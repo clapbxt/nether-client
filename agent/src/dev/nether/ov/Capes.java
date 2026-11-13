@@ -98,7 +98,8 @@ final class Capes {
             for (Object pi : (Collection<?>) all) {
                 String uuid = uuid(Game.call(pi, legacy ? Game.l("a", "func_178845_a") : "method_2966"));
                 if (uuid == null) continue;
-                String id = DEV != null ? DEV : worn.get(uuid);
+                String own = DEV != null ? null : Wardrobe.ownNetherCape(uuid);
+                String id = DEV != null ? DEV : own != null ? own : worn.get(uuid);
                 if (API != null && DEV == null) {
                     Long t = asked.get(uuid);
                     if (t == null || now - t > REQUERY_MS) { asked.put(uuid, now); synchronized (queue) { queue.add(uuid); } }

@@ -25,8 +25,9 @@ import java.util.Map;
  *                 "color": "#EAEEF3",          // module settings: bool / number / "#rrggbb[aa]" or "chroma" / string / key code
  *                 "bg": true, "bgAlpha": 0.62, "shadow": false, "accent": true, ... } } }
  *
- * Changes made in game are saved (debounced) to the global file, unless the module key already exists in the
- * instance file, then to the instance file. Both files are re-read when their mtime changes (launcher edits).
+ * Changes made in game are saved (debounced) like the game's own settings: to the instance file when the launcher
+ * passes one (the instance keeps its own settings), else to the global file. The menu look (client theme/accent)
+ * is a launcher setting and always stays global. Both files are re-read when their mtime changes (launcher edits).
  * A save re-reads the file and writes only the values changed in game onto it, so launcher edits made meanwhile
  * survive; a file that cannot be parsed (half written, hand-edited) is never written over: it is retried, and only
  * after it stayed broken for a while is it copied to *.bad-(time) before a fresh one replaces it.
@@ -247,9 +248,14 @@ final class Config {
     }
 
     /** v == null removes the key (back to its default / legacy meaning). */
+    /** Where an in-game change is saved: the instance file whenever there is one, except the launcher-owned look. */
+    private static boolean toInstance(String id, String key) {
+        return iPath != null && !("client".equals(id) && ("theme".equals(key) || "accent".equals(key) || "accent2".equals(key)));
+    }
+
     static synchronized void set(String id, String key, Object v) {
         if (v instanceof Number && !isFinite(((Number) v).doubleValue())) return; // never store NaN / Infinity
-        boolean inst = mod(in, id, false) != null;
+        boolean inst = toInstance(id, key);
         if (v == null) {
             Map<String, Object> m = mod(inst ? in : g, id, false);
             if (m == null || !m.containsKey(key)) return;
@@ -304,7 +310,7 @@ final class Config {
     }
 
     static synchronized void setMenuKey(int k) {
-        boolean inst = in.get("menuKey") instanceof Number;
+        boolean inst = iPath != null;
         (inst ? in : g).put("menuKey", (double) k);
         (inst ? iTouched : gTouched).put("\0menuKey", (double) k);
         if (inst) iDirty = true; else gDirty = true;

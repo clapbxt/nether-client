@@ -68,6 +68,16 @@ final class Wardrobe {
 
     private static String str(Object o) { return o instanceof String ? (String) o : ""; }
 
+    /**
+     * The Nether cape the signed-in player wears, from the launcher's state (dashless uuid; null = not this player
+     * or no state yet). Capes draws your own cape from this, so it shows the moment you pick it, API or not.
+     */
+    static String ownNetherCape(String uuidNoDash) {
+        reload();
+        if (!loaded || uuidNoDash == null || !uuidNoDash.equalsIgnoreCase(uuid.replace("-", ""))) return null;
+        return netherWorn;
+    }
+
     private static BufferedImage read(Path p) {
         try { return Files.isRegularFile(p) ? javax.imageio.ImageIO.read(p.toFile()) : null; } catch (Throwable t) { return null; }
     }
