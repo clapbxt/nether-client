@@ -1,6 +1,7 @@
 //! Native window chrome. Main window: no title bar and no border
 //! (the app draws its own top bar + window buttons) while keeping native resize edges, snap and shadow.
-use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
+use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
+use windows_sys::Win32::Graphics::Gdi::ScreenToClient;
 use windows_sys::Win32::Graphics::Dwm::DwmSetWindowAttribute;
 use windows_sys::Win32::UI::HiDpi::GetDpiForWindow;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture;
@@ -14,6 +15,7 @@ pub struct Handlers {
     /// Files dropped onto the window.
     pub dropped: fn(Vec<std::path::PathBuf>),
 }
+static DRAGGING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static HANDLERS: std::sync::OnceLock<Handlers> = std::sync::OnceLock::new();
 
 pub fn set_handlers(h: Handlers) { let _ = HANDLERS.set(h); }
@@ -80,6 +82,18 @@ unsafe extern "system" fn chrome_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPAR
             }
             DefSubclassProc(hwnd, msg, wp, lp)
         }
+        // The native move/size loop swallows the mouse-up that ends a top-bar drag, so Slint keeps the drag area as its
+        // pressed pointer grabber and the buttons stay dead until some later click clears it. Replay the release
+        // (through winit, so its capture bookkeeping stays right) and refresh the pointer position at the real cursor.
+        WM_EXITSIZEMOVE => {
+            let mut pt = POINT { x: 0, y: 0 };
+            GetCursorPos(&mut pt);
+            ScreenToClient(hwnd, &mut pt);
+            let lp = ((pt.y as isize & 0xffff) << 16) | (pt.x as isize & 0xffff);
+            if DRAGGING.swap(false, std::sync::atomic::Ordering::Relaxed) { PostMessageW(hwnd, WM_LBUTTONUP, 0, lp); }
+            PostMessageW(hwnd, WM_MOUSEMOVE, 0, lp);
+            DefSubclassProc(hwnd, msg, wp, lp as LPARAM)
+        }
         WM_DROPFILES => {
             let files = dropped_files(wp as HDROP);
             if let Some(h) = HANDLERS.get() { let f = h.dropped; let _ = slint::invoke_from_event_loop(move || f(files)); }
@@ -118,6 +132,7 @@ pub fn drag(ui: &slint::Window) {
     let Some(h) = hwnd_of(ui) else { return };
     unsafe {
         ReleaseCapture();
+        DRAGGING.store(true, std::sync::atomic::Ordering::Relaxed);
         PostMessageW(h, WM_NCLBUTTONDOWN, HTCAPTION as usize, 0);
     }
 }
