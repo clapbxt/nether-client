@@ -80,7 +80,7 @@ component DownloadSplit inherits Rectangle {
     pop := PopupWindow {
         x: 0px; y: root.height + 4px; width: root.width; height: Math.min(root.labels.length, 8) * 32px + 8px;
         Rectangle {
-            background: #121217; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
             Flickable {
                 y: 4px; height: parent.height - 8px; content-height: root.labels.length * 32px;
                 for l[i] in root.labels: Rectangle {
@@ -233,7 +233,7 @@ export component InstancesScreen inherits Rectangle {
                     x: card.mx; y: card.my; width: 212px; height: 8 * 36px + 8px;
                     close-policy: close-on-click-outside;
                     Rectangle {
-                        background: #121217; border-width: 1px; border-color: Theme.ln2;
+                        background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
                         // order on screen; a = the action number for root.act
                         for it[j] in [{t: "Play", d: Ico.play, a: 0}, {t: "Edit instance", d: Ico.edit, a: 1}, {t: "Rename", d: Ico.edit, a: 6}, {t: "Move to group", d: Ico.folder, a: 7}, {t: "Open folder", d: Ico.folder, a: 2}, {t: "Duplicate", d: Ico.copy, a: 3}, {t: "Export as .mrpack", d: Ico.export, a: 4}, {t: "Delete", d: Ico.trash, a: 5}]: Rectangle {
                             y: 4px + j * 36px; height: 36px; width: parent.width;
@@ -265,7 +265,7 @@ export component InstancesScreen inherits Rectangle {
             background: Theme.s1;
             Rectangle { x: 0px; width: 1px; background: Theme.ln; }
             Cover { x: 1px; y: 0px; width: parent.width - 1px; height: 340px; inst: root.pk; dim: 0.9; }
-            Rectangle { x: 1px; y: 0px; width: parent.width - 1px; height: 340px; background: @linear-gradient(180deg, #0D0D1100 35%, #0D0D11 100%); }
+            Rectangle { x: 1px; y: 0px; width: parent.width - 1px; height: 340px; background: @linear-gradient(180deg, #0D0D1100 35%, Theme.s1 100%); }
             Rectangle { x: 32px; y: 236px; width: 44px; height: 44px; background: #060608d0;
                 Image { x: 5px; y: 5px; width: 34px; height: 34px; source: root.pk.icon-img; image-rendering: pixelated; } }
             Heading { x: 30px; y: 284px; width: parent.width - 60px; text: root.pk.title; font-size: root.pk.title.character-count > 18 ? 40px : 54px; overflow: elide; }
@@ -295,7 +295,7 @@ export component InstancesScreen inherits Rectangle {
             x: 0px; y: 0px; width: root.width; height: 190px; clip: true;
             if !Backend.instances[root.sel].has-cover: Hatch { width: parent.width; height: parent.height; }
             if Backend.instances[root.sel].has-cover: Image { width: parent.width; height: parent.height; source: Backend.instances[root.sel].cover-img; image-fit: cover; opacity: 0.5; }
-            Rectangle { background: @linear-gradient(180deg, #06060855 0%, #060608 100%); }
+            Rectangle { background: @linear-gradient(180deg, #06060855 0%, Theme.bg 100%); }
             Rectangle { background: @linear-gradient(90deg, #060608e0 0%, #06060800 65%); }
         }
         LinkBtn { x: 56px; y: 16px; back: true; text: "ALL INSTANCES"; clicked => { root.sel = -1; } }
@@ -673,7 +673,7 @@ export component InstancesScreen inherits Rectangle {
         dismiss => { root.renaming = false; }
         Rectangle {
             x: (parent.width - 500px) / 2; y: 230px; width: 500px; height: 220px;
-            background: #121217; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
             TouchArea { }
             Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.ice; }
             Eyebrow { x: 28px; y: 28px; text: "RENAME INSTANCE"; }
@@ -693,7 +693,7 @@ export component InstancesScreen inherits Rectangle {
         gd := Rectangle {
             property <int> ng: Backend.groups.length;
             x: (parent.width - 520px) / 2; y: 210px; width: 520px; height: 230px + (self.ng > 0 ? 62px : 0px);
-            background: #121217; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
             TouchArea { }
             Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.ice; }
             Eyebrow { x: 28px; y: 28px; text: "MOVE TO GROUP"; }
@@ -724,7 +724,7 @@ export component InstancesScreen inherits Rectangle {
         dismiss => { root.confirm-del = false; }
         Rectangle {
             x: (parent.width - 500px) / 2; y: 230px; width: 500px; height: 232px;
-            background: #121217; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
             TouchArea { }
             Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.red; }
             Eyebrow { x: 28px; y: 28px; text: "DELETE INSTANCE"; color: Theme.redtx; }
@@ -761,7 +761,7 @@ export component InstancesScreen inherits Rectangle {
                 if dlg.step == 4 { Wizard.load-rps(dlg.ver); }
             }
             x: (parent.width - 1040px) / 2; y: 30px; width: 1040px; height: 728px;
-            background: #101014; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s1; border-width: 1px; border-color: Theme.ln2;
             init => { Backend.cover-for(dlg.ver); Wizard.pick-pack(""); Wizard.load-rps(""); Wizard.mode = 0; }
             TouchArea { }
             Slash { x: 32px; y: 34px; width: 30px; height: 7px; skew: 5px; color: Theme.red2; }

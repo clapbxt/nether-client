@@ -1,32 +1,9 @@
 import { Theme } from "theme.slint";
-import { Backend, Inst, SkinLib } from "structs.slint";
-import { Dropdown, Eyebrow, Heading, Slot, Btn, Toggle, SpinArea, PlayButton, Hatch, Ticks, Slash, SectionHead, Stat, IconBtn, Ico, Icon, LinkBtn, Pulse, Chip } from "components.slint";
+import { Backend, Inst } from "structs.slint";
+import { Btn, LinkBtn, Ico, Icon, Pulse, SpinArea } from "components.slint";
 
-// One line of the "jump back in" tower.
-component TowerRow inherits Rectangle {
-    in property <Inst> inst;
-    in property <int> pos;
-    in property <bool> active;
-    callback picked();
-    callback play();
-    height: 52px;
-    background: ta.has-hover ? Theme.s2 : (root.active ? Theme.s1 : transparent);
-    animate background { duration: Theme.fast; }
-    Rectangle { x: 0px; width: 3px; background: root.active ? Theme.ice : Theme.red2; opacity: root.active || ta.has-hover ? 1 : 0; animate opacity { duration: Theme.fast; } }
-    ta := TouchArea { mouse-cursor: pointer; clicked => { root.picked(); } }
-    Text { x: 18px; width: 26px; text: root.pos < 10 ? "0\{root.pos}" : "\{root.pos}"; color: root.active ? Theme.tx : Theme.mut; font-family: Theme.mono; font-size: 12px * Theme.ts; font-weight: 700; vertical-alignment: center; }
-    Rectangle { x: 54px; y: 9px; width: 34px; height: 34px; background: Theme.s2;
-        Image { x: 4px; y: 4px; width: 26px; height: 26px; source: root.inst.icon-img; image-rendering: pixelated; } }
-    Text { x: 104px; width: 300px; text: root.inst.title; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; letter-spacing: 0.4px; vertical-alignment: center; overflow: elide; }
-    Text { x: 420px; width: 90px; text: root.inst.ver; color: Theme.dim; font-family: Theme.mono; font-size: 12px * Theme.ts; vertical-alignment: center; }
-    Text { x: 510px; width: 130px; text: root.inst.loader; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
-    if !root.inst.running: Text { x: 640px; width: 120px; text: root.inst.last; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
-    if root.inst.running: Rectangle { x: 640px; width: 120px;
-        Pulse { x: 0px; y: 22px; }
-        Text { x: 16px; text: "Running"; color: Theme.redtx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 500; vertical-alignment: center; } }
-    IconBtn { x: parent.width - 48px; y: 10px; size: 32px; d: root.inst.running || root.inst.starting ? Ico.check : Ico.play; hot: !root.inst.running && !root.inst.starting; tip: root.inst.running ? "Running" : (root.inst.starting ? "Starting" : "Play"); opacity: ta.has-hover || self.hovered || root.active ? 1 : 0.55; clicked => { if !root.inst.running && !root.inst.starting { root.play(); } } }
-}
-
+// v6 Home = "Dock": the launch target's wallpaper full-bleed, its title and PLAY bottom-left, a glass dock of instances
+// bottom-centre, the player standing right of centre and a glass news card on the right. Glass = a darkened translucent fill.
 export component HomeScreen inherits Rectangle {
     callback open-instance(int);
     // L2: the crash page of an instance (its Logs tab on the crash report)
@@ -37,146 +14,137 @@ export component HomeScreen inherits Rectangle {
     property <Inst> cur: Backend.instances[root.ai];
     property <bool> any: Backend.instances.length > 0;
     property <int> tl: root.cur.title.character-count;
-    property <length> hero-w: 1010px;
+    property <length> m: 56px;
+    property <bool> can: !root.cur.starting && !root.cur.stopping;
+    property <int> shown: Math.min(Backend.instances.length, 9);
+    property <length> dock-w: (root.shown + 1) * 66px + 18px;
+    property <length> dock-y: root.height - 24px - 84px;
+    background: Theme.bg;
 
-    // ---------- hero: the launch target, on its own wallpaper ----------
-    Rectangle {
-        x: 0px; y: 0px; width: root.hero-w; height: 452px; clip: true;
-        if !(root.any && root.cur.has-cover): Hatch { width: parent.width; height: parent.height; }
-        if root.any && root.cur.has-cover: Image { width: parent.width; height: parent.height; source: root.cur.cover-img; image-fit: cover; opacity: 0.9; }
-        Rectangle { background: @linear-gradient(90deg, #060608e6 0%, #06060880 40%, #06060810 72%, #06060855 100%); }
-        Rectangle { background: @linear-gradient(180deg, #06060800 55%, #060608 100%); }
-    }
+    // ---------- wallpaper ----------
+    if root.any && root.cur.has-cover: Image { width: root.width; height: root.height; source: root.cur.cover-img; image-fit: cover; }
+    Rectangle { background: @linear-gradient(180deg, #00000070 0%, #00000040 35%, #000000a8 75%, #000000e0 100%); }
 
+    // ---------- player, right of centre (always turning; drag to spin) ----------
+    if Backend.skin-ready: Image { x: root.width / 2 - 20px; y: 84px; width: 340px; height: 440px; source: Backend.skin-frame; image-fit: contain; }
+    SpinArea { x: root.width / 2 - 20px; y: 84px; width: 340px; height: 440px; }
+
+    // ---------- launch target, bottom-left ----------
     if root.any: Rectangle {
-        x: 56px; y: 0px; width: root.hero-w - 56px; height: 452px;
-        Slash { x: 0px; y: 47px; width: 30px; height: 7px; skew: 5px; color: Theme.red2; }
-        if root.cur.running: Pulse { x: 42px; y: 46px; }
-        ey := Eyebrow { x: root.cur.running ? 58px : 42px; y: 42px; color: root.cur.running || root.cur.crashed ? Theme.redtx : Theme.dim; font-size: 15px * Theme.ts;
+        x: root.m; y: root.height - 24px - 84px - 300px; width: 600px; height: 280px;
+        if root.cur.running: Pulse { x: 0px; y: 12px; }
+        ey := Text { x: root.cur.running ? 16px : 0px; y: 0px; height: 24px; vertical-alignment: center;
+            color: root.cur.running || root.cur.crashed ? Theme.red2 : #ffffffb8; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.5px;
             text: root.cur.running ? "RUNNING NOW" : (root.cur.crashed ? "LAST SESSION CRASHED" : (root.cur.last == "" ? "READY TO PLAY" : "LAST PLAYED · " + root.cur.last)); }
-        // L2: last session crashed: straight to the crash report
-        if root.cur.crashed && !root.cur.running && !root.cur.starting: LinkBtn { x: ey.x + ey.preferred-width + 18px; y: 37px; text: "VIEW CRASH"; clicked => { root.open-crash(root.ai); } }
-        Heading {
-            x: -3px; y: root.tl > 22 ? 84px : (root.tl > 14 ? 70px : 58px); width: parent.width - 40px; overflow: elide;
-            text: root.cur.title;
-            font-size: root.tl > 22 ? 64px : (root.tl > 14 ? 88px : 116px);
-        }
-        // spec strip
+        if root.cur.crashed && !root.cur.running && !root.cur.starting: LinkBtn { x: ey.x + ey.preferred-width + 18px; y: -2px; text: "VIEW CRASH"; clicked => { root.open-crash(root.ai); } }
+        Text { x: 0px; y: 36px; width: 640px; height: 72px; vertical-alignment: center; overflow: elide;
+            text: root.cur.title; color: #FFFFFF; font-family: Theme.disp; font-size: 64px; font-weight: 700; }
+        Text { x: 0px; y: 116px; width: 640px; height: 24px; vertical-alignment: center; overflow: elide;
+            text: root.cur.ver + "  ·  " + root.cur.loader + "  ·  " + root.cur.ram + " GB  ·  " + root.cur.hours + " h played  ·  " + root.cur.mods + " mods";
+            color: #ffffffc0; font-family: Theme.ui; font-size: 15px * Theme.ts; }
+        // PLAY
         Rectangle {
-            x: 0px; y: 206px; width: 760px; height: 48px;
-            Rectangle { x: -16px; y: -10px; width: 742px; height: 68px; background: #060608d8; }
-            Stat { x: 0px; width: 130px; rule: false; k: "VERSION"; v: root.cur.ver; }
-            Stat { x: 130px; width: 190px; k: "LOADER"; v: root.cur.loader; }
-            Stat { x: 320px; width: 130px; k: "MEMORY"; v: "\{root.cur.ram} GB"; }
-            Stat { x: 450px; width: 130px; k: "PLAYED"; v: "\{root.cur.hours} h"; }
-            Stat { x: 580px; width: 130px; k: "MODS"; v: "\{root.cur.mods}"; }
-        }
-        PlayButton {
-            x: 0px; y: 296px; width: 330px; height: 78px; skew: 20px; text-size: 44px;
-            label: root.cur.stopping ? "STOPPING" : (root.cur.running ? "STOP" : (root.cur.starting ? "STARTING" : "PLAY"));
-            arrow: !root.cur.running && !root.cur.starting;
-            enabled: !root.cur.starting && !root.cur.stopping;
-            clicked => { if root.cur.running { Backend.stop(root.cur.name); } else { Backend.play(root.cur.name); } }
+            x: 0px; y: 164px; width: 210px; height: 56px; border-radius: 8px;
+            opacity: root.can ? 1 : 0.5;
+            background: pt.pressed ? Theme.press : (pt.has-hover ? Theme.red2 : Theme.red);
+            animate background { duration: Theme.fast; }
+            if !root.cur.running && !root.cur.starting: Icon { x: 30px; y: 22px; width: 14px; height: 14px; viewbox-width: 12; viewbox-height: 12; d: Ico.play; tint: #FFFFFF; solid: true; }
+            Text { x: root.cur.running || root.cur.starting ? 0px : 20px; width: parent.width - (root.cur.running || root.cur.starting ? 0px : 20px); height: parent.height;
+                horizontal-alignment: center; vertical-alignment: center; color: #FFFFFF; font-family: Theme.disp; font-size: 24px; font-weight: 700;
+                text: root.cur.stopping ? "STOPPING" : (root.cur.running ? "STOP" : (root.cur.starting ? "STARTING" : "PLAY")); }
+            pt := TouchArea { mouse-cursor: pointer; enabled: root.can;
+                clicked => { if root.cur.running { Backend.stop(root.cur.name); } else { Backend.play(root.cur.name); } } }
         }
         // change the launch target
         Rectangle {
-            x: 362px; y: 296px; width: 250px; height: 78px;
-            background: car.pressed ? Theme.s3 : (car.has-hover ? #15151Be0 : #0D0D11c8);
-            border-width: 1px; border-color: car.has-hover ? #ffffff66 : Theme.ln2;
-            animate background, border-color { duration: Theme.fast; }
-            Eyebrow { x: 18px; y: 16px; text: "LAUNCH TARGET"; font-size: 12px * Theme.ts; }
-            Text { x: 18px; y: 36px; width: 190px; text: root.cur.name; color: Theme.tx; font-family: Theme.ui; font-size: 16px * Theme.ts; font-weight: 600; overflow: elide; }
-            Icon { x: parent.width - 30px; y: 33px; d: Ico.down; tint: car.has-hover ? Theme.tx : Theme.dim; }
-            car := TouchArea { mouse-cursor: pointer; clicked => { pop.show(); } }
+            x: 226px; y: 164px; width: 170px; height: 56px;
+            Text { height: parent.height; vertical-alignment: center; text: "Change instance"; color: ch.has-hover ? #FFFFFF : #ffffffc0; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 500; }
+            ch := TouchArea { mouse-cursor: pointer; clicked => { pop.show(); } }
             pop := PopupWindow {
-                x: 0px; y: parent.height + 4px; width: 360px; height: Math.min(Backend.instances.length, 8) * 40px + 8px;
+                x: 0px; y: -(Math.min(Backend.instances.length, 8) * 40px + 16px); width: 340px; height: Math.min(Backend.instances.length, 8) * 40px + 8px;
                 Rectangle {
-                    background: #121217; border-width: 1px; border-color: Theme.ln2;
+                    background: Theme.s1; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
                     Flickable {
                         y: 4px; height: parent.height - 8px; content-height: Backend.instances.length * 40px;
                         for it[i] in Backend.instances: Rectangle {
                             y: i * 40px; height: 40px; width: parent.width;
                             background: t2.has-hover ? Theme.s3 : transparent;
-                            Rectangle { x: 0px; width: 3px; background: Theme.red; visible: root.ai == i; }
+                            Rectangle { x: 0px; y: 8px; width: 3px; height: 24px; background: Theme.red; visible: root.ai == i; }
                             Image { x: 16px; y: 9px; width: 22px; height: 22px; source: it.icon-img; image-rendering: pixelated; }
-                            Text { x: 50px; width: 200px; text: it.name; color: root.ai == i || t2.has-hover ? Theme.tx : Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 500; vertical-alignment: center; overflow: elide; }
-                            Text { x: parent.width - 106px; width: 90px; text: it.ver; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; }
+                            Text { x: 50px; width: 190px; text: it.name; color: root.ai == i || t2.has-hover ? Theme.tx : Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 500; vertical-alignment: center; overflow: elide; }
+                            Text { x: parent.width - 86px; width: 70px; text: it.ver; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; }
                             t2 := TouchArea { clicked => { Backend.active-inst = i; pop.close(); } }
                         }
                     }
                 }
             }
         }
-        LinkBtn { x: 644px; y: 321px; text: "MODS & SETTINGS"; clicked => { root.open-instance(root.ai); } }
     }
 
     // first run: nothing to launch yet
     if !root.any: Rectangle {
-        x: 56px; y: 0px; width: root.hero-w - 56px; height: 452px;
-        Slash { x: 0px; y: 47px; width: 30px; height: 7px; skew: 5px; color: Theme.red2; }
-        Eyebrow { x: 42px; y: 42px; text: "START HERE"; color: Theme.dim; font-size: 15px * Theme.ts; }
-        Heading { x: -3px; y: 58px; text: "NO INSTANCES YET"; font-size: 116px; }
-        Text { x: 0px; y: 212px; width: 620px; text: "An instance is one Minecraft setup: a version, a loader and its own mods and worlds. Make one, or start from a modpack."; color: Theme.dim; font-family: Theme.ui; font-size: 16px * Theme.ts; wrap: word-wrap; }
-        PlayButton { x: 0px; y: 296px; width: 330px; height: 78px; skew: 20px; text-size: 34px; label: "NEW INSTANCE"; clicked => { Backend.create-open = true; root.open-instance(-1); } }
-        Btn { x: 362px; y: 296px; height: 78px; text: "BROWSE MODPACKS"; clicked => { root.go-discover(); } }
-    }
-
-    // ---------- jump back in ----------
-    SectionHead { x: 56px; y: 468px; width: root.hero-w - 56px - 40px - 150px; idx: "01"; title: "JUMP BACK IN"; }
-    LinkBtn { x: root.hero-w - 40px - 132px; y: 464px; text: "ALL INSTANCES"; clicked => { root.open-instance(-1); } }
-    // most recently played first
-    for n[i] in Backend.recent: TowerRow {
-        visible: i < 5;
-        x: 56px; y: 502px + i * 54px; width: root.hero-w - 56px - 40px;
-        inst: Backend.instances[n]; pos: i + 1; active: root.ai == n;
-        picked => { Backend.active-inst = n; }
-        play => { Backend.play(Backend.instances[n].name); }
-    }
-    if !root.any: Text { x: 56px; y: 510px; text: "Instances you play show up here, most recent first."; color: Theme.mut; font-family: Theme.ui; font-size: 14px * Theme.ts; }
-
-    // ---------- right column: player + news ----------
-    Rectangle {
-        x: root.hero-w; y: 0px; width: root.width - root.hero-w; height: parent.height;
-        background: Theme.s1;
-        Rectangle { x: 0px; width: 1px; background: Theme.ln; }
-
-        SectionHead { x: 32px; y: 28px; width: parent.width - 64px; idx: "02"; title: "PLAYER"; }
-        // 3D player (rotates slowly, see skin.rs) on a hatch plate
+        x: root.m; y: root.height - 24px - 84px - 300px; width: 700px; height: 280px;
+        Text { x: 0px; y: 0px; height: 24px; vertical-alignment: center; text: "START HERE"; color: #ffffffb8; font-family: Theme.disp; font-size: 16px; font-weight: 700; }
+        Text { x: 0px; y: 36px; width: 700px; height: 72px; vertical-alignment: center; text: "No instances yet"; color: #FFFFFF; font-family: Theme.disp; font-size: 64px; font-weight: 700; }
+        Text { x: 0px; y: 116px; width: 560px; text: "An instance is one Minecraft setup: a version, a loader and its own mods and worlds. Make one, or start from a modpack."; color: #ffffffc0; font-family: Theme.ui; font-size: 15px * Theme.ts; wrap: word-wrap; }
         Rectangle {
-            x: 32px; y: 62px; width: parent.width - 64px; height: 318px; background: Theme.bg; clip: true;
-            Hatch { width: parent.width; height: parent.height; }
-            Rectangle { x: (parent.width - 320px) / 2; y: 130px; width: 320px; height: 320px; background: @radial-gradient(circle, Theme.red.with-alpha(0.251) 0%, Theme.red.with-alpha(0.000) 68%); }
-            Rectangle { x: (parent.width - 120px) / 2; y: 288px; width: 120px; height: 12px; border-radius: 6px; background: #000000aa; visible: Backend.skin-ready; }
-            if Backend.skin-ready: Image { x: 0px; y: 12px; width: parent.width; height: 290px; source: Backend.skin-frame; image-fit: contain; }
-            SpinArea { }
-            if !Backend.skin-ready: Text { text: "Loading skin…"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }
-            Ticks { width: parent.width; height: parent.height; }
-            // nameplate
-            Slash { x: 12px; y: 14px; width: nm.preferred-width + 34px; height: 30px; skew: 8px; color: Theme.ice; }
-            nm := Text { x: 28px; y: 14px; height: 30px; text: Backend.acct-state == 2 ? Backend.acct-name : "Player"; color: Theme.ink; font-family: Theme.disp; font-size: 16px; font-weight: 700;  vertical-alignment: center; }
+            x: 0px; y: 190px; width: 230px; height: 56px; border-radius: 8px; background: pn.pressed ? Theme.press : (pn.has-hover ? Theme.red2 : Theme.red);
+            Text { text: "NEW INSTANCE"; color: #FFFFFF; font-family: Theme.disp; font-size: 24px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+            pn := TouchArea { mouse-cursor: pointer; clicked => { Backend.create-open = true; root.open-instance(-1); } }
         }
-        Text { x: 32px; y: 396px; height: 36px; text: "Skin"; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; vertical-alignment: center; }
-        Dropdown { x: 120px; y: 396px; width: parent.width - 152px; height: 36px; items: SkinLib.names; current <=> SkinLib.home-idx;
-            init => { if !SkinLib.loaded { SkinLib.refresh(); } }
-            changed(i) => { if i > 0 { SkinLib.wear(i - 1); } } }
-        Text { x: 32px; y: 440px; height: 36px; text: "Cape"; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; vertical-alignment: center; }
-        Dropdown { x: 120px; y: 440px; width: parent.width - 152px; height: 36px; items: Backend.cape-names; current <=> Backend.cape-idx; changed(i) => { Backend.equip-cape(i); } }
-        Text { x: 32px; y: 486px; height: 30px; text: "Auto-rotate"; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; vertical-alignment: center; }
-        Toggle { x: 152px; y: 490px; on <=> Backend.skin-spin; }
-        LinkBtn { x: parent.width - 32px - self.width; y: 487px; text: "WARDROBE"; clicked => { root.go-wardrobe(); } }
+        Btn { x: 246px; y: 198px; height: 40px; text: "BROWSE MODPACKS"; clicked => { root.go-discover(); } }
+    }
 
-        // L2: no news when it couldn't be fetched (never a stuck "fetching" line)
-        property <bool> no-news: Backend.news-failed && Backend.news.length == 0;
-        SectionHead { x: 32px; y: 546px; width: parent.width - 64px; idx: "03"; title: "NEWS"; visible: !parent.no-news; }
-        if Backend.news.length == 0 && !Backend.news-failed: Text { x: 32px; y: 592px; text: "Fetching the latest releases…"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; }
+    // ---------- news: glass card, right ----------
+    property <bool> no-news: Backend.news-failed && Backend.news.length == 0;
+    Rectangle {
+        x: root.width - root.m - 330px; y: 84px; width: 330px; height: root.no-news ? 96px : 64px + 3 * 62px; border-radius: 12px;
+        background: Theme.glass; border-width: 1px; border-color: Theme.glass-ln;
+        Text { x: 20px; y: 14px; height: 24px; vertical-alignment: center; text: "NEWS"; color: Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; }
+        LinkBtn { x: parent.width - 20px - self.width; y: 12px; text: "WARDROBE"; clicked => { root.go-wardrobe(); } }
+        if Backend.news.length == 0 && !Backend.news-failed: Text { x: 20px; y: 52px; text: "Fetching the latest releases…"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; }
+        if root.no-news: Text { x: 20px; y: 52px; width: parent.width - 40px; text: "No news right now."; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; }
         for n[i] in Backend.news: Rectangle {
             visible: i < 3;
-            x: 32px; y: 578px + i * 44px; width: parent.width - 64px; height: 44px;
+            x: 12px; y: 48px + i * 62px; width: parent.width - 24px; height: 58px; border-radius: 6px;
+            background: nta.has-hover ? Theme.hov : transparent;
             nta := TouchArea { mouse-cursor: pointer; clicked => { Backend.open-url(n.url); } }
-            Text { x: 0px; width: 84px; text: n.tag; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; vertical-alignment: center; }
-            Text { x: 84px; width: parent.width - 84px; text: n.title; color: nta.has-hover ? Theme.ice : Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 500; vertical-alignment: center; overflow: elide; }
-            Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; }
+            Text { x: 8px; y: 6px; width: parent.width - 16px; text: n.tag; color: Theme.mut; font-family: Theme.ui; font-size: 11px * Theme.ts; overflow: elide; }
+            Text { x: 8px; y: 24px; width: parent.width - 16px; height: 30px; text: n.title; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 500; wrap: word-wrap; overflow: elide; }
         }
-        Text { x: 32px; y: parent.no-news ? 556px : 578px + Math.min(Math.max(Backend.news.length, 1), 3) * 44px + 18px; width: parent.width - 64px; text: "Play with friends: host a server on the Host tab and send them its address."; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
+    }
+
+    // ---------- job progress: a small glass bar above the dock ----------
+    if Backend.job-on: Rectangle {
+        x: (root.width - self.width) / 2; y: root.dock-y - 52px; width: 460px; height: 38px; border-radius: 10px;
+        background: Theme.glass; border-width: 1px; border-color: Theme.glass-ln;
+        Pulse { x: 14px; y: 16px; }
+        Text { x: 34px; width: parent.width - 34px - (Backend.job-prog >= 0 ? 150px : 14px); height: parent.height; text: Backend.job-text; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
+        if Backend.job-prog >= 0: Rectangle {
+            x: parent.width - 140px; y: 17px; width: 124px; height: 4px; border-radius: 2px; background: Theme.s3;
+            Rectangle { width: parent.width * Math.clamp(Backend.job-prog, 0, 1); border-radius: 2px; background: Theme.red2; animate width { duration: Theme.mid; } }
+        }
+    }
+
+    // ---------- dock: instances, bottom-centre ----------
+    Rectangle {
+        x: (root.width - self.width) / 2; y: root.dock-y; width: root.dock-w; height: 84px; border-radius: 12px;
+        background: Theme.glass; border-width: 1px; border-color: Theme.glass-ln;
+        for it[i] in Backend.instances: Rectangle {
+            visible: i < 9;
+            x: 12px + i * 66px; y: 10px; width: 56px; height: 56px; border-radius: 10px;
+            background: root.ai == i ? Theme.ln2 : (dt.has-hover ? Theme.hov : transparent);
+            animate background { duration: Theme.fast; }
+            Image { x: 8px; y: 8px; width: 40px; height: 40px; source: it.icon-img; image-rendering: pixelated; }
+            if it.running: Rectangle { x: parent.width - 12px; y: 4px; width: 8px; height: 8px; border-radius: 4px; background: Theme.red2; }
+            if root.ai == i: Rectangle { x: (parent.width - 6px) / 2; y: parent.height + 5px; width: 6px; height: 6px; border-radius: 3px; background: Theme.red2; }
+            dt := TouchArea { mouse-cursor: pointer; clicked => { Backend.active-inst = i; } }
+        }
+        Rectangle {
+            x: 12px + root.shown * 66px; y: 10px; width: 56px; height: 56px; border-radius: 10px;
+            background: pt2.has-hover ? Theme.hov : transparent; border-width: 1px; border-color: Theme.glass-ln;
+            Icon { x: 21px; y: 21px; width: 14px; height: 14px; viewbox-width: 12; viewbox-height: 12; d: Ico.plus; tint: Theme.dim; }
+            pt2 := TouchArea { mouse-cursor: pointer; clicked => { Backend.create-open = true; root.open-instance(-1); } }
+        }
     }
 }

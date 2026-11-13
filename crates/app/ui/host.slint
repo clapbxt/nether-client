@@ -116,7 +116,7 @@ export component HostScreen inherits Rectangle {
             pop := PopupWindow {
                 x: 0px; y: parent.height + 4px; width: 420px; height: Math.min(HostState.servers.length, 8) * 48px + 34px + 52px;
                 Rectangle {
-                    background: #121217; border-width: 1px; border-color: Theme.ln2;
+                    background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
                     Eyebrow { x: 16px; y: 10px; text: "SERVERS"; }
                     Flickable {
                         y: 34px; height: parent.height - 34px - 52px; content-height: HostState.servers.length * 48px;
@@ -484,7 +484,7 @@ export component HostScreen inherits Rectangle {
         dismiss => { HostState.eula-open = false; }
         Rectangle {
             x: (parent.width - 560px) / 2; y: 200px; width: 560px; height: 290px;
-            background: #121217; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
             TouchArea { }
             Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.ice; }
             Eyebrow { x: 28px; y: 28px; text: "BEFORE THE FIRST START"; }
@@ -502,7 +502,7 @@ export component HostScreen inherits Rectangle {
         dismiss => { root.confirm-del = false; }
         Rectangle {
             x: (parent.width - 500px) / 2; y: 230px; width: 500px; height: 232px;
-            background: #121217; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
             TouchArea { }
             Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.red; }
             Eyebrow { x: 28px; y: 28px; text: "DELETE SERVER"; color: Theme.redtx; }
@@ -536,7 +536,7 @@ export component HostScreen inherits Rectangle {
             property <string> kind-name: wz.kind == 0 ? "Vanilla" : wz.kind == 1 ? "Fabric" : "Paper";
             property <bool> can-create: wz.agree && HostState.wiz-name != "" && wz.ver != "";
             x: (parent.width - 1040px) / 2; y: 30px; width: 1040px; height: 728px;
-            background: #101014; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s1; border-width: 1px; border-color: Theme.ln2;
             TouchArea { }
             Slash { x: 32px; y: 34px; width: 30px; height: 7px; skew: 5px; color: Theme.red2; }
             Heading { x: 30px; y: 44px; text: "NEW SERVER"; font-size: 44px; }

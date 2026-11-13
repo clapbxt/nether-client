@@ -189,7 +189,7 @@ export component SettingsScreen inherits Rectangle {
             for c[i] in root.accents: Rectangle {
                 x: parent.width - 5 * 36px + 6px + i * 36px; y: 18px; width: 28px; height: 28px; background: c;
                 border-width: Backend.lp-accent == i ? 2px : 0px; border-color: Theme.ice;
-                Rectangle { x: 6px; y: 6px; width: 16px; height: 16px; background: transparent; border-width: Backend.lp-accent == i ? 2px : 0px; border-color: #060608; }
+                Rectangle { x: 6px; y: 6px; width: 16px; height: 16px; background: transparent; border-width: Backend.lp-accent == i ? 2px : 0px; border-color: Theme.bg; }
                 sw := TouchArea { mouse-cursor: pointer; clicked => { Backend.lp-accent = i; Backend.save-launcher(); } }
                 sf := FocusScope { width: 0px; height: 0px; focus-on-click: false;
                     key-pressed(e) => { if e.text == " " || e.text == Key.Return { Backend.lp-accent = i; Backend.save-launcher(); return accept; } return reject; } }

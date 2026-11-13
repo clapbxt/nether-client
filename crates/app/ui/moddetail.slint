@@ -99,7 +99,7 @@ export component ModDetail inherits Rectangle {
         y: 20px + (root.shown ? 0px : 14px);
         animate y { duration: Theme.slow; easing: ease-out-quint; }
         width: root.W; height: root.H;
-        background: #101014;
+        background: Theme.s1;
         border-width: 1px; border-color: #ffffff26;
         clip: true;
         TouchArea { scroll-event(e) => { accept } }
@@ -246,7 +246,7 @@ export component ModDetail inherits Rectangle {
             for w[i] in [0.92, 0.84, 0.97, 0.6, 0.0, 0.88, 0.95, 0.72, 0.9, 0.5]: Skel { y: i * 26px; width: parent.width * w; height: 10px; }
         }
         // fade the bottom of the scroll area
-        Rectangle { x: 32px; y: root.H - 64px; width: 748px; height: 40px; background: @linear-gradient(180deg, #10101400 0%, #101014 100%); }
+        Rectangle { x: 32px; y: root.H - 64px; width: 748px; height: 40px; background: @linear-gradient(180deg, #10101400 0%, Theme.s1 100%); }
         Rectangle { x: 804px; y: 230px; width: 1px; height: root.H - 254px; background: #ffffff10; }
 
         // ---------- sidebar ----------

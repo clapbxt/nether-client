@@ -11,9 +11,10 @@ export component Hatch inherits Rectangle {
 
 // Parallelogram: the one signature shape (Play, tab marker, tags).
 export component Slash inherits Path {
-    in property <length> skew: 8px;
+    // kept for the old call sites: a flat bar now (v6 has no slanted shapes); skew is ignored
+    in property <length> skew: 0px;
     in property <brush> color: Theme.red;
-    commands: "M \{root.skew / 1px} 0 L \{root.width / 1px} 0 L \{(root.width - root.skew) / 1px} \{root.height / 1px} L 0 \{root.height / 1px} Z";
+    commands: "M 0 0 L \{root.width / 1px} 0 L \{root.width / 1px} \{root.height / 1px} L 0 \{root.height / 1px} Z";
     fill: root.color;
     stroke-width: 0px;
 }
@@ -34,6 +35,7 @@ export component Ticks inherits Rectangle {
 
 // Flat panel with a hairline frame.
 export component Glass inherits Rectangle {
+    border-radius: 8px;
     in property <bool> hoverable: false;
     out property <bool> hovered: ta.has-hover;
     background: Theme.s1;
@@ -161,6 +163,7 @@ export component VerTag inherits Rectangle {
 }
 
 export component Chip inherits Rectangle {
+    border-radius: 4px;
     in property <string> text;
     in property <bool> hot;
     height: 22px;
@@ -172,6 +175,7 @@ export component Chip inherits Rectangle {
 // ---------- actions ----------
 
 export component Btn inherits Rectangle {
+    border-radius: 6px;
     in property <string> text;
     in property <bool> solid;
     in property <bool> danger;
@@ -203,42 +207,32 @@ export component PlayButton inherits Rectangle {
     callback clicked();
     in property <string> label: "PLAY";
     in property <bool> enabled: true;
-    in property <length> skew: 14px;
+    in property <length> skew: 0px;
     in property <length> text-size: 24px;
     // play arrow after the label (off for actions like Stop)
     in property <bool> arrow: true;
     out property <bool> hovered: ta.has-hover;
     width: 200px;
     height: 52px;
-    property <length> d: root.height > 60px ? 6px : 4px;
-    property <length> off: ta.pressed && root.enabled ? root.d : 0px;
-    animate off { duration: 70ms; }
-    Slash { x: root.d; y: root.d; width: parent.width; height: parent.height; skew: root.skew; color: Theme.plate; }
-    Slash {
-        x: root.off; y: root.off; width: parent.width; height: parent.height; skew: root.skew;
-        color: !root.enabled ? Theme.s3 : (ta.pressed ? Theme.press : (ta.has-hover ? Theme.red2 : Theme.red));
-        animate color { duration: Theme.fast; }
-    }
-    // lighter leading edge
-    Slash { x: root.off; y: root.off; width: root.skew + 6px; height: parent.height; skew: root.skew; color: #ffffff30; visible: root.enabled; }
-    Rectangle {
-        x: root.off; y: root.off; width: parent.width; height: parent.height;
-        HorizontalLayout {
-            alignment: center; spacing: root.text-size * 0.45;
-            Text { text: root.label; color: root.enabled ? white : Theme.mut; font-family: Theme.disp; font-size: root.text-size; font-weight: 800;  letter-spacing: 1px; vertical-alignment: center; }
-            if root.arrow: VerticalLayout { alignment: center;
-                Path { width: root.text-size * 0.5; height: root.text-size * 0.58; commands: "M 0 0 L 10 6 L 0 12 Z"; fill: root.enabled ? white : Theme.mut; stroke-width: 0px; }
-            }
+    border-radius: 8px;
+    background: !root.enabled ? Theme.s3 : (ta.pressed ? Theme.press : (ta.has-hover ? Theme.red2 : Theme.red));
+    animate background { duration: Theme.fast; }
+    HorizontalLayout {
+        alignment: center; spacing: 10px;
+        Text { text: root.label; color: root.enabled ? white : Theme.mut; font-family: Theme.disp; font-size: root.text-size; font-weight: 700; vertical-alignment: center; }
+        if root.arrow: VerticalLayout { alignment: center;
+            Path { width: root.text-size * 0.4; height: root.text-size * 0.46; commands: "M 0 0 L 10 6 L 0 12 Z"; fill: root.enabled ? white : Theme.mut; stroke-width: 0px; }
         }
     }
     ta := TouchArea { mouse-cursor: root.enabled ? pointer : default; clicked => { if root.enabled { root.clicked(); } } }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false; enabled: root.enabled;
         key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
-    if fs.has-focus: Slash { x: -4px; y: -4px; width: parent.width + 8px + root.d; height: parent.height + 8px + root.d; skew: root.skew + 2px; color: transparent; stroke: Theme.ice; stroke-width: 2px; }
+    if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-radius: 10px; border-width: 2px; border-color: Theme.ice; }
 }
 
 // Square icon-only button.
 export component IconBtn inherits Rectangle {
+    border-radius: 6px;
     in property <string> d;
     in property <bool> danger;
     in property <bool> solid;
@@ -263,7 +257,7 @@ export component IconBtn inherits Rectangle {
     in property <string> tip;
     if root.tip != "" && (ta.has-hover || fs.has-focus): Rectangle {
         x: -tl.preferred-width - 26px; y: (root.height - 24px) / 2; width: tl.preferred-width + 18px; height: 24px;
-        background: #1C1C24; border-width: 1px; border-color: Theme.ln2;
+        background: Theme.s3; border-width: 1px; border-color: Theme.ln2;
         tl := Text { text: root.tip; color: Theme.tx; font-family: Theme.ui; font-size: 12px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }
     }
 }
@@ -288,6 +282,7 @@ export component LinkBtn inherits Rectangle {
 
 // Segmented control with a sliding ice thumb.
 export component Seg inherits Rectangle {
+    border-radius: 6px;
     in property <[string]> items;
     in property <length> item-w: 110px;
     in-out property <int> current: 0;
@@ -346,6 +341,7 @@ export component Toggle inherits Rectangle {
 }
 
 export component Dropdown inherits Rectangle {
+    border-radius: 6px;
     in property <[string]> items;
     in-out property <int> current: 0;
     callback changed(int);
@@ -372,7 +368,7 @@ export component Dropdown inherits Rectangle {
     pop := PopupWindow {
         x: 0px; y: root.height + 4px; width: root.width; height: Math.min(root.items.length, 8) * 36px + 8px;
         Rectangle {
-            background: #121217; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
             Flickable {
                 y: 4px; height: parent.height - 8px; content-height: root.items.length * 36px;
                 for it[i] in root.items: Rectangle {
@@ -441,6 +437,7 @@ export component Slider inherits Rectangle {
 
 // Single-line text field with a placeholder (optional search glyph).
 export component Field inherits Rectangle {
+    border-radius: 6px;
     in-out property <string> text <=> inp.text;
     in property <string> placeholder;
     in property <bool> search;
@@ -520,7 +517,7 @@ export component WinButtons inherits Rectangle {
         if i == 1 && !Backend.win-maxed: Rectangle { x: 17px; y: 22px; width: 11px; height: 11px; border-width: 1px; border-color: wb.has-hover ? Theme.tx : Theme.dim; }
         if i == 1 && Backend.win-maxed: Rectangle {
             Rectangle { x: 19px; y: 20px; width: 9px; height: 9px; border-width: 1px; border-color: wb.has-hover ? Theme.tx : Theme.dim; }
-            Rectangle { x: 17px; y: 23px; width: 9px; height: 9px; background: wb.has-hover ? (Theme.s2) : #08080B; border-width: 1px; border-color: wb.has-hover ? Theme.tx : Theme.dim; }
+            Rectangle { x: 17px; y: 23px; width: 9px; height: 9px; background: wb.has-hover ? (Theme.s2) : Theme.s1; border-width: 1px; border-color: wb.has-hover ? Theme.tx : Theme.dim; }
         }
         if i == 2: Icon { x: 17px; y: 22px; d: Ico.close; tint: wb.has-hover ? white : Theme.dim; }
         wb := TouchArea { clicked => { if i == 0 { Backend.win-min(); } else if i == 1 { Backend.win-max(); } else { Backend.win-close(); } } }
