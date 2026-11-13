@@ -32,8 +32,6 @@ final class Controls {
     private static long vanillaAt;
     private static boolean vanillaDead;
     private static final Map<Class<?>, Field> idFields = new HashMap<>();
-    /** client key -> Minecraft binding it has to equal */
-    private static final String[][] MIRROR = {{"sprint", "sprintKey", "key.sprint"}, {"sneak", "sneakKey", "key.sneak"}};
 
     static List<Bind> binds() {
         List<Bind> l = new ArrayList<>();
@@ -44,7 +42,7 @@ final class Controls {
         mb.active = true;
         l.add(mb);
         for (Module m : Modules.all) {
-            if (!m.injected()) continue;
+            if (m.hidden()) continue;
             for (Setting s : m.settings) {
                 if (s.t != Setting.KEY) continue;
                 Bind b = new Bind();
@@ -61,7 +59,6 @@ final class Controls {
     }
 
     private static String mirror(Bind b) {
-        if (b.m != null) for (String[] r : MIRROR) if (r[0].equals(b.m.id) && r[1].equals(b.s.key)) return r[2];
         return null;
     }
 

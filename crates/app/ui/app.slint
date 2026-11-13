@@ -11,8 +11,8 @@ import "fonts/JetBrainsMono-Bold.ttf";
 
 import { Theme } from "theme.slint";
 export { Theme }
-import { Backend, ClientState, Inst, Row, ClientMod, SetVal, Detail, Link, HostState, SkinLib, HostPlayer, HostBackup, HostServer, ConLine, SkinTile, Wizard, JavaRt, FriendRow } from "structs.slint";
-export { Backend, ClientState, Inst, Row, ClientMod, SetVal, Detail, Link, HostState, SkinLib, HostPlayer, HostBackup, HostServer, ConLine, SkinTile, Wizard, JavaRt, FriendRow }
+import { Backend, ClientState, Inst, Row, ClientMod, SetVal, Detail, Link, HostState, SkinLib, HostPlayer, HostBackup, HostServer, ConLine, SkinTile, Wizard, JavaRt } from "structs.slint";
+export { Backend, ClientState, Inst, Row, ClientMod, SetVal, Detail, Link, HostState, SkinLib, HostPlayer, HostBackup, HostServer, ConLine, SkinTile, Wizard, JavaRt }
 import { Btn, Eyebrow, Page, Slash, Hatch, PlayButton, Icon, Ico, Pulse, LinkBtn, Heading, Scrim, WinButtons, Field, FocusTrap, Toggle } from "components.slint";
 import { HomeScreen } from "home.slint";
 import { InstancesScreen } from "instances.slint";
@@ -112,7 +112,6 @@ export component AppWindow inherits Window {
             if e.text == Key.Escape {
                 if Backend.detail-open { Backend.detail-open = false; return accept; }
                 if Backend.acct-open { Backend.acct-open = false; return accept; }
-                if Backend.fr-open { Backend.fr-open = false; return accept; }
                 if Backend.crash-open { Backend.crash-open = false; return accept; }
                 return reject;
             }
@@ -174,18 +173,10 @@ export component AppWindow inherits Window {
                 }
                 if root.tab == 6: Rectangle { x: 0px; y: parent.height - 2px; height: 2px; background: Theme.red2; }
             }
-            // friends (L3; only when the service has Friends on and you're signed in)
-            if Backend.fr-enabled && Backend.acct-state == 2: frb := BarBtn {
-                x: root.W - 138px - 12px - 40px - 8px - 196px - 8px - 40px; y: 8px; width: 40px; height: 40px; active: Backend.fr-open;
-                clicked => { Backend.acct-open = false; Backend.fr-open = !Backend.fr-open; if Backend.fr-open { Backend.fr-refresh(); } }
-                Icon { x: 12px; y: 12px; d: Ico.user; tint: Backend.fr-open || frb.hot ? Theme.tx : Theme.dim; }
-                // red dot: someone asked to be your friend (incoming requests sort first)
-                if Backend.fr-list.length > 0 && Backend.fr-list[0].state == 1: Rectangle { x: 28px; y: 8px; width: 6px; height: 6px; border-radius: 3px; background: Theme.red2; }
-            }
             // account
             chip := BarBtn {
                 x: root.W - 138px - 12px - 40px - 8px - 196px; y: 8px; width: 196px; height: 40px; active: Backend.acct-open;
-                clicked => { Backend.fr-open = false; Backend.acct-open = !Backend.acct-open; }
+                clicked => { Backend.acct-open = !Backend.acct-open; }
                 // player head (face + hat layer from the skin)
                 Rectangle { x: 6px; y: 6px; width: 28px; height: 28px; background: Theme.s2; clip: true;
                     if !(root.acct-known && Backend.skin-ready): Icon { x: 8px; y: 8px; d: Ico.user; tint: Theme.mut; }
@@ -344,70 +335,6 @@ export component AppWindow inherits Window {
                     if Backend.acct-offline: Text { x: 22px; y: 48px + Backend.accounts.length * 48px; width: 296px; text: "No connection: singleplayer only until you're back online."; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; }
                     Btn { x: 22px; y: parent.height - 56px; text: "ADD ACCOUNT"; icon: Ico.plus; clicked => { Backend.sign-in(); } }
                     Btn { x: 186px; y: parent.height - 56px; text: "SIGN OUT"; danger: true; clicked => { Backend.sign-out(); } }
-                }
-            }
-        }
-
-        // ---------- friends panel (L3) ----------
-        if Backend.fr-open: Rectangle {
-            x: 0px; y: root.top; width: root.W; height: root.H - root.top;
-            TouchArea { clicked => { Backend.fr-open = false; } }
-            frp := Rectangle {
-                property <bool> share-row: Backend.fr-on && HostState.addr != "";
-                property <length> list-y: self.share-row ? 210px : 166px;
-                property <int> shown: Math.min(Backend.fr-list.length, 6);
-                x: root.W - 198px - 48px - 400px; y: 6px; width: 400px;
-                height: !Backend.fr-on ? 236px : self.list-y + Math.max(self.shown, 1) * 52px + (Backend.fr-msg != "" ? 30px : 0px) + 64px;
-                background: #121217; border-width: 1px; border-color: Theme.ln2;
-                TouchArea { }
-                Rectangle { x: 0px; y: 0px; width: 3px; height: parent.height; background: Theme.red; }
-                Eyebrow { x: 22px; y: 18px; text: "FRIENDS"; }
-                // not on yet: what it does and what it shares
-                if !Backend.fr-on: Rectangle {
-                    Text { x: 22px; y: 44px; width: 356px; text: Backend.fr-loaded ? "Add friends with a code and join the servers they host in one click." : "Checking your friends…"; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; wrap: word-wrap; }
-                    Text { x: 22px; y: 90px; width: 356px; text: "Only friends you both accept see each other, and only the server you choose to share. No chat, no online status, nobody can find you by name."; color: Theme.dim; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; }
-                    Btn { x: 22px; y: 150px; text: Backend.fr-busy ? "TURNING ON…" : "TURN ON FRIENDS"; solid: true; enabled: Backend.fr-loaded && !Backend.fr-busy; clicked => { Backend.fr-turn-on(); } }
-                    if Backend.fr-msg != "": Text { x: 22px; y: 198px; width: 356px; text: Backend.fr-msg; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; }
-                }
-                if Backend.fr-on: Rectangle {
-                    Text { x: 22px; y: 42px; text: "YOUR CODE"; color: Theme.mut; font-family: Theme.disp; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 0.9px; }
-                    Text { x: 22px; y: 58px; text: Backend.fr-code; color: Theme.tx; font-family: Theme.mono; font-size: 24px; font-weight: 700; letter-spacing: 3px; }
-                    Btn { x: parent.width - 22px - 104px - 8px - 92px; y: 56px; width: 92px; text: "COPY"; icon: Ico.copy; clicked => { Backend.copy-text(Backend.fr-code); } }
-                    Btn { x: parent.width - 22px - 104px; y: 56px; width: 104px; text: "NEW CODE"; enabled: !Backend.fr-busy; clicked => { Backend.fr-new-code(); } }
-                    Field { x: 22px; y: 110px; width: parent.width - 44px - 92px; placeholder: "Friend's code"; text <=> Backend.fr-input;
-                        accepted => { if self.text != "" && !Backend.fr-busy { Backend.fr-add(self.text); } } }
-                    Btn { x: parent.width - 22px - 84px; y: 110px; width: 84px; text: "ADD"; icon: Ico.plus; enabled: Backend.fr-input != "" && !Backend.fr-busy; clicked => { Backend.fr-add(Backend.fr-input); } }
-                    if frp.share-row: Rectangle {
-                        x: 22px; y: 162px; width: parent.width - 44px; height: 36px;
-                        Text { x: 0px; y: 0px; height: parent.height; text: "Show my server to friends"; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; vertical-alignment: center; }
-                        Text { x: 186px; y: 0px; width: parent.width - 186px - 54px; height: parent.height; text: HostState.addr; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; vertical-alignment: center; overflow: elide; }
-                        Toggle { x: parent.width - 42px; y: 7px; on <=> Backend.fr-sharing; toggled(v) => { Backend.fr-share(v); } }
-                    }
-                    Rectangle { x: 22px; y: frp.list-y - 8px; width: parent.width - 44px; height: 1px; background: Theme.ln; }
-                    if Backend.fr-list.length == 0: Text { x: 22px; y: frp.list-y + 8px; width: parent.width - 44px; text: "No friends yet. Send someone your code, or add theirs."; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
-                    Flickable {
-                        x: 12px; y: frp.list-y; width: parent.width - 24px; height: frp.shown * 52px;
-                        content-height: Backend.fr-list.length * 52px;
-                        for f[i] in Backend.fr-list: Rectangle {
-                            y: i * 52px; width: parent.width; height: 48px;
-                            background: frow.has-hover ? Theme.s1 : transparent;
-                            animate background { duration: Theme.fast; }
-                            frow := TouchArea { }
-                            Rectangle { x: 10px; y: 10px; width: 28px; height: 28px; background: Theme.s3;
-                                Icon { x: 6px; y: 6px; d: Ico.user; tint: f.host != "" ? Theme.ice : Theme.mut; } }
-                            Text { x: 50px; y: 6px; width: 150px; text: f.name; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; overflow: elide; }
-                            Text { x: 50px; y: 26px; width: 150px; overflow: elide; font-family: Theme.ui; font-size: 11px * Theme.ts;
-                                text: f.state == 1 ? "Wants to be friends" : (f.state == 2 ? "Request sent" : (f.host != "" ? "Hosting a server" : "Friend"));
-                                color: f.state == 1 || f.host != "" ? Theme.ice : Theme.mut; }
-                            if f.state == 1: Btn { x: parent.width - 8px - 96px - 6px - 88px; y: 6px; width: 88px; text: "ACCEPT"; solid: true; clicked => { Backend.fr-respond(f.uuid, "accept"); } }
-                            if f.state == 1: Btn { x: parent.width - 8px - 96px; y: 6px; width: 96px; text: "DECLINE"; clicked => { Backend.fr-respond(f.uuid, "decline"); } }
-                            if f.state == 1 && frow.has-hover: LinkBtn { x: 50px + 100px; y: 26px; text: "BLOCK"; clicked => { Backend.fr-respond(f.uuid, "block"); } }
-                            if f.state == 0 && f.host != "": Btn { x: parent.width - 8px - 84px - (frow.has-hover ? 44px : 0px); y: 6px; width: 84px; text: "JOIN"; solid: true; icon: Ico.play; clicked => { Backend.fr-open = false; Backend.fr-join(f.name, f.host); } }
-                            if f.state != 1 && frow.has-hover: Btn { x: parent.width - 8px - 36px; y: 6px; width: 36px; icon: Ico.close; clicked => { Backend.fr-respond(f.uuid, "remove"); } }
-                        }
-                    }
-                    if Backend.fr-msg != "": Text { x: 22px; y: frp.list-y + Math.max(frp.shown, 1) * 52px + 4px; width: parent.width - 44px; text: Backend.fr-msg; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; }
-                    LinkBtn { x: 22px; y: frp.height - 42px; text: "TURN OFF FRIENDS"; clicked => { Backend.fr-turn-off(); } }
                 }
             }
         }

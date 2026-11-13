@@ -13,12 +13,13 @@ public final class Schema {
         StringBuilder b = new StringBuilder("{\"modules\":[");
         boolean first = true;
         for (Module m : Modules.all) {
+            if (m.hidden()) continue;
             if (!first) b.append(',');
             first = false;
             b.append("{\"id\":").append(q(m.id)).append(",\"name\":").append(q(m.name)).append(",\"cat\":").append(q(m.cat))
-                .append(",\"group\":").append(q(m.group())).append(",\"desc\":").append(q(m.desc)).append(",\"hud\":").append(m.hud)
+                .append(",\"desc\":").append(q(m.desc)).append(",\"hud\":").append(m.hud)
                 .append(",\"icon\":").append(q(m.icon()[0])).append(",\"on\":").append(m.defOn).append(",\"x\":").append(m.dx).append(",\"y\":").append(m.dy)
-                .append(",\"safety\":").append(q(Module.SAFETY_ID[m.safety()])).append(",\"home\":").append(m.hud ? q(m.home()) : "null").append(",\"settings\":[");
+                .append(",\"home\":").append(m.hud ? q(m.home()) : "null").append(",\"settings\":[");
             for (int i = 0; i < m.settings.size(); i++) {
                 Setting s = m.settings.get(i);
                 if (i > 0) b.append(',');

@@ -1,14 +1,13 @@
 //! One launcher at a time: a later start (shortcut, a modpack opened with it) is handed to the running launcher over
-//! loopback and exits. Also: joining a server by address with the instance that fits its version (Friends).
+//! loopback and exits.
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::sync::Arc;
 use std::time::Duration;
 
-use nether_core::net;
-use slint::{ComponentHandle, Model};
+use slint::ComponentHandle;
 
-use crate::{show_toast, ui_do, AppWindow, Backend, Shared};
+use crate::{ui_do, AppWindow, Shared};
 
 const PORT: u16 = 48651;
 const HELLO: &[u8; 12] = b"NETHER-LINK\n";
@@ -115,51 +114,5 @@ fn handle(ui: &AppWindow, sh: &Arc<Shared>, msg: &str) {
         "SHOW" => crate::prefs::show(ui),
         "OPEN" if std::path::Path::new(arg).is_absolute() => { crate::prefs::show(ui); crate::drop::dropped(ui, sh, vec![std::path::PathBuf::from(arg)]); }
         _ => {}
-    }
-}
-
-/// After the user agreed: ask the server for its version, then offer to join with a fitting instance.
-pub(crate) fn check(ui: &AppWindow, sh: &Arc<Shared>, addr: String) {
-    let (weak, sh) = (ui.as_weak(), sh.clone());
-    std::thread::spawn(move || {
-        let status = net::ping_server(&addr).ok();
-        ui_do(&weak, move |ui| {
-            let insts = ui.global::<Backend>().get_instances();
-            let ver = status.as_ref().map(|s| s.version.clone()).unwrap_or_default();
-            let list: Vec<(usize, String, String, i32)> = insts.iter().enumerate().map(|(i, x)| (i, x.title.to_string(), x.ver.to_string(), x.last_ts)).collect();
-            let Some((idx, fits)) = pick(&list, &ver) else {
-                show_toast(ui, &sh, &format!("Create an instance{} first, then open the invite again", if ver.is_empty() { String::new() } else { format!(" for {ver}") }));
-                return;
-            };
-            let (_, title, iver, _) = &list[idx];
-            let motd: String = status.as_ref().map(|s| s.motd.chars().take(120).collect()).unwrap_or_default();
-            let text = match (&status, fits) {
-                (None, _) => format!("The server at {addr} didn't answer yet. Try anyway with {title} ({iver})?"),
-                (Some(s), true) => format!("{} · {}/{} online. Play {title} ({iver}) and connect?", if motd.is_empty() { "Minecraft server".into() } else { motd }, s.online, s.max),
-                (Some(_), false) => format!("The server runs {ver}, and none of your instances match. Try with {title} ({iver})? Create a {ver} instance if it won't connect."),
-            };
-            let (sh2, addr2) = (sh.clone(), addr.clone());
-            crate::instpage::ask(ui, &format!("Join {addr}?"), &text, "JOIN SERVER", false, move |ui| crate::instpage::join_server(ui, &sh2, idx as i32, &addr2));
-        });
-    });
-}
-
-/// The instance to join with: newest-played one whose version the server reports, else the newest-played one.
-fn pick(list: &[(usize, String, String, i32)], server_ver: &str) -> Option<(usize, bool)> {
-    let fits = |v: &str| !v.is_empty() && server_ver.split(|c: char| !(c.is_ascii_alphanumeric() || c == '.' || c == '-')).any(|t| t == v);
-    let newest = |it: &mut dyn Iterator<Item = &(usize, String, String, i32)>| it.max_by_key(|x| x.3).map(|x| x.0);
-    newest(&mut list.iter().filter(|x| fits(&x.2))).map(|i| (i, true)).or_else(|| newest(&mut list.iter()).map(|i| (i, false)))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn picks_matching_version() {
-        let l = vec![(0, "A".into(), "1.20.1".into(), 50), (1, "B".into(), "1.21.11".into(), 10), (2, "C".into(), "1.21.11".into(), 20)];
-        assert_eq!(pick(&l, "Paper 1.21.11"), Some((2, true)));
-        assert_eq!(pick(&l, "1.8.9"), Some((0, false)));
-        assert_eq!(pick(&[], "1.21.11"), None);
     }
 }

@@ -10,12 +10,11 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Client "menu" group: our own title screen (backgrounds, three layouts, button styles, logo + splash, clock, account,
- * quick join) and a Nether button on the pause screen. Vanilla's screens stay underneath: on the title screen its
- * widgets and splash are removed, its logo and version text faded out (modern) or covered (1.8.9), the panorama keeps
- * running. Buttons open vanilla's own screens through reflection. A NETHER / VANILLA switch sits in the top-left corner
- * of both our screen and vanilla's, so either one is a click away; the module switch (synced with the launcher's
- * modules.client.mainMenu) is the same setting. Needs bound names (Fabric intermediary / Mojang / same-version obf
+ * Built-in main menu (always on, not a listed module; the hidden "menu" module only holds its settings): our own title
+ * screen (backgrounds, three layouts, button styles, logo + splash, clock, account, quick join) and a Nether button on the
+ * pause screen. Vanilla's screens stay underneath: on the title screen its widgets and splash are removed, its logo and
+ * version text faded out (modern) or covered (1.8.9), the panorama keeps running. Buttons open vanilla's own screens
+ * through reflection. Needs bound names (Fabric intermediary / Mojang / same-version obf
  * tables, 1.8.9 notch / SRG); elsewhere vanilla's menu stays untouched.
  */
 final class MainMenu {
@@ -25,7 +24,10 @@ final class MainMenu {
     private static final String[] LAYOUTS = {"Center", "Left", "Bottom"}, STYLES = {"Solid", "Outline", "Minimal"}, LOGOS = {"Wordmark", "Mark", "Hidden"};
 
     static final Module MODULE = new Module("menu", "Main Menu", "Visual",
-        "Nether title screen: backgrounds, layouts, quick join and your account. Switch to vanilla from the title screen itself.", false, true, 0, 0) { };
+        "Nether title screen: backgrounds, layouts, quick join and your account.", false, true, 0, 0) {
+        @Override boolean hidden() { return true; }
+        @Override boolean wantedOn() { return true; }
+    };
 
     static {
         Module m = MODULE;
@@ -60,7 +62,6 @@ final class MainMenu {
     private static boolean looked, legacy;
     /** our title screen is drawn this frame (every click on it is ours) */
     static boolean title, pause;
-    private static boolean vanillaTitle;
     private static boolean pressed, click;
     private static long shownAt;
     /** the title screen whose widgets we removed (rebuilt by {@link #restoreVanilla}) and the splash vanilla picked for it */
@@ -69,20 +70,6 @@ final class MainMenu {
 
     static final int SINGLE = 0, MULTI = 1, MODS = 2, OPTIONS = 3, QUIT = 4, NETHER = 5;
     private static final String[] LABELS = {"SINGLEPLAYER", "MULTIPLAYER", "MODS", "OPTIONS", "QUIT", "NETHER CLIENT"};
-
-    // ---------------------------------------------------------------- on / off (module switch <-> launcher key)
-
-    private static int syncM = -1, syncE = -1;
-
-    /** Our title screen wanted: the module switch, kept equal to modules.client.mainMenu (the launcher's switch). */
-    private static boolean wanted() {
-        int mm = Config.bool("client", "mainMenu", true) ? 1 : 0, en = MODULE.wantedOn() ? 1 : 0;
-        if (syncM < 0 ? mm != en : mm != syncM) { if (en != mm) Config.set("menu", "enabled", mm == 1); en = mm; }
-        else if (en != syncE) { Config.set("client", "mainMenu", en == 1); mm = en; }
-        syncM = mm;
-        syncE = en;
-        return en == 1;
-    }
 
     private static void look() {
         if (looked) return;
@@ -111,33 +98,26 @@ final class MainMenu {
     /** Before the in-game menu each frame. */
     static void frame(int fbW, int fbH) {
         boolean was = title;
-        title = pause = vanillaTitle = false;
+        title = pause = false;
         click = pressed;
         pressed = false;
         nb = 0;
         modal = null;
-        if (!MODULE.injected() || !MODULE.available()) return;
+        if (!MODULE.available()) return;
         look();
         if (cTitle == null) return;
         QuickJoin.track();
-        boolean want = wanted();
         Object s = Game.screen();
         if (s == null) { panelOpen = false; return; }
         boolean isTitle = cTitle.isInstance(s);
-        if (isTitle && !want && stripped == s) restoreVanilla(); // switched off here: vanilla rebuilds its buttons and fades back in
         Gfx.minPx = 9; // corner text and labels stay legible in small windows
         try {
-            if (isTitle && want) {
+            if (isTitle) {
                 title = true;
                 if (!was) shownAt = System.nanoTime();
                 strip(s);
                 stripped = s;
                 drawTitle(fbW, fbH, s);
-            } else if (isTitle) {
-                vanillaTitle = true;
-                panelOpen = false;
-                units(Math.min(Gfx.base, Math.min(fbW / 640f, fbH / 480f)));
-                topBar(false, s);
             } else if (cPause != null && cPause.isInstance(s) && !Input.menuOpen && MODULE.bool("pauseButton")) {
                 // F3+Esc pauses without the menu (screenshots): no button either
                 if (legacy || !Boolean.FALSE.equals(Game.fld(s, "field_19319"))) {
@@ -152,7 +132,7 @@ final class MainMenu {
         }
     }
 
-    /** Overlay death or switched off: re-open the title screen we stripped, so vanilla rebuilds its buttons and splash. */
+    /** Overlay death: re-open the title screen we stripped, so vanilla rebuilds its buttons and splash. */
     static void restoreVanilla() {
         Object s = stripped;
         stripped = null;
@@ -200,7 +180,7 @@ final class MainMenu {
     /** Mouse press from the input chain while no Nether menu is open; true swallows it. */
     static boolean press(int b) {
         if (title) { if (b == 0) pressed = true; return true; }
-        if ((vanillaTitle || pause) && b == 0) {
+        if (pause && b == 0) {
             float x = fx(), y = fy();
             for (int i = 0; i < nb; i += 4) if (x >= boxes[i] && y >= boxes[i + 1] && x < boxes[i] + boxes[i + 2] && y < boxes[i + 1] + boxes[i + 3]) { pressed = true; return true; }
         }
@@ -285,7 +265,7 @@ final class MainMenu {
         corner(W, accTop);
         footer(W, H, layout.equals("Bottom"));
         Gfx.alpha = a0;
-        topBar(true, screen);
+        topBar();
         if (panelOpen) panel(W, H);
         else panelA = 0;
         // dev: -Dnether.titleClick=<button index> presses that button once the screen has settled; -Dnether.titlePanel=1 opens the quick panel
@@ -571,38 +551,16 @@ final class MainMenu {
         return h;
     }
 
-    // ---------------------------------------------------------------- top bar (both title screens) + pause chip
+    // ---------------------------------------------------------------- top bar (our title screen) + pause chip
 
     private static float[] custBox;
 
-    /** Top-left controls, in the same place on our title screen and on vanilla's: the menu switch, then CUSTOMISE (ours) or the NETHER button (vanilla). */
-    private static void topBar(boolean ours, Object scr) {
+    /** Top-left CUSTOMISE control of our title screen. */
+    private static void topBar() {
         float x = 12, y = 12, h = 32;
-        x += seg(x, y, h, ours) + 6;
-        if (ours) {
-            float w = chipW("CUSTOMISE", null, false) + 18;
-            custBox = new float[] {x, y, w, h};
-            if (chip("cust", x, y, h, "CUSTOMISE", null, false, panelOpen)) panelOpen = !panelOpen;
-        } else if (chip("nether", x, y, h, "NETHER", keyName(), true, false)) Input.setMenu(true);
-    }
-
-    /** MENU [NETHER | VANILLA] switch with a red sliding thumb; returns its width. */
-    private static float seg(float x, float y, float h, boolean ours) {
-        String l0 = "MENU", a = "NETHER", b = "VANILLA";
-        float lw0 = Gfx.width(Gfx.MONO, 9, l0, 1.4f), wa = Gfx.width(Gfx.SEMI, 11, a, 1.2f) + 22, wb = Gfx.width(Gfx.SEMI, 11, b, 1.2f) + 22;
-        float w = 12 + lw0 + 8 + wa + wb + 4;
-        Gfx.rect(x, y, w, h, 0, Gfx.a(Gfx.BG, 0.86f));
-        Gfx.ring(x, y, w, h, 0, 0.5f, Gfx.LN2);
-        Gfx.text(Gfx.MONO, 9, x + 12, y + h / 2, Gfx.SUB, l0, false, 1.4f);
-        float sx = x + 12 + lw0 + 8, sy = y + 4, sh = h - 8;
-        float p = an("seg", !ours), ha = an("segA", ours ? false : over(sx, y, wa, h)), hb = an("segB", ours && over(sx + wa, y, wb, h));
-        Gfx.rect(sx + p * wa, sy, wa + (wb - wa) * p, sh, 0, Gfx.RED);
-        Gfx.textC(Gfx.SEMI, 11, sx + wa / 2, y + h / 2, Gfx.mix(Gfx.mix(Gfx.DIM, Gfx.ICE, ha), 0xFFFFFFFF, 1 - p), a, 1.2f);
-        Gfx.textC(Gfx.SEMI, 11, sx + wa + wb / 2, y + h / 2, Gfx.mix(Gfx.mix(Gfx.DIM, Gfx.ICE, hb), 0xFFFFFFFF, p), b, 1.2f);
-        box(x, y, w, h);
-        if (!ours && hit(sx, y, wa, h)) Config.set("menu", "enabled", true);
-        if (ours && hit(sx + wa, y, wb, h)) { panelOpen = false; Config.set("menu", "enabled", false); }
-        return w;
+        float w = chipW("CUSTOMISE", null, false) + 18;
+        custBox = new float[] {x, y, w, h};
+        if (chip("cust", x, y, h, "CUSTOMISE", null, false, panelOpen)) panelOpen = !panelOpen;
     }
 
     private static float chipW(String label, String key, boolean mark) {
@@ -757,10 +715,7 @@ final class MainMenu {
                 break;
             case MULTI: open(mc, makeFirst(screen, legacy ? Game.l("azh", "net.minecraft.client.gui.GuiMultiplayer") : "net.minecraft.class_500")); break;
             case MODS: open(mc, make(cMods, screen)); break;
-            case OPTIONS:
-                if (legacy) open(mc, make(Game.cls0(Game.l("axn", "net.minecraft.client.gui.GuiOptions")), screen, Game.fld(mc, Game.l("t", "field_71474_y"))));
-                else open(mc, make(Game.cls0("net.minecraft.class_429"), screen, Game.fld(mc, "field_1690")));
-                break;
+            case OPTIONS: open(mc, options(mc, screen, Game.cls0(legacy ? Game.l("axn", "net.minecraft.client.gui.GuiOptions") : "net.minecraft.class_429"))); break;
             case QUIT: Game.call(mc, legacy ? Game.l("m", "func_71400_g") : "method_1592"); break;
             default: panelOpen = false; Input.setMenu(true);
         }
@@ -768,6 +723,33 @@ final class MainMenu {
 
     static void open(Object mc, Object screen) {
         if (screen != null) Game.call(mc, legacy ? Game.l("a", "func_147108_a") : "method_1507", screen);
+    }
+
+    /**
+     * The options screen: its (parent, options) constructor with the game's options object, found by type on the game instance
+     * (no field name to get wrong on any version or loader), else the named field.
+     */
+    private static Object options(Object mc, Object parent, Class<?> cls) {
+        if (cls == null) return null;
+        try {
+            for (Constructor<?> c : cls.getDeclaredConstructors()) {
+                Class<?>[] p = c.getParameterTypes();
+                if (p.length != 2 || !p[0].isInstance(parent)) continue;
+                for (Class<?> k = mc.getClass(); k != null && k != Object.class; k = k.getSuperclass()) {
+                    for (Field f : k.getDeclaredFields()) {
+                        if (!p[1].isAssignableFrom(f.getType()) || java.lang.reflect.Modifier.isStatic(f.getModifiers())) continue;
+                        f.setAccessible(true);
+                        Object o = f.get(mc);
+                        if (o == null) continue;
+                        c.setAccessible(true);
+                        return c.newInstance(parent, o);
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            System.out.println("[nether-agent] could not open options: " + t);
+        }
+        return make(cls, parent, Game.fld(mc, legacy ? Game.l("t", "field_71474_y") : "field_1690"));
     }
 
     /** The first of these screen classes that exists, made with its (parent screen) constructor. */

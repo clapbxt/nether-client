@@ -7,8 +7,8 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * In-game menu (immediate mode): module grid (search, tabs, favourites, safety badges), per-module settings page (inline
- * colour picker, type-in slider values), the CONTROLS ({@link Controls}) and CLIENT ({@link Profiles}) tabs, and the HUD
+ * In-game menu (immediate mode): module grid (search, tabs, favourites), per-module settings page (inline
+ * colour picker, type-in slider values), the CONTROLS ({@link Controls}), CLIENT ({@link Profiles}) and WARDROBE ({@link Wardrobe}) tabs, and the HUD
  * layout editor ({@link HudEditor}). Laid out in a 720-unit-tall logical space (Gfx.s = framebuffer height / 720).
  * Keyboard: arrows / Tab move the focus, Enter / Space use it, Left / Right adjust it, Esc steps back; Ctrl+F searches,
  * Ctrl+E opens the layout editor, Ctrl+V pastes into the field being typed in.
@@ -17,10 +17,10 @@ final class Menu {
     private Menu() {}
 
     static final float PW = 880, PH = 540;
-    static final String[] TABS = {"ALL", "FAVOURITES", "ENABLED", "HUD", "MOVEMENT", "VISUAL", "UTILITY", "CONTROLS", "CLIENT"};
-    private static final String[] TAB_CAT = {null, "*fav", "*on", "HUD", "Movement", "Visual", "Utility", null, null};
+    static final String[] TABS = {"ALL", "FAVOURITES", "ENABLED", "HUD", "MOVEMENT", "VISUAL", "UTILITY", "CONTROLS", "CLIENT", "WARDROBE"};
+    private static final String[] TAB_CAT = {null, "*fav", "*on", "HUD", "Movement", "Visual", "Utility", null, null, null};
     /** tabs from here on are pages of their own (drawn on the right of the tab row) */
-    static final int T_CONTROLS = 7, T_CLIENT = 8;
+    static final int T_CONTROLS = 7, T_CLIENT = 8, T_WARDROBE = 9;
 
     static boolean hudEdit;
     static String page;
@@ -445,18 +445,6 @@ final class Menu {
         if (hit(x, y, w, 28) || used(f) != 0) capture = cid;
     }
 
-    /** Safety tag of m as a dot + label at (x, cy); hover explains it. Returns its width. */
-    static float badge(Module m, float x, float cy) {
-        int s = m.safety();
-        int col = s == Module.SAFE ? 0xFF3DDC84 : s == Module.COSMETIC ? Gfx.DIM : 0xFFFFB020;
-        String t = Module.SAFETY[s];
-        float tw = Gfx.width(Gfx.MONO, 9, t, 1.4f);
-        Gfx.rect(x, cy - 2, 4, 4, 0, col);
-        Gfx.text(Gfx.MONO, 9, x + 9, cy, Gfx.mix(col, Gfx.SUB, 0.3f), t, false, 1.4f);
-        if (in(x - 4, cy - 9, tw + 17, 18)) tip = Module.SAFETY_TIP[s];
-        return 9 + tw;
-    }
-
     // ---------------------------------------------------------------- frame
 
     static void frame(int fbW, int fbH, float dt) {
@@ -569,6 +557,7 @@ final class Menu {
             tabs(px, py);
             if (tab == T_CONTROLS) Controls.draw(px, py, wheel);
             else if (tab == T_CLIENT) Profiles.draw(px, py, wheel);
+            else if (tab == T_WARDROBE) Wardrobe.draw(px, py, wheel);
             else grid(px, py, wheel);
         }
 
@@ -601,16 +590,15 @@ final class Menu {
         float t = an("safe", hv), o = an("safeon", on);
         Gfx.rect(x, y, 176, 30, 6, Gfx.a(0xFFFFFFFF, 0.035f + 0.04f * t));
         Gfx.ring(x, y, 176, 30, 6, 1, Gfx.mix(Gfx.mix(Gfx.LN, Gfx.LN2, t), Gfx.a(Gfx.RED, 0.7f), o));
-        String why = on ? AutoSafe.reason() : null;
-        Gfx.text(Gfx.SEMI, 10, x + 13, y + 15, Gfx.mix(Gfx.DIM, Gfx.ICE, Math.max(t, o)), why == null ? "SERVER-SAFE" : "AUTO: " + (why.length() > 11 ? why.substring(0, 10) + ".." : why).toUpperCase(java.util.Locale.ROOT), false, 1.2f);
+        Gfx.text(Gfx.SEMI, 10, x + 13, y + 15, Gfx.mix(Gfx.DIM, Gfx.ICE, Math.max(t, o)), "SERVER-SAFE", false, 1.2f);
         float sx = x + 176 - 13 - 36, sy = y + 5;
         Gfx.rect(sx, sy, 36, 20, 10, Gfx.mix(Gfx.S3, Gfx.RED, o));
         Gfx.rect(sx + 3 + 16 * o, sy + 3, 14, 14, 7, Gfx.mix(Gfx.DIM, 0xFFFFFFFF, o));
-        if (hit(x, y, 176, 30)) { AutoSafe.manual(); Modules.setSafe(!on); }
-        if (hv) tip = "Turns off every module marked CHECK RULES (sprint, sneak, zoom, fullbright, reach) for servers that forbid them. On by itself on strict servers (Auto Safe Mode).";
+        if (hit(x, y, 176, 30)) Modules.setSafe(!on);
+        if (hv) tip = "Turns off the modules that can be an advantage (zoom, fullbright, reach) for servers that forbid them.";
     }
 
-    /** Category tabs on the left, the CONTROLS and CLIENT pages on the right. */
+    /** Category tabs on the left, the CONTROLS, CLIENT and WARDROBE pages on the right. */
     private static void tabs(float px, float py) {
         float ty = py + 100, wl = 0, wr = 0;
         for (int i = 0; i < TABS.length; i++) { float tw = Gfx.width(Gfx.SEMI, 12, TABS[i], 1.4f); if (i < T_CONTROLS) wl += tw; else wr += tw; }
@@ -638,7 +626,7 @@ final class Menu {
         List<Module> l = new ArrayList<>();
         String q = search.toLowerCase(Locale.ROOT), c = TAB_CAT[tab];
         for (Module m : Modules.all) {
-            if (!m.injected()) continue;
+            if (m.hidden()) continue;
             if ("*on".equals(c) ? !m.enabled() : "*fav".equals(c) ? !m.fav() : c != null && !m.cat.equals(c)) continue;
             if (!q.isEmpty() && !(m.name.toLowerCase(Locale.ROOT).contains(q) || m.desc.toLowerCase(Locale.ROOT).contains(q) || m.cat.toLowerCase(Locale.ROOT).contains(q))) continue;
             l.add(m);
@@ -713,8 +701,7 @@ final class Menu {
             Gfx.text(Gfx.MONO, 9, x + 28, y + h - 16, avail ? Gfx.DIM : Gfx.SUB, m.lockNote(), false, 1.4f);
             Gfx.alpha = a0 * 0.55f;
         } else {
-            float cwid = Gfx.text(Gfx.MONO, 9, x + 18, y + h - 16, Gfx.SUB, m.cat.toUpperCase(Locale.ROOT), false, 2f);
-            badge(m, x + 18 + cwid + 12, y + h - 16);
+            Gfx.text(Gfx.MONO, 9, x + 18, y + h - 16, Gfx.SUB, m.cat.toUpperCase(Locale.ROOT), false, 2f);
         }
 
         // settings icon (two sliders)
@@ -768,8 +755,7 @@ final class Menu {
         if (ColorPicker.id != null && !ColorPicker.id.equals(m.id)) ColorPicker.close();
         if (button("back", "BACK", px + 28, py + 88, 92, 30, false)) { commitEdit(); ColorPicker.close(); page = null; scroll = scrollT = gridScroll; return; }
         float tw = Gfx.text(Gfx.HEAD, 22, px + 138, py + 103, Gfx.ICE, m.name.toUpperCase(Locale.ROOT), false, 1.5f);
-        float cw0 = Gfx.text(Gfx.MONO, 9, px + 138 + tw + 12, py + 105, Gfx.SUB, m.cat.toUpperCase(Locale.ROOT), false, 2f);
-        badge(m, px + 138 + tw + 12 + cw0 + 12, py + 105);
+        Gfx.text(Gfx.MONO, 9, px + 138 + tw + 12, py + 105, Gfx.SUB, m.cat.toUpperCase(Locale.ROOT), false, 2f);
 
         float top = py + 138, viewH = PH - 138 - 24, lx = px + 28, lw = 500, rowH = 46;
         String note = m.lockNote();

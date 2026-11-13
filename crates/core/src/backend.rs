@@ -202,14 +202,22 @@ pub fn players(c: &Client, uuids: &[&str]) -> Result<HashMap<String, String>> {
 struct Tok { uuid: String, token: String, exp: i64 }
 static TOKEN: Mutex<Option<Tok>> = Mutex::new(None);
 
+/// The response if it succeeded; else an error that says which step failed and what the service answered (its JSON `error`).
+fn step(r: Response, what: &str) -> Result<Response> {
+    if r.status().is_success() { return Ok(r); }
+    let code = r.status();
+    let msg = r.text().ok().and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok()).and_then(|v| v["error"].as_str().map(String::from)).unwrap_or_default();
+    bail!("{what} failed (HTTP {code}{})", if msg.is_empty() { String::new() } else { format!(": {msg}") })
+}
+
 fn handshake(c: &Client, api: &str, s: &Session) -> Result<String> {
-    let started: serde_json::Value = c.post(format!("{api}/v1/auth/start")).send()?.error_for_status()?.json()?;
+    let started: serde_json::Value = step(c.post(format!("{api}/v1/auth/start")).send()?, "Nether sign-in")?.json()?;
     let server_id = started["serverId"].as_str().filter(|v| v.len() == 32).ok_or_else(|| anyhow!("bad auth start"))?;
-    c.post("https://sessionserver.mojang.com/session/minecraft/join")
+    step(c.post("https://sessionserver.mojang.com/session/minecraft/join")
         .json(&serde_json::json!({ "accessToken": s.access_token, "selectedProfile": s.uuid.replace('-', ""), "serverId": server_id }))
-        .send()?.error_for_status()?;
-    let done: serde_json::Value = c.post(format!("{api}/v1/auth/finish")).json(&serde_json::json!({ "name": s.name, "serverId": server_id }))
-        .send()?.error_for_status()?.json()?;
+        .send()?, "Mojang join")?;
+    let done: serde_json::Value = step(c.post(format!("{api}/v1/auth/finish")).json(&serde_json::json!({ "name": s.name, "serverId": server_id }))
+        .send()?, "Nether sign-in")?.json()?;
     let (token, uuid) = (done["token"].as_str().unwrap_or_default(), done["uuid"].as_str().unwrap_or_default());
     if token.is_empty() || uuid != s.uuid.replace('-', "").to_lowercase() { bail!("bad auth reply"); }
     *TOKEN.lock().unwrap_or_else(|e| e.into_inner()) = Some(Tok { uuid: uuid.into(), token: token.into(), exp: done["exp"].as_i64().unwrap_or(0) });

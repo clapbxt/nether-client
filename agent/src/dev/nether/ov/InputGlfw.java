@@ -198,7 +198,7 @@ final class InputGlfw extends Plat {
         @Override public int key(int r, long w, int key) {
             if (Input.dead) return r;
             if (Input.menuOpen) return 0;
-            return Modules.polledKey(key, Input.devOnly ? 0 : r);
+            return Input.devOnly ? 0 : r;
         }
 
         @Override public int btn(int r, long w, int b) { return Input.dead ? r : Input.menuOpen || Input.devOnly ? 0 : r; }

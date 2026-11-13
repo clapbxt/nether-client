@@ -16,8 +16,6 @@ export struct VerOpt { id: string, label: string }
 export struct MdBlock { kind: int, text: styled-text, plain: string, img: image, ratio: float, has-img: bool }
 // an account cape (id "" = no cape); img = its outside face
 export struct Cape { id: string, name: string, img: image }
-// L3 Friends: state 0 friend, 1 asked you, 2 you asked; host = their shared server address while they host
-export struct FriendRow { uuid: string, name: string, state: int, host: string }
 // a saved Microsoft account (account panel); active = the one Play uses
 export struct Acct { uuid: string, name: string, active: bool }
 // Settings > Java: one major version, what the launcher will run for it (custom = picked by the user)
@@ -63,8 +61,8 @@ export struct Detail {
 export struct SetVal { t: int, key: string, label: string, min: float, max: float, step: float, num: float, on: bool, str: string, opts: [string], pick: int,
     // L2: hint = explanation line under the label; unset = KEY with no key bound
     hint: string, unset: bool, col: color, rainbow: bool }
-// group = injection group (hud, pvp, qol); variant = look of the HUD preview (armor layout)
-export struct ClientMod { id: string, name: string, desc: string, cat: string, ci: int, on: bool, hud: bool, x: float, y: float, scale: float, group: string, sets: [SetVal], variant: string, icon: image, has-icon: bool, pixel-icon: bool, moved: bool }
+// variant = look of the HUD preview (armor layout)
+export struct ClientMod { id: string, name: string, desc: string, cat: string, ci: int, on: bool, hud: bool, x: float, y: float, scale: float, sets: [SetVal], variant: string, icon: image, has-icon: bool, pixel-icon: bool, moved: bool }
 
 // Everything the Rust side provides or handles.
 // L2: a restore point row (date = "12 Nov 2026 · 13:40", when = "3 days ago", kind = MANUAL / AUTO / BEFORE RESTORE)
@@ -289,7 +287,6 @@ export global Backend {
     // account chip head; drag on the preview turns the model (skin-held pauses the auto spin)
     in-out property <image> acct-head;
     in-out property <bool> skin-held: false;
-    in-out property <bool> skin-hover: false;
     callback skin-drag(float);
     // the preview needs frames again (hover, tab change, new skin)
     callback skin-wake();
@@ -379,25 +376,6 @@ export global Backend {
     // L3: Discord Rich Presence (row hidden until a Discord app id is configured)
     in-out property <bool> lp-discord: false;
     in-out property <bool> discord-ready: false;
-    // L3: Friends-lite (top-bar button + panel, hidden unless the Nether API enables Friends)
-    in-out property <bool> fr-enabled: false;
-    in-out property <bool> fr-open: false;
-    in-out property <bool> fr-on: false;
-    in-out property <bool> fr-loaded: false;
-    in-out property <bool> fr-busy: false;
-    in-out property <bool> fr-sharing: false;
-    in-out property <string> fr-code;
-    in-out property <string> fr-msg;
-    in-out property <string> fr-input;
-    in-out property <[FriendRow]> fr-list;
-    callback fr-refresh();
-    callback fr-turn-on();
-    callback fr-turn-off();
-    callback fr-new-code();
-    callback fr-add(string);
-    callback fr-respond(string, string);
-    callback fr-join(string, string);
-    callback fr-share(bool);
     // L2: command palette (Ctrl+K): query, matching rows, highlighted row; pal-run(row) runs it and closes
     in-out property <bool> pal-open;
     in-out property <string> pal-query;
@@ -557,6 +535,8 @@ export global Wizard {
     in-out property <string> pack;
     in-out property <bool> pack-has-client;
     in-out property <int> mode: 0;
+    // snapshot only: open the create wizard on this step
+    in property <int> snap-step: 0;
     callback pick-pack(string);
     callback load-rps(string);
     callback finish(string, string);

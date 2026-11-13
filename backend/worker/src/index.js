@@ -68,118 +68,6 @@ async function readJson(req, max = 512) {
   try { const v = JSON.parse(text); return v && typeof v === "object" ? v : null; } catch { return null; }
 }
 
-// ---- Friends-lite (opt-in): mutual friend codes, hosting-only presence (no heartbeats). Off unless env FRIENDS = "1".
-// Every op derives the caller from the session token; a friend's host address is visible to accepted friends only.
-const CODE_ABC = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; // Crockford base32: 8 chars = 40 bits
-const CODE = /^[0-9A-HJKMNP-TV-Z]{8}$/;
-const HOST = /^[a-z0-9]([a-z0-9.-]{0,78}[a-z0-9])?(:[0-9]{1,5})?$/i;
-const MAX_FRIENDS = 100, MAX_PENDING = 20, CODE_DAYS = 7;
-const pair = (x, y) => (x < y ? [x, y] : [y, x]);
-function newCode() {
-  const r = crypto.getRandomValues(new Uint8Array(8));
-  return Array.from(r, (b) => CODE_ABC[b & 31]).join("");
-}
-async function friendState(env, uuid) {
-  const me = await env.DB.prepare("SELECT code, code_exp FROM fr_users WHERE uuid = ?").bind(uuid).first();
-  if (!me) return { on: false };
-  const { results } = await env.DB.prepare(
-    "SELECT CASE WHEN e.a = ?1 THEN e.b ELSE e.a END AS other, e.state, e.requester, u.host, u.host_until " +
-    "FROM fr_edges e LEFT JOIN fr_users u ON u.uuid = (CASE WHEN e.a = ?1 THEN e.b ELSE e.a END) " +
-    "WHERE e.a = ?1 OR e.b = ?1 LIMIT 200").bind(uuid).all();
-  const t = now();
-  const friends = results.map((r) => {
-    const state = r.state === "accepted" ? "accepted" : (r.requester === uuid ? "outgoing" : "incoming");
-    const f = { uuid: r.other, state };
-    if (state === "accepted" && r.host && r.host_until > t) { f.host = r.host; f.hostUntil = r.host_until; }
-    return f;
-  });
-  return { on: true, code: me.code, codeExp: me.code_exp, friends };
-}
-async function friendsRoute(req, env, url) {
-  if (!url.pathname.startsWith("/v1/friends")) return null;
-  const on = env.FRIENDS === "1";
-  if (req.method === "GET" && url.pathname === "/v1/friends/flag") return json({ enabled: on }, 200, { "cache-control": "public, max-age=300" });
-  if (!on) return fail(404, "not found");
-  const uuid = await caller(req, env);
-  if (!uuid) return fail(401, "sign in with Minecraft");
-  const read = req.method === "GET";
-  if (await limited(env, "RL_FRIENDS", uuid)) return tooMany();
-  const t = now();
-
-  if (read && url.pathname === "/v1/friends") return json(await friendState(env, uuid));
-  if (req.method === "POST" && url.pathname === "/v1/friends/on") {
-    await env.DB.prepare("INSERT OR IGNORE INTO fr_users (uuid, code, code_exp, joined) VALUES (?, ?, ?, ?)").bind(uuid, newCode(), t + CODE_DAYS * 86400, t).run();
-    return json(await friendState(env, uuid));
-  }
-  if (req.method === "DELETE" && url.pathname === "/v1/friends") {
-    await env.DB.batch([
-      env.DB.prepare("DELETE FROM fr_edges WHERE a = ?1 OR b = ?1").bind(uuid),
-      env.DB.prepare("DELETE FROM fr_blocks WHERE uuid = ?").bind(uuid),
-      env.DB.prepare("DELETE FROM fr_users WHERE uuid = ?").bind(uuid),
-    ]);
-    return json({ on: false });
-  }
-  if (!(await env.DB.prepare("SELECT 1 FROM fr_users WHERE uuid = ?").bind(uuid).first())) return fail(409, "turn on Friends first");
-  if (req.method === "POST" && url.pathname === "/v1/friends/code") {
-    await env.DB.prepare("UPDATE fr_users SET code = ?, code_exp = ? WHERE uuid = ?").bind(newCode(), t + CODE_DAYS * 86400, uuid).run();
-    return json(await friendState(env, uuid));
-  }
-  if (req.method === "POST" && url.pathname === "/v1/friends/add") {
-    if (await limited(env, "RL_AUTH", "add:" + uuid)) return tooMany(); // code guessing is attempt-limited per caller
-    const b = await readJson(req);
-    const code = String((b && b.code) || "").toUpperCase().replace(/[\s-]/g, "");
-    if (!CODE.test(code)) return fail(400, "that isn't a friend code");
-    const them = await env.DB.prepare("SELECT uuid FROM fr_users WHERE code = ? AND code_exp > ?").bind(code, t).first();
-    if (!them) return fail(404, "no one has that code (codes last 7 days)");
-    if (them.uuid === uuid) return fail(400, "that's your own code");
-    const [a, z] = pair(uuid, them.uuid);
-    const edge = await env.DB.prepare("SELECT state, requester FROM fr_edges WHERE a = ? AND b = ?").bind(a, z).first();
-    if (edge && edge.state === "accepted") return json(await friendState(env, uuid));
-    if (edge && edge.requester !== uuid) { // they asked first: adding their code accepts
-      await env.DB.prepare("UPDATE fr_edges SET state = 'accepted' WHERE a = ? AND b = ?").bind(a, z).run();
-      return json(await friendState(env, uuid));
-    }
-    if (!edge) {
-      // a block by them drops the request silently (it looks sent); adding someone you blocked lifts your block
-      const blocked = await env.DB.prepare("SELECT 1 FROM fr_blocks WHERE uuid = ? AND blocked = ?").bind(them.uuid, uuid).first();
-      const n = await env.DB.prepare(
-        "SELECT SUM(state = 'accepted') AS friends, SUM(state = 'pending' AND requester = ?1) AS pending FROM fr_edges WHERE a = ?1 OR b = ?1").bind(uuid).first();
-      if ((n.friends || 0) >= MAX_FRIENDS) return fail(409, "you can have up to " + MAX_FRIENDS + " friends");
-      if ((n.pending || 0) >= MAX_PENDING) return fail(409, "you have " + MAX_PENDING + " requests waiting already");
-      await env.DB.prepare("DELETE FROM fr_blocks WHERE uuid = ? AND blocked = ?").bind(uuid, them.uuid).run();
-      if (!blocked) await env.DB.prepare("INSERT INTO fr_edges (a, b, state, requester, created) VALUES (?, ?, 'pending', ?, ?)").bind(a, z, uuid, t).run();
-    }
-    return json(await friendState(env, uuid));
-  }
-  if (req.method === "POST" && url.pathname === "/v1/friends/respond") {
-    const b = await readJson(req);
-    const other = String((b && b.uuid) || "").toLowerCase();
-    const action = b && b.action;
-    if (!UUID.test(other) || other === uuid || !["accept", "decline", "remove", "block"].includes(action)) return fail(400, "bad request");
-    const [a, z] = pair(uuid, other);
-    if (action === "accept") {
-      await env.DB.prepare("UPDATE fr_edges SET state = 'accepted' WHERE a = ? AND b = ? AND state = 'pending' AND requester = ?").bind(a, z, other).run();
-    } else {
-      await env.DB.prepare("DELETE FROM fr_edges WHERE a = ? AND b = ?").bind(a, z).run();
-      if (action === "block") await env.DB.prepare("INSERT OR IGNORE INTO fr_blocks (uuid, blocked) VALUES (?, ?)").bind(uuid, other).run();
-    }
-    return json(await friendState(env, uuid));
-  }
-  if (req.method === "PUT" && url.pathname === "/v1/friends/host") {
-    const b = await readJson(req);
-    const host = b ? b.host : undefined;
-    if (host === null || host === undefined) {
-      await env.DB.prepare("UPDATE fr_users SET host = NULL, host_until = NULL WHERE uuid = ?").bind(uuid).run();
-    } else {
-      if (typeof host !== "string" || !HOST.test(host)) return fail(400, "bad address");
-      const mins = Math.min(Math.max(Number(b.minutes) || 120, 10), 720);
-      await env.DB.prepare("UPDATE fr_users SET host = ?, host_until = ? WHERE uuid = ?").bind(host.toLowerCase(), t + mins * 60, uuid).run();
-    }
-    return json({ ok: true });
-  }
-  return fail(404, "not found");
-}
-
 async function handle(req, env, ctx) {
   const url = new URL(req.url);
   // signed content (news, packs, capes, manifest): static files bundled with the Worker from backend/content
@@ -228,11 +116,16 @@ async function handle(req, env, ctx) {
     const b = await readJson(req);
     if (!b || !NAME.test(b.name || "") || !NONCE.test(b.serverId || "")) return fail(400, "bad request");
     const used = await env.DB.prepare("DELETE FROM nonces WHERE id = ? AND exp >= ? RETURNING id").bind(b.serverId, now()).first();
-    if (!used) return fail(401, "sign in with Minecraft");
+    if (!used) return fail(401, "sign-in step expired, try again");
+    // Mojang's session servers can take a moment to show a fresh join: 204 gets two more tries
     let r;
-    try { r = await fetch(`https://sessionserver.mojang.com/session/minecraft/hasJoined?username=${b.name}&serverId=${b.serverId}`, { signal: AbortSignal.timeout(4000) }); }
-    catch { return fail(503, "try again later", { "retry-after": "30" }); }
-    if (r.status === 204 || r.status === 403 || r.status === 401) return fail(401, "sign in with Minecraft");
+    for (let i = 0; i < 3; i++) {
+      if (i) await new Promise((ok) => setTimeout(ok, 500));
+      try { r = await fetch(`https://sessionserver.mojang.com/session/minecraft/hasJoined?username=${b.name}&serverId=${b.serverId}`, { signal: AbortSignal.timeout(4000) }); }
+      catch { return fail(503, "try again later", { "retry-after": "30" }); }
+      if (r.status !== 204) break;
+    }
+    if (r.status === 204 || r.status === 403 || r.status === 401) return fail(401, "Mojang didn't confirm the join (" + r.status + ")");
     if (!r.ok) return fail(503, "try again later", { "retry-after": "30" });
     const id = String((await r.json().catch(() => ({}))).id || "").toLowerCase();
     if (!UUID.test(id)) return fail(401, "sign in with Minecraft");
@@ -264,21 +157,16 @@ async function handle(req, env, ctx) {
     return json({ uuid, cape });
   }
 
-  // forget me: removes the caller's rows (player, friends)
+  // forget me: removes the caller's rows
   if (req.method === "DELETE" && url.pathname === "/v1/me") {
     const uuid = await caller(req, env);
     if (!uuid) return fail(401, "sign in with Minecraft");
     if (await limited(env, "RL_WRITE", uuid)) return tooMany();
     await env.DB.batch([
       env.DB.prepare("DELETE FROM players WHERE uuid = ?").bind(uuid),
-      env.DB.prepare("DELETE FROM fr_edges WHERE a = ?1 OR b = ?1").bind(uuid),
-      env.DB.prepare("DELETE FROM fr_blocks WHERE uuid = ?").bind(uuid),
-      env.DB.prepare("DELETE FROM fr_users WHERE uuid = ?").bind(uuid),
     ]);
     return json({ ok: true });
   }
-  const fr = await friendsRoute(req, env, url);
-  if (fr) return fr;
   return fail(404, "not found");
 }
 
@@ -298,7 +186,6 @@ export default {
     await env.DB.batch([
       env.DB.prepare("DELETE FROM players WHERE seen < ?").bind(now() - PURGE_DAYS * 86400),
       env.DB.prepare("DELETE FROM nonces WHERE exp < ?").bind(now()),
-      env.DB.prepare("UPDATE fr_users SET host = NULL, host_until = NULL WHERE host_until < ?").bind(now()),
     ]);
   },
 };

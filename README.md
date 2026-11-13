@@ -134,7 +134,7 @@ Beta, Windows 10/11 64-bit. Public builds ship from `tools/release.ps1` to this 
   - **Mods:** Modrinth, imports (`.mrpack`, CurseForge zip, Prism/MultiMC).
   - **Safety nets:** pre-launch check, verify/repair, snapshots before updates, restore points, crash analysis, mclo.gs.
   - **Hosting:** local servers (Vanilla/Fabric/Paper), UPnP, the playit tunnel, a plain address to share.
-  - **Backend clients:** signed content, capes, Friends, auto-update.
+  - **Backend clients:** signed content, capes, auto-update.
 - **In-game client** (`agent/`, Java 8+ agent, package `dev.nether.ov`): it injects into every loader and draws its own
   overlay (GL core/compat, LWJGL 2/3, SDL).
   - 33 modules.
@@ -154,13 +154,12 @@ Beta, Windows 10/11 64-bit. Public builds ship from `tools/release.ps1` to this 
 - **Backend** (`backend/`), all on free tiers:
   - `content/` holds news, packs and capes, Ed25519-signed and bundled into the Worker, which serves them at
     `/content/…`.
-  - `worker/` is a Cloudflare Worker + D1 for capes and Friends-lite. Auth uses Mojang's `join`/`hasJoined` handshake, so
+  - `worker/` is a Cloudflare Worker + D1 for capes. Auth uses Mojang's `join`/`hasJoined` handshake, so
     the Worker never sees a Minecraft token.
 
 ### Known gaps
 
 - Fabric 26.x and Forge/NeoForge client features are implemented from Mojang names but only partly verified in game.
-- Friends-lite is built and tested locally but stays off (`FRIENDS = "0"`) until its security review.
 - Discord Rich Presence stays hidden until a Discord application id is set.
 - CurseForge browsing is hidden: it needs an approved API key.
 - The setup isn't Authenticode-signed (SmartScreen warns). Updates are Ed25519-signed regardless.
@@ -193,7 +192,7 @@ Developer switches live behind the `dev` cargo feature, never in shipping builds
 | Game without the launcher UI | `$env:NETHER_DEV_OFFLINE=1; cargo run -p nether-core --release --features dev --example launch -- 1.21.11 Player 60 fabric` (`NETHER_SNAPSHOT=<png>`, `NETHER_AGENT=<jar>`, agent dev props via `JAVA_TOOL_OPTIONS`) |
 | Installer screens | `cargo build -p nether-setup --release --features dev`, then `NC_SETUP_SNAP="out.png|<mode>|<step>|<installed>"` |
 | Installer end-to-end | `NC_SETUP_AUTO=install:<dir>` / `uninstall` (with `NC_SETUP_AUTO_OUT=<file>`) |
-| Worker locally | `cd backend\worker; npx wrangler dev --local --var FRIENDS:1 --var SESSION_KEY:<test>` |
+| Worker locally | `cd backend\worker; npx wrangler dev --local --var SESSION_KEY:<test>` |
 
 Tests: `cargo test -p nether-core`. Worker checks run against `wrangler dev`.
 

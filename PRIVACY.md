@@ -41,7 +41,6 @@ The cape service stores, per player who checked in: your UUID, the Nether cape y
 seen. Players unseen for 180 days are deleted automatically. To be removed sooner, open
 [an issue](https://github.com/clapbxt/nether-client/issues) and we'll delete your entry.
 
-Friends (when it launches) is opt-in. It stores your friend code and your accepted friends by UUID, never names.
 Turning it off deletes all of it.
 
 Everything else (instances, worlds, settings, screenshots, logs) stays in `%APPDATA%\NetherClient` on your PC.

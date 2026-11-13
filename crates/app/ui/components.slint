@@ -591,12 +591,11 @@ export component Pulse inherits Rectangle {
     opacity: Backend.calm ? 1 : 0.45 + 0.55 * Math.abs(sin(Backend.tick / 1.6s * 180deg));
 }
 
-// Click-and-drag over the player preview to turn the model (auto spin runs only while hovered, pauses while held).
+// Click-and-drag over the player preview to turn the model (auto spin always runs, pauses while held).
 export component SpinArea inherits TouchArea {
     property <length> last;
     mouse-cursor: self.pressed ? MouseCursor.grabbing : MouseCursor.grab;
     changed pressed => { Backend.skin-held = self.pressed; root.last = self.mouse-x; Backend.skin-wake(); }
-    changed has-hover => { Backend.skin-hover = self.has-hover; Backend.skin-wake(); }
     moved => { if self.pressed { Backend.skin-drag((self.mouse-x - root.last) / 1px); root.last = self.mouse-x; } }
 }
 

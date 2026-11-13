@@ -161,7 +161,7 @@ export component HomeScreen inherits Rectangle {
             changed(i) => { if i > 0 { SkinLib.wear(i - 1); } } }
         Text { x: 32px; y: 440px; height: 36px; text: "Cape"; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; vertical-alignment: center; }
         Dropdown { x: 120px; y: 440px; width: parent.width - 152px; height: 36px; items: Backend.cape-names; current <=> Backend.cape-idx; changed(i) => { Backend.equip-cape(i); } }
-        Text { x: 32px; y: 486px; height: 30px; text: "Spin on hover"; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; vertical-alignment: center; }
+        Text { x: 32px; y: 486px; height: 30px; text: "Auto-rotate"; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; vertical-alignment: center; }
         Toggle { x: 152px; y: 490px; on <=> Backend.skin-spin; }
         LinkBtn { x: parent.width - 32px - self.width; y: 487px; text: "WARDROBE"; clicked => { root.go-wardrobe(); } }
 

@@ -6,27 +6,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/** Module registry, HUD drawing loop and the input-side hooks of toggle sprint / sneak. */
+/** Module registry, HUD drawing loop and the input-side hooks. */
 final class Modules {
     private Modules() {}
 
     static final List<Module> all = new ArrayList<>();
-    static boolean sprintHeld, sneakOn;
-    private static final int KEY_W = 87;
     // modules the input hooks and HUD loop need every event / frame (no lookups by id there)
-    static final Sprint SPRINT = new Sprint();
-    static final Sneak SNEAK = new Sneak();
     static final Crosshair CROSSHAIR = new Crosshair();
     static final Zoom ZOOM = new Zoom();
-    static final Precision PRECISION = new Precision();
     static final Fullbright FULLBRIGHT = new Fullbright();
     static final Waypoints WAYPOINTS = new Waypoints();
     static final MediaPlayer MEDIA = new MediaPlayer();
     static final Lyrics LYRICS = new Lyrics();
-    static final AutoSafe AUTOSAFE = new AutoSafe();
     static final Streamer STREAMER = new Streamer();
     static final Stopwatch STOPWATCH = new Stopwatch();
-    static final Vitals VITALS = new Vitals();
     static final CameraFx CAMERA = new CameraFx();
 
     static {
@@ -37,11 +30,8 @@ final class Modules {
         all.add(new Clock());
         all.add(new Session());
         all.add(new Memory());
-        all.add(SPRINT);
-        all.add(SNEAK);
         all.add(CROSSHAIR);
         all.add(ZOOM);
-        all.add(PRECISION);
         all.add(FULLBRIGHT);
         all.add(new Armor());
         all.add(new Potions());
@@ -57,12 +47,9 @@ final class Modules {
         // c5
         all.add(new Reach());
         all.add(new Combo());
-        all.add(VITALS);
         all.add(new Items());
-        all.add(new FrameGraph());
         all.add(STOPWATCH);
         all.add(CAMERA);
-        all.add(AUTOSAFE);
         all.add(STREAMER);
         all.add(MainMenu.MODULE);
         Runtime.getRuntime().addShutdownHook(new Thread(Modules::exitHook));
@@ -77,44 +64,37 @@ final class Modules {
     /** Render thread, every frame while the game is quitting: puts every temporary game option back so options.txt never sees our values. */
     static void shutdown() {
         restoreOptions();
-        AUTOSAFE.restore();
         closedOnRender = true;
         Config.flush();
     }
 
     /** JVM exit: the render thread normally did the restore already; only a game that died without a closing frame needs it here. */
     private static void exitHook() {
-        try { if (!closedOnRender) { restoreOptions(); AUTOSAFE.restore(); } } catch (Throwable ignored) { }
+        try { if (!closedOnRender) { restoreOptions(); } } catch (Throwable ignored) { }
         Config.flush();
     }
 
     private static void restoreOptions() {
         ZOOM.restore();
         FULLBRIGHT.restore();
-        PRECISION.restore();
         CAMERA.restore();
     }
 
-    /** Overlay death: options back, held toggles let go (the game must keep no key we pressed for it). */
+    /** Overlay death: options back (the game must keep no value we set for it). */
     static void release() {
         restoreOptions();
-        AUTOSAFE.restore();
-        if (sprintHeld) { sprintHeld = false; Input.synthKey((int) SPRINT.num("sprintKey"), 0); }
-        if (sneakOn) { sneakOn = false; Input.synthKey(sneakKey(), 0); }
     }
 
-    static int sneakKey() { return (int) SNEAK.num("sneakKey"); }
-
-    // ---------------------------------------------------------------- sensitivity: Zoom and Precision Mouse share one saved base
+    // ---------------------------------------------------------------- sensitivity: Zoom keeps one saved base
 
     private static double sensBase = -1;
 
     /**
-     * Writes base sensitivity scaled by both modules' factors (vanilla: speed = (0.6 v + 0.2)^3) and puts the base back
-     * once neither wants a change. One owner, so holding both in any order can never leak a lowered value into options.
+     * Writes base sensitivity scaled by Zoom's factor (vanilla: speed = (0.6 v + 0.2)^3) and puts the base back
+     * once it does not want a change.
      */
     static void syncSens() {
-        double k = ZOOM.sensScale * PRECISION.sensScale;
+        double k = ZOOM.sensScale;
         if (k != 1) {
             if (sensBase < 0) sensBase = Game.sens();
             double d = (0.6 * sensBase + 0.2) * Math.cbrt(k);
@@ -321,7 +301,7 @@ final class Modules {
             Gfx.s = Gfx.base;
             CROSSHAIR.drawAt(fbW / 2f / Gfx.s, fbH / 2f / Gfx.s);
         }
-        if (world) { VITALS.vignette(fbW, fbH); Toast.draw(fbW); menuHint(fbW); }
+        if (world) { Toast.draw(fbW); menuHint(fbW); }
         Gfx.s = prev;
     }
 
@@ -384,35 +364,11 @@ final class Modules {
             if (action == 1 && zm.enabled() && Input.inWorld()) zm.held = zm.toggle() ? !zm.held : true;
             else if (action == 0 && !zm.toggle()) zm.held = false;
         }
-        Precision pm = PRECISION;
-        if (key == (int) pm.num("key")) pm.held = action != 0 && pm.enabled() && Input.inWorld();
         if (press && !Input.inWorld()) return false;
         Waypoints wp = WAYPOINTS;
         if (action == 1 && wp.enabled() && key == (int) wp.num("addKey")) { wp.addHere(); return true; }
         if (action == 1 && (MEDIA.key(key) || LYRICS.key(key) || STOPWATCH.key(key) || STREAMER.key(key))) return true;
-        Module sp = SPRINT, sn = SNEAK;
-        if (sp.enabled() && key == KEY_W) {
-            int sk = (int) sp.num("sprintKey");
-            if (action == 1 && !sprintHeld) { sprintHeld = true; Input.synthKey(sk, 1); }
-            else if (action == 0 && sprintHeld) { sprintHeld = false; Input.synthKey(sk, 0); }
-        }
-        if (sn.enabled() && key == (int) sn.num("sneakKey")) {
-            if (action == 1) {
-                sneakOn = !sneakOn;
-                if (!sneakOn) { Input.synthKey(key, 0); return true; }
-            } else if (action == 0) return sneakOn;
-        }
         return false;
-    }
-
-    /**
-     * Polled key state: toggle sneak reads as held in the world (the game re-polls its bindings when a screen closes).
-     * The sprint key is never faked: Ctrl is polled as a modifier (Q drops the whole stack, Ctrl+pick block), so auto
-     * sprint lives on synthesised key events only, re-sent whenever play resumes (Toggle.tick).
-     */
-    static int polledKey(int key, int r) {
-        if (!sneakOn || Input.dead || key != sneakKey() || Game.screenOpen()) return r;
-        return 1;
     }
 
     // ---------------------------------------------------------------- modules
@@ -560,51 +516,6 @@ final class Modules {
         }
     }
 
-    abstract static class Toggle extends RowsModule {
-        final String label, keyId;
-        private boolean wasPlaying;
-        Toggle(String id, String name, String label, String desc, double dy, String keyId, String keyLabel, int key) {
-            super(id, name, "Movement", desc, false, 0.012, dy);
-            this.label = label;
-            this.keyId = keyId;
-            add(Setting.key(keyId, keyLabel, key));
-            drop("accent");
-            safe();
-        }
-        abstract boolean active();
-        @Override boolean visible() { return active() || Menu.editing(); }
-        @Override String[][] rows() { return new String[][] {{label, value}}; }
-        String value = "TOGGLED";
-        private boolean wasIn;
-        @Override void tick() {
-            release();
-            // leaving the world (title screen, another server) ends the toggle: you never spawn crouched
-            boolean in = Game.hasPlayer();
-            if (wasIn && !in) leave();
-            wasIn = in;
-            // a game screen or lost focus releases every key binding: press ours again as soon as play resumes
-            boolean p = Game.playing() && Plat.cur.focused();
-            if (p && !wasPlaying && active() && enabled()) Input.synthKey((int) num(keyId), 1);
-            wasPlaying = p;
-        }
-        void release() { }
-        abstract void leave();
-    }
-
-    static final class Sprint extends Toggle {
-        Sprint() { super("sprint", "Toggle Sprint", "SPRINT", "Sprint automatically while you hold forward, no sprint key needed. Uses W and your sprint key.", 0.37, "sprintKey", "Sprint key", 341); value = "AUTO"; }
-        @Override boolean active() { return sprintHeld; }
-        @Override void release() { if (!enabled() && sprintHeld) leave(); }
-        @Override void leave() { if (sprintHeld) { sprintHeld = false; Input.synthKey((int) num("sprintKey"), 0); } }
-    }
-
-    static final class Sneak extends Toggle {
-        Sneak() { super("sneak", "Toggle Sneak", "SNEAK", "Press sneak once to stay crouched, again to stand.", 0.43, "sneakKey", "Sneak key", 340); }
-        @Override boolean active() { return sneakOn; }
-        @Override void release() { if (!enabled() && sneakOn) leave(); }
-        @Override void leave() { if (sneakOn) { sneakOn = false; Input.synthKey((int) num("sneakKey"), 0); } }
-    }
-
     static final class Keystrokes extends Module {
         static final float C = 24, G = 3;
         private final float[] an = new float[8];
@@ -674,30 +585,6 @@ final class Modules {
 
 
     // ---------------------------------------------------------------- game-option modules (restored on release/exit)
-
-    /** Hold a key to slow the mouse down (precise building, bridging, long shots); released = back to normal. */
-    static final class Precision extends Module {
-        boolean held;
-        /** mouse speed factor this module wants (1 = none); applied with Zoom's by {@link Modules#syncSens} */
-        double sensScale = 1;
-
-        Precision() {
-            super("precision", "Precision Mouse", "Utility", "Hold a key to slow your mouse down for precise building and aiming.", false, false, 0, 0);
-            add(Setting.key("key", "Hold key", 342));
-            add(Setting.slider("factor", "Speed while held", 0.1, 0.9, 0.05, 0.35));
-            needs(3);
-        }
-
-        @Override boolean available() { return super.available() && Game.optionsOk(); }
-
-        @Override void tick() {
-            boolean want = held && enabled() && Game.playing();
-            double k = want ? num("factor") : 1;
-            if (k != sensScale) { sensScale = k; syncSens(); }
-        }
-
-        void restore() { if (sensScale != 1) { sensScale = 1; syncSens(); } }
-    }
 
     static final class Zoom extends Module {
         boolean held;

@@ -270,7 +270,7 @@ final class Capes {
     /** Hook.name: the nametag of a Nether player gets our icon in front (client thread only, so servers never see it). */
     static Object name(Object player, Object comp) {
         // render thread only (the integrated server calls this too; game state is not thread safe), and cheap when nobody wears one
-        if (Thread.currentThread() != Overlay.renderThread || noIcon || (DEV == null && worn.isEmpty())) return comp;
+        if (Thread.currentThread() != Overlay.renderThread || noIcon || (DEV == null && worn.isEmpty()) || !Config.bool("client", "nametagIcon", true)) return comp;
         boolean legacy = Game.legacy();
         if (!(legacy || Game.fabric())) return comp;
         Object id = Game.call(player, legacy ? Game.l("aK", "func_110124_au") : "method_5667");

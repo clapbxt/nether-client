@@ -102,6 +102,13 @@ pub fn borderless(ui: &slint::Window) -> bool {
         windows_sys::Win32::System::Ole::RevokeDragDrop(h);
         DragAcceptFiles(h, 1);
         SetWindowPos(h, std::ptr::null_mut(), 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        // Dropping the frame makes the client area as big as the window, but Windows sends no WM_SIZE for a frame-only change:
+        // winit/Slint would keep the old, smaller size and draw/hit-test a stretched surface (clicks land beside the buttons
+        // until the window is resized or maximised). Tell them the real client size.
+        let mut r: RECT = std::mem::zeroed();
+        GetClientRect(h, &mut r);
+        let kind = if IsZoomed(h) != 0 { SIZE_MAXIMIZED } else { SIZE_RESTORED };
+        SendMessageW(h, WM_SIZE, kind as usize, (((r.bottom - r.top) as isize) << 16) | ((r.right - r.left) as isize & 0xffff));
     }
     true
 }

@@ -34,7 +34,6 @@ mod snapshot;
 mod restore;
 mod palette;
 mod discord;
-mod friends;
 slint::include_modules!();
 
 #[allow(clippy::too_many_arguments)]
@@ -898,8 +897,6 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let (weak, sh) = (ui.as_weak(), shared.clone());
         backend.on_load_ncapes(move || if let Some(ui) = weak.upgrade() { skin::load_ncapes(&ui, &sh) });
-        friends::wire(&ui, &shared);
-        friends::probe(&ui);
         let (weak, sh) = (ui.as_weak(), shared.clone());
         backend.on_wear_ncape(move |id| if let Some(ui) = weak.upgrade() { skin::wear_ncape(&ui, &sh, &id) });
     }
@@ -1494,6 +1491,7 @@ java.lang.OutOfMemoryError: Java heap space
         if let Some((w, h)) = std::env::var("NC_SNAP_SIZE").ok().and_then(|s| s.split_once('x').map(|(w, h)| (w.parse::<u32>().unwrap_or(1440), h.parse::<u32>().unwrap_or(900)))) {
             ui.window().set_size(slint::PhysicalSize::new(w, h));
         }
+        if let Some(n) = std::env::var("NC_SNAP_STEP").ok().and_then(|n| n.parse::<i32>().ok()) { ui.global::<Wizard>().set_snap_step(n); }
         // NC_SNAP_TABS=n: press Tab n times before the capture (keyboard focus checks)
         if let Some(n) = std::env::var("NC_SNAP_TABS").ok().and_then(|n| n.parse::<u32>().ok()) {
             let w = ui.as_weak();

@@ -747,7 +747,7 @@ export component InstancesScreen inherits Rectangle {
             property <string> icon: "";
             property <string> wall: "";
             // 0 loader, 1 version, 2 Nether pack (Fabric only), 3 client, 4 resource packs, 5 finish
-            property <int> step: 0;
+            property <int> step: Wizard.snap-step;
             property <bool> raw: false;
             property <string> name;
             property <[string]> steps: ["LOADER", "VERSION", "NETHER PACK", "CLIENT", "RESOURCE PACKS", "FINISH"];
@@ -777,7 +777,7 @@ export component InstancesScreen inherits Rectangle {
                     opacity: self.skip ? 0.35 : 1;
                     Rectangle { y: parent.height - 2px; height: 2px; background: i < dlg.step ? Theme.ice : (dlg.step == i ? Theme.red2 : Theme.ln2); }
                     Text { x: 10px; height: parent.height; text: "0\{i + 1}"; color: dlg.step == i ? Theme.red2 : Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; vertical-alignment: center; }
-                    Text { x: 34px; height: parent.height; text: s; color: dlg.step == i ? Theme.tx : (i < dlg.step ? Theme.dim : Theme.mut); font-family: Theme.disp; font-size: 13px * Theme.ts; font-weight: 700; letter-spacing: 0.8px; vertical-alignment: center; }
+                    Text { x: 34px; width: parent.width - 40px; height: parent.height; overflow: elide; text: s; color: dlg.step == i ? Theme.tx : (i < dlg.step ? Theme.dim : Theme.mut); font-family: Theme.disp; font-size: 13px * Theme.ts; font-weight: 700; letter-spacing: 0.8px; vertical-alignment: center; }
                     TouchArea { mouse-cursor: i < dlg.step && !parent.skip ? pointer : default; clicked => { if i < dlg.step && !parent.skip { dlg.go(i); } } }
                 }
             }
@@ -938,8 +938,11 @@ export component InstancesScreen inherits Rectangle {
 
             // footer
             Rectangle { x: 0px; y: parent.height - 76px; width: parent.width; height: 1px; background: Theme.ln; }
-            if dlg.step < 5: LinkBtn { x: 32px; y: parent.height - 52px; text: "CREATE RAW INSTANCE"; clicked => { dlg.raw = true; Wizard.pick-pack(""); Wizard.mode = 0; dlg.step = 5; } }
-            if dlg.step < 5: Text { x: 230px; y: parent.height - 58px; height: 40px; text: "Just a name and a version. Skips packs and setup."; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; }
+            if dlg.step < 5: HorizontalLayout {
+                x: 32px; y: parent.height - 58px; width: parent.width - 64px - 330px; height: 40px; spacing: 24px; alignment: start;
+                LinkBtn { text: "CREATE RAW INSTANCE"; clicked => { dlg.raw = true; Wizard.pick-pack(""); Wizard.mode = 0; dlg.step = 5; } }
+                Text { text: "Just a name and a version. Skips packs and setup."; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; overflow: elide; }
+            }
             Btn { x: parent.width - 32px - nx.width - 12px - self.width; y: parent.height - 58px; height: 40px; text: dlg.step == 0 || dlg.raw ? "CANCEL" : "BACK";
                 clicked => { if dlg.step == 0 || dlg.raw { Backend.create-open = false; } else { dlg.go(dlg.step - 1); } } }
             nx := Btn { x: parent.width - 32px - self.width; y: parent.height - 58px; height: 40px; width: 200px; visible: dlg.step < 5; text: "NEXT"; solid: true; enabled: dlg.step != 1 || dlg.vers.length > 0;

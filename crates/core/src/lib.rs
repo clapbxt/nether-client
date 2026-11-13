@@ -8,7 +8,6 @@ pub mod gamesettings;
 pub mod download;
 pub mod fabric;
 pub mod forge;
-pub mod friends;
 pub mod instances;
 pub mod modrinth;
 pub mod net;

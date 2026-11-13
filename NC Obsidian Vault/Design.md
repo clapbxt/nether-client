@@ -6,7 +6,7 @@ Motorsport timing wall crossed with a mech garage: dense tables, one slanted red
 - **Asymmetry:** content left, a fixed side column right (preview / player / notes). No centred layouts, no card grids.
 - **Signature shape = the slash** (parallelogram): Play, tab marker, nameplate, section ticks. Zero corner radius everywhere. Logo keeps its chamfer; the UI does not use chamfers.
 - **Imagery is the user's:** instance wallpaper, block icon, skin. Where nothing exists: hatch plate (`assets/hatch.svg`) + corner ticks, never a "placeholder" box.
-- **No ambient decoration:** no orbs, embers, glass gradients, blur. One static red glow only behind the player and on the gate. Idle = zero redraws (player preview auto-rotates only while hovered).
+- **No ambient decoration:** no orbs, embers, glass gradients, blur. One static red glow only behind the player and on the gate. Player preview auto-rotates always on Home/Wardrobe (off with Reduce motion or the Auto-rotate toggle); every other screen idles at zero redraws.
 - **Case:** condensed caps for titles, buttons, section labels; sentence case for everything you read. No wide-tracked mono eyebrows.
 ## Tokens (`crates/app/ui/theme.slint`)
 - Surfaces: bg #060608 · s1 #0D0D11 · s2 #15151B · s3 #1F1F27 · hairlines white 8% / 17%.

@@ -769,7 +769,7 @@ final class Game {
         double v = 0;
         if (p != null && lastPos != null && t > lastT) v = Math.hypot(p[0] - lastPos[0], p[2] - lastPos[2]) / (t - lastT);
         if (p != null) { lastPos = p.clone(); lastT = t; }
-        return "fov " + fov() + " gamma " + gamma() + " sens " + sens() + " sprint " + Modules.sprintHeld + " sneak " + Modules.sneakOn
+        return "fov " + fov() + " gamma " + gamma() + " sens " + sens()
             + " screen " + screenOpen() + " speed " + String.format(java.util.Locale.ROOT, "%.2f", v) + (p == null ? "" : String.format(java.util.Locale.ROOT, " y %.2f", p[1]));
     }
 

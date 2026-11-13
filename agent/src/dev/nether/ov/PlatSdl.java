@@ -165,19 +165,12 @@ final class PlatSdl extends Plat implements Hook.Sdl {
         if (!(state instanceof ByteBuffer)) return state;
         if (Input.dead) return state;
         boolean hide = Input.menuOpen || Input.devOnly;
-        if (!hide && !Modules.sneakOn) return state;
+        if (!hide) return state;
         ByteBuffer s = (ByteBuffer) state;
         int n = s.capacity();
         if (keys == null || keys.capacity() != n) keys = memAlloc(n);
-        for (int i = 0; i < n; i++) keys.put(i, hide ? 0 : s.get(i));
-        // toggle sneak reads as held; the sprint key is never faked here (Ctrl is polled for drop-stack / pick-block)
-        if (!Input.menuOpen) held(Modules.sneakKey(), n);
+        for (int i = 0; i < n; i++) keys.put(i, 0);
         return keys;
-    }
-
-    private void held(int glfwKey, int n) {
-        int sc = Keys.toSdl(glfwKey);
-        if (sc > 0 && sc < n) keys.put(sc, (byte) Modules.polledKey(glfwKey, keys.get(sc)));
     }
 
     @Override public boolean relative(boolean on) {

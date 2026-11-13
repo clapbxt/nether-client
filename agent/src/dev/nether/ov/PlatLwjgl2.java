@@ -112,9 +112,7 @@ final class PlatLwjgl2 extends Plat implements Hook.Legacy {
         if (inside) return r;
         if (Input.dead) return r;
         if (Input.menuOpen) return false;
-        int g = Keys.toGlfw(key);
-        boolean real = r && !Input.devOnly;
-        try { return g < 0 ? real : Modules.polledKey(g, real ? 1 : 0) != 0; } catch (Throwable t) { Input.fail(t); return real; }
+        return r && !Input.devOnly;
     }
 
     // ---------------------------------------------------------------- Mouse

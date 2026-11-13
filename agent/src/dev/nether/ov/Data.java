@@ -120,12 +120,6 @@ final class Data {
     private static Object self() { return Game.legacy() ? Game.player0() : Game.me(); }
 
     static double health() { return f(call(self(), Game.legacy() ? l("bn", "func_110143_aJ") : "method_6032")); }
-    static double maxHealth() { return f(call(self(), Game.legacy() ? l("bu", "func_110138_aP") : "method_6063")); }
-    static double absorption() { return f(call(self(), Game.legacy() ? l("bN", "func_110139_bj") : "method_6067")); }
-
-    private static Object foodData() { return call(self(), Game.legacy() ? l("cl", "func_71024_bL") : "method_7344"); }
-    static double food() { return f(call(foodData(), Game.legacy() ? l("a", "func_75116_a") : "method_7586")); }
-    static double saturation() { return f(call(foodData(), Game.legacy() ? l("e", "func_75115_e") : "method_7589")); }
 
     /** Ticks left of the red hurt flash (10 when just hit, 0 idle), -1 unknown. */
     static int hurtTime() { return (int) f(fld(self(), Game.legacy() ? l("au", "field_70737_aN") : "field_6235")); }

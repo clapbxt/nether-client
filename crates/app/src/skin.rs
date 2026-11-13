@@ -259,8 +259,7 @@ fn set_preview_cape(id: &str) {
 }
 
 thread_local! {
-    /// Frame timer for the preview: runs only while something changes (a new skin, a drag) or the model spins under
-    /// the pointer, so an idle launcher draws nothing (Design: idle = zero redraws).
+    /// Frame timer for the preview: runs only while something changes (a new skin, a drag) or the model spins, so an idle launcher draws nothing (Design: idle = zero redraws).
     static TIMER: slint::Timer = slint::Timer::default();
     static UI: RefCell<Option<slint::Weak<AppWindow>>> = const { RefCell::new(None) };
     static LAST: RefCell<std::time::Instant> = RefCell::new(std::time::Instant::now());
@@ -293,8 +292,8 @@ fn tick(ui: &AppWindow, dt: f32) -> bool {
     if ui.get_tab() != 5 && PREVIEW.with(|p| *p.borrow()) { preview_account(ui); }
     if !matches!(ui.get_tab(), 0 | 5) || !ui.window().is_visible() || ui.window().is_minimized() { return false; }
     let b = ui.global::<Backend>();
-    // auto spin only while the pointer rests on the model, never with reduced motion
-    let spin = b.get_skin_spin() && b.get_skin_hover() && !b.get_skin_held() && !b.get_calm();
+    // auto spin always (while the tab shows), never with reduced motion
+    let spin = b.get_skin_spin() && !b.get_skin_held() && !b.get_calm();
     if spin { YAW.with(|y| *y.borrow_mut() += dt * std::f32::consts::TAU / 14.0); }
     let slim = b.get_skin_slim();
     LOOK.with(|l| {

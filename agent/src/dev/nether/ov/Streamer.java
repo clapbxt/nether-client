@@ -22,7 +22,7 @@ final class Streamer extends Module {
     /** Toggle key from {@link Modules#onKey}; true = used. */
     boolean key(int k) {
         int mine = (int) num("key");
-        if (mine < 0 || k != mine || !injected() || locked()) return false;
+        if (mine < 0 || k != mine || locked()) return false;
         Config.set(id, "enabled", !wantedOn());
         Toast.show("Streamer mode " + (wantedOn() ? "on" : "off"));
         return true;

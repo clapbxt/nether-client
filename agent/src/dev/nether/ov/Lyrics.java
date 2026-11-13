@@ -14,9 +14,10 @@ import java.util.Map;
  * Synced lyrics for the track {@link Media} reports, from LRCLIB (lrclib.net, community lyrics, no key): a local
  * {@code <client>/lyrics/<artist> - <title>.lrc} wins, then {@code /api/get} (title, artist, album, duration), then
  * {@code /api/search}. Answers are cached on disk by {@link Net}; nothing is bundled or re-shared. Shown as a HUD panel
- * (current line highlighted between the previous and next) or floating in the world: projected by the overlay itself
- * ({@link Project}), no renderer code, so there is no depth test; "Drift" (default) keeps the text a few blocks ahead
- * of the view on a lagging spring so it never sits inside a wall for long, "Pinned" leaves it where it was placed.
+ * (current line highlighted between the previous and next) or in the world, projected by the overlay itself
+ * ({@link Project}), no renderer code, so there is no depth test. Modes: "On screen" (HUD panel), "Pinned" (the three-line
+ * block stays where it was placed) and "In world" (each line is spawned as text floating at a spot around you, ahead of
+ * where you walk or look, stays there as you pass, then fades).
  */
 final class Lyrics extends Module {
     private static final String API = "https://lrclib.net/api/";
@@ -39,11 +40,11 @@ final class Lyrics extends Module {
 
     Lyrics() {
         super("lyrics", "Lyrics", "HUD", "Synced lyrics for the song in Media Player, as a panel or floating in the world. Sends the title, artist, album and duration to lrclib.net; answers are cached on this PC.", true, false, 0.35, 0.6);
-        add(Setting.choice("mode", "Display", "Panel", "Panel", "In world"));
-        add(Setting.choice("place", "World placement", "Drift", "Drift", "Pinned").hint("Drift floats ahead of your view and follows it. Pinned stays put and shows through walls"));
-        add(Setting.slider("dist", "World distance (blocks)", 2, 16, 0.5, 6));
+        add(Setting.choice("mode", "Display", "On screen", "On screen", "Pinned", "In world").hint("On screen: a panel. Pinned: stays where you placed it in the world. In world: each line appears floating around you as you walk, then fades."));
+        add(Setting.slider("dist", "World distance (blocks)", 2, 16, 0.5, 6).hint("Pinned: how far in front it is placed. In world: how far from you lines appear."));
         add(Setting.slider("lift", "World height (blocks)", -2, 4, 0.1, 1.2));
         add(Setting.slider("worldSize", "World text size", 0.5, 3, 0.05, 1));
+        add(Setting.slider("fade", "In world: seconds on screen", 3, 15, 0.5, 7));
         add(Setting.key("pinKey", "Re-pin key", -1).hint("Pinned: moves the lyrics in front of you. Delete clears a key"));
         add(Setting.choice("lines", "Lines", "3", "1", "3", "5"));
         add(Setting.choice("align", "Align", "Centre", "Left", "Centre"));
@@ -283,7 +284,8 @@ final class Lyrics extends Module {
 
     private boolean sample() { return Media.cur == null && Modules.sampling(this); }
     private int rows() { return Integer.parseInt(str("lines")); }
-    private boolean world() { return str("mode").equals("In world"); }
+    /** 0 on screen (old "Panel"), 1 pinned, 2 spawned in the world. */
+    private int mode() { String m = str("mode"); return m.equals("Pinned") ? 1 : m.equals("In world") ? 2 : 0; }
 
     /** Something worth showing: lines, or a status that is still fresh (not found fades after 5 s). */
     private boolean content() {
@@ -298,7 +300,7 @@ final class Lyrics extends Module {
         }
     }
 
-    @Override boolean visible() { return sample() || (!Streamer.hides("lyrics") && Media.cur != null && content() && (!world() || noWorld)); }
+    @Override boolean visible() { return sample() || (!Streamer.hides("lyrics") && Media.cur != null && content() && (mode() == 0 || noWorld)); }
 
     @Override void measure() {
         w = (float) num("width");
@@ -400,12 +402,21 @@ final class Lyrics extends Module {
     // ---------------------------------------------------------------- in world
 
     private boolean pinned, anchorOn, forceShadow;
-    private double ax, ay, az, yawS;
+    private double ax, ay, az;
 
-    /** HUD loop, in play: the lines floating in the world (Drift or Pinned). */
+    /** One line spawned into the world: fixed position, fades in, drifts up a little, fades out. */
+    private static final class Piece { String text; double x, y, z; long born; }
+    private final java.util.ArrayList<Piece> pieces = new java.util.ArrayList<>();
+    private int spawnedIdx = -2;
+    private double lastX = Double.NaN, lastZ = Double.NaN, vx, vz;
+    private final java.util.Random rnd = new java.util.Random();
+
+    /** HUD loop, in play: the lines floating in the world (Pinned block or spawned lines). */
     void drawWorld(int fbW, int fbH) {
-        if (!world()) { noWorld = false; return; }
+        int mode = mode();
+        if (mode == 0) { noWorld = false; pieces.clear(); return; }
         if (Media.cur == null || !content()) return;
+        if (mode == 2) { spawned(fbW, fbH); return; }
         float prev = Gfx.s;
         Gfx.s = Gfx.base;
         float W = fbW / Gfx.s, H = fbH / Gfx.s;
@@ -413,21 +424,11 @@ final class Lyrics extends Module {
         noWorld = c == null; // camera unknown here (1.8.9 third person): the panel stands in
         if (c == null) { anchorOn = false; Gfx.s = prev; return; }
         double D = num("dist"), lift = num("lift"), yaw = c[3];
-        boolean drift = str("place").equals("Drift");
-        float dt = Math.min(0.1f, Gfx.dt);
-        if (!anchorOn) { yawS = yaw; anchorOn = true; pinned = false; ax = Double.NaN; }
-        double wrap = ((yaw - yawS) % 360 + 540) % 360 - 180;
-        yawS += wrap * Math.min(1, dt * 2.2);
-        double ty = Math.toRadians(drift ? yawS : yaw);
+        if (!anchorOn) { anchorOn = true; pinned = false; ax = Double.NaN; }
+        double ty = Math.toRadians(yaw);
         double tx = c[0] - Math.sin(ty) * D, tyy = c[1] + lift, tz = c[2] + Math.cos(ty) * D;
-        if (drift) {
-            if (Double.isNaN(ax)) { ax = tx; ay = tyy; az = tz; }
-            double k = Math.min(1, dt * 6);
-            ax += (tx - ax) * k; ay += (tyy - ay) * k; az += (tz - az) * k;
-        } else {
-            double dx = ax - c[0], dz = az - c[2];
-            if (!pinned || Double.isNaN(ax) || dx * dx + dz * dz > Math.max(32, D * 4) * Math.max(32, D * 4)) { ax = tx; ay = tyy; az = tz; pinned = true; }
-        }
+        double dx = ax - c[0], dz = az - c[2];
+        if (!pinned || Double.isNaN(ax) || dx * dx + dz * dz > Math.max(32, D * 4) * Math.max(32, D * 4)) { ax = tx; ay = tyy; az = tz; pinned = true; }
         if (!Project.to(ax, ay, az) || Math.abs(Project.nx) > 1.4 || Math.abs(Project.ny) > 1.4) { Gfx.s = prev; return; }
         float sx = Project.sx(W), sy = Project.sy(H);
         // billboard: size falls off with distance (quantised so the glyph atlas sees few sizes)
@@ -464,5 +465,62 @@ final class Lyrics extends Module {
         }
         Gfx.alpha = a0;
         Gfx.s = prev;
+    }
+
+    /** Mode "In world": spawn the line being sung at a spot around the player; draw every live piece where it hangs. */
+    private void spawned(int fbW, int fbH) {
+        float prev = Gfx.s;
+        Gfx.s = Gfx.base;
+        float W = fbW / Gfx.s, H = fbH / Gfx.s;
+        double[] c = Project.begin(W, H) ? Game.camera() : null;
+        noWorld = c == null; // camera unknown here (1.8.9 third person): the panel stands in
+        if (c == null) { Gfx.s = prev; return; }
+        long nowMs = System.currentTimeMillis();
+        float dt = Math.min(0.1f, Gfx.dt);
+        // walking velocity (smoothed) decides where the next line appears: ahead of where you go, else ahead of the view
+        if (!Double.isNaN(lastX) && dt > 0) { vx += ((c[0] - lastX) / dt - vx) * Math.min(1, dt * 4); vz += ((c[2] - lastZ) / dt - vz) * Math.min(1, dt * 4); }
+        lastX = c[0]; lastZ = c[2];
+        int idx = state == SYNCED || state == PLAIN ? index(now()) : -1;
+        if (idx != spawnedIdx) {
+            spawnedIdx = idx;
+            if (idx >= 0 && idx < texts.length && !texts[idx].isEmpty()) spawn(texts[idx], c, nowMs);
+        }
+        double life = num("fade") * 1000;
+        float a0 = Gfx.alpha;
+        for (java.util.Iterator<Piece> it = pieces.iterator(); it.hasNext();) {
+            Piece p = it.next();
+            double age = nowMs - p.born;
+            if (age > life) { it.remove(); continue; }
+            double rise = age / 1000.0 * 0.12;
+            if (!Project.to(p.x, p.y + rise, p.z) || Math.abs(Project.nx) > 1.4 || Math.abs(Project.ny) > 1.4) continue;
+            float fin = (float) Math.min(1, age / 450.0), fout = (float) Math.min(1, (life - age) / Math.min(2500, life * 0.4));
+            float edge = (float) Math.min(1, (1.4 - Math.max(Math.abs(Project.nx), Math.abs(Project.ny))) / 0.3);
+            float k = (float) Math.max(0.35, Math.min(3, num("worldSize") * 6 / Math.max(1, Project.depth)));
+            k = Math.round(k * 20) / 20f;
+            float cx = Project.sx(W) / k, cy = Project.sy(H) / k;
+            Gfx.s = Gfx.base * k;
+            Gfx.alpha = a0 * fin * fout * edge;
+            float size = 15, tw = Gfx.width(Gfx.SEMI, size, p.text);
+            if (bool("bg")) Gfx.rect(cx - tw / 2 - 10, cy - 12, tw + 20, 24, 0, Gfx.a(Gfx.BG, (float) num("bgAlpha") * 0.7f));
+            Gfx.text(Gfx.SEMI, size, cx - tw / 2, cy, color(), p.text, true, 0);
+        }
+        Gfx.alpha = a0;
+        Gfx.s = prev;
+    }
+
+    /** Adds a piece 0.6 to 1 x the world distance from the player, within 60 degrees of the heading, at eye height plus the world height. */
+    private void spawn(String text, double[] c, long nowMs) {
+        double sp = Math.hypot(vx, vz);
+        double heading = sp > 0.8 ? Math.atan2(-vx, vz) : Math.toRadians(c[3]); // camera convention: forward = (-sin yaw, cos yaw)
+        double a = heading + Math.toRadians((rnd.nextDouble() - 0.5) * 120);
+        double d = num("dist") * (0.6 + 0.4 * rnd.nextDouble());
+        Piece p = new Piece();
+        p.text = text;
+        p.x = c[0] - Math.sin(a) * d;
+        p.z = c[2] + Math.cos(a) * d;
+        p.y = c[1] + num("lift") + (rnd.nextDouble() - 0.5) * 1.2;
+        p.born = nowMs;
+        pieces.add(p);
+        while (pieces.size() > 8) pieces.remove(0);
     }
 }

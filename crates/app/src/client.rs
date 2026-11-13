@@ -15,7 +15,7 @@ use crate::{AppWindow, Backend, ClientMod, ClientState, SetVal, Shared};
 struct SSet { t: i32, key: String, label: String, min: f64, max: f64, step: f64, def: Value, #[serde(default)] opts: Vec<String>, #[serde(default)] hint: String }
 
 #[derive(Deserialize, Clone)]
-struct SMod { id: String, name: String, cat: String, group: String, desc: String, hud: bool, on: bool, x: f64, y: f64, settings: Vec<SSet>, #[serde(default)] icon: String }
+struct SMod { id: String, name: String, cat: String, desc: String, hud: bool, on: bool, x: f64, y: f64, settings: Vec<SSet>, #[serde(default)] icon: String }
 
 #[derive(Deserialize)]
 struct Schema { modules: Vec<SMod> }
@@ -130,7 +130,7 @@ fn rows(own: Option<&Value>, global: &Value) -> Vec<ClientMod> {
             id: m.id.as_str().into(), name: m.name.as_str().into(), desc: m.desc.as_str().into(), cat: m.cat.to_uppercase().into(), ci, hud: m.hud,
             on: get("enabled").and_then(|v| v.as_bool()).unwrap_or(m.on), moved: false,
             x: num("x", m.x) as f32, y: num("y", m.y) as f32, scale: num("scale", 1.0) as f32,
-            group: m.group.as_str().into(), variant: variant.into(),
+            variant: variant.into(),
             has_icon: icon.is_some(), pixel_icon: pixel, icon: icon.unwrap_or_default(),
             sets: ModelRc::new(VecModel::from(sets)),
         }

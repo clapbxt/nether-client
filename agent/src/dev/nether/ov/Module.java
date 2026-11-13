@@ -100,8 +100,6 @@ abstract class Module {
             case "clock": return new String[] {"clock_00", "clock"};
             case "session": return new String[] {"recovery_compass_16", "clock"};
             case "memory": return new String[] {"writable_book", "book_writable"};
-            case "sprint": return new String[] {"sugar"};
-            case "sneak": return new String[] {"leather_boots"};
             case "crosshair": return new String[] {"bow_pulling_2", "bow"};
             case "zoom": return new String[] {"spyglass", "ender_eye"};
             case "fullbright": return new String[] {"glowstone_dust"};
@@ -114,16 +112,12 @@ abstract class Module {
             case "speed": return new String[] {"feather"};
             case "waypoints": return new String[] {"filled_map", "map_filled"};
             case "packs": return new String[] {"painting"};
-            case "precision": return new String[] {"brush", "stick"};
             case "menu": return new String[] {"item_frame"};
             case "reach": return new String[] {"iron_sword", "stone_sword"};
             case "combo": return new String[] {"diamond_sword"};
-            case "vitals": return new String[] {"golden_apple", "apple"};
             case "items": return new String[] {"ender_pearl"};
             case "camera": return new String[] {"spyglass", "ender_eye"};
-            case "framegraph": return new String[] {"clock_00", "clock"};
             case "stopwatch": return new String[] {"clock_00", "clock"};
-            case "autosafe": return new String[] {"shield"};
             case "streamer": return new String[] {"ender_eye"};
             default: return new String[] {"paper"};
         }
@@ -143,45 +137,14 @@ abstract class Module {
 
     void drop(String key) { settings.removeIf(s -> s.key.equals(key)); byKey.remove(key); }
 
-    /** Injection group (the launcher picks which groups an instance gets): hud, pvp, qol. */
-    String group() {
-        switch (id) {
-            case "cps": case "keys": case "sprint": case "sneak": case "crosshair": case "reach": case "combo": return "pvp";
-            case "zoom": case "fullbright": case "waypoints": case "precision": case "camera": case "streamer": return "qol";
-            case "menu": return "menu";
-            default: return "hud";
-        }
-    }
-    /** -Dnether.groups=hud,pvp,... from the launcher (read once); absent = everything. */
-    private static final String GROUPS = groups();
-    private static String groups() { String p = System.getProperty("nether.groups"); return p == null || p.trim().isEmpty() ? null : "," + p.replace(" ", "") + ","; }
-    static boolean injected(String g) {
-        if (GROUPS == null) return true;
-        switch (g) { // literals: no string building per call
-            case "hud": return GROUPS.contains(",hud,");
-            case "pvp": return GROUPS.contains(",pvp,");
-            case "qol": return GROUPS.contains(",qol,");
-            case "menu": return GROUPS.contains(",menu,");
-            default: return GROUPS.contains("," + g + ",");
-        }
-    }
-    boolean injected() { return injected(group()); }
+    /** Built-in feature that is not a user module (the title screen): always on, never listed, not in the launcher schema. */
+    boolean hidden() { return false; }
 
     /** needs: 0 none, 1 player state, 2 full game state (Fabric names), 3 player state + options (also 1.8.9), 4 = 2 or 1.8.9 */
     boolean available() { return needs == 0 || (needs == 1 || needs == 3 ? Game.supported() : needs == 4 ? Game.fabric() || Game.legacy() : Game.fabric()); }
     boolean locked() { return !available() || (safeOff && Modules.safe()); }
     /** why the module is greyed out, or null */
     String lockNote() { return !available() ? "NOT AVAILABLE ON THIS VERSION" : safeOff && Modules.safe() ? "OFF IN SERVER-SAFE MODE" : null; }
-    /** Safety tag (menu badge, launcher schema "safety"): SAFE = information the game already gives, COSMETIC = looks only,
-     *  RULES = can be an advantage some servers forbid (off in server-safe mode). */
-    static final int SAFE = 0, COSMETIC = 1, RULES = 2;
-    static final String[] SAFETY = {"SAFE", "COSMETIC", "CHECK RULES"}, SAFETY_ID = {"safe", "cosmetic", "rules"};
-    static final String[] SAFETY_TIP = {
-        "Shows information the game already gives you. Fine on any server.",
-        "Changes how things look, nothing else. Fine on any server.",
-        "Can be an advantage, and some servers forbid it. Check the server's rules; server-safe mode turns it off."};
-    int safety() { return safeOff ? RULES : "Visual".equals(cat) || "menu".equals(id) ? COSMETIC : SAFE; }
-
     /** Starred in the menu: pinned on top of every tab and listed under FAVOURITES. */
     boolean fav() { return Config.bool(id, "fav", false); }
 
@@ -199,7 +162,7 @@ abstract class Module {
 
     /** switched on in the config (ignores locks) */
     boolean wantedOn() { return Config.bool(id, "enabled", defOn); }
-    boolean enabled() { return injected() && wantedOn() && !locked(); }
+    boolean enabled() { return wantedOn() && !locked(); }
     /** worth refreshing data for: on, or being previewed in the menu */
     boolean live() { return enabled() || (Input.menuOpen && id.equals(Menu.page)); }
     float scale() { return (float) Config.num(id, "scale", 1.0); }

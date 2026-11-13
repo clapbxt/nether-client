@@ -161,7 +161,6 @@ export component ClientEditor inherits Rectangle {
             y: 40px; height: parent.height - 40px;
             Rectangle {
                 y: 0px; height: 76px; background: Theme.s1;
-                Rectangle { width: 3px; background: Theme.red2; }
                 Text { x: 22px; y: 12px; width: parent.width - 120px; text: col.s.name; color: Theme.tx; font-family: Theme.disp; font-size: 26px; font-weight: 700; overflow: elide; }
                 Text { x: 22px; y: 46px; width: parent.width - 120px; text: col.s.desc; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; overflow: elide; }
                 Toggle { x: parent.width - 62px; y: 27px; on: col.s.on; enabled: !root.locked;
