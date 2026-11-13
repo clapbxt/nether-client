@@ -471,7 +471,8 @@ final class MainMenu {
 
     // ---------------------------------------------------------------- account (name + skin head)
 
-    private static String accName, accUuid;
+    static String accName;
+    private static String accUuid;
     private static boolean accTried;
     private static int headState; // 0 to do, 1 profile asked, 2 skin asked, 3 done (head or none)
     private static Net.Req req;
@@ -655,7 +656,7 @@ final class MainMenu {
         Gfx.rect(x + 16, fy - 8, w - 32, MenuBack.lw(), 0, Gfx.LN);
         Gfx.text(Gfx.UI, 10.5f, c1, fy + 13, Gfx.SUB, "Blur, motion, slideshow and more in the full settings.", false, 0);
         float bw = Gfx.width(Gfx.SEMI, 11, "ALL SETTINGS", 1.2f) + 28;
-        if (cell("all", "ALL SETTINGS", x + w - 16 - bw, fy, bw, false)) { panelOpen = false; Menu.page = "menu"; Input.setMenu(true); }
+        if (cell("all", "ALL SETTINGS", x + w - 16 - bw, fy, bw, false)) { panelOpen = false; Menu.openMainMenuSettings(); Input.setMenu(true); }
         Gfx.alpha = a0;
         inModal = false;
     }

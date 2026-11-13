@@ -132,10 +132,10 @@ final class Wardrobe {
         Menu.navCols = 1;
         float lx = px + 28, top = py + 124, bottom = py + Menu.PH - 24;
         if (!loaded) {
-            Gfx.text(Gfx.SEMI, 16, lx, top + 30, Gfx.ICE, "WARDROBE NEEDS THE LAUNCHER");
+            Gfx.text(Gfx.SEMI, 16, lx, top + 30, Th.tx, "WARDROBE NEEDS THE LAUNCHER");
             for (int i = 0; i < 3; i++) {
                 String[] t = {"Capes and your player are managed by the Nether launcher.", "Keep it open, sign in with your Microsoft account, and start the game from it.", "Your capes then appear here."};
-                Gfx.text(Gfx.UI, 12, lx, top + 58 + i * 20, Gfx.DIM, t[i]);
+                Gfx.text(Gfx.UI, 12, lx, top + 58 + i * 20, Th.dim, t[i]);
             }
             return;
         }
@@ -147,8 +147,8 @@ final class Wardrobe {
 
         // ---- left: player
         float pw = 250, ph = 336;
-        Gfx.rect(lx, top, pw, ph, 8, Gfx.CARD);
-        Gfx.ring(lx, top, pw, ph, 8, 1, Gfx.LN2);
+        Gfx.rect(lx, top, pw, ph, 8, Th.s1);
+        Gfx.ring(lx, top, pw, ph, 8, 1, Th.ln2);
         boolean over = Menu.in(lx, top, pw, ph);
         if (over && Input.btn[0] && !dragging) { dragging = true; dragX = Menu.L; }
         if (!Input.btn[0]) dragging = false;
@@ -159,19 +159,19 @@ final class Wardrobe {
         if (skin != null) {
             renderPlayer(pc);
             if (Gfx.hasTexture("wd.player")) Gfx.image("wd.player", lx + (pw - PW) / 2f, top + (ph - PH) / 2f, PW, PH, 0xFFFFFFFF, 0);
-        } else Gfx.textC(Gfx.SEMI, 11, lx + pw / 2, top + ph / 2, Gfx.SUB, "SKIN NOT SHARED YET", 1.2f);
-        Gfx.text(Gfx.MONO, 9, lx + 12, top + 16, Gfx.SUB, "DRAG TO SPIN", false, 1.4f);
+        } else Gfx.textC(Gfx.SEMI, 11, lx + pw / 2, top + ph / 2, Th.mut, "SKIN NOT SHARED YET", 1.2f);
+        Gfx.text(Gfx.MONO, 9, lx + 12, top + 16, Th.mut, "DRAG TO SPIN", false, 1.4f);
 
         // nametag icon switch
         float sy = top + ph + 12;
         boolean on = Config.bool("client", "nametagIcon", true), hv = Menu.in(lx, sy, pw, 30);
         float t = Menu.an("wdicon", hv), o = Menu.an("wdiconon", on);
-        Gfx.rect(lx, sy, pw, 30, 6, Gfx.a(0xFFFFFFFF, 0.035f + 0.04f * t));
-        Gfx.ring(lx, sy, pw, 30, 6, 1, Gfx.mix(Gfx.mix(Gfx.LN, Gfx.LN2, t), Gfx.a(Gfx.RED, 0.7f), o));
-        Gfx.text(Gfx.SEMI, 10, lx + 13, sy + 15, Gfx.mix(Gfx.DIM, Gfx.ICE, Math.max(t, o)), "NAMETAG ICON", false, 1.2f);
+        Gfx.rect(lx, sy, pw, 30, 6, Gfx.a(Th.ov, 0.035f + 0.04f * t));
+        Gfx.ring(lx, sy, pw, 30, 6, 1, Gfx.mix(Gfx.mix(Th.ln, Th.ln2, t), Gfx.a(Th.ac, 0.7f), o));
+        Gfx.text(Gfx.SEMI, 10, lx + 13, sy + 15, Gfx.mix(Th.dim, Th.tx, Math.max(t, o)), "NAMETAG ICON", false, 1.2f);
         float sx = lx + pw - 13 - 36, ssy = sy + 5;
-        Gfx.rect(sx, ssy, 36, 20, 10, Gfx.mix(Gfx.S3, Gfx.RED, o));
-        Gfx.rect(sx + 3 + 16 * o, ssy + 3, 14, 14, 7, Gfx.mix(Gfx.DIM, 0xFFFFFFFF, o));
+        Gfx.rect(sx, ssy, 36, 20, 10, Gfx.mix(Th.s3, Th.ac, o));
+        Gfx.rect(sx + 3 + 16 * o, ssy + 3, 14, 14, 7, Gfx.mix(Th.dim, 0xFFFFFFFF, o));
         if (Menu.hit(lx, sy, pw, 30)) Config.set("client", "nametagIcon", !on);
         if (hv) Menu.tip = "Shows the Nether icon next to other Nether players' names. Your own icon is controlled by the launcher.";
 
@@ -188,7 +188,7 @@ final class Wardrobe {
         gridScroll = Config.calm() ? gridScrollT : gridScroll + (gridScrollT - gridScroll) * Math.min(1, Gfx.dt * 16);
         Menu.beginClip(gx - 6, top, gw + 12, viewH);
         float y = top - gridScroll;
-        Gfx.text(Gfx.MONO, 9, gx, y + 8, Gfx.SUB, "NETHER CAPES", false, 1.6f);
+        Gfx.text(Gfx.MONO, 9, gx, y + 8, Th.mut, "NETHER CAPES", false, 1.6f);
         y += 26;
         boolean noneWorn = netherWorn.isEmpty() && accountWorn.isEmpty();
         tile(0, null, gx, y, tw, th, noneWorn);
@@ -198,7 +198,7 @@ final class Wardrobe {
         }
         y += nRow * (th + gap);
         if (!account.isEmpty()) {
-            Gfx.text(Gfx.MONO, 9, gx, y + 8, Gfx.SUB, "ACCOUNT CAPES", false, 1.6f);
+            Gfx.text(Gfx.MONO, 9, gx, y + 8, Th.mut, "ACCOUNT CAPES", false, 1.6f);
             y += 30;
             for (int i = 0; i < account.size(); i++)
                 tile(100 + i, account.get(i), gx + (i % 4) * (tw + gap), y + (i / 4) * (th + gap), tw, th, account.get(i).id.equals(accountWorn) && !account.get(i).id.isEmpty());
@@ -206,9 +206,9 @@ final class Wardrobe {
         Menu.endClip();
         if (maxS > 0) {
             float bh = Math.max(30, viewH * viewH / contentH);
-            Gfx.rect(px + Menu.PW - 12, top + (viewH - bh) * (gridScroll / maxS), 3, bh, 1.5f, Gfx.a(0xFFFFFFFF, 0.16f));
+            Gfx.rect(px + Menu.PW - 12, top + (viewH - bh) * (gridScroll / maxS), 3, bh, 1.5f, Gfx.a(Th.ov, 0.16f));
         }
-        if (total == 1 && account.isEmpty()) Gfx.text(Gfx.UI, 12, gx, top + 40 + th, Gfx.DIM, "No capes yet. Nether capes load in the launcher.");
+        if (total == 1 && account.isEmpty()) Gfx.text(Gfx.UI, 12, gx, top + 40 + th, Th.dim, "No capes yet. Nether capes load in the launcher.");
     }
 
     private static BufferedImage hover;
@@ -217,12 +217,12 @@ final class Wardrobe {
     private static void tile(int slot, Cape c, float x, float y, float w, float h, boolean equipped) {
         boolean hv = Menu.in(x, y, w, h);
         float t = Menu.an("wdt" + slot, hv), o = Menu.an("wdte" + slot, equipped);
-        Gfx.rect(x, y, w, h, 8, Gfx.mix(Gfx.CARD, Gfx.CARD2, Math.max(t, o * 0.6f)));
-        Gfx.ring(x, y, w, h, 8, 1, Gfx.mix(Gfx.mix(Gfx.LN, Gfx.LN2, t), Gfx.RED2, o));
+        Gfx.rect(x, y, w, h, 8, Gfx.mix(Th.s1, Th.s2, Math.max(t, o * 0.6f)));
+        Gfx.ring(x, y, w, h, 8, 1, Gfx.mix(Gfx.mix(Th.ln, Th.ln2, t), Th.ac2, o));
         float iw = 60, ih = 96, ix = x + (w - iw) / 2, iy = y + 14;
         if (c == null) {
-            Gfx.ring(ix, iy, iw, ih, 4, 1, Gfx.LN2);
-            Menu.drawX(ix + iw / 2, iy + ih / 2, 9, Gfx.SUB);
+            Gfx.ring(ix, iy, iw, ih, 4, 1, Th.ln2);
+            Menu.drawX(ix + iw / 2, iy + ih / 2, 9, Th.mut);
         } else {
             if (!Gfx.hasTexture(c.key)) Gfx.texture(c.key, c.img, false);
             // front of a cape: 10 x 16 texels at (1, 1) in the 64 x 32 layout
@@ -230,12 +230,12 @@ final class Wardrobe {
             if (hv) hover = c.img;
         }
         String name = c == null ? "NONE" : Menu.fit(c.name.toUpperCase(java.util.Locale.ROOT), Gfx.SEMI, 10, w - 16, 1f);
-        Gfx.textC(Gfx.SEMI, 10, x + w / 2, y + h - 34, equipped ? Gfx.ICE : Gfx.DIM, name, 1f);
+        Gfx.textC(Gfx.SEMI, 10, x + w / 2, y + h - 34, equipped ? Th.tx : Th.dim, name, 1f);
         float bw = w - 20, by = y + h - 24;
-        Gfx.rect(bx(x, w, bw), by, bw, 18, 5, equipped ? Gfx.a(Gfx.RED, 0.22f) : Gfx.a(0xFFFFFFFF, 0.04f + 0.05f * t));
-        Gfx.textC(Gfx.MONO, 9, x + w / 2, by + 9, equipped ? Gfx.RED2 : Gfx.mix(Gfx.SUB, Gfx.ICE, t), equipped ? "EQUIPPED" : "WEAR", 1.4f);
+        Gfx.rect(bx(x, w, bw), by, bw, 18, 5, equipped ? Gfx.a(Th.ac, 0.22f) : Gfx.a(Th.ov, 0.04f + 0.05f * t));
+        Gfx.textC(Gfx.MONO, 9, x + w / 2, by + 9, equipped ? Th.ac2 : Gfx.mix(Th.mut, Th.tx, t), equipped ? "EQUIPPED" : "WEAR", 1.4f);
         if (equipped) { // check mark badge
-            Gfx.rect(x + w - 24, y + 8, 16, 16, 8, Gfx.RED);
+            Gfx.rect(x + w - 24, y + 8, 16, 16, 8, Th.ac);
             Gfx.rect(x + w - 20.5f, y + 15, 3, 1.6f, 0.8f, 0xFFFFFFFF);
             Gfx.rect(x + w - 18.2f, y + 13.6f, 1.6f, 5, 0.8f, 0xFFFFFFFF);
         }

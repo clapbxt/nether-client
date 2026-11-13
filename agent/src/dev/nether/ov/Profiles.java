@@ -237,15 +237,15 @@ final class Profiles {
         // Reduce motion (client.calm); the launcher's own setting turns it on as well
         boolean lc = Config.launcherCalm(), on = Config.calm();
         boolean f = Menu.focus(lx - 4, y + 3, lw + 8, 44);
-        Gfx.text(Gfx.UI, 13, lx, y + 18, Gfx.ICE, "Reduce motion");
-        Gfx.text(Gfx.UI, 10, lx, y + 34, Gfx.SUB, lc ? "On because Reduce motion is on in the launcher." : "Menus and the HUD stop animating and nothing blinks.");
+        Gfx.text(Gfx.UI, 13, lx, y + 18, Th.tx, "Reduce motion");
+        Gfx.text(Gfx.UI, 10, lx, y + 34, Th.mut, lc ? "On because Reduce motion is on in the launcher." : "Menus and the HUD stop animating and nothing blinks.");
         float a0 = Gfx.alpha;
         if (lc) Gfx.alpha = a0 * 0.55f;
         Menu.sw("calm", xr - 36, y + 15, on);
         Gfx.alpha = a0;
         int a = Menu.adjust(f);
         if (!lc && (Menu.hit(xr - 44, y + 8, 52, 34) || Menu.used(f) != 0 || (a != 0 && (a > 0) != on))) Config.set("client", "calm", !on);
-        Gfx.rect(lx, y + 49, lw, 1, 0, Gfx.LN);
+        Gfx.rect(lx, y + 49, lw, 1, 0, Th.ln);
         y += 50;
 
         header("PROFILES", lx, y, lw);
@@ -276,19 +276,19 @@ final class Profiles {
             say(ok ? "CODE COPIED  -  SEND IT, THEN USE IMPORT CODE ON THE OTHER SIDE" : "COULD NOT REACH THE CLIPBOARD", !ok);
         }
         if (Menu.in(xr - 268, by, 130, 30)) Menu.tip = "Copies your current setup as a code you can paste to a friend";
-        Gfx.rect(lx, y + 55, lw, 1, 0, Gfx.LN);
+        Gfx.rect(lx, y + 55, lw, 1, 0, Th.ln);
         y += 56;
 
-        if (n == 0) Gfx.text(Gfx.UI, 12, lx, y + 25, Gfx.SUB, "No profiles yet. Save your setup, or import a code someone copied for you.");
+        if (n == 0) Gfx.text(Gfx.UI, 12, lx, y + 25, Th.mut, "No profiles yet. Save your setup, or import a code someone copied for you.");
         SimpleDateFormat df = new SimpleDateFormat("d MMM yyyy  HH:mm", Locale.ROOT);
         for (int i = 0; i < n; i++, y += rowH) {
             Object[] r = list.get(i);
             String name = (String) r[0];
             Path file = (Path) r[1];
-            Gfx.rect(lx, y + rowH - 1, lw, 1, 0, Gfx.LN);
-            Gfx.text(Gfx.SEMI, 14, lx + 2, y + rowH / 2 - 7, Gfx.ICE, Menu.fit(name, Gfx.SEMI, 14, lw - 420, 0));
+            Gfx.rect(lx, y + rowH - 1, lw, 1, 0, Th.ln);
+            Gfx.text(Gfx.SEMI, 14, lx + 2, y + rowH / 2 - 7, Th.tx, Menu.fit(name, Gfx.SEMI, 14, lw - 420, 0));
             int on2 = (Integer) r[3];
-            Gfx.text(Gfx.MONO, 9, lx + 2, y + rowH / 2 + 10, Gfx.SUB, df.format(new Date((Long) r[2])).toUpperCase(Locale.ROOT) + "  -  " + on2 + (on2 == 1 ? " MODULE ON" : " MODULES ON"), false, 1.4f);
+            Gfx.text(Gfx.MONO, 9, lx + 2, y + rowH / 2 + 10, Th.mut, df.format(new Date((Long) r[2])).toUpperCase(Locale.ROOT) + "  -  " + on2 + (on2 == 1 ? " MODULE ON" : " MODULES ON"), false, 1.4f);
             String key = file.toString();
             boolean ask = key.equals(confirm) && System.currentTimeMillis() - confirmAt < 4000;
             float dx = xr - (ask ? 96 : 30);
@@ -302,8 +302,8 @@ final class Profiles {
             } else {
                 boolean dh = Menu.in(dx, y + 10, 30, 30);
                 float dt = Menu.an("pdx" + i, dh);
-                Gfx.rect(dx, y + 10, 30, 30, 6, Gfx.a(Gfx.RED, 0.2f * dt));
-                Menu.drawX(dx + 15, y + 25, 4f, Gfx.mix(Gfx.MUT, Gfx.RED2, dt));
+                Gfx.rect(dx, y + 10, 30, 30, 6, Gfx.a(Th.ac, 0.2f * dt));
+                Menu.drawX(dx + 15, y + 25, 4f, Gfx.mix(Th.mut, Th.ac2, dt));
                 if (dh) Menu.tip = "Delete this profile";
                 if (Menu.hit(dx, y + 10, 30, 30) | Menu.used(fd) != 0) { confirm = key; confirmAt = System.currentTimeMillis(); }
             }
@@ -326,12 +326,12 @@ final class Profiles {
         Menu.endClip();
         if (maxS > 0) {
             float th = Math.max(30, viewH * viewH / contentH);
-            Gfx.rect(px + Menu.PW - 12, top + (viewH - th) * (Menu.scroll / maxS), 3, th, 1.5f, Gfx.a(0xFFFFFFFF, 0.16f));
+            Gfx.rect(px + Menu.PW - 12, top + (viewH - th) * (Menu.scroll / maxS), 3, th, 1.5f, Gfx.a(Th.ov, 0.16f));
         }
     }
 
     private static void header(String t, float x, float y, float w) {
-        Gfx.text(Gfx.MONO, 9, x, y + 20, Gfx.SUB, t, false, 2f);
-        Gfx.rect(x, y + 33, w, 1, 0, Gfx.LN2);
+        Gfx.text(Gfx.MONO, 9, x, y + 20, Th.mut, t, false, 2f);
+        Gfx.rect(x, y + 33, w, 1, 0, Th.ln2);
     }
 }

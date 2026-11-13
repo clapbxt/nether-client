@@ -162,7 +162,7 @@ final class ColorPicker {
         Gfx.round = true;
         Gfx.ring(mx - 7, my - 7, 14, 14, 7, 1, 0x99000000);
         Gfx.ring(mx - 6, my - 6, 12, 12, 6, 2, 0xFFFFFFFF);
-        Gfx.round = false;
+        Gfx.round = true; // the menu draws rounded
         // hue, alpha
         Gfx.image("cp:hue", hx, top, 14, sh, 0xFFFFFFFF, 0);
         marker(hx, top + hue * sh, 14);
@@ -177,25 +177,25 @@ final class ColorPicker {
         if (Menu.in(rx, top, 120, 28) && !ek.equals(Menu.editSet)) Menu.tip = "Type RRGGBB, or RRGGBBAA with opacity";
         swatch(rx + 128, top, 28, 28, ch ? Module.chroma() : argb);
         // rainbow
-        Gfx.text(Gfx.SEMI, 11, rx, top + 48, ch ? Gfx.ICE : Gfx.DIM, "RAINBOW", false, 1.2f);
+        Gfx.text(Gfx.SEMI, 11, rx, top + 48, ch ? Th.tx : Th.dim, "RAINBOW", false, 1.2f);
         Menu.sw("cpch" + ek, rx + rw - 36, top + 38, ch);
         if (Menu.hit(rx - 4, top + 34, rw + 4, 28)) setChroma(m, key, !ch);
         // presets and recent colours
-        Gfx.text(Gfx.MONO, 9, rx, top + 74, Gfx.SUB, "PRESETS", false, 2f);
+        Gfx.text(Gfx.MONO, 9, rx, top + 74, Th.mut, "PRESETS", false, 2f);
         String cur = Config.hex(argb);
         for (int i = 0; i < Module.PALETTE.length; i++) pick(m, "p" + i, Module.PALETTE[i], rx + i * 24, top + 82, cur, ch);
-        Gfx.text(Gfx.MONO, 9, rx, top + 110, Gfx.SUB, "RECENT", false, 2f);
+        Gfx.text(Gfx.MONO, 9, rx, top + 110, Th.mut, "RECENT", false, 2f);
         String[] rec = Config.str("client", "recentColors", "").split(",");
         int n = 0;
         for (String r : rec) if (n < 8 && Config.argb(r) >= 0) pick(m, "r" + n, r, rx + n++ * 24, top + 118, cur, ch);
-        if (n == 0) Gfx.text(Gfx.UI, 10, rx, top + 127, Gfx.MUT, "Colours you pick show up here");
+        if (n == 0) Gfx.text(Gfx.UI, 10, rx, top + 127, Th.mut, "Colours you pick show up here");
     }
 
     private static void pick(Module m, String sid, String hex, float x, float y, String cur, boolean ch) {
         int c = (int) Config.argb(hex);
         boolean sel = !ch && Config.hex(c).equalsIgnoreCase(cur), hv = Menu.in(x - 2, y - 2, 22, 22);
         float t = Menu.an("cps" + sid, sel || hv);
-        if (t > 0.02f) Gfx.ring(x - 3, y - 3, 24, 24, 0, 1.5f, Gfx.a(sel ? Gfx.ICE : Gfx.LN2, Math.max(t, sel ? 1 : 0)));
+        if (t > 0.02f) Gfx.ring(x - 3, y - 3, 24, 24, 0, 1.5f, Gfx.a(sel ? Th.tx : Th.ln2, Math.max(t, sel ? 1 : 0)));
         swatch(x, y, 18, 18, c);
         if (hv) Menu.tip = Config.hex(c);
         if (Menu.hit(x - 2, y - 2, 22, 22)) {

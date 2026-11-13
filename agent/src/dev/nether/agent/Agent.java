@@ -49,7 +49,7 @@ public final class Agent {
         inst = instrumentation;
         openJavaLang();
         Hook.open = Agent::openModule;
-        for (String f : new String[] {"ChakraPetch-Bold", "ChakraPetch-SemiBold", "ChakraPetch-Medium", "JetBrainsMono-Medium"}) {
+        for (String f : new String[] {"NetherPixel-Bold", "NetherPixel-Regular"}) {
             try (InputStream in = Agent.class.getResourceAsStream("/fonts/" + f + ".ttf")) {
                 if (in != null) Hook.res.put("fonts/" + f + ".ttf", readAll(in));
             } catch (Throwable t) {

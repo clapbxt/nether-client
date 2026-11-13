@@ -47,7 +47,6 @@ final class MediaPlayer extends Module {
 
     @Override boolean available() { return Media.supported(); }
     @Override String lockNote() { return !available() ? "NOT AVAILABLE ON THIS OS" : super.lockNote(); }
-    @Override String[] icon() { return new String[] {"music_disc_cat", "record_cat"}; }
 
     // ---------------------------------------------------------------- data
 

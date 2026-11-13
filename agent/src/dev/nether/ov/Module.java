@@ -90,45 +90,6 @@ abstract class Module {
         }
     }
 
-    /** Fallback card icon for ids without a {@link ModIcons} glyph: item textures tried in order (modern name first, 1.8.9 name after). */
-    String[] icon() {
-        switch (id) {
-            case "fps": return new String[] {"experience_bottle"};
-            case "cps": return new String[] {"arrow"};
-            case "keys": return new String[] {"oak_sign", "sign"};
-            case "coords": return new String[] {"map", "map_empty"};
-            case "clock": return new String[] {"clock_00", "clock"};
-            case "session": return new String[] {"recovery_compass_16", "clock"};
-            case "memory": return new String[] {"writable_book", "book_writable"};
-            case "crosshair": return new String[] {"bow_pulling_2", "bow"};
-            case "zoom": return new String[] {"spyglass", "ender_eye"};
-            case "fullbright": return new String[] {"glowstone_dust"};
-            case "armor": return new String[] {"diamond_chestplate"};
-            case "potions": return new String[] {"potion", "potion_bottle_drinkable"};
-            case "ping": return new String[] {"ender_pearl"};
-            case "server": return new String[] {"name_tag"};
-            case "compass": return new String[] {"compass_00", "compass"};
-            case "worldtime": return new String[] {"clock_08", "clock"};
-            case "speed": return new String[] {"feather"};
-            case "waypoints": return new String[] {"filled_map", "map_filled"};
-            case "packs": return new String[] {"painting"};
-            case "menu": return new String[] {"item_frame"};
-            case "reach": return new String[] {"iron_sword", "stone_sword"};
-            case "combo": return new String[] {"diamond_sword"};
-            case "items": return new String[] {"ender_pearl"};
-            case "camera": return new String[] {"spyglass", "ender_eye"};
-            case "stopwatch": return new String[] {"clock_00", "clock"};
-            case "streamer": return new String[] {"ender_eye"};
-            default: return new String[] {"paper"};
-        }
-    }
-
-    /** First icon that exists in this game version, or null. */
-    int[] iconPx() {
-        for (String s : icon()) { int[] p = Icons.get("minecraft:" + s); if (p != null) return p; }
-        return null;
-    }
-
     Module add(Setting s) { settings.add(s); byKey.put(s.key, s); return this; }
     boolean has(String key) { return byKey.containsKey(key); }
     Setting setting(String key) { return byKey.get(key); }

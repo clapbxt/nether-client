@@ -16,11 +16,13 @@ import java.util.Map;
 final class Menu {
     private Menu() {}
 
-    static final float PW = 880, PH = 540;
-    static final String[] TABS = {"ALL", "FAVOURITES", "ENABLED", "HUD", "MOVEMENT", "VISUAL", "UTILITY", "CONTROLS", "CLIENT", "WARDROBE"};
-    private static final String[] TAB_CAT = {null, "*fav", "*on", "HUD", "Movement", "Visual", "Utility", null, null, null};
-    /** tabs from here on are pages of their own (drawn on the right of the tab row) */
-    static final int T_CONTROLS = 7, T_CLIENT = 8, T_WARDROBE = 9;
+    /** Space the Controls / Profiles / Wardrobe pages draw in (set every frame from the panel; they anchor at px + 28, py + 124). */
+    static float PW = 880, PH = 540;
+    static final String[] TABS = {"Favorites", "All", "HUD", "Visual", "PvP", "Utility", "Wardrobe", "HUD Editor", "Settings"};
+    private static final String[] TAB_ICON = {"favorites", "all", "hud", "visual", "pvp", "utility", "wardrobe", "hudeditor", "settings"};
+    /** sidebar entries from here on are the CLIENT group */
+    static final int T_WARDROBE = 6, T_HUDED = 7, T_SETTINGS = 8;
+    private static int sub;
 
     static boolean hudEdit;
     static String page;
@@ -48,12 +50,15 @@ final class Menu {
     static boolean editing() { return hudEdit && Input.menuOpen; }
     static boolean capturing() { return capture != null; }
     /** Typed characters go to a text field (search with text or focus, a waypoint name): a letter menu key types there. */
-    static boolean textFocus() { return fieldFocus() || (page == null && !hudEdit && (searchFocus || !search.isEmpty())); }
+    static boolean textFocus() { return fieldFocus() || (!hudEdit && tab < T_WARDROBE && (searchFocus || !search.isEmpty())); }
     /** A waypoint name, a text setting, a slider value, a hex colour or a profile name is being typed into. */
     static boolean fieldFocus() { return editWp >= 0 || editSet != null; }
 
     /** Smallest text in the menu, in pixels: small windows / GUI scale 1 never get unreadable labels. */
     static final int MIN_PX = 9;
+
+    /** From the title screen's quick panel: the Settings tab with the title screen's options open. */
+    static void openMainMenuSettings() { tab = T_SETTINGS; sub = 0; page = "menu"; scroll = scrollT = 0; }
 
     static void opened() { drag = capture = null; searchFocus = false; scroll = scrollT = 0; fCur = -1; kbNav = false; }
     static void closed() {
@@ -163,7 +168,7 @@ final class Menu {
             else if (y + h > cy1 - 6) scrollT += y + h - (cy1 - 6);
         }
         kbScroll = false;
-        if (kbNav) Gfx.ring(x - 3, y - 3, w + 6, h + 6, 6, 1.5f, Gfx.RED2);
+        if (kbNav) Gfx.ring(x - 3, y - 3, w + 6, h + 6, 6, 1.5f, Th.ac2);
         return true;
     }
 
@@ -220,17 +225,17 @@ final class Menu {
         }
         if (!press && k != 259 && k != 258 && (k < 262 || k > 267)) return; // held keys repeat only Backspace, Tab, arrows, paging
         if (ctrl) {
-            if (k == 70) { commitEdit(); ColorPicker.close(); page = null; if (tab >= T_CONTROLS) setTab(0); searchFocus = true; return; } // Ctrl+F
+            if (k == 70) { commitEdit(); ColorPicker.close(); page = null; if (tab >= T_WARDROBE) setTab(1); searchFocus = true; return; } // Ctrl+F
             if (k == 69) { commitEdit(); ColorPicker.close(); page = null; hudEdit = true; return; }                                   // Ctrl+E
             if (k == 86) { typedSearch(Plat.cur.clipboard()); return; }                                                                // Ctrl+V
             return;
         }
         if (k == 259) {
-            if (page == null && !search.isEmpty()) { search = search.substring(0, search.length() - 1); searchFocus = true; scroll = scrollT = 0; fCur = -1; }
+            if (!search.isEmpty() && tab < T_WARDROBE) { search = search.substring(0, search.length() - 1); searchFocus = true; scroll = scrollT = 0; fCur = -1; }
             return;
         }
         switch (k) {
-            case 258: if (page == null) setTab((tab + (shift ? TABS.length - 1 : 1)) % TABS.length); else nav(shift ? -1 : 1); kbNav = true; break;
+            case 258: if (page == null) { int n = (tab + (shift ? TABS.length - 1 : 1)) % TABS.length; if (n == T_HUDED) n = (n + (shift ? TABS.length - 1 : 1)) % TABS.length; setTab(n); } else nav(shift ? -1 : 1); kbNav = true; break;
             case 265: nav(-navCols); break;
             case 264: nav(navCols); break;
             case 262: case 263: {
@@ -241,7 +246,7 @@ final class Menu {
             }
             case 257: case 335:
                 if (fCur >= 0) { act = 257; kbNav = true; }
-                else if (page == null && tab < T_CONTROLS) { searchFocus = false; if (!search.isEmpty()) { fCur = 0; kbNav = true; kbScroll = true; } }
+                else if (page == null && tab < T_WARDROBE) { searchFocus = false; if (!search.isEmpty()) { fCur = 0; kbNav = true; kbScroll = true; } }
                 break;
             case 32: if (fCur >= 0 && (page != null || search.isEmpty())) { act = 32; kbNav = true; } break;
             case 266: scrollT -= 300; break;
@@ -263,7 +268,7 @@ final class Menu {
     }
 
     private static void typedSearch(String t) {
-        if (page != null || hudEdit || capture != null || t.isEmpty()) return;
+        if (hudEdit || capture != null || t.isEmpty() || (tab == T_SETTINGS && sub != 0)) return;
         String q = (search + t.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')).replaceFirst("^\\s+", "");
         q = q.substring(0, Math.min(24, q.length()));
         if (q.equals(search)) return; // a lone space: nothing to search for (Space toggles the focused card)
@@ -271,7 +276,9 @@ final class Menu {
         searchFocus = true;
         scroll = scrollT = 0;
         fCur = -1;
-        if (tab >= T_CONTROLS) tab = 0; // typing on CONTROLS / CLIENT searches the modules
+        if (tab >= T_WARDROBE) tab = 1; // typing on a client page searches the modules
+        commitEdit();
+        page = null;
     }
 
     // ---------------------------------------------------------------- text fields
@@ -332,17 +339,17 @@ final class Menu {
         if (kind == HEX) value = value.replace("#", ""); // the field draws its own #
         String v = ed ? editBuf : value;
         float t = an("fld" + key, ed || in(x, y, w, h));
-        Gfx.rect(x, y, w, h, 6, Gfx.a(0xFFFFFFFF, 0.035f + 0.03f * t));
-        Gfx.ring(x, y, w, h, 6, 1, ed ? Gfx.RED : Gfx.mix(Gfx.LN, Gfx.LN2, t));
+        Gfx.rect(x, y, w, h, 6, Gfx.a(Th.ov, 0.035f + 0.03f * t));
+        Gfx.ring(x, y, w, h, 6, 1, ed ? Th.ac : Gfx.mix(Th.ln, Th.ln2, t));
         int font = kind == HEX || kind == NUM ? Gfx.MONO : Gfx.UI;
         float tx = x + 10, cy = y + h / 2;
-        if (kind == HEX) tx += Gfx.text(Gfx.MONO, 12, tx, cy, Gfx.SUB, "#") + 1;
+        if (kind == HEX) tx += Gfx.text(Gfx.MONO, 12, tx, cy, Th.mut, "#") + 1;
         float room = x + w - tx - 10;
         String shown = v;
         if (ed) while (shown.length() > 1 && Gfx.width(font, 12, shown) > room) shown = shown.substring(1); // typing: keep the end in view
         else shown = v.isEmpty() ? empty : fit(v, font, 12, room, 0);
-        float fw = Gfx.text(font, 12, tx, cy, !ed && v.isEmpty() ? Gfx.MUT : Gfx.ICE, shown);
-        if (ed && (Config.calm() || (System.currentTimeMillis() / 530) % 2 == 0)) Gfx.rect(tx + fw + 1, cy - 7, 1.5f, 14, 0, Gfx.RED2);
+        float fw = Gfx.text(font, 12, tx, cy, !ed && v.isEmpty() ? Th.mut : Th.tx, shown);
+        if (ed && (Config.calm() || (System.currentTimeMillis() / 530) % 2 == 0)) Gfx.rect(tx + fw + 1, cy - 7, 1.5f, 14, 0, Th.ac2);
         if (!ed && (hit(x, y, w, h) || used(f) != 0)) startEdit(key, kind, value, max);
     }
 
@@ -353,12 +360,12 @@ final class Menu {
         float t = an(id, hv);
         boolean down = hv && Input.btn[0];
         if (primary) {
-            Gfx.rect(x, y, w, h, 6, down ? 0xFFB80500 : Gfx.mix(Gfx.RED, Gfx.RED2, t));
+            Gfx.rect(x, y, w, h, 6, down ? 0xFFB80500 : Gfx.mix(Th.ac, Th.ac2, t));
             Gfx.textC(Gfx.SEMI, 11, x + w / 2, y + h / 2, 0xFFFFFFFF, label, 1.2f);
         } else {
-            Gfx.rect(x, y, w, h, 6, Gfx.a(0xFFFFFFFF, down ? 0.02f : 0.035f + 0.05f * t));
-            Gfx.ring(x, y, w, h, 6, 1, Gfx.mix(Gfx.LN, Gfx.LN2, t));
-            Gfx.textC(Gfx.SEMI, 11, x + w / 2, y + h / 2, Gfx.mix(Gfx.DIM, Gfx.ICE, t), label, 1.2f);
+            Gfx.rect(x, y, w, h, 6, Gfx.a(Th.ov, down ? 0.02f : 0.035f + 0.05f * t));
+            Gfx.ring(x, y, w, h, 6, 1, Gfx.mix(Th.ln, Th.ln2, t));
+            Gfx.textC(Gfx.SEMI, 11, x + w / 2, y + h / 2, Gfx.mix(Th.dim, Th.tx, t), label, 1.2f);
         }
         return hit(x, y, w, h);
     }
@@ -409,8 +416,8 @@ final class Menu {
 
     static void sw(String id, float x, float y, boolean on) {
         float t = an(id, on);
-        Gfx.rect(x, y, 36, 20, 10, Gfx.mix(Gfx.S3, Gfx.RED, t));
-        Gfx.rect(x + 3 + 16 * t, y + 3, 14, 14, 7, Gfx.mix(Gfx.DIM, 0xFFFFFFFF, t));
+        Gfx.rect(x, y, 36, 20, 10, Gfx.mix(Th.s3, Th.ac, t));
+        Gfx.rect(x + 3 + 16 * t, y + 3, 14, 14, 7, Gfx.mix(Th.dim, 0xFFFFFFFF, t));
     }
 
     private static double slider(String id, float x, float y, float w, double v, double min, double max, double step) {
@@ -427,7 +434,7 @@ final class Menu {
         }
         float f = (float) ((v - min) / (max - min));
         Gfx.rect(x, y - 2, w, 4, 2, 0xFF23232C);
-        Gfx.rect(x, y - 2, Math.max(4, w * f), 4, 2, Gfx.RED);
+        Gfx.rect(x, y - 2, Math.max(4, w * f), 4, 2, Th.ac);
         float r = 6 + 1.5f * t;
         Gfx.rect(x + w * f - r, y - r, r * 2, r * 2, r, 0xFFEAEEF3);
         return v;
@@ -439,9 +446,9 @@ final class Menu {
         String name = cap ? "PRESS A KEY" : keyName(code);
         boolean hv = in(x, y, w, 28);
         float t = an("k" + cid, hv || cap);
-        Gfx.rect(x, y, w, 28, 6, Gfx.a(0xFFFFFFFF, 0.035f + 0.04f * t));
-        Gfx.ring(x, y, w, 28, 6, 1, cap || clash ? Gfx.RED : Gfx.mix(Gfx.LN, Gfx.LN2, t));
-        Gfx.textC(Gfx.SEMI, 11, x + w / 2, y + 14, code < 0 && !cap ? Gfx.SUB : Gfx.ICE, name, 1f);
+        Gfx.rect(x, y, w, 28, 6, Gfx.a(Th.ov, 0.035f + 0.04f * t));
+        Gfx.ring(x, y, w, 28, 6, 1, cap || clash ? Th.ac : Gfx.mix(Th.ln, Th.ln2, t));
+        Gfx.textC(Gfx.SEMI, 11, x + w / 2, y + 14, code < 0 && !cap ? Th.mut : Th.tx, name, 1f);
         if (hit(x, y, w, 28) || used(f) != 0) capture = cid;
     }
 
@@ -460,7 +467,7 @@ final class Menu {
             return;
         }
         // 720-unit-tall space, never smaller than 0.8 px/unit, but the whole panel always fits the window (narrow / short windows)
-        sc = Math.min(Math.max(0.8f, fbH / 720f), Math.min(fbW / (PW + 24), fbH / (PH + 24)));
+        sc = Math.min(Math.max(0.8f, fbH / 720f), Math.min(fbW / 900f, fbH / 610f));
         W = fbW / sc;
         H = fbH / sc;
         Gfx.dt = dt;
@@ -495,7 +502,8 @@ final class Menu {
             Gfx.alpha = e;
             Gfx.s = sc;
             Gfx.minPx = MIN_PX;
-            panel(wheel, e);
+            Gfx.round = true; // rounded panel, rows and controls (HUD modules stay square)
+            try { panel(wheel, e); } finally { Gfx.round = false; }
             if (click && fieldFocus()) commitEdit(); // clicked somewhere else
             if (click) Hits.press(0); // a click the panel did not use may land on a HUD widget
         }
@@ -506,70 +514,146 @@ final class Menu {
         Gfx.s = sc;
     }
 
-    // ---------------------------------------------------------------- main panel
+    // ---------------------------------------------------------------- main panel (v6: sidebar + list)
+
+    private static final int SIDE = 210, TOP = 56, FOOT = 28, ROW = 44;
+
+    /** Module in this sidebar category (0 favourites, 1 all, 2 HUD, 3 visual, 4 PvP, 5 utility). */
+    private static boolean inTab(Module m, int t) {
+        switch (t) {
+            case 0: return m.fav();
+            case 1: return true;
+            case 2: return "HUD".equals(m.cat);
+            case 3: return "Visual".equals(m.cat);
+            case 4: return PVP.contains(m.id);
+            default: return "Utility".equals(m.cat) || "Movement".equals(m.cat);
+        }
+    }
+
+    private static final java.util.Set<String> PVP = new java.util.HashSet<>(java.util.Arrays.asList("cps", "keys", "reach", "combo", "crosshair", "armor", "potions", "items"));
+
+    private static int onCount(int t) {
+        int n = 0;
+        for (Module m : Modules.all) if (!m.hidden() && inTab(m, t) && m.enabled()) n++;
+        return n;
+    }
+
+    private static int count(int t) {
+        int n = 0;
+        for (Module m : Modules.all) if (!m.hidden() && inTab(m, t)) n++;
+        return n;
+    }
 
     private static void panel(float wheel, float e) {
-        Gfx.rect(0, 0, W, H, 0, Gfx.a(0xFF050507, 0.62f));
-        float px = (W - PW) / 2, py = (H - PH) / 2 + (1 - e) * 14;
-        for (int i = 3; i >= 1; i--) Gfx.rect(px - i * 7, py - i * 4 + 10, PW + i * 14, PH + i * 8, 16 + i * 4, Gfx.a(0xFF000000, 0.10f));
-        Gfx.rect(px, py, PW, PH, 10, Gfx.BG);
-        Gfx.ring(px, py, PW, PH, 10, 1, 0x24FFFFFF);
-        Gfx.rect(px + 28, py, 56, 2, 0, Gfx.RED);
-
-        // header
-        float hy = py + 36;
-        float lw = Gfx.text(Gfx.HEAD, 24, px + 28, hy, Gfx.ICE, "NETHER", false, 4f);
-        Gfx.text(Gfx.MONO, 9, px + 28 + lw + 10, hy + 2, Gfx.SUB, "CLIENT", false, 3f);
-        float cxp = px + PW - 28 - 28;
-        boolean xh = in(cxp, py + 22, 28, 28);
-        float xt = an("close", xh);
-        Gfx.rect(cxp, py + 22, 28, 28, 6, Gfx.a(0xFFFFFFFF, 0.035f + 0.06f * xt));
-        drawX(cxp + 14, py + 36, 4.2f, Gfx.mix(Gfx.DIM, Gfx.ICE, xt));
-        if (hit(cxp, py + 22, 28, 28)) Input.setMenu(false);
-        float ex = cxp - 12 - 158;
-        if (button("edit", "EDIT HUD LAYOUT", ex, py + 21, 158, 30, true)) { commitEdit(); ColorPicker.close(); hudEdit = true; page = null; }
-        if (in(ex, py + 21, 158, 30)) tip = "Move, scale and hide HUD modules (Ctrl+E)";
-        float sx = ex - 12;
-        if (page == null) {
-            sx = ex - 12 - 170;
-            boolean sh = in(sx, py + 21, 170, 30);
-            float qx = sx + 170 - 26, qy = py + 24;
-            if (!search.isEmpty() && hit(qx, qy, 22, 24)) { search = ""; searchFocus = true; scroll = scrollT = 0; }
-            if (click && !sh) searchFocus = false;
-            if (hit(sx, py + 21, 170, 30)) { searchFocus = true; if (tab >= T_CONTROLS) setTab(0); }
-            float st = an("search", searchFocus || sh);
-            Gfx.rect(sx, py + 21, 170, 30, 6, Gfx.a(0xFFFFFFFF, 0.04f));
-            Gfx.ring(sx, py + 21, 170, 30, 6, 1, Gfx.mix(Gfx.LN, searchFocus ? Gfx.RED : Gfx.LN2, st));
-            if (search.isEmpty() && !searchFocus) Gfx.text(Gfx.SEMI, 10, sx + 14, py + 36, Gfx.SUB, "TYPE TO SEARCH", false, 1.2f);
-            else {
-                String shown = search; // the end of a long query stays visible
-                while (shown.length() > 1 && Gfx.width(Gfx.UI, 13, shown) > 170 - 14 - 34) shown = shown.substring(1);
-                float tw = Gfx.text(Gfx.UI, 13, sx + 14, py + 36, Gfx.ICE, shown);
-                if (searchFocus && (Config.calm() || (System.currentTimeMillis() / 530) % 2 == 0)) Gfx.rect(sx + 15 + tw, py + 28, 1.5f, 16, 0, Gfx.RED2);
-            }
-            if (!search.isEmpty()) drawX(qx + 11, qy + 12, 3.4f, Gfx.mix(Gfx.MUT, Gfx.ICE, an("sclear", in(qx, qy, 22, 24)))); // clear
-        }
-        safePill(sx - 12 - 176, py + 21);
-        Gfx.rect(px, py + 72, PW, 1, 0, Gfx.LN);
-
-        if (page != null) settings(px, py, wheel);
-        else {
-            tabs(px, py);
-            if (tab == T_CONTROLS) Controls.draw(px, py, wheel);
-            else if (tab == T_CLIENT) Profiles.draw(px, py, wheel);
-            else if (tab == T_WARDROBE) Wardrobe.draw(px, py, wheel);
-            else grid(px, py, wheel);
-        }
-
-        // what the keys do, while they are in use
+        Gfx.rect(0, 0, W, H, 0, Gfx.a(0xFF000000, Th.light() ? 0.18f : 0.34f));
+        float pw = Math.max(760, Math.min(1180, W * 0.86f)), ph = Math.max(500, Math.min(640, H * 0.86f));
+        float px = (W - pw) / 2, py = (H - ph) / 2 + (1 - e) * 14;
+        Gfx.rect(px, py, pw, ph, 8, Gfx.a(Th.s1, 0.80f));
+        float mx = px + SIDE, mw = pw - SIDE;
+        sidebar(px, py, ph);
+        Gfx.ring(px, py, pw, ph, 8, 1, Th.ln2);
+        // legacy page space for Controls / Profiles / Wardrobe: they draw at (px + 28, py + 124) inside PW x PH
+        PW = mw + 16;
+        PH = ph + 62;
+        float cpx = px + SIDE - 8, cpy = py - 68;
+        boolean modules = tab < T_WARDROBE;
+        String title = TABS[tab];
+        String stat = modules ? onCount(tab) + " of " + count(tab) + " on" : "";
+        topBar(mx, py, mw, title, stat, modules);
+        if (tab == T_WARDROBE) Wardrobe.draw(cpx, cpy, wheel);
+        else if (tab == T_SETTINGS) settingsPage(cpx, cpy, wheel, mx, py, mw, ph);
+        else list(mx, py + TOP, mw, ph - TOP - FOOT, wheel);
+        // footer: the keys, and the same count
+        Gfx.rect(mx, py + ph - FOOT, mw, 1, 0, Th.ln);
         String foot = Profiles.status();
-        if (foot == null && kbNav) foot = page != null ? "UP / DOWN MOVE  -  LEFT / RIGHT ADJUST  -  ENTER CHANGES  -  ESC BACK"
-            : tab < T_CONTROLS ? "ARROWS MOVE  -  SPACE TURNS ON / OFF  -  ENTER OPENS SETTINGS  -  TAB NEXT TAB  -  ESC BACK"
-            : tab == T_CONTROLS ? "UP / DOWN MOVE  -  ENTER REBINDS  -  DELETE CLEARS  -  ESC CANCELS"
-            : "UP / DOWN MOVE  -  ENTER USES  -  TAB NEXT TAB  -  ESC CLOSES";
-        else if (foot == null && page == null && tab == T_CONTROLS) foot = "CLICK A KEY TO REBIND IT  -  DELETE CLEARS IT  -  ESC CANCELS";
-        if (foot != null) Gfx.textC(Gfx.MONO, 9, px + PW / 2, py + PH - 11, Profiles.statusBad() ? Gfx.RED2 : Gfx.SUB, foot, 1.4f);
+        boolean bad = Profiles.statusBad();
+        if (foot == null) foot = tab < T_WARDROBE ? "↑↓ move  ·  Enter toggle  ·  → settings  ·  Esc close" : "Esc close";
+        Gfx.text(Gfx.UI, 11, mx + 20, py + ph - FOOT / 2f, bad ? Th.ac2 : Th.mut, foot);
+        if (modules) {
+            String r = onCount(tab) + " of " + count(tab) + " on";
+            Gfx.text(Gfx.UI, 11, mx + mw - 20 - Gfx.width(Gfx.UI, 11, r), py + ph - FOOT / 2f, Th.mut, r);
+        }
         if (tip != null) tooltip(px);
+    }
+
+    private static void sidebar(float px, float py, float ph) {
+        Gfx.clip(px, py, SIDE, ph);
+        Gfx.rect(px, py, SIDE + 12, ph, 8, Gfx.a(Th.ov, Th.light() ? 0.0f : 0.03f));
+        Gfx.unclip();
+        Gfx.rect(px + SIDE - 1, py, 1, ph, 0, Th.ln);
+        Gfx.text(Gfx.HEAD, 14, px + 18, py + 30, Th.ac2, "Nether Client");
+        float y = py + 56;
+        y = group("MODULES", px, y);
+        for (int i = 0; i < T_WARDROBE; i++) { navItem(i, px, y, count(i)); y += 32; }
+        y += 6;
+        y = group("CLIENT", px, y);
+        for (int i = T_WARDROBE; i <= T_SETTINGS; i++) { navItem(i, px, y, -1); y += 32; }
+        // profile chip
+        float cy = py + ph - 34;
+        Gfx.rect(px, cy - 22, SIDE - 1, 1, 0, Th.ln);
+        String nm = MainMenu.accName == null || MainMenu.accName.isEmpty() ? "Player" : MainMenu.accName;
+        Gfx.rect(px + 16, cy - 10, 24, 24, 4, Th.s3);
+        Gfx.textC(Gfx.HEAD, 12, px + 28, cy + 2, Th.tx, nm.substring(0, 1).toUpperCase(Locale.ROOT), 0);
+        Gfx.text(Gfx.UI, 12, px + 50, cy - 3, Th.tx, fit(nm, Gfx.UI, 12, SIDE - 66, 0));
+        Gfx.text(Gfx.UI, 10, px + 50, cy + 10, Th.mut, "Default profile");
+    }
+
+    private static float group(String label, float px, float y) {
+        float w = Gfx.text(Gfx.UI, 10, px + 18, y + 8, Th.mut, label, false, 1.2f);
+        Gfx.rect(px + 18 + w + 8, y + 8, SIDE - 36 - w - 8, 1, 0, Th.ln);
+        return y + 20;
+    }
+
+    private static void navItem(int i, float px, float y, int cnt) {
+        float x = px + 8, w = SIDE - 16, h = 30;
+        boolean sel = tab == i, hv = in(x, y, w, h);
+        float t = an("nv" + i, hv), s = an("nvs" + i, sel);
+        if (s > 0.02f) {
+            Gfx.rect(x, y, w, h, 4, Gfx.a(Th.ac, 0.16f * s));
+            Gfx.rect(px, y + 5, 3, h - 10, 1.5f, Gfx.a(Th.ac, s));
+        } else if (t > 0.02f) Gfx.rect(x, y, w, h, 4, Gfx.a(Th.ov, 0.07f * t));
+        ModIcons.draw(TAB_ICON[i], x + 10, y + h / 2 - 7.5f, 15, Gfx.mix(Th.dim, Th.tx, Math.max(s, t)));
+        Gfx.text(Gfx.UI, 13, x + 34, y + h / 2, Gfx.mix(Th.dim, Th.tx, Math.max(s, t)), TABS[i]);
+        if (cnt >= 0) { String c = String.valueOf(cnt); Gfx.text(Gfx.UI, 11, x + w - 10 - Gfx.width(Gfx.UI, 11, c), y + h / 2, sel ? Th.tx : Th.mut, c); }
+        if (hit(x, y, w, h)) {
+            if (i == T_HUDED) { commitEdit(); ColorPicker.close(); hudEdit = true; page = null; }
+            else if (i != tab) { commitEdit(); ColorPicker.close(); page = null; setTab(i); searchFocus = false; }
+        }
+    }
+
+    private static void topBar(float mx, float py, float mw, String title, String stat, boolean searchable) {
+        float cy = py + TOP / 2f;
+        float tw = Gfx.text(Gfx.HEAD, 16, mx + 20, cy, Th.tx, title);
+        if (!stat.isEmpty()) Gfx.text(Gfx.UI, 12, mx + 20 + tw + 12, cy, Th.mut, stat);
+        float cx = mx + mw - 16 - 28;
+        boolean xh = in(cx, cy - 14, 28, 28);
+        float xt = an("close", xh);
+        Gfx.rect(cx, cy - 14, 28, 28, 4, Gfx.a(Th.ov, 0.07f * xt));
+        drawX(cx + 14, cy, 4.2f, Gfx.mix(Th.mut, Th.tx, xt));
+        if (hit(cx, cy - 14, 28, 28)) Input.setMenu(false);
+        float sx = cx - 12 - 250;
+        if (searchable && page == null) {
+            boolean sh = in(sx, cy - 15, 250, 30);
+            float qx = sx + 250 - 40;
+            if (!search.isEmpty() && hit(qx, cy - 12, 22, 24)) { search = ""; searchFocus = true; scroll = scrollT = 0; }
+            if (click && !sh) searchFocus = false;
+            if (hit(sx, cy - 15, 250, 30)) searchFocus = true;
+            float st = an("search", searchFocus || sh);
+            Gfx.rect(sx, cy - 15, 250, 30, 4, Gfx.a(Th.s1, 0.5f));
+            Gfx.ring(sx, cy - 15, 250, 30, 4, 1, Gfx.mix(Th.ln2, Th.ac, searchFocus ? st : 0));
+            ModIcons.draw("zoom", sx + 9, cy - 7, 14, Th.mut);
+            if (search.isEmpty() && !searchFocus) {
+                Gfx.text(Gfx.UI, 12, sx + 30, cy, Th.mut, "Search modules");
+                Gfx.text(Gfx.UI, 10, sx + 250 - 12 - Gfx.width(Gfx.UI, 10, "Ctrl F"), cy, Th.mut, "Ctrl F");
+            } else {
+                String shown = search;
+                while (shown.length() > 1 && Gfx.width(Gfx.UI, 12, shown) > 250 - 30 - 40) shown = shown.substring(1);
+                float w = Gfx.text(Gfx.UI, 12, sx + 30, cy, Th.tx, shown);
+                if (searchFocus && (Config.calm() || (System.currentTimeMillis() / 530) % 2 == 0)) Gfx.rect(sx + 31 + w, cy - 7, 1.5f, 14, 0, Th.ac2);
+            }
+            if (!search.isEmpty()) drawX(qx + 11, cy, 3.4f, Gfx.mix(Th.mut, Th.tx, an("sclear", in(qx, cy - 12, 22, 24))));
+        }
+        Gfx.rect(mx, py + TOP, mw, 1, 0, Th.ln);
     }
 
     private static void tooltip(float px) {
@@ -577,57 +661,27 @@ final class Menu {
         float tipW = 0;
         for (String t : tl) tipW = Math.max(tipW, Gfx.width(Gfx.UI, 11, t));
         float bh = 12 + tl.size() * 16;
-        float bx = Math.max(4, Math.min(L + 14, px + PW - tipW - 40)), by = T + 18;
+        float bx = Math.max(4, Math.min(L + 14, W - tipW - 30)), by = T + 18;
         if (by + bh > H - 4) by = T - 10 - bh;
-        Gfx.rect(bx, by, tipW + 24, bh, 6, 0xF2101016);
-        Gfx.ring(bx, by, tipW + 24, bh, 6, 1, Gfx.LN2);
-        for (int i = 0; i < tl.size(); i++) Gfx.text(Gfx.UI, 11, bx + 12, by + 14 + i * 16, Gfx.DIM, tl.get(i));
+        Gfx.rect(bx, by, tipW + 24, bh, 6, Gfx.a(Th.s2, 0.97f));
+        Gfx.ring(bx, by, tipW + 24, bh, 6, 1, Th.ln2);
+        for (int i = 0; i < tl.size(); i++) Gfx.text(Gfx.UI, 11, bx + 12, by + 14 + i * 16, Th.dim, tl.get(i));
     }
 
-    /** Profile-wide server-safe mode switch (header). */
-    private static void safePill(float x, float y) {
-        boolean on = Modules.safe(), hv = in(x, y, 176, 30);
-        float t = an("safe", hv), o = an("safeon", on);
-        Gfx.rect(x, y, 176, 30, 6, Gfx.a(0xFFFFFFFF, 0.035f + 0.04f * t));
-        Gfx.ring(x, y, 176, 30, 6, 1, Gfx.mix(Gfx.mix(Gfx.LN, Gfx.LN2, t), Gfx.a(Gfx.RED, 0.7f), o));
-        Gfx.text(Gfx.SEMI, 10, x + 13, y + 15, Gfx.mix(Gfx.DIM, Gfx.ICE, Math.max(t, o)), "SERVER-SAFE", false, 1.2f);
-        float sx = x + 176 - 13 - 36, sy = y + 5;
-        Gfx.rect(sx, sy, 36, 20, 10, Gfx.mix(Gfx.S3, Gfx.RED, o));
-        Gfx.rect(sx + 3 + 16 * o, sy + 3, 14, 14, 7, Gfx.mix(Gfx.DIM, 0xFFFFFFFF, o));
-        if (hit(x, y, 176, 30)) Modules.setSafe(!on);
-        if (hv) tip = "Turns off the modules that can be an advantage (zoom, fullbright, reach) for servers that forbid them.";
-    }
-
-    /** Category tabs on the left, the CONTROLS, CLIENT and WARDROBE pages on the right. */
-    private static void tabs(float px, float py) {
-        float ty = py + 100, wl = 0, wr = 0;
-        for (int i = 0; i < TABS.length; i++) { float tw = Gfx.width(Gfx.SEMI, 12, TABS[i], 1.4f); if (i < T_CONTROLS) wl += tw; else wr += tw; }
-        float pad = Math.max(14, Math.min(28, (PW - 56 - 28 - wl - wr) / TABS.length));
-        float tx = px + 28, rx = px + PW - 28 - wr - pad * (TABS.length - T_CONTROLS);
-        Gfx.rect(rx - 12, ty - 9, 1, 18, 0, Gfx.LN2);
-        for (int i = 0; i < TABS.length; i++) {
-            float tw = Gfx.width(Gfx.SEMI, 12, TABS[i], 1.4f) + pad, x0 = i < T_CONTROLS ? tx : rx;
-            boolean hv = in(x0, ty - 15, tw, 30);
-            float t = an("tab" + i, hv || tab == i);
-            Gfx.text(Gfx.SEMI, 12, x0 + pad / 2, ty, Gfx.mix(Gfx.DIM, Gfx.ICE, t), TABS[i], false, 1.4f);
-            if (hit(x0, ty - 15, tw, 30)) { setTab(i); if (i >= T_CONTROLS) searchFocus = false; }
-            if (tab == i) {
-                if (tabX < 0) { tabX = x0; tabW = tw; }
-                float k = Config.calm() ? 1 : Math.min(1, Gfx.dt * 16);
-                tabX += (x0 - tabX) * k;
-                tabW += (tw - tabW) * k;
-            }
-            if (i < T_CONTROLS) tx += tw; else rx += tw;
-        }
-        Gfx.rect(tabX + pad / 2, ty + 14, tabW - pad, 2, 1, Gfx.RED);
+    /** Profile-wide server-safe mode switch (Settings). */
+    private static void safeRow(float x, float y, float w) {
+        boolean on = Modules.safe();
+        Gfx.text(Gfx.UI, 13, x, y + 15, Th.tx, "Server-safe mode");
+        Gfx.text(Gfx.UI, 10, x, y + 31, Th.mut, "Turns off the modules that can be an advantage (zoom, fullbright, reach) for servers that forbid them.");
+        pill("safe", x + w - 30, y + 14, on);
+        if (hit(x + w - 40, y + 4, 40, 34) || hit(x, y, w - 50, 42)) Modules.setSafe(!on);
     }
 
     private static List<Module> filtered() {
         List<Module> l = new ArrayList<>();
-        String q = search.toLowerCase(Locale.ROOT), c = TAB_CAT[tab];
+        String q = search.toLowerCase(Locale.ROOT);
         for (Module m : Modules.all) {
-            if (m.hidden()) continue;
-            if ("*on".equals(c) ? !m.enabled() : "*fav".equals(c) ? !m.fav() : c != null && !m.cat.equals(c)) continue;
+            if (m.hidden() || !inTab(m, tab)) continue;
             if (!q.isEmpty() && !(m.name.toLowerCase(Locale.ROOT).contains(q) || m.desc.toLowerCase(Locale.ROOT).contains(q) || m.cat.toLowerCase(Locale.ROOT).contains(q))) continue;
             l.add(m);
         }
@@ -635,175 +689,174 @@ final class Menu {
         return l;
     }
 
-    private static void grid(float px, float py, float wheel) {
-        navCols = 3;
+    /** Toggle pill 30 x 17. */
+    static void pill(String id, float x, float y, boolean on) {
+        float t = an(id, on);
+        Gfx.rect(x, y, 30, 17, 8.5f, Gfx.mix(Th.s3, Th.ac, t));
+        Gfx.rect(x + 3 + 13 * t, y + 3, 11, 11, 5.5f, Gfx.mix(Th.dim, 0xFFFFFFFF, t));
+    }
+
+    private static void list(float lx, float top, float lw, float viewH, float wheel) {
+        navCols = 1;
         List<Module> list = filtered();
-        float top = py + 132, viewH = PH - 132 - 24;
-        int cols = 3;
-        float gap = 14, cw = (PW - 56 - gap * (cols - 1)) / cols, ch = 94;
-        int rows = (list.size() + cols - 1) / cols;
-        float contentH = rows * (ch + gap) - gap;
+        float x = lx + 16, w = lw - 32;
+        // sections: one per category in the All tab, else a single one
+        List<String> secs = new ArrayList<>();
+        for (Module m : list) { String s = tab == 1 ? m.cat : TABS[tab]; if (!secs.contains(s)) secs.add(s); }
+        if (list.isEmpty()) {
+            boolean q = !search.isEmpty();
+            String head = q ? "No modules match" : tab == 0 ? "No favourites yet" : "No modules in this category";
+            String sub = q ? "Esc clears the search" : tab == 0 ? "Star a module to pin it here and on top of every list" : "Nothing here for this instance";
+            Gfx.textC(Gfx.HEAD, 14, lx + lw / 2, top + 80, Th.dim, head, 0);
+            Gfx.textC(Gfx.UI, 11, lx + lw / 2, top + 104, Th.mut, sub, 0);
+            return;
+        }
+        float contentH = 8;
+        for (String s : secs) {
+            contentH += 30;
+            for (Module m : list) if ((tab == 1 ? m.cat : TABS[tab]).equals(s)) contentH += ROW + 2 + (m.id.equals(page) ? expH(m) : 0);
+        }
         float maxS = Math.max(0, contentH - viewH);
         scrollT = Math.max(0, Math.min(maxS, scrollT - wheel * 46));
         scroll = Config.calm() ? scrollT : scroll + (scrollT - scroll) * Math.min(1, Gfx.dt * 16);
-        beginClip(px + 8, top - 4, PW - 16, viewH + 8);
-        if (list.isEmpty()) {
-            boolean q = !search.isEmpty();
-            String head = q ? "NO MODULES MATCH" : tab == 1 ? "NO FAVOURITES YET" : tab == 2 ? "NOTHING ENABLED YET" : "NO MODULES IN THIS TAB";
-            String sub = q ? "ESC CLEARS THE SEARCH" : tab == 1 ? "STAR A MODULE TO PIN IT HERE AND ON TOP OF EVERY TAB" : tab == 2 ? "TURN A MODULE ON FROM THE ALL TAB" : "THIS INSTANCE LEAVES THEM OUT";
-            Gfx.textC(Gfx.SEMI, 13, px + PW / 2, top + 60, Gfx.DIM, head, 2f);
-            Gfx.textC(Gfx.MONO, 10, px + PW / 2, top + 84, Gfx.SUB, sub, 1.4f);
-        }
-        for (int i = 0; i < list.size(); i++) {
-            Module m = list.get(i);
-            float x = px + 28 + (i % cols) * (cw + gap), y = top - scroll + (i / cols) * (ch + gap);
-            boolean f = focus(x, y, cw, ch);
-            if (!f && (y > top + viewH || y + ch < top - 4)) continue;
-            if (card(m, x, y, cw, ch, f)) break; // opened its settings
+        beginClip(lx, top, lw, viewH);
+        float y = top + 8 - scroll;
+        for (String s : secs) {
+            int n = 0;
+            for (Module m : list) if ((tab == 1 ? m.cat : TABS[tab]).equals(s)) n++;
+            float tw = Gfx.text(Gfx.HEAD, 12, x + 4, y + 12, Th.dim, s);
+            String c = String.valueOf(n);
+            float cw = Gfx.width(Gfx.UI, 10, c) + 12;
+            Gfx.rect(x + 4 + tw + 10, y + 4, cw, 16, 8, Th.s3);
+            Gfx.textC(Gfx.UI, 10, x + 4 + tw + 10 + cw / 2, y + 12, Th.dim, c, 0);
+            y += 30;
+            for (Module m : list) {
+                if (!(tab == 1 ? m.cat : TABS[tab]).equals(s)) continue;
+                boolean open = m.id.equals(page);
+                float eh = open ? expH(m) : 0;
+                boolean f = focus(x, y, w, ROW);
+                if (f || (y < top + viewH && y + ROW + eh > top - 4)) row(m, x, y, w, f, open);
+                if (open && y + ROW + eh > top && y < top + viewH) expand(m, x, y + ROW, w);
+                y += ROW + 2 + eh;
+            }
         }
         endClip();
         if (maxS > 0) {
             float th = Math.max(30, viewH * viewH / contentH);
-            float ty2 = top + (viewH - th) * (scroll / maxS);
-            Gfx.rect(px + PW - 12, ty2, 3, th, 1.5f, Gfx.a(0xFFFFFFFF, 0.16f));
+            Gfx.rect(lx + lw - 8, top + (viewH - th) * (scroll / maxS), 3, th, 1.5f, Gfx.a(Th.ov, 0.16f));
         }
     }
 
-    /** One module card; true when it opened the module's settings page. */
-    private static boolean card(Module m, float x, float y, float w, float h, boolean f) {
-        boolean on = m.enabled(), lock = m.locked(), avail = m.available();
-        boolean hv = in(x, y, w, h);
-        float t = an("c" + m.id, hv);
-        float on1 = an("on" + m.id, on);
-        Gfx.rect(x, y, w, h, 8, Gfx.mix(Gfx.CARD, Gfx.CARD2, lock ? t * 0.4f : t));
-        Gfx.ring(x, y, w, h, 8, 1, Gfx.mix(Gfx.LN, on ? Gfx.a(Gfx.RED, 0.55f) : Gfx.LN2, Math.max(t, on1 * 0.7f)));
-        if (on1 > 0.02f) Gfx.rect(x, y + 14, 3, h - 28, 1.5f, Gfx.a(Gfx.RED, on1));
+    /** One list row: icon box, name + description, star, key chip, toggle. Click the name = settings, the pill = on / off. */
+    private static void row(Module m, float x, float y, float w, boolean f, boolean open) {
+        boolean on = m.enabled(), lock = m.locked();
+        float hv0 = in(x, y, w, ROW) ? 1 : 0;
+        float t = an("r" + m.id, hv0 > 0), o = an("ro" + m.id, open), on1 = an("on" + m.id, on);
+        Gfx.rect(x, y, w, ROW, 4, Gfx.a(Th.ov, 0.04f * t + 0.05f * o));
+        if (o > 0.02f) Gfx.rect(x, y + 5, 2, ROW - 10, 1, Gfx.a(Th.ac, o));
         float a0 = Gfx.alpha;
         if (lock) Gfx.alpha = a0 * 0.55f;
-        // icon tile (the item that stands for the module), Lunar-style
-        float ix = x + 16, iy = y + 14;
-        Gfx.rect(ix, iy, 40, 40, 8, Gfx.mix(Gfx.a(0xFFFFFFFF, 0.04f), Gfx.a(Gfx.RED, 0.16f), on1));
-        Gfx.ring(ix, iy, 40, 40, 8, 1, Gfx.mix(Gfx.LN, Gfx.a(Gfx.RED, 0.5f), on1));
-        // Nether's own glyph (ice, red accent); item texture only for ids without one
-        float io = hv ? 1 : 0;
-        if (!ModIcons.draw(m.id, ix + 8 - io, iy + 8 - io, 24 + 2 * io, Gfx.mix(Gfx.DIM, Gfx.ICE, Math.max(t, on1)), Gfx.mix(Gfx.RED, Gfx.RED2, on1))) {
-            int[] ipx = m.iconPx();
-            if (ipx != null) Gfx.icon(ipx, ix + 8 - io, iy + 8 - io, 24 + 2 * io);
-            else Gfx.textC(Gfx.HEAD, 18, ix + 20, iy + 20, Gfx.ICE, m.name.substring(0, 1), 0);
+        Gfx.rect(x + 12, y + (ROW - 28) / 2, 28, 28, 4, Gfx.a(Th.ov, 0.06f));
+        if (!ModIcons.draw(m.id, x + 12 + 6.5f, y + ROW / 2f - 7.5f, 15, Gfx.mix(Th.dim, Th.ac2, on1)))
+            Gfx.textC(Gfx.HEAD, 12, x + 26, y + ROW / 2f, Th.dim, m.name.substring(0, 1), 0);
+        // right side first: pill, key chip, star
+        float rx = x + w - 14 - 30;
+        boolean pillHit = hit(rx - 8, y + 4, 52, ROW - 8);
+        pill("p" + m.id, rx, y + (ROW - 17) / 2, on);
+        float lim = rx - 14;
+        Setting ks = null;
+        for (Setting s : m.settings) if (s.t == Setting.KEY) { ks = s; break; }
+        if (ks != null) {
+            int code = (int) Config.num(m.id, ks.key, ((Number) ks.def).doubleValue());
+            if (code >= 0) {
+                String kn = keyName(code);
+                float kw = Gfx.width(Gfx.UI, 10, kn) + 14;
+                Gfx.rect(lim - kw, y + ROW / 2f - 10, kw, 20, 4, Th.s3);
+                Gfx.textC(Gfx.UI, 10, lim - kw / 2, y + ROW / 2f, Th.dim, kn, 0);
+                lim -= kw + 10;
+            }
         }
-        Gfx.text(Gfx.SEMI, 16, x + 66, y + 25, Gfx.ICE, fit(m.name, Gfx.SEMI, 16, w - 66 - 50, 0));
-        List<String> lines = wrap(m.desc, Gfx.UI, 11, w - 66 - 58);
-        if (lines.size() > 2) lines.set(1, fit(lines.get(1) + " " + lines.get(2), Gfx.UI, 11, w - 66 - 58, 0));
-        for (int i = 0; i < Math.min(2, lines.size()); i++) Gfx.text(Gfx.UI, 11, x + 66, y + 45 + i * 14, Gfx.DIM, lines.get(i));
-        if (lock) {
-            Gfx.alpha = a0;
-            Gfx.rect(x + 18, y + h - 19, 4, 4, 2, Gfx.a(avail ? Gfx.RED2 : Gfx.MUT, 0.9f));
-            Gfx.text(Gfx.MONO, 9, x + 28, y + h - 16, avail ? Gfx.DIM : Gfx.SUB, m.lockNote(), false, 1.4f);
-            Gfx.alpha = a0 * 0.55f;
-        } else {
-            Gfx.text(Gfx.MONO, 9, x + 18, y + h - 16, Gfx.SUB, m.cat.toUpperCase(Locale.ROOT), false, 2f);
+        boolean fav = m.fav(), sh = in(lim - 22, y + ROW / 2f - 11, 22, 22);
+        if (fav || hv0 > 0) {
+            drawStar(lim - 11, y + ROW / 2f, fav, fav ? 0xFFFFB020 : Gfx.mix(Th.mut, Th.tx, an("star" + m.id, sh)));
+            if (hit(lim - 22, y + ROW / 2f - 11, 22, 22)) { Config.set(m.id, "fav", !fav); pillHit = false; }
+            lim -= 30;
         }
-
-        // settings icon (two sliders)
-        float gx = x + w - 18 - 24, gy = y + 12;
-        boolean gh = in(gx, gy, 24, 24);
-        float gt = an("g" + m.id, gh);
-        Gfx.rect(gx, gy, 24, 24, 6, Gfx.a(0xFFFFFFFF, 0.06f * gt));
-        int ic = Gfx.mix(Gfx.DIM, Gfx.ICE, gt);
-        Gfx.rect(gx + 5, gy + 8, 14, 1.5f, 0.75f, ic);
-        Gfx.rect(gx + 5, gy + 15, 14, 1.5f, 0.75f, ic);
-        Gfx.rect(gx + 12, gy + 5.5f, 4, 6.5f, 2, ic);
-        Gfx.rect(gx + 7, gy + 12.5f, 4, 6.5f, 2, ic);
-        if (gh) tip = "Settings (or right-click the card)";
-        // favourite star beside the switch: shown when starred, on hover or keyboard focus
-        boolean fav = m.fav();
-        float stx = lock ? gx - 26 : x + w - 18 - 36 - 32, sty = lock ? gy : y + h - 32; // locked cards keep that row for the reason
-        boolean sth = in(stx, sty, 24, 24);
-        float stt = an("st" + m.id, sth), vis = Math.max(fav ? 1 : 0, Math.max(t, f ? 1 : 0));
-        if (vis > 0.02f) {
-            float a1 = Gfx.alpha;
-            Gfx.alpha = a1 * vis;
-            Gfx.rect(stx, sty, 24, 24, 6, Gfx.a(0xFFFFFFFF, 0.06f * stt));
-            drawStar(stx + 12, sty + 12, fav, fav ? Gfx.mix(Gfx.RED, Gfx.RED2, stt) : Gfx.mix(Gfx.SUB, Gfx.ICE, stt));
-            Gfx.alpha = a1;
-        }
-        if (sth) tip = fav ? "Remove from favourites" : "Add to favourites: pinned on top of every tab";
-        if (hit(stx, sty, 24, 24)) Config.set(m.id, "fav", !fav);
-        // the gear, a right-click anywhere on the card, Enter, or a click on a locked card (it explains why) opens the settings
-        int u = used(f);
-        boolean rc = clickRt && in(x, y, w, h);
-        if (hit(gx, gy, 24, 24) || rc || u == 257 || (lock && (hit(x, y, w, h) || u == 32))) {
-            if (rc) clickRt = false;
-            Gfx.alpha = a0;
-            openPage(m.id);
-            return true;
-        }
-
-        float sx = x + w - 18 - 36, sy = y + h - 30;
-        if (avail) sw("sw" + m.id, sx, sy, on);
+        // name + description on one line
+        float nx = x + 52, room = lim - nx - 8;
+        String nm = fit(m.name, Gfx.UI, 13, room, 0);
+        float nw = Gfx.text(Gfx.UI, 13, nx, y + ROW / 2f, lock ? Th.dim : Th.tx, nm);
+        float dr = room - nw - 12;
+        if (dr > 60) Gfx.text(Gfx.UI, 11, nx + nw + 12, y + ROW / 2f, Th.mut, fit(m.desc, Gfx.UI, 11, dr, 0));
         Gfx.alpha = a0;
-        if (!lock && (hit(sx - 6, sy - 4, 48, 28) || hit(x, y, w, h) || u == 32)) Config.set(m.id, "enabled", !on);
-        return false;
+        if (lock && in(x, y, w, ROW) && m.lockNote() != null) tip = m.lockNote();
+        int u = used(f), a = adjust(f);
+        if (!lock && (pillHit || u != 0)) Config.set(m.id, "enabled", !on);
+        else if (hit(x, y, w, ROW) || a > 0) { commitEdit(); ColorPicker.close(); page = open && a <= 0 ? null : m.id; }
+        else if (a < 0 && open) { commitEdit(); ColorPicker.close(); page = null; }
     }
 
-    // ---------------------------------------------------------------- settings page
+    // ---------------------------------------------------------------- settings of one module, inline under its row
 
-    private static void settings(float px, float py, float wheel) {
-        Module m = Modules.byId(page);
-        if (m == null) { page = null; return; }
-        navCols = 1;
+    private static final float SROW = 46;
+
+    private static float expH(Module m) {
+        float h = 10;
+        if (m.lockNote() != null) h += 42;
+        for (Setting s : m.settings) h += SROW + (s.t == Setting.COLOR && ColorPicker.isOpen(m.id, s.key) ? ColorPicker.H : 0);
+        h += SROW; // the Enabled-free footer: reset buttons
+        if (m instanceof Waypoints) h += wpHeight((Waypoints) m);
+        return h;
+    }
+
+    private static void expand(Module m, float x, float y, float w) {
         if (ColorPicker.id != null && !ColorPicker.id.equals(m.id)) ColorPicker.close();
-        if (button("back", "BACK", px + 28, py + 88, 92, 30, false)) { commitEdit(); ColorPicker.close(); page = null; scroll = scrollT = gridScroll; return; }
-        float tw = Gfx.text(Gfx.HEAD, 22, px + 138, py + 103, Gfx.ICE, m.name.toUpperCase(Locale.ROOT), false, 1.5f);
-        Gfx.text(Gfx.MONO, 9, px + 138 + tw + 12, py + 105, Gfx.SUB, m.cat.toUpperCase(Locale.ROOT), false, 2f);
-
-        float top = py + 138, viewH = PH - 138 - 24, lx = px + 28, lw = 500, rowH = 46;
+        float h = expH(m);
+        Gfx.rect(x + 6, y, w - 12, h - 4, 4, Gfx.a(Th.ov, 0.025f));
+        float lx = x + 52, lw = w - 52 - 20;
+        float yy = y + 6;
         String note = m.lockNote();
         if (note != null) {
-            // why the module is off, above its settings (its own switch still shows and sets what you want)
-            float bh = 34;
-            Gfx.rect(lx, top, lw, bh, 0, Gfx.a(Gfx.RED, 0.12f));
-            Gfx.rect(lx, top, 3, bh, 0, Gfx.RED2);
-            Gfx.text(Gfx.SEMI, 11, lx + 16, top + bh / 2, Gfx.ICE, note, false, 1.2f);
+            Gfx.rect(lx, yy, lw, 34, 4, Gfx.a(Th.ac, 0.12f));
+            Gfx.rect(lx, yy, 3, 34, 1, Th.ac2);
+            Gfx.text(Gfx.UI, 11, lx + 14, yy + 17, Th.tx, note);
             if (m.available()) {
-                String why = "TURN SERVER-SAFE OFF IN THE HEADER";
-                Gfx.text(Gfx.MONO, 9, lx + lw - 14 - Gfx.width(Gfx.MONO, 9, why, 1.2f), top + bh / 2, Gfx.DIM, why, false, 1.2f);
+                String why = "Turn server-safe off in Settings";
+                Gfx.text(Gfx.UI, 10, lx + lw - 12 - Gfx.width(Gfx.UI, 10, why), yy + 17, Th.dim, why);
             }
-            top += bh + 8;
-            viewH -= bh + 8;
+            yy += 42;
         }
-        List<Setting> rows = new ArrayList<>();
-        rows.add(Setting.bool("enabled", "Enabled", m.defOn));
-        rows.addAll(m.settings);
         Waypoints wp = m instanceof Waypoints ? (Waypoints) m : null;
         if (wp == null && editWp >= 0) commitEdit();
-        float contentH = wp != null ? wpHeight(wp) : 0;
-        for (Setting s : rows) contentH += rowH + (s.t == Setting.COLOR && ColorPicker.isOpen(m.id, s.key) ? ColorPicker.H : 0);
-        float maxS = Math.max(0, contentH - viewH);
-        scrollT = Math.max(0, Math.min(maxS, scrollT - wheel * 46));
-        scroll = Config.calm() ? scrollT : scroll + (scrollT - scroll) * Math.min(1, Gfx.dt * 16);
-        beginClip(lx - 8, top, lw + 16, viewH);
-        float y = top - scroll;
-        for (Setting s : rows) {
+        yy = settingRows(m, lx, yy, lw);
+        if (wp != null) { wpList(wp, lx, yy, lw); yy += wpHeight(wp); }
+        if (fbutton("reset" + m.id, "Reset to default", lx, yy + 6, 150, 28, false)) { ColorPicker.close(); m.reset(); }
+        if (m.hud && fbutton("styleall" + m.id, "Style to all HUD", lx + 158, yy + 6, 150, 28, false)) m.styleToAll();
+    }
+
+    /** The setting rows of module m from y; returns the y after them. */
+    private static float settingRows(Module m, float lx, float y, float lw) {
+        float rowH = SROW;
+        for (Setting s : m.settings) {
             float xr = lx + lw, rh = rowH;
-            if (s.t == Setting.HEADER) { // section title: small caps on the row's lower half, a stronger rule
-                Gfx.text(Gfx.MONO, 9, lx, y + rowH - 14, Gfx.SUB, s.label.toUpperCase(Locale.ROOT), false, 2f);
-                Gfx.rect(lx, y + rowH - 1, lw, 1, 0, Gfx.LN2);
+            if (s.t == Setting.HEADER) {
+                Gfx.text(Gfx.UI, 10, lx, y + rowH - 14, Th.mut, s.label.toUpperCase(Locale.ROOT), false, 1.2f);
+                Gfx.rect(lx, y + rowH - 1, lw, 1, 0, Th.ln2);
                 y += rowH;
                 continue;
             }
             boolean f = focus(lx - 4, y + 3, lw + 8, rowH - 6);
-            Gfx.text(Gfx.UI, 13, lx, y + rowH / 2 - (s.hint != null ? 7 : 0), Gfx.ICE, s.label);
+            Gfx.text(Gfx.UI, 12, lx, y + rowH / 2 - (s.hint != null ? 7 : 0), Th.tx, s.label);
             String id = m.id + "." + s.key, ek = m.id + ":" + s.key;
-            float cw = 0; // width of the control on the right (the hint line stops before it)
+            float cw = 0;
             switch (s.t) {
                 case Setting.BOOL: {
-                    boolean v = s.key.equals("enabled") ? m.wantedOn() : Config.bool(m.id, s.key, (Boolean) s.def);
-                    sw("s" + id, xr - 36, y + 13, v);
+                    boolean v = Config.bool(m.id, s.key, (Boolean) s.def);
+                    pill("s" + id, xr - 30, y + (rowH - 17) / 2, v);
                     int a = adjust(f);
-                    if (hit(xr - 44, y + 6, 52, 34) || used(f) != 0) Config.set(m.id, s.key, !v);
+                    if (hit(xr - 40, y + 6, 44, 34) || used(f) != 0) Config.set(m.id, s.key, !v);
                     else if (a != 0 && (a > 0) != v) Config.set(m.id, s.key, a > 0);
-                    cw = 52;
+                    cw = 44;
                     break;
                 }
                 case Setting.SLIDER: {
@@ -815,12 +868,11 @@ final class Menu {
                     if (nv != v) Config.set(m.id, s.key, nv);
                     if (ek.equals(editSet)) field(ek, NUM, fmt(nv, s.step), "", vx, y + 9, vw, 28, 10, false);
                     else {
-                        // the value: click (or Enter) to type an exact one
                         String vs = fmt(nv, s.step);
                         boolean vh = in(vx, y + 9, vw, 28);
                         float vt = an("sv" + id, vh);
-                        if (vt > 0.02f) Gfx.ring(vx, y + 9, vw, 28, 6, 1, Gfx.a(Gfx.LN2, vt));
-                        Gfx.text(Gfx.MONO, 12, vx + vw - 10 - Gfx.width(Gfx.MONO, 12, vs), y + rowH / 2, Gfx.mix(Gfx.DIM, Gfx.ICE, vt), vs);
+                        if (vt > 0.02f) Gfx.ring(vx, y + 9, vw, 28, 4, 1, Gfx.a(Th.ln2, vt));
+                        Gfx.text(Gfx.UI, 12, vx + vw - 10 - Gfx.width(Gfx.UI, 12, vs), y + rowH / 2, Gfx.mix(Th.dim, Th.tx, vt), vs);
                         if (vh) tip = "Click to type a value";
                         if (hit(vx, y + 9, vw, 28) || used(f) != 0) startEdit(ek, NUM, vs, 10);
                     }
@@ -833,11 +885,11 @@ final class Menu {
                     float bw = 136, x = xr - bw, by = y + 9;
                     boolean hv = in(x, by, bw, 28);
                     float t = an("cl" + id, hv || op);
-                    Gfx.rect(x, by, bw, 28, 6, Gfx.a(0xFFFFFFFF, 0.035f + 0.03f * t));
-                    Gfx.ring(x, by, bw, 28, 6, 1, op ? Gfx.RED : Gfx.mix(Gfx.LN, Gfx.LN2, t));
+                    Gfx.rect(x, by, bw, 28, 4, Gfx.a(Th.ov, 0.035f + 0.03f * t));
+                    Gfx.ring(x, by, bw, 28, 4, 1, op ? Th.ac : Gfx.mix(Th.ln, Th.ln2, t));
                     ColorPicker.swatch(x + 7, by + 6, 16, 16, col);
-                    Gfx.text(Gfx.MONO, 11, x + 31, by + 14, Gfx.ICE, ch ? "RAINBOW" : Config.hex(col));
-                    chevron(x + bw - 15, by + 14, op, Gfx.mix(Gfx.DIM, Gfx.ICE, t));
+                    Gfx.text(Gfx.UI, 11, x + 31, by + 14, Th.tx, ch ? "RAINBOW" : Config.hex(col));
+                    chevron(x + bw - 15, by + 14, op, Gfx.mix(Th.dim, Th.tx, t));
                     if (hit(x, by, bw, 28) || used(f) != 0) ColorPicker.toggle(m, s.key);
                     cw = bw;
                     if (ColorPicker.isOpen(m.id, s.key)) { ColorPicker.draw(m, lx, y + rowH, lw); rh += ColorPicker.H; }
@@ -847,19 +899,32 @@ final class Menu {
                     String cur = Config.str(m.id, s.key, (String) s.def);
                     float total = 0;
                     int ci = 0;
-                    for (int o = 0; o < s.opts.length; o++) { total += Gfx.width(Gfx.SEMI, 11, s.opts[o], 0.6f) + 22; if (s.opts[o].equals(cur)) ci = o; }
+                    for (int o = 0; o < s.opts.length; o++) { total += Gfx.width(Gfx.UI, 11, s.opts[o]) + 22; if (s.opts[o].equals(cur)) ci = o; }
                     int a = adjust(f), u = used(f);
                     if (a != 0) Config.set(m.id, s.key, s.opts[Math.max(0, Math.min(s.opts.length - 1, ci + Integer.signum(a)))]);
                     else if (u != 0) Config.set(m.id, s.key, s.opts[(ci + 1) % s.opts.length]);
+                    float cy = y + rowH / 2;
+                    if (total > 330) { // too wide for chips: a stepper, click either side
+                        float bw = 190, x = xr - bw;
+                        Gfx.rect(x, cy - 14, bw, 28, 4, Gfx.a(Th.ov, 0.05f));
+                        Gfx.textC(Gfx.UI, 11, x + bw / 2, cy, Th.tx, fit(cur, Gfx.UI, 11, bw - 56, 0), 0);
+                        boolean lh = in(x, cy - 14, 28, 28), rh2 = in(x + bw - 28, cy - 14, 28, 28);
+                        Gfx.textC(Gfx.UI, 14, x + 14, cy, Gfx.mix(Th.mut, Th.tx, an("chl" + id, lh)), "<", 0);
+                        Gfx.textC(Gfx.UI, 14, x + bw - 14, cy, Gfx.mix(Th.mut, Th.tx, an("chr" + id, rh2)), ">", 0);
+                        if (hit(x, cy - 14, 28, 28)) Config.set(m.id, s.key, s.opts[(ci + s.opts.length - 1) % s.opts.length]);
+                        if (hit(x + bw - 28, cy - 14, 28, 28)) Config.set(m.id, s.key, s.opts[(ci + 1) % s.opts.length]);
+                        cw = bw + 10;
+                        break;
+                    }
                     cw = total + 10;
-                    float x = xr - total, cy = y + rowH / 2;
-                    Gfx.rect(x - 3, cy - 15, total + 6, 30, 8, Gfx.a(0xFFFFFFFF, 0.04f));
+                    float x = xr - total;
+                    Gfx.rect(x - 3, cy - 15, total + 6, 30, 5, Gfx.a(Th.ov, 0.05f));
                     for (String o : s.opts) {
-                        float ow = Gfx.width(Gfx.SEMI, 11, o, 0.6f) + 22;
+                        float ow = Gfx.width(Gfx.UI, 11, o) + 22;
                         boolean sel = o.equals(cur);
                         float t = an("ch" + id + o, sel);
-                        if (t > 0.02f) Gfx.rect(x, cy - 12, ow, 24, 6, Gfx.a(Gfx.RED, t));
-                        Gfx.textC(Gfx.SEMI, 11, x + ow / 2, cy, Gfx.mix(Gfx.DIM, 0xFFFFFFFF, Math.max(t, an("hv" + id + o, in(x, cy - 12, ow, 24)) * 0.6f)), o, 0.6f);
+                        if (t > 0.02f) Gfx.rect(x, cy - 12, ow, 24, 4, Gfx.a(Th.ac, t));
+                        Gfx.textC(Gfx.UI, 11, x + ow / 2, cy, Gfx.mix(Th.dim, 0xFFFFFFFF, Math.max(t, an("hv" + id + o, in(x, cy - 12, ow, 24)) * 0.6f)), o, 0);
                         if (hit(x, cy - 12, ow, 24)) Config.set(m.id, s.key, o);
                         x += ow;
                     }
@@ -867,14 +932,14 @@ final class Menu {
                 }
                 case Setting.KEY: {
                     int code = (int) Config.num(m.id, s.key, ((Number) s.def).doubleValue());
-                    float bw = Math.max(110, Gfx.width(Gfx.SEMI, 11, keyName(code), 1f) + 28);
+                    float bw = Math.max(110, Gfx.width(Gfx.UI, 11, keyName(code)) + 28);
                     boolean[] hard = new boolean[1];
                     String clash = Controls.conflict(m, s, hard);
                     keyButton(ek, code, xr - bw, y + 9, bw, clash != null && hard[0], f);
                     cw = bw;
                     if (clash != null) {
-                        int cc = hard[0] ? Gfx.RED2 : 0xFFFFB020;
-                        Gfx.rect(xr - bw - 14, y + rowH / 2 - 2, 4, 4, 0, cc);
+                        int cc = hard[0] ? Th.ac2 : 0xFFFFB020;
+                        Gfx.rect(xr - bw - 14, y + rowH / 2 - 2, 4, 4, 2, cc);
                         if (in(xr - bw - 22, y + 6, 22, 34)) tip = clash.charAt(0) + clash.substring(1).toLowerCase(Locale.ROOT);
                         cw += 18;
                     }
@@ -886,45 +951,115 @@ final class Menu {
                     break;
                 }
                 case Setting.ACTION: {
-                    String bl = s.opts != null && s.opts.length > 0 ? s.opts[0] : "RUN";
-                    float bw = Math.max(96, Gfx.width(Gfx.SEMI, 11, bl, 1.2f) + 32);
+                    String bl = s.opts != null && s.opts.length > 0 ? s.opts[0] : "Run";
+                    float bw = Math.max(96, Gfx.width(Gfx.UI, 11, bl) + 32);
                     if ((button("a" + id, bl, xr - bw, y + 8, bw, 30, false) | used(f) != 0) && s.run != null) s.run.run();
                     cw = bw;
                     break;
                 }
                 default: break;
             }
-            Gfx.rect(lx, y + rh - 1, lw, 1, 0, Gfx.LN);
+            Gfx.rect(lx, y + rh - 1, lw, 1, 0, Th.ln);
             if (s.hint != null) {
                 float hw = lw - cw - 20;
                 String h = fit(s.hint, Gfx.UI, 10, hw, 0);
-                Gfx.text(Gfx.UI, 10, lx, y + rowH / 2 + 9, Gfx.SUB, h);
-                if (!h.equals(s.hint) && in(lx, y, hw, rowH)) tip = s.hint; // shortened: the whole text on hover
+                Gfx.text(Gfx.UI, 10, lx, y + rowH / 2 + 9, Th.mut, h);
+                if (!h.equals(s.hint) && in(lx, y, hw, rowH)) tip = s.hint;
             }
             y += rh;
         }
-        if (wp != null) wpList(wp, lx, y, lw);
+        return y;
+    }
+
+    // ---------------------------------------------------------------- settings tab (look, safety, main menu, keys, profiles)
+
+    private static final String[] ACC_NAMES = {"Red", "Ember", "Acid", "Cobalt", "Violet"};
+    private static final String[][] ACC = {{"#E5372D", "#FF6157"}, {"#E8590C", "#FF7A2E"}, {"#22A845", "#3DDC6A"}, {"#1F6FEB", "#4C8DFF"}, {"#8B3DFF", "#A66BFF"}};
+
+    private static void settingsPage(float cpx, float cpy, float wheel, float mx, float py, float mw, float ph) {
+        navCols = 1;
+        String[] names = {"General", "Controls", "Profiles"};
+        float x = mx + 20, y = py + TOP + 10;
+        for (int i = 0; i < 3; i++) {
+            float w = Gfx.width(Gfx.UI, 12, names[i]) + 28;
+            boolean sel = sub == i, hv = in(x, y, w, 28);
+            float t = an("ss" + i, sel);
+            Gfx.rect(x, y, w, 28, 4, Gfx.a(Th.ac, 0.16f * t));
+            if (!sel && hv) Gfx.rect(x, y, w, 28, 4, Gfx.a(Th.ov, 0.07f));
+            Gfx.textC(Gfx.UI, 12, x + w / 2, y + 14, Gfx.mix(Th.dim, Th.tx, t), names[i], 0);
+            if (hit(x, y, w, 28) && sub != i) { sub = i; scroll = scrollT = 0; fCur = -1; commitEdit(); }
+            x += w + 6;
+        }
+        if (sub == 1) { float sp = PH; PH -= 40; Controls.draw(cpx, cpy + 40, wheel); PH = sp; return; }
+        if (sub == 2) { float sp = PH; PH -= 40; Profiles.draw(cpx, cpy + 40, wheel); PH = sp; return; }
+        float lx = mx + 20, lw = mw - 40, top = py + TOP + 48, viewH = py + ph - FOOT - top;
+        float contentH = 8 + 62 + 62 + 62 + 62 + 30 + (page != null && page.equals("menu") ? expH(MainMenu.MODULE) : 0) + ROW + 20;
+        float maxS = Math.max(0, contentH - viewH);
+        scrollT = Math.max(0, Math.min(maxS, scrollT - wheel * 46));
+        scroll = Config.calm() ? scrollT : scroll + (scrollT - scroll) * Math.min(1, Gfx.dt * 16);
+        beginClip(lx - 8, top, lw + 16, viewH);
+        float yy = top + 8 - scroll;
+        // theme
+        Gfx.text(Gfx.UI, 13, lx, yy + 15, Th.tx, "Theme");
+        Gfx.text(Gfx.UI, 10, lx, yy + 31, Th.mut, "The look of this menu and the launcher.");
+        float cx = lx + lw - 4 * 96;
+        for (int i = 0; i < 4; i++) {
+            boolean sel = Th.theme == i, hv = in(cx, yy + 8, 90, 28);
+            float t = an("th" + i, sel);
+            Gfx.rect(cx, yy + 8, 90, 28, 4, Gfx.a(Th.ac, 0.16f * t));
+            Gfx.ring(cx, yy + 8, 90, 28, 4, 1, Gfx.mix(Th.ln2, Th.ac, t));
+            Gfx.textC(Gfx.UI, 11, cx + 45, yy + 22, Gfx.mix(Th.dim, Th.tx, Math.max(t, hv ? 1 : 0)), Th.NAMES[i], 0);
+            if (hit(cx, yy + 8, 90, 28)) Config.set("client", "theme", Th.NAMES[i]);
+            cx += 96;
+        }
+        Gfx.rect(lx, yy + 61, lw, 1, 0, Th.ln);
+        yy += 62;
+        // accent
+        Gfx.text(Gfx.UI, 13, lx, yy + 15, Th.tx, "Accent colour");
+        Gfx.text(Gfx.UI, 10, lx, yy + 31, Th.mut, "Selection, switches and play marks.");
+        cx = lx + lw - 5 * 40;
+        for (int i = 0; i < 5; i++) {
+            boolean sel = ACC[i][0].equalsIgnoreCase(Config.str("client", "accent", "#E5372D"));
+            int c = 0xFF000000 | Integer.parseInt(ACC[i][0].substring(1), 16);
+            Gfx.rect(cx, yy + 10, 28, 24, 4, c);
+            if (sel) Gfx.ring(cx - 3, yy + 7, 34, 30, 6, 2, Th.tx);
+            else if (in(cx, yy + 10, 28, 24)) Gfx.ring(cx - 3, yy + 7, 34, 30, 6, 1, Th.ln2);
+            if (hit(cx, yy + 10, 28, 24)) { Config.set("client", "accent", ACC[i][0]); Config.set("client", "accent2", ACC[i][1]); }
+            cx += 40;
+        }
+        Gfx.rect(lx, yy + 61, lw, 1, 0, Th.ln);
+        yy += 62;
+        // reduce motion
+        boolean calm = Config.bool("client", "calm", false);
+        Gfx.text(Gfx.UI, 13, lx, yy + 15, Th.tx, "Reduce motion");
+        Gfx.text(Gfx.UI, 10, lx, yy + 31, Th.mut, Config.launcherCalm() ? "Set by the launcher." : "Menu animations snap; nothing blinks.");
+        pill("calm", lx + lw - 30, yy + 14, calm || Config.launcherCalm());
+        if (!Config.launcherCalm() && (hit(lx + lw - 40, yy + 4, 40, 34))) Config.set("client", "calm", !calm);
+        Gfx.rect(lx, yy + 61, lw, 1, 0, Th.ln);
+        yy += 62;
+        safeRow(lx, yy, lw);
+        Gfx.rect(lx, yy + 61, lw, 1, 0, Th.ln);
+        yy += 62;
+        Gfx.text(Gfx.UI, 10, lx, yy + 14, Th.mut, "MAIN MENU", false, 1.2f);
+        yy += 30;
+        Module mm = MainMenu.MODULE;
+        boolean open = "menu".equals(page);
+        boolean f = focus(lx, yy, lw, ROW);
+        boolean hv = in(lx, yy, lw, ROW);
+        Gfx.rect(lx, yy, lw, ROW, 4, Gfx.a(Th.ov, hv ? 0.04f : open ? 0.05f : 0f));
+        Gfx.rect(lx + 12, yy + 8, 28, 28, 4, Gfx.a(Th.ov, 0.06f));
+        ModIcons.draw("menu", lx + 18.5f, yy + ROW / 2f - 7.5f, 15, Th.dim);
+        float nw = Gfx.text(Gfx.UI, 13, lx + 52, yy + ROW / 2f, Th.tx, "Title screen");
+        Gfx.text(Gfx.UI, 11, lx + 64 + nw, yy + ROW / 2f, Th.mut, fit("Backgrounds, layout, quick join, account", Gfx.UI, 11, lw - 64 - nw - 40, 0));
+        chevron(lx + lw - 20, yy + ROW / 2f, open, Th.dim);
+        if (hit(lx, yy, lw, ROW) || used(f) != 0) { commitEdit(); ColorPicker.close(); page = open ? null : "menu"; }
+        yy += ROW + 2;
+        if (open) expand(mm, lx, yy, lw);
         endClip();
         if (maxS > 0) {
             float th = Math.max(30, viewH * viewH / contentH);
-            Gfx.rect(lx + lw + 10, top + (viewH - th) * (scroll / maxS), 3, th, 1.5f, Gfx.a(0xFFFFFFFF, 0.16f));
+            Gfx.rect(mx + mw - 8, top + (viewH - th) * (scroll / maxS), 3, th, 1.5f, Gfx.a(Th.ov, 0.16f));
         }
-
-        // preview + description
-        float rx = px + 572, rw = 280, rh = 190;
-        Gfx.rect(rx, top, rw, rh, 8, 0xFF08080C);
-        Gfx.ring(rx, top, rw, rh, 8, 1, Gfx.LN);
-        Gfx.text(Gfx.MONO, 9, rx + 14, top + 16, Gfx.SUB, "PREVIEW", false, 2f);
-        beginClip(rx + 1, top + 1, rw - 2, rh - 2);
-        float s0 = Gfx.s;
-        m.preview(rx + rw / 2, top + rh / 2 + 6);
-        Gfx.s = s0;
-        endClip();
-        List<String> lines = wrap(m.desc, Gfx.UI, 12, rw);
-        for (int i = 0; i < lines.size(); i++) Gfx.text(Gfx.UI, 12, rx, top + rh + 26 + i * 17, Gfx.DIM, lines.get(i));
-        if (fbutton("reset", "RESET TO DEFAULT", rx, py + PH - 24 - 30, 136, 30, false)) { ColorPicker.close(); m.reset(); }
-        // one look for the whole HUD: copy this module's colours/background/outline to every HUD module
-        if (m.hud && fbutton("styleall", "STYLE TO ALL HUD", rx + 144, py + PH - 24 - 30, 136, 30, false)) m.styleToAll();
     }
 
     // ---------------------------------------------------------------- waypoint list (settings page of Waypoints)
@@ -937,29 +1072,29 @@ final class Menu {
     private static void wpList(Waypoints w, float lx, float y, float lw) {
         float xr = lx + lw;
         String k = w.world();
-        Gfx.text(Gfx.MONO, 9, lx, y + 33, Gfx.SUB, "THIS WORLD", false, 2f);
+        Gfx.text(Gfx.MONO, 9, lx, y + 33, Th.mut, "THIS WORLD", false, 2f);
         String wn = k == null ? "NOT IN A WORLD" : k.substring(3).replace("|minecraft:", "  /  ").replace('|', '/').replace('_', ' ').toUpperCase(Locale.ROOT);
         float ww = xr - 176 - 16 - (lx + 96);
         while (wn.length() > 4 && Gfx.width(Gfx.SEMI, 11, wn, 0.8f) > ww) wn = wn.substring(0, wn.length() - 3) + "..";
-        Gfx.text(Gfx.SEMI, 11, lx + 96, y + 33, Gfx.DIM, wn, false, 0.8f);
+        Gfx.text(Gfx.SEMI, 11, lx + 96, y + 33, Th.dim, wn, false, 0.8f);
         if (k != null && Game.player() != null && fbutton("wpadd", "ADD AT MY POSITION", xr - 176, y + 18, 176, 30, true)) w.addHere();
         List<Map<String, Object>> l = w.list(false);
         float ry = y + 66;
-        Gfx.rect(lx, ry - 1, lw, 1, 0, Gfx.LN);
+        Gfx.rect(lx, ry - 1, lw, 1, 0, Th.ln);
         if (l == null || l.isEmpty()) {
             String msg = k == null ? "Join a world to add waypoints for it." : "No waypoints here yet. Press " + keyName((int) w.num("addKey")) + " in game or use the button.";
-            Gfx.text(Gfx.UI, 12, lx, ry + 23, Gfx.SUB, msg);
+            Gfx.text(Gfx.UI, 12, lx, ry + 23, Th.mut, msg);
             return;
         }
         for (int i = 0; i < l.size(); i++) {
             Map<String, Object> p = l.get(i);
             float top = ry + i * 46, cy = top + 23;
-            Gfx.rect(lx, top + 45, lw, 1, 0, Gfx.LN);
+            Gfx.rect(lx, top + 45, lw, 1, 0, Th.ln);
             // colour: click cycles through the palette
             boolean sh = in(lx - 2, cy - 11, 22, 22);
             float st = an("wpc" + i, sh);
             Gfx.rect(lx + 1, cy - 8, 16, 16, 4, Waypoints.col(p));
-            if (st > 0.02f) Gfx.ring(lx - 2, cy - 11, 22, 22, 6, 1.5f, Gfx.a(Gfx.ICE, st));
+            if (st > 0.02f) Gfx.ring(lx - 2, cy - 11, 22, 22, 6, 1.5f, Gfx.a(Th.tx, st));
             if (hit(lx - 2, cy - 11, 22, 22)) {
                 String cur = Waypoints.str(p, "color", Module.PALETTE[1]);
                 int ci = 0;
@@ -973,14 +1108,14 @@ final class Menu {
             boolean f = focus(nx - 8, cy - 14, nw, 28);
             boolean nh = in(nx - 8, cy - 14, nw, 28);
             float nt = an("wpn" + i, nh || ed);
-            Gfx.rect(nx - 8, cy - 14, nw, 28, 6, Gfx.a(0xFFFFFFFF, 0.045f * nt));
-            Gfx.ring(nx - 8, cy - 14, nw, 28, 6, 1, ed ? Gfx.RED : Gfx.a(Gfx.LN2, nt));
+            Gfx.rect(nx - 8, cy - 14, nw, 28, 6, Gfx.a(Th.ov, 0.045f * nt));
+            Gfx.ring(nx - 8, cy - 14, nw, 28, 6, 1, ed ? Th.ac : Gfx.a(Th.ln2, nt));
             String nm = ed ? editBuf : Waypoints.str(p, "name", "Waypoint");
-            float tw = Gfx.text(Gfx.UI, 13, nx, cy, Gfx.ICE, nm);
-            if (ed && (Config.calm() || (System.currentTimeMillis() / 530) % 2 == 0)) Gfx.rect(nx + tw + 1, cy - 8, 1.5f, 16, 0, Gfx.RED2);
+            float tw = Gfx.text(Gfx.UI, 13, nx, cy, Th.tx, nm);
+            if (ed && (Config.calm() || (System.currentTimeMillis() / 530) % 2 == 0)) Gfx.rect(nx + tw + 1, cy - 8, 1.5f, 16, 0, Th.ac2);
             if ((hit(nx - 8, cy - 14, nw, 28) || used(f) != 0) && !ed) { commitEdit(); editWp = i; editKind = TXT; editBuf = Waypoints.str(p, "name", ""); }
             // position
-            Gfx.text(Gfx.MONO, 11, lx + 238, cy, Gfx.DIM, String.format(Locale.ROOT, "%d / %d / %d",
+            Gfx.text(Gfx.MONO, 11, lx + 238, cy, Th.dim, String.format(Locale.ROOT, "%d / %d / %d",
                 (long) Waypoints.num(p, "x"), (long) Waypoints.num(p, "y"), (long) Waypoints.num(p, "z")));
             // shown on screen
             boolean on = !Boolean.FALSE.equals(p.get("on"));
@@ -989,8 +1124,8 @@ final class Menu {
             // delete
             boolean dh = in(xr - 26, cy - 13, 26, 26);
             float dt = an("wpd" + i, dh);
-            Gfx.rect(xr - 26, cy - 13, 26, 26, 6, Gfx.a(Gfx.RED, 0.2f * dt));
-            drawX(xr - 13, cy, 4f, Gfx.mix(Gfx.MUT, Gfx.RED2, dt));
+            Gfx.rect(xr - 26, cy - 13, 26, 26, 6, Gfx.a(Th.ac, 0.2f * dt));
+            drawX(xr - 13, cy, 4f, Gfx.mix(Th.mut, Th.ac2, dt));
             if (hit(xr - 26, cy - 13, 26, 26)) {
                 if (editWp == i) editWp = -1; else if (editWp > i) editWp--;
                 l.remove(i);

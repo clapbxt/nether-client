@@ -18,7 +18,7 @@ public final class Schema {
             first = false;
             b.append("{\"id\":").append(q(m.id)).append(",\"name\":").append(q(m.name)).append(",\"cat\":").append(q(m.cat))
                 .append(",\"desc\":").append(q(m.desc)).append(",\"hud\":").append(m.hud)
-                .append(",\"icon\":").append(q(m.icon()[0])).append(",\"on\":").append(m.defOn).append(",\"x\":").append(m.dx).append(",\"y\":").append(m.dy)
+                .append(",\"on\":").append(m.defOn).append(",\"x\":").append(m.dx).append(",\"y\":").append(m.dy)
                 .append(",\"home\":").append(m.hud ? q(m.home()) : "null").append(",\"settings\":[");
             for (int i = 0; i < m.settings.size(); i++) {
                 Setting s = m.settings.get(i);

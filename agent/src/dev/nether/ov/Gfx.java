@@ -33,7 +33,7 @@ final class Gfx {
     // palette (ARGB), matches crates/app/ui/theme.slint
     /** SUB: small informative labels (between DIM and MUT, readable at 9 px on BG); MUT is for decoration only. */
     static final int BG = 0xFF060608, CARD = 0xFF0D0D11, CARD2 = 0xFF15151B, S3 = 0xFF1F1F27, ICE = 0xFFE9EDF2, DIM = 0xFFA7AFBC, MUT = 0xFF707988, SUB = 0xFF8F98A6,
-        RED = 0xFFE10600, RED2 = 0xFFFF3B2F, LN = 0x14FFFFFF, LN2 = 0x2BFFFFFF, BLACK = 0xFF000000;
+        RED = 0xFFE5372D, RED2 = 0xFFFF6157, LN = 0x14FFFFFF, LN2 = 0x2BFFFFFF, BLACK = 0xFF000000;
 
     /** s = pixels per logical unit now; base = HUD unit (half a GUI pixel); gui = the game's GUI scale in pixels */
     static float s = 1, base = 1, gui = 2, alpha = 1, dt = 0.016f;
@@ -66,7 +66,8 @@ final class Gfx {
     static void init() {
         GlBackend.cur.init(ATLAS);
 
-        String[] names = {"ChakraPetch-Bold", "ChakraPetch-SemiBold", "ChakraPetch-Medium", "JetBrainsMono-Medium"};
+        // Nether Pixel everywhere (8 px per em; sizes snap to whole multiples in pxSize): bold for heads and labels, regular for text and data
+        String[] names = {"NetherPixel-Bold", "NetherPixel-Bold", "NetherPixel-Regular", "NetherPixel-Regular"};
         for (int i = 0; i < names.length; i++) {
             try {
                 byte[] b = Hook.res.get("fonts/" + names[i] + ".ttf");
@@ -428,7 +429,8 @@ final class Gfx {
         quad(Math.round(x * s) - 1, Math.round(y * s) - 1, g.w, g.h, g.u0, g.v0, g.u1, g.v1, col, col, -1, 0);
     }
 
-    private static int pxSize(float size) { return Math.max(Math.max(5, minPx), Math.round(size * s)); }
+    /** Nether Pixel is drawn at whole multiples of 8 px (one font pixel = a whole number of screen pixels). */
+    private static int pxSize(float size) { return Math.max(8, Math.round(Math.max(Math.max(5, minPx), size * s) / 8f) * 8); }
 
     /** Width in logical units. spacing is extra logical units per glyph. */
     static float width(int f, float size, String str, float spacing) {

@@ -58,7 +58,6 @@ final class Lyrics extends Module {
 
     @Override boolean available() { return Media.supported(); }
     @Override String lockNote() { return !available() ? "NOT AVAILABLE ON THIS OS" : super.lockNote(); }
-    @Override String[] icon() { return new String[] {"writable_book", "book_writable"}; }
 
     // ---------------------------------------------------------------- lookup
 

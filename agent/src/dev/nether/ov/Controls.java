@@ -188,30 +188,30 @@ final class Controls {
         float lx = px + 28, lw = Menu.PW - 56, top = py + 124;
         String sum = n + " KEYS  -  " + (clashes == 0 ? "NO CLASHES" : clashes + (clashes == 1 ? " CLASH" : " CLASHES"))
             + "  -  " + (vanilla != null ? "CHECKED AGAINST MINECRAFT'S CONTROLS" : "MINECRAFT'S CONTROLS NOT READABLE ON THIS VERSION");
-        Gfx.text(Gfx.MONO, 9, lx, top + 10, clashes > 0 ? Gfx.RED2 : Gfx.SUB, sum, false, 1.4f);
+        Gfx.text(Gfx.MONO, 9, lx, top + 10, clashes > 0 ? Th.ac2 : Th.mut, sum, false, 1.4f);
 
         float lt = top + 24, viewH = py + Menu.PH - 24 - lt, rowH = 46, contentH = n * rowH;
         float maxS = Math.max(0, contentH - viewH);
         Menu.scrollT = Math.max(0, Math.min(maxS, Menu.scrollT - wheel * 46));
         Menu.scroll = Config.calm() ? Menu.scrollT : Menu.scroll + (Menu.scrollT - Menu.scroll) * Math.min(1, Gfx.dt * 16);
         Menu.beginClip(lx - 8, lt, lw + 16, viewH);
-        Gfx.rect(lx, lt, lw, 1, 0, Gfx.LN);
+        Gfx.rect(lx, lt, lw, 1, 0, Th.ln);
         for (int i = 0; i < n; i++) {
             Bind b = all.get(i);
             float y = lt - Menu.scroll + i * rowH;
             boolean f = Menu.focus(lx - 4, y + 3, lw + 8, rowH - 6);
             if (!f && (y > lt + viewH || y + rowH < lt)) continue;
-            Gfx.rect(lx, y + rowH - 1, lw, 1, 0, Gfx.LN);
+            Gfx.rect(lx, y + rowH - 1, lw, 1, 0, Th.ln);
             float a0 = Gfx.alpha;
             if (!b.active) Gfx.alpha = a0 * 0.55f;
-            Gfx.text(Gfx.UI, 13, lx + 2, y + rowH / 2 - 7, Gfx.ICE, b.label);
-            Gfx.text(Gfx.MONO, 9, lx + 2, y + rowH / 2 + 10, Gfx.SUB, up(b.owner) + (b.active ? "" : "  -  OFF"), false, 1.4f);
+            Gfx.text(Gfx.UI, 13, lx + 2, y + rowH / 2 - 7, Th.tx, b.label);
+            Gfx.text(Gfx.MONO, 9, lx + 2, y + rowH / 2 + 10, Th.mut, up(b.owner) + (b.active ? "" : "  -  OFF"), false, 1.4f);
             Gfx.alpha = a0;
             float bw = 136, bx = lx + lw - bw;
             String cid = b.m == null ? "menu" : b.m.id + ":" + b.s.key;
             Menu.keyButton(cid, b.code, bx, y + 9, bw, notes[i] != null && hards[i], f);
             if (notes[i] != null) {
-                int col = hards[i] ? Gfx.RED2 : 0xFFFFB020;
+                int col = hards[i] ? Th.ac2 : 0xFFFFB020;
                 String t = Menu.fit(notes[i], Gfx.MONO, 10, lw - bw - 300, 1f);
                 float tw = Gfx.width(Gfx.MONO, 10, t, 1f), nx = bx - 18 - tw;
                 Gfx.rect(nx - 11, y + rowH / 2 - 2, 4, 4, 0, col);
@@ -222,7 +222,7 @@ final class Controls {
         Menu.endClip();
         if (maxS > 0) {
             float th = Math.max(30, viewH * viewH / contentH);
-            Gfx.rect(px + Menu.PW - 12, lt + (viewH - th) * (Menu.scroll / maxS), 3, th, 1.5f, Gfx.a(0xFFFFFFFF, 0.16f));
+            Gfx.rect(px + Menu.PW - 12, lt + (viewH - th) * (Menu.scroll / maxS), 3, th, 1.5f, Gfx.a(Th.ov, 0.16f));
         }
     }
 }

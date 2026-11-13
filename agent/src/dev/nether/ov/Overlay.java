@@ -85,6 +85,7 @@ public final class Overlay {
                 }
             }
             Config.tick();
+            Th.tick();
             Keybind.tick();
             Capes.tick();
             try { Game.devTick(); Game.devInput(); } catch (Throwable t) { System.out.println("[nether-agent] dev hooks: " + t); } // a bad dev property never kills the overlay
