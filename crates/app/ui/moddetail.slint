@@ -1,0 +1,316 @@
+import { Theme } from "theme.slint";
+import { Backend, Detail, MdBlock } from "structs.slint";
+import { Dropdown } from "components.slint";
+import { Eyebrow, Chip, Btn, ModIcon, Icon, Ico, VerTag, Hatch } from "components.slint";
+
+// Sidebar block: mono title, hairline, content.
+component Section inherits VerticalLayout {
+    in property <string> title;
+    spacing: 10px;
+    padding-bottom: 22px;
+    Eyebrow { text: root.title; color: Theme.tx; font-size: 15px * Theme.ts; font-weight: 700; }
+    Rectangle { height: 1px; background: #ffffff14; }
+    @children
+}
+
+component Sub inherits Text {
+    font-family: Theme.disp; font-size: 12px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; color: Theme.mut;
+}
+
+component KV inherits Rectangle {
+    in property <string> k;
+    in property <string> v;
+    height: 26px;
+    Text { text: root.k; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; }
+    Text { x: 110px; width: parent.width - 110px; text: root.v; color: Theme.tx; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
+}
+
+// Fixed-column chip grid (wraps cleanly in the narrow sidebar); the matching item is lit red.
+component TagGrid inherits Rectangle {
+    in property <[string]> items;
+    in property <int> cols: 3;
+    in property <string> hot;
+    property <length> cw: (self.width + 6px) / root.cols;
+    height: Math.max(1, Math.ceil(root.items.length / root.cols)) * 30px - 6px;
+    for t[i] in root.items: Rectangle {
+        x: mod(i, root.cols) * root.cw; y: floor(i / root.cols) * 30px;
+        width: root.cw - 6px; height: 24px;
+        property <bool> lit: t == root.hot;
+        background: self.lit ? Theme.red.with-alpha(0.133) : #ffffff06;
+        border-width: 1px; border-color: self.lit ? Theme.red2.with-alpha(0.600) : #ffffff1f;
+        Text { x: 8px; width: parent.width - 16px; text: t; color: parent.lit ? Theme.redtx : Theme.tx; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; overflow: elide; }
+    }
+}
+
+// One rendered description block (see md.rs): text, headings, code, image, quote, rule.
+component MdView inherits VerticalLayout {
+    in property <MdBlock> b;
+    padding-top: root.b.kind >= 1 && root.b.kind <= 3 ? 10px : 0px;
+    if root.b.kind == 0: StyledText { text: root.b.text; default-color: #C5CBD4; default-font-family: Backend.detail.cjk ? Theme.cjk : Theme.ui; default-font-size: 14px * Theme.ts; link-color: Theme.redtx; link-clicked(l) => { Backend.open-url(l); } }
+    if root.b.kind >= 1 && root.b.kind <= 3: StyledText {
+        text: root.b.text; default-color: Theme.tx; default-font-family: Backend.detail.cjk ? Theme.cjk : Theme.ui; link-color: Theme.redtx;
+        default-font-size: root.b.kind == 1 ? 24px : (root.b.kind == 2 ? 19px : 16px);
+        link-clicked(l) => { Backend.open-url(l); }
+    }
+    if root.b.kind == 4: Rectangle {
+        height: code.preferred-height + 24px; background: #ffffff07; border-width: 1px; border-color: #ffffff14;
+        code := Text { x: 14px; y: 12px; width: parent.width - 28px; text: root.b.plain; color: #C5CBD4; font-family: Theme.mono; font-size: 11px * Theme.ts; wrap: word-wrap; }
+    }
+    if root.b.kind == 5: Rectangle {
+        height: root.b.has-img ? Math.min(732px * root.b.ratio, 520px) : 0px;
+        animate height { duration: Theme.slow; easing: ease-out; }
+        Image { width: parent.width; height: parent.height; source: root.b.img; image-fit: contain; horizontal-alignment: left; }
+    }
+    if root.b.kind == 6: HorizontalLayout {
+        spacing: 14px;
+        Rectangle { width: 3px; background: Theme.red2; }
+        StyledText { text: root.b.text; default-color: Theme.dim; default-font-family: Backend.detail.cjk ? Theme.cjk : Theme.ui; default-font-size: 14px * Theme.ts; link-color: Theme.redtx; link-clicked(l) => { Backend.open-url(l); } }
+    }
+    if root.b.kind == 7: Rectangle { height: 1px; background: #ffffff18; }
+}
+
+// Shimmering placeholder bar while the project loads.
+component Skel inherits Rectangle {
+    background: #ffffff0c;
+    opacity: 0.55 + 0.45 * sin(Backend.tick / 1.4s * 360deg);
+}
+
+// Modrinth-structured mod page: header · version strip · description | sidebar.
+export component ModDetail inherits Rectangle {
+    in property <string> inst-ver;
+    in property <string> inst-loader;
+    property <length> W: 1180px;
+    property <length> H: 748px;
+    property <bool> shown: false;
+    init => { root.shown = true; }
+    property <Detail> d: Backend.detail;
+    property <bool> ready: !root.d.loading;
+
+    background: #000000b8;
+    opacity: root.shown ? 1 : 0;
+    animate opacity { duration: Theme.mid; easing: ease-out; }
+    // clicks outside close the page; scrolling never reaches the list underneath
+    TouchArea { clicked => { Backend.detail-open = false; } scroll-event(e) => { accept } }
+    property <image> zoom;
+    property <bool> zoomed: false;
+
+    panel := Rectangle {
+        x: (parent.width - root.W) / 2;
+        y: 20px + (root.shown ? 0px : 14px);
+        animate y { duration: Theme.slow; easing: ease-out-quint; }
+        width: root.W; height: root.H;
+        background: #101014;
+        border-width: 1px; border-color: #ffffff26;
+        clip: true;
+        TouchArea { scroll-event(e) => { accept } }
+
+        // header glow + hairline accent
+        Hatch { x: 0px; y: 0px; width: parent.width; height: 140px; }
+        Rectangle { x: 0px; y: 0px; width: parent.width; height: 3px; background: Theme.red; }
+
+        // ---------- header ----------
+        ModIcon { x: 32px; y: 32px; width: 92px; height: 92px; src: root.d.icon; has: root.d.has-icon; }
+        Text { x: 146px; y: 22px; width: 600px; text: root.d.title; color: Theme.tx; font-family: Theme.disp; font-size: 42px; font-weight: 800; font-italic: true; overflow: elide; }
+        if root.ready: Text { x: 148px; y: 74px; width: 600px; text: root.d.summary; color: Theme.dim; font-family: root.d.cjk ? Theme.cjk : Theme.ui; font-size: 14px * Theme.ts; overflow: elide; }
+        if !root.ready: Skel { x: 148px; y: 78px; width: 420px; height: 12px; }
+        if root.ready && root.d.downloads != "": HorizontalLayout {
+            x: 148px; y: 104px; height: 18px; spacing: 18px; alignment: start;
+            if root.d.author != "": HorizontalLayout { spacing: 6px;
+                Icon { y: 3px; d: Ico.user; }
+                Text { text: root.d.author; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; vertical-alignment: center; }
+            }
+            HorizontalLayout { spacing: 6px;
+                Icon { y: 3px; d: Ico.download; }
+                Text { text: root.d.downloads + " downloads"; color: Theme.dim; font-family: Theme.mono; font-size: 11px * Theme.ts; vertical-alignment: center; }
+            }
+            HorizontalLayout { spacing: 6px;
+                Icon { y: 3px; d: Ico.heart; }
+                Text { text: root.d.followers + " followers"; color: Theme.dim; font-family: Theme.mono; font-size: 11px * Theme.ts; vertical-alignment: center; }
+            }
+        }
+
+        // close
+        Rectangle {
+            x: root.W - 32px - 36px; y: 24px; width: 36px; height: 36px;
+            background: cl.has-hover ? #ffffff14 : transparent; border-width: 1px; border-color: cl.has-hover ? #ffffff44 : #ffffff1a;
+            animate background, border-color { duration: Theme.mid; }
+            Icon { x: 12px; y: 12px; d: Ico.close; tint: cl.has-hover ? Theme.tx : Theme.dim; }
+            cl := TouchArea { clicked => { Backend.detail-open = false; } }
+        }
+        // primary action (chamfered, red when installable)
+        // installable, or (installed) a different version is picked -> switch
+        property <bool> switching: root.d.installed && root.d.vers.length > 0 && root.d.vers[root.d.pick].id != root.d.cur-vid;
+        property <bool> can: !root.d.busy && ((root.d.can-install && !root.d.installed) || panel.switching);
+        Rectangle {
+            x: root.W - 32px - 224px; y: 76px; width: 224px; height: 48px;
+            
+            Path {
+                width: parent.width; height: parent.height; viewbox-width: 224; viewbox-height: 48;
+                commands: "M 14 0 L 224 0 L 210 48 L 0 48 Z";
+                fill: panel.can ? (ins.pressed ? Theme.press : (ins.has-hover ? Theme.red2 : Theme.red)) : #ffffff0c;
+                stroke: panel.can ? transparent : #ffffff2e; stroke-width: 1px;
+                animate fill { duration: Theme.mid; }
+            }
+            HorizontalLayout {
+                alignment: center; spacing: 8px;
+                if root.d.installed && !panel.switching && !root.d.busy: Icon { y: 18px; d: Ico.check; tint: Theme.tx; }
+                Text {
+                    text: root.d.busy ? "INSTALLING {Math.floor(root.d.prog * 100)}%" : (panel.switching ? "SWITCH VERSION" : (root.d.installed ? "INSTALLED" : (root.d.loading ? "CHECKING…" : (root.d.can-install ? "INSTALL" : "UNAVAILABLE"))));
+                    color: panel.can ? white : (root.d.installed ? Theme.tx : Theme.mut);
+                    font-family: Theme.disp; font-size: 20px; font-weight: 800; font-italic: true; letter-spacing: 0.8px; vertical-alignment: center;
+                }
+            }
+            // download progress along the bottom edge
+            Rectangle { x: 6px; y: parent.height - 3px; width: root.d.busy ? (parent.width - 20px) * root.d.prog : 0px; height: 3px; background: white; animate width { duration: Theme.fast; } }
+            ins := TouchArea { mouse-cursor: panel.can ? pointer : default; clicked => { if panel.can { Backend.install-detail(); } } }
+        }
+        // uninstall an installed project
+        if root.d.installed && root.d.file != "": Rectangle {
+            x: root.W - 32px - 224px - 10px - 150px - 10px - 130px; y: 76px; width: 130px; height: 48px;
+            background: un.pressed ? Theme.red.with-alpha(0.267) : (un.has-hover ? Theme.red.with-alpha(0.149) : #ffffff08);
+            border-width: 1px; border-color: un.has-hover ? Theme.red2 : Theme.red2.with-alpha(0.400);
+            animate background, border-color { duration: Theme.mid; }
+            Text { text: "UNINSTALL"; color: Theme.redtx; font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 0.7px; horizontal-alignment: center; vertical-alignment: center; }
+            un := TouchArea { mouse-cursor: pointer; clicked => { Backend.uninstall-detail(); } }
+        }
+        // secondary: open on Modrinth
+        Rectangle {
+            x: root.W - 32px - 224px - 10px - 150px; y: 76px; width: 150px; height: 48px;
+            visible: root.d.page-url != "";
+            background: mr.pressed ? #ffffff22 : (mr.has-hover ? #ffffff14 : #ffffff08);
+            border-width: 1px; border-color: mr.has-hover ? #ffffff55 : #ffffff2e;
+            animate background, border-color { duration: Theme.mid; }
+            HorizontalLayout { alignment: center; spacing: 8px;
+                Text { text: "MODRINTH"; color: Theme.tx; font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 0.7px; vertical-alignment: center; }
+                Icon { y: 18px; d: Ico.ext; tint: mr.has-hover ? Theme.tx : Theme.dim; }
+            }
+            mr := TouchArea { mouse-cursor: pointer; clicked => { Backend.open-url(root.d.page-url); } }
+        }
+
+        // ---------- version strip: mod version next to game version ----------
+        Rectangle {
+            x: 32px; y: 148px; width: root.W - 64px; height: 58px;
+            background: #ffffff06; border-width: 1px; border-color: root.d.compat-ok == 2 ? Theme.red2.with-alpha(0.333) : #ffffff1a;
+            Rectangle { x: 0px; width: 3px; background: root.d.compat-ok == 2 ? Theme.red2 : (root.d.compat-ok == 1 ? Theme.tx : Theme.mut); }
+            Rectangle {
+                x: 20px; y: 15px; width: 7px; height: 7px;
+                background: root.d.compat-ok == 2 ? Theme.red2 : (root.d.compat-ok == 1 ? Theme.tx : Theme.mut);
+                opacity: root.d.loading ? 0.4 + 0.6 * sin(Backend.tick / 1s * 360deg) : 1;
+            }
+            Text {
+                x: 36px; y: 9px;
+                text: root.d.loading ? (Backend.detail-pack ? "READING PACK" : "CHECKING YOUR INSTANCE") : Backend.detail-pack ? (root.d.compat-ok == 2 ? "NOTHING TO DOWNLOAD" : "BUILDS A NEW INSTANCE") : (root.d.installed ? "INSTALLED" : (root.d.compat-ok == 1 ? "COMPATIBLE BUILD FOUND" : (root.d.compat-ok == 2 ? "NO BUILD FOR YOUR VERSION" : "UNKNOWN FILE")));
+                color: root.d.compat-ok == 2 && !root.d.loading ? Theme.redtx : Theme.tx;
+                font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 700; letter-spacing: 0.8px;
+            }
+            Text { x: 36px; y: 31px; width: 560px; text: root.d.compat-text; color: Theme.dim; font-family: Theme.mono; font-size: 11px * Theme.ts; overflow: elide; }
+            // version picker: every build for this game version (newest first); INSTALL uses the picked one
+            if root.d.vers.length > 0: Rectangle {
+                x: parent.width - 380px; width: 368px; height: parent.height;
+                Eyebrow { x: 0px; y: 23px; text: "\{root.d.vers.length} BUILDS"; }
+                Dropdown { x: 84px; y: 9px; width: 284px; items: root.d.vlabels; current: root.d.pick; changed(i) => { Backend.pick-version(i); } }
+            }
+            if root.d.vers.length == 0: HorizontalLayout {
+                x: 600px; width: parent.width - 620px; height: parent.height; alignment: end; spacing: 10px; padding-top: 18px; padding-bottom: 18px;
+                if root.d.mod-ver != "": VerTag { ver: root.d.mod-ver; mc: root.d.mod-mc; bad: root.d.compat-ok == 2; }
+                if root.d.mod-ver == "" && root.d.compat-ok == 2: Chip { text: "NO BUILD · MC " + root.d.mod-mc; hot: true; }
+                if root.d.mod-loader != "" && root.d.compat-ok != 0: Chip { text: root.d.mod-loader; }
+                if root.d.mod-size != "": Text { text: root.d.mod-size + "  ·  " + root.d.mod-date; color: Theme.dim; font-family: Theme.mono; font-size: 11px * Theme.ts; vertical-alignment: center; }
+            }
+        }
+
+        // ---------- description ----------
+        Eyebrow { x: 32px; y: 230px; text: "DESCRIPTION"; color: Theme.tx; font-size: 15px * Theme.ts; font-weight: 700; }
+        Rectangle { x: 32px; y: 252px; width: 748px; height: 1px; background: #ffffff14; }
+        if root.ready: Flickable {
+            x: 32px; y: 266px; width: 748px; height: root.H - 266px - 24px;
+            content-height: body.preferred-height + 48px;
+            body := VerticalLayout {
+                x: 0px; y: 0px; width: 732px; spacing: 14px; alignment: start;
+                // screenshot gallery (click to enlarge)
+                if root.d.gallery.length > 0: Rectangle {
+                    height: 136px;
+                    for g[i] in root.d.gallery: Rectangle {
+                        x: i * 186px; width: 174px; height: 124px; clip: true; visible: i < 4;
+                        background: #ffffff08; border-width: 1px; border-color: gt.has-hover ? #ffffff66 : #ffffff1a;
+                        Image { width: parent.width; height: parent.height; source: g; image-fit: cover; }
+                        gt := TouchArea { mouse-cursor: pointer; clicked => { root.zoom = g; root.zoomed = true; } }
+                    }
+                }
+                for b in root.d.blocks: MdView { b: b; }
+                if root.d.blocks.length == 0: Text { text: root.d.desc; color: #C5CBD4; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
+            }
+        }
+        if !root.ready: Rectangle {
+            x: 32px; y: 270px; width: 748px; height: 300px;
+            for w[i] in [0.92, 0.84, 0.97, 0.6, 0.0, 0.88, 0.95, 0.72, 0.9, 0.5]: Skel { y: i * 26px; width: parent.width * w; height: 10px; }
+        }
+        // fade the bottom of the scroll area
+        Rectangle { x: 32px; y: root.H - 64px; width: 748px; height: 40px; background: @linear-gradient(180deg, #10101400 0%, #101014 100%); }
+        Rectangle { x: 804px; y: 230px; width: 1px; height: root.H - 254px; background: #ffffff10; }
+
+        // ---------- sidebar ----------
+        Flickable {
+            x: 828px; y: 230px; width: root.W - 828px - 32px; height: root.H - 254px;
+            content-height: sb.preferred-height;
+            sb := VerticalLayout {
+                width: parent.width;
+                alignment: start;
+                Section {
+                    title: "COMPATIBILITY";
+                    Sub { text: "MINECRAFT"; }
+                    Rectangle {
+                        height: root.ready ? Math.max(1, Math.ceil(root.d.versions.length / 4)) * 30px : 54px;
+                        if !root.ready: Skel { width: parent.width; height: 24px; }
+                        if !root.ready: Skel { y: 30px; width: parent.width * 0.5; height: 24px; }
+                        for v[i] in root.d.versions: Rectangle {
+                            x: mod(i, 4) * (parent.width + 6px) / 4; y: floor(i / 4) * 30px;
+                            width: (parent.width + 6px) / 4 - 6px; height: 24px;
+                            property <bool> mine: v == root.inst-ver;
+                            background: self.mine ? Theme.red.with-alpha(0.133) : #ffffff06;
+                            border-width: 1px; border-color: self.mine ? Theme.red2.with-alpha(0.600) : #ffffff1f;
+                            Text { text: v; color: parent.mine ? Theme.redtx : Theme.tx; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }
+                        }
+                    }
+                    if root.d.more-versions != "": Text { text: root.d.more-versions; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; }
+                    Rectangle { height: 4px; }
+                    Sub { text: "PLATFORMS"; }
+                    TagGrid { items: root.d.loaders; cols: 3; hot: root.inst-loader; }
+                    if root.d.env != "": Rectangle { height: 4px; }
+                    if root.d.env != "": Sub { text: "ENVIRONMENT"; }
+                    if root.d.env != "": Text { text: root.d.env; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; }
+                }
+                if root.d.tags.length > 0: Section {
+                    title: "CATEGORIES";
+                    TagGrid { items: root.d.tags; cols: 2; }
+                }
+                if root.d.links.length > 0: Section {
+                    title: "LINKS";
+                    spacing: 2px;
+                    for l in root.d.links: Rectangle {
+                        height: 34px;
+                        background: lk.has-hover ? #ffffff0c : transparent;
+                        animate background { duration: Theme.fast; }
+                        Text { x: 10px; text: l.k; color: lk.has-hover ? Theme.tx : #C5CBD4; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 500; vertical-alignment: center; }
+                        Icon { x: parent.width - 22px; y: 11px; d: Ico.ext; tint: lk.has-hover ? Theme.red2 : Theme.mut; }
+                        lk := TouchArea { mouse-cursor: pointer; clicked => { Backend.open-url(l.url); } }
+                    }
+                }
+                if root.ready && root.d.license != "": Section {
+                    title: "DETAILS";
+                    spacing: 2px;
+                    KV { k: "License"; v: root.d.license; }
+                    KV { k: "Published"; v: root.d.published; }
+                    KV { k: "Updated"; v: root.d.updated; }
+                }
+            }
+        }
+    }
+
+    // enlarged screenshot
+    if root.zoomed: Rectangle {
+        background: #000000e0;
+        TouchArea { clicked => { root.zoomed = false; } scroll-event(e) => { accept } }
+        Image { x: 60px; y: 40px; width: parent.width - 120px; height: parent.height - 80px; source: root.zoom; image-fit: contain; }
+    }
+}

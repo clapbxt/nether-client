@@ -1,0 +1,160 @@
+field_1350	i	D
+field_1351	h	D
+field_1352	g	D
+field_1655	a	Lfyc$a;
+field_1668	a	Lfyc$b;
+field_1687	r	Lhif;
+field_1690	k	Lgfo;
+field_1705	j	Lgiq;
+field_1708	ar	Lgnp;
+field_1724	s	Lhnh;
+field_1755	x	Lgsb;
+field_1765	u	Lftk;
+field_1773	i	Lhob;
+field_17772	u	J
+field_18222	t	Z
+field_1826	cT	Lgfn;
+field_1838	bG	Lgfn;
+field_1839	as	[Lgfh;
+field_1840	di	Lgfn;
+field_1842	au	Z
+field_1843	aM	Lgfn;
+field_1849	v	Lgfh;
+field_18712	h	Lftm;
+field_18717	m	F
+field_18718	n	F
+field_1881	u	Lgfh;
+field_1894	s	Lgfh;
+field_1903	w	Lgfh;
+field_1908	bD	Lgfn;
+field_1913	t	Lgfh;
+field_1915	bE	Lgfn;
+field_19319	F	Z
+field_2021	ah	Lgjf;
+field_2064	n	Ljava/util/List;
+field_2259	h	Ljava/util/Map;
+field_24360	a	Lzf;
+field_2586	e	Lgkm;
+field_26665	b	Lges;
+field_33816	t	Ljava/util/List;
+field_34801	u	Lgwi;
+field_3752	a	Ljava/lang/String;
+field_3761	b	Ljava/lang/String;
+field_37868	k	Ljava/lang/Object;
+field_4019	r	F
+field_44666	g	Lyh;
+field_45607	b	Ljava/util/function/Supplier;
+field_5330	c	Ljava/util/Map;
+field_5965	ba	F
+field_6031	aZ	F
+field_6235	bu	I
+method_10517	a	()Luu;
+method_10852	b	(Lyh;)Lyw;
+method_10862	b	(Lzf;)Lyw;
+method_1422	b	(Lfyc$a;)V
+method_1426	e	()V
+method_1442	a	()Lfyc$b;
+method_1444	b	()I
+method_1447	a	(I)Lfyc$a;
+method_150	d	()Ljava/lang/String;
+method_1507	a	(Lgsb;)V
+method_1531	af	()Lilr;
+method_1548	ac	()Lgfx;
+method_1555	aF	()Z
+method_1558	X	()Lhit;
+method_1562	R	()Lhig;
+method_1576	aa	()Liqa;
+method_1592	u	()V
+method_1676	c	()Ljava/lang/String;
+method_1743	e	()Lgjf;
+method_17783	d	()Lftk$a;
+method_1812	a	(Lyh;)V
+method_19418	p	()Lger;
+method_22683	aR	()Lfyk;
+method_23317	dP	()D
+method_23318	dR	()D
+method_23321	dV	()D
+method_27693	f	(Ljava/lang/String;)Lyw;
+method_27704	a	(Lym;)Lzf;
+method_27728	bb	()Lfnt;
+method_27983	aq	()Lamt;
+method_2871	a	(Ljava/util/UUID;)Lhiq;
+method_2880	o	()Ljava/util/Collection;
+method_29177	a	()Lamo;
+method_2950	a	(Ljava/lang/String;)Lhjw;
+method_2959	f	()I
+method_2966	a	()Lcom/mojang/authlib/GameProfile;
+method_31043	a	(Lges;)V
+method_31044	aV	()Lges;
+method_31548	gK	()Lddl;
+method_36139	a	(I)Lzf;
+method_36454	ec	()F
+method_36455	ee	()F
+method_36877	a	(Lgsb;Lgfj;Lhjw;Lhit;ZLhix;)V
+method_37067	t	()V
+method_3734	aF	()Lee;
+method_3739	aG	()Led;
+method_41735	B	()Lgyk;
+method_4309	a	(Ljava/io/InputStream;)Lfyh;
+method_43470	b	(Ljava/lang/String;)Lyw;
+method_43473	i	()Lyw;
+method_44252	a	(Led;Ljava/lang/String;)V
+method_44382	a	(D)V
+method_44717	b	()Ljava/util/UUID;
+method_4495	s	()I
+method_4616	a	(Lamo;Likz;)V
+method_48559	b	()Z
+method_53526	aT	()Lgjm;
+method_53536	b	()Z
+method_5438	a	(I)Ldlt;
+method_5439	b	()I
+method_5476	R_	()Lyh;
+method_5578	e	()I
+method_5584	d	()I
+method_5586	j	()Ljava/lang/String;
+method_5667	cY	()Ljava/util/UUID;
+method_6026	eW	()Ljava/util/Collection;
+method_6032	eZ	()F
+method_6063	fq	()F
+method_60655	a	(Ljava/lang/String;Ljava/lang/String;)Lamo;
+method_6067	fX	()F
+method_6118	a	(Lcgv;)Ldlt;
+method_7299	a	(Lyw;)Lyw;
+method_7331	o	()V
+method_7344	gW	()Ldhe;
+method_74698	a	(Lamo;)Lgfh$a;
+method_7586	a	()I
+method_7589	d	()F
+method_7909	h	()Ldlp;
+method_7919	o	()I
+method_7936	p	()I
+method_7947	N	()I
+method_7960	f	()Z
+method_7963	m	()Z
+method_7964	y	()Lyh;
+method_8532	al	()J
+method_9249	a	(Lcom/mojang/brigadier/ParseResults;Ljava/lang/String;)V
+net.minecraft.class_1011	fyh	
+net.minecraft.class_1043	ilc	
+net.minecraft.class_11719$class_11721	ym$c	
+net.minecraft.class_12079$class_10726	iu$b	
+net.minecraft.class_1304	cgv	
+net.minecraft.class_1657	ddm	
+net.minecraft.class_2477	uu	
+net.minecraft.class_2561	yh	
+net.minecraft.class_2583	zf	
+net.minecraft.class_2960	amo	
+net.minecraft.class_304$class_11900	gfh$a	
+net.minecraft.class_310	gfj	
+net.minecraft.class_3675$class_307	fyc$b	
+net.minecraft.class_408	gqy	
+net.minecraft.class_412	grb	
+net.minecraft.class_429	gwb	
+net.minecraft.class_433	grx	
+net.minecraft.class_442	gsd	
+net.minecraft.class_500	gvp	
+net.minecraft.class_526	gyf	
+net.minecraft.class_5498	ges	
+net.minecraft.class_639	hjw	
+net.minecraft.class_642	hit	
+net.minecraft.class_6599	gwj	

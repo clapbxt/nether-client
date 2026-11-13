@@ -1,0 +1,616 @@
+import { Theme } from "theme.slint";
+import { ClientState, Backend } from "structs.slint";
+
+// ---------- surfaces ----------
+
+// Diagonal hatch plate: the texture behind imagery, empty slots and focal frames.
+export component Hatch inherits Rectangle {
+    clip: true;
+    Image { x: 0px; y: 0px; width: parent.width; height: parent.height; source: @image-url("assets/hatch.svg"); horizontal-tiling: repeat; vertical-tiling: repeat; horizontal-alignment: left; vertical-alignment: top; image-fit: preserve; }
+}
+
+// Parallelogram: the one signature shape (Play, tab marker, tags).
+export component Slash inherits Path {
+    in property <length> skew: 8px;
+    in property <brush> color: Theme.red;
+    commands: "M \{root.skew / 1px} 0 L \{root.width / 1px} 0 L \{(root.width - root.skew) / 1px} \{root.height / 1px} L 0 \{root.height / 1px} Z";
+    fill: root.color;
+    stroke-width: 0px;
+}
+
+// Corner brackets around a focal frame.
+export component Ticks inherits Rectangle {
+    in property <color> tint: Theme.ln2;
+    in property <length> len: 10px;
+    Rectangle { x: 0px; y: 0px; width: root.len; height: 1px; background: root.tint; }
+    Rectangle { x: 0px; y: 0px; width: 1px; height: root.len; background: root.tint; }
+    Rectangle { x: parent.width - root.len; y: 0px; width: root.len; height: 1px; background: root.tint; }
+    Rectangle { x: parent.width - 1px; y: 0px; width: 1px; height: root.len; background: root.tint; }
+    Rectangle { x: 0px; y: parent.height - 1px; width: root.len; height: 1px; background: root.tint; }
+    Rectangle { x: 0px; y: parent.height - root.len; width: 1px; height: root.len; background: root.tint; }
+    Rectangle { x: parent.width - root.len; y: parent.height - 1px; width: root.len; height: 1px; background: root.tint; }
+    Rectangle { x: parent.width - 1px; y: parent.height - root.len; width: 1px; height: root.len; background: root.tint; }
+}
+
+// Flat panel with a hairline frame.
+export component Glass inherits Rectangle {
+    in property <bool> hoverable: false;
+    out property <bool> hovered: ta.has-hover;
+    background: Theme.s1;
+    border-width: 1px;
+    border-color: (root.hoverable && ta.has-hover) ? Theme.ln2 : Theme.ln;
+    animate border-color { duration: Theme.fast; }
+    ta := TouchArea { }
+    @children
+}
+
+// ---------- type ----------
+
+// Section / field label: condensed caps, never wide-tracked.
+export component Eyebrow inherits Text {
+    font-family: Theme.disp;
+    font-size: 13px * Theme.ts;
+    font-weight: 600;
+    letter-spacing: 0.9px;
+    color: Theme.mut;
+}
+
+// Screen and instance titles.
+export component Heading inherits Text {
+    font-family: Theme.disp;
+    font-size: 56px;
+    font-weight: 800;
+    font-italic: true;
+    color: Theme.tx;
+}
+
+// Numbered section header with a rule that runs to the edge.
+export component SectionHead inherits Rectangle {
+    in property <string> idx;
+    in property <string> title;
+    in property <string> note;
+    height: 20px;
+    n := Text { x: 0px; height: parent.height; text: root.idx; color: Theme.red2; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; vertical-alignment: center; }
+    t := Text { x: root.idx == "" ? 0px : n.preferred-width + 10px; height: parent.height; text: root.title; color: Theme.tx; font-family: Theme.disp; font-size: 16px * Theme.ts; font-weight: 700; letter-spacing: 0.8px; vertical-alignment: center; }
+    nt := Text { x: parent.width - self.preferred-width; height: parent.height; text: root.note; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; vertical-alignment: center; }
+    Rectangle { x: t.x + t.preferred-width + 12px; y: 10px; width: parent.width - self.x - (root.note == "" ? 0px : nt.preferred-width + 12px); height: 1px; background: Theme.ln; }
+}
+
+// Label over a value (spec strips).
+export component Stat inherits Rectangle {
+    in property <string> k;
+    in property <string> v;
+    in property <length> size: 22px;
+    in property <bool> rule: true;
+    height: 48px;
+    if root.rule: Rectangle { x: 0px; y: 4px; width: 1px; height: parent.height - 8px; background: Theme.ln; }
+    Eyebrow { x: root.rule ? 16px : 0px; y: 2px; text: root.k; font-size: 12px * Theme.ts; }
+    Text { x: root.rule ? 16px : 0px; y: 18px; width: parent.width - 24px; text: root.v; color: Theme.tx; font-family: Theme.disp; font-size: root.size; font-weight: 600; overflow: elide; }
+}
+
+// ---------- imagery ----------
+
+export component Slot inherits Rectangle {
+    in property <string> label;
+    background: Theme.s1;
+    border-width: 1px;
+    border-color: Theme.ln;
+    Hatch { x: 1px; y: 1px; width: parent.width - 2px; height: parent.height - 2px; }
+    Text { text: root.label; color: Theme.mut; font-family: Theme.disp; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; horizontal-alignment: center; vertical-alignment: center; }
+}
+
+export component ModIcon inherits Rectangle {
+    in property <image> src;
+    in property <bool> has;
+    width: 38px;
+    height: 38px;
+    background: Theme.s2;
+    clip: true;
+    // quiet placeholder until the real icon streams in
+    if !root.has: Hatch { width: parent.width; height: parent.height; }
+    if root.has: Image { x: 0px; y: 0px; source: root.src; width: parent.width; height: parent.height; image-fit: contain; }
+}
+
+// Line icon drawn on a 12x12 grid (one consistent stroke family for the whole app).
+export component Icon inherits Path {
+    in property <string> d;
+    in property <color> tint: Theme.dim;
+    in property <bool> solid;
+    width: 12px; height: 12px;
+    viewbox-width: 12; viewbox-height: 12;
+    commands: root.d;
+    stroke: root.tint;
+    stroke-width: 1.4px;
+    fill: root.solid ? root.tint : transparent;
+}
+export global Ico {
+    out property <string> download: "M 6 1 L 6 8 M 2.5 4.8 L 6 8.3 L 9.5 4.8 M 1 11 L 11 11";
+    out property <string> heart: "M 6 10.5 L 1.6 6 C 0.2 4.5 0.8 1.6 3.3 1.6 C 4.6 1.6 5.4 2.4 6 3.3 C 6.6 2.4 7.4 1.6 8.7 1.6 C 11.2 1.6 11.8 4.5 10.4 6 Z";
+    out property <string> ext: "M 4 2 L 10 2 L 10 8 M 10 2 L 2 10";
+    out property <string> close: "M 2 2 L 10 10 M 10 2 L 2 10";
+    out property <string> check: "M 1.5 6.5 L 4.5 9.5 L 10.5 2.5";
+    out property <string> user: "M 6 6 C 4.3 6 3.3 4.8 3.3 3.4 C 3.3 2 4.3 1 6 1 C 7.7 1 8.7 2 8.7 3.4 C 8.7 4.8 7.7 6 6 6 Z M 1 11.5 C 1.5 8.8 3.4 7.6 6 7.6 C 8.6 7.6 10.5 8.8 11 11.5";
+    out property <string> chev: "M 4 2 L 8 6 L 4 10";
+    out property <string> back: "M 8 2 L 4 6 L 8 10";
+    out property <string> down: "M 2 4 L 6 8 L 10 4";
+    out property <string> play: "M 3 1.5 L 10.5 6 L 3 10.5 Z";
+    out property <string> plus: "M 6 1.5 L 6 10.5 M 1.5 6 L 10.5 6";
+    out property <string> folder: "M 1 2.5 L 4.5 2.5 L 5.7 4 L 11 4 L 11 10 L 1 10 Z";
+    out property <string> copy: "M 4 4 L 11 4 L 11 11 L 4 11 Z M 1 8 L 1 1 L 8 1";
+    out property <string> trash: "M 1.5 3 L 10.5 3 M 4.5 3 L 4.5 1.3 L 7.5 1.3 L 7.5 3 M 2.8 3 L 3.4 10.8 L 8.6 10.8 L 9.2 3";
+    out property <string> search: "M 5 1 A 4 4 0 1 1 4.99 1 Z M 8 8 L 11 11";
+    out property <string> export: "M 6 8 L 6 1 M 3.5 3.5 L 6 1 L 8.5 3.5 M 1.5 7 L 1.5 10.5 L 10.5 10.5 L 10.5 7";
+    out property <string> edit: "M 2 10 L 2 8 L 8.5 1.5 L 10.5 3.5 L 4 10 Z";
+}
+
+// ---------- tags ----------
+
+// Mod version + the game version it targets, joined as one split badge.
+export component VerTag inherits Rectangle {
+    in property <string> ver;
+    in property <string> mc;
+    in property <bool> bad;
+    property <length> aw: a.preferred-width + 16px;
+    property <length> bw: root.mc == "" ? 0px : b.preferred-width + 16px;
+    width: root.aw + root.bw;
+    height: 22px;
+    background: Theme.s2;
+    Rectangle { x: root.aw; width: root.bw; background: root.bad ? Theme.red.with-alpha(0.188) : Theme.s3; }
+    a := Text { x: 8px; height: parent.height; text: root.ver; color: Theme.tx; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 500; vertical-alignment: center; }
+    b := Text { x: root.aw + 8px; height: parent.height; visible: root.mc != ""; text: "MC " + root.mc; color: root.bad ? Theme.redtx : Theme.dim; font-family: Theme.mono; font-size: 11px * Theme.ts; vertical-alignment: center; }
+}
+
+export component Chip inherits Rectangle {
+    in property <string> text;
+    in property <bool> hot;
+    height: 22px;
+    width: t.preferred-width + 16px;
+    background: root.hot ? Theme.red.with-alpha(0.188) : Theme.s2;
+    t := Text { text: root.text; color: root.hot ? Theme.redtx : Theme.dim; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }
+}
+
+// ---------- actions ----------
+
+export component Btn inherits Rectangle {
+    in property <string> text;
+    in property <bool> solid;
+    in property <bool> danger;
+    in property <bool> enabled: true;
+    in property <string> icon;
+    callback clicked();
+    height: 36px;
+    width: t.preferred-width + (root.icon == "" ? 32px : 54px);
+    opacity: root.enabled ? 1 : 0.4;
+    background: root.solid
+        ? (root.danger ? (ta.pressed ? Theme.red3 : (ta.has-hover ? Theme.red2 : Theme.red)) : (ta.pressed ? #B9C1CC : (ta.has-hover ? #FFFFFF : Theme.ice)))
+        : (ta.pressed ? Theme.s3 : (ta.has-hover ? Theme.s2 : transparent));
+    border-width: 1px;
+    border-color: root.solid ? transparent : (root.danger ? (ta.has-hover ? Theme.red2 : Theme.red2.with-alpha(0.439)) : (ta.has-hover ? #ffffff66 : Theme.ln2));
+    animate background, border-color { duration: Theme.fast; }
+    property <color> fg: root.solid ? (root.danger ? white : Theme.ink) : (root.danger ? Theme.redtx : Theme.tx);
+    property <length> cw: t.preferred-width + (root.icon == "" ? 0px : 22px);
+    if root.icon != "": Icon { x: (parent.width - root.cw) / 2; y: (parent.height - 12px) / 2 + (ta.pressed ? 1px : 0px); d: root.icon; tint: root.fg; }
+    t := Text { x: (parent.width - root.cw) / 2 + (root.icon == "" ? 0px : 22px); y: ta.pressed ? 1px : 0px; width: self.preferred-width; height: parent.height; text: root.text; color: root.fg; font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 0.7px; vertical-alignment: center; }
+    ta := TouchArea { mouse-cursor: root.enabled ? pointer : default; clicked => { if root.enabled { root.clicked(); } } }
+    fs := FocusScope { width: 0px; height: 0px; focus-on-click: false; enabled: root.enabled;
+        key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
+    // keyboard focus ring (Tab only; mouse clicks never show it)
+    if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-width: 2px; border-color: Theme.ice; }
+}
+
+// The one focal action. A slanted red slab on a dark offset plate; pressing seats it onto the plate.
+export component PlayButton inherits Rectangle {
+    callback clicked();
+    in property <string> label: "PLAY";
+    in property <bool> enabled: true;
+    in property <length> skew: 14px;
+    in property <length> text-size: 24px;
+    // play arrow after the label (off for actions like Stop)
+    in property <bool> arrow: true;
+    out property <bool> hovered: ta.has-hover;
+    width: 200px;
+    height: 52px;
+    property <length> d: root.height > 60px ? 6px : 4px;
+    property <length> off: ta.pressed && root.enabled ? root.d : 0px;
+    animate off { duration: 70ms; }
+    Slash { x: root.d; y: root.d; width: parent.width; height: parent.height; skew: root.skew; color: Theme.plate; }
+    Slash {
+        x: root.off; y: root.off; width: parent.width; height: parent.height; skew: root.skew;
+        color: !root.enabled ? Theme.s3 : (ta.pressed ? Theme.press : (ta.has-hover ? Theme.red2 : Theme.red));
+        animate color { duration: Theme.fast; }
+    }
+    // lighter leading edge
+    Slash { x: root.off; y: root.off; width: root.skew + 6px; height: parent.height; skew: root.skew; color: #ffffff30; visible: root.enabled; }
+    Rectangle {
+        x: root.off; y: root.off; width: parent.width; height: parent.height;
+        HorizontalLayout {
+            alignment: center; spacing: root.text-size * 0.45;
+            Text { text: root.label; color: root.enabled ? white : Theme.mut; font-family: Theme.disp; font-size: root.text-size; font-weight: 800; font-italic: true; letter-spacing: 1px; vertical-alignment: center; }
+            if root.arrow: VerticalLayout { alignment: center;
+                Path { width: root.text-size * 0.5; height: root.text-size * 0.58; commands: "M 0 0 L 10 6 L 0 12 Z"; fill: root.enabled ? white : Theme.mut; stroke-width: 0px; }
+            }
+        }
+    }
+    ta := TouchArea { mouse-cursor: root.enabled ? pointer : default; clicked => { if root.enabled { root.clicked(); } } }
+    fs := FocusScope { width: 0px; height: 0px; focus-on-click: false; enabled: root.enabled;
+        key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
+    if fs.has-focus: Slash { x: -4px; y: -4px; width: parent.width + 8px + root.d; height: parent.height + 8px + root.d; skew: root.skew + 2px; color: transparent; stroke: Theme.ice; stroke-width: 2px; }
+}
+
+// Square icon-only button.
+export component IconBtn inherits Rectangle {
+    in property <string> d;
+    in property <bool> danger;
+    in property <bool> solid;
+    in property <length> size: 32px;
+    // outline at rest, red only under the pointer (row play buttons: PLAY stays the one solid red action)
+    in property <bool> hot;
+    out property <bool> hovered: ta.has-hover;
+    callback clicked();
+    width: root.size; height: root.size;
+    background: root.solid || (root.hot && ta.has-hover) ? (ta.pressed ? Theme.press : (ta.has-hover ? Theme.red2 : Theme.red))
+        : (ta.pressed ? Theme.s3 : (ta.has-hover ? (root.danger ? Theme.red.with-alpha(0.188) : Theme.s2) : transparent));
+    border-width: root.solid || (root.hot && ta.has-hover) ? 0px : 1px;
+    border-color: root.danger ? (ta.has-hover ? Theme.red2 : Theme.red2.with-alpha(0.333)) : (ta.has-hover ? #ffffff66 : Theme.ln2);
+    animate background, border-color { duration: Theme.fast; }
+    Icon { x: (parent.width - 12px) / 2; y: (parent.height - 12px) / 2 + (ta.pressed ? 1px : 0px); d: root.d; solid: root.solid || root.hot; tint: root.solid || (root.hot && ta.has-hover) ? white : (root.danger ? Theme.redtx : (ta.has-hover ? Theme.tx : Theme.dim)); }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    fs := FocusScope { width: 0px; height: 0px; focus-on-click: false; enabled: true;
+        key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
+    // keyboard focus ring (Tab only; mouse clicks never show it)
+    if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-width: 2px; border-color: Theme.ice; }
+    // hover label, to the left so row clipping never hides it (also shown on keyboard focus)
+    in property <string> tip;
+    if root.tip != "" && (ta.has-hover || fs.has-focus): Rectangle {
+        x: -tl.preferred-width - 26px; y: (root.height - 24px) / 2; width: tl.preferred-width + 18px; height: 24px;
+        background: #1C1C24; border-width: 1px; border-color: Theme.ln2;
+        tl := Text { text: root.tip; color: Theme.tx; font-family: Theme.ui; font-size: 12px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }
+    }
+}
+
+// Text link with an arrow that nudges on hover.
+export component LinkBtn inherits Rectangle {
+    in property <string> text;
+    in property <bool> back;
+    callback clicked();
+    height: 28px;
+    width: t.preferred-width + 20px;
+    if root.back: Icon { x: ta.has-hover ? -3px : 0px; y: 8px; d: Ico.back; tint: ta.has-hover ? Theme.tx : Theme.dim; animate x { duration: Theme.fast; } }
+    t := Text { x: root.back ? 20px : 0px; height: parent.height; text: root.text; color: ta.has-hover ? Theme.tx : Theme.dim; font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 0.7px; vertical-alignment: center; animate color { duration: Theme.fast; } }
+    if !root.back: Icon { x: t.preferred-width + 8px + (ta.has-hover ? 3px : 0px); y: 8px; d: Ico.chev; tint: ta.has-hover ? Theme.red2 : Theme.dim; animate x { duration: Theme.fast; } }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    fs := FocusScope { width: 0px; height: 0px; focus-on-click: false; enabled: true;
+        key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
+    if fs.has-focus: Rectangle { x: -6px; y: 0px; width: parent.width + 6px; height: parent.height; border-width: 2px; border-color: Theme.ice; }
+}
+
+// ---------- inputs ----------
+
+// Segmented control with a sliding ice thumb.
+export component Seg inherits Rectangle {
+    in property <[string]> items;
+    in property <length> item-w: 110px;
+    in-out property <int> current: 0;
+    callback changed(int);
+    width: root.items.length * root.item-w + 6px;
+    height: 34px;
+    background: Theme.s1;
+    border-width: 1px;
+    border-color: Theme.ln;
+    Rectangle {
+        x: 3px + root.current * root.item-w; y: 3px; width: root.item-w; height: parent.height - 6px;
+        background: Theme.ice;
+        animate x { duration: Theme.slow; easing: ease-out-quint; }
+    }
+    for it[i] in root.items: Rectangle {
+        x: 3px + i * root.item-w; width: root.item-w; height: parent.height;
+        Text {
+            text: it; color: root.current == i ? Theme.ink : (st.has-hover ? Theme.tx : Theme.dim);
+            font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 0.7px;
+            horizontal-alignment: center; vertical-alignment: center;
+            animate color { duration: Theme.mid; }
+        }
+        st := TouchArea { mouse-cursor: pointer; clicked => { root.current = i; root.changed(i); } }
+    }
+    // keyboard: Left/Right move the thumb
+    fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
+        key-pressed(e) => {
+            if e.text == Key.LeftArrow && root.current > 0 { root.current -= 1; root.changed(root.current); return accept; }
+            if e.text == Key.RightArrow && root.current < root.items.length - 1 { root.current += 1; root.changed(root.current); return accept; }
+            return reject;
+        } }
+    // keyboard focus ring (Tab only; mouse clicks never show it)
+    if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-width: 2px; border-color: Theme.ice; }
+}
+
+// Hard switch: square thumb, red when on. The hit area is larger than the drawing.
+export component Toggle inherits Rectangle {
+    in-out property <bool> on;
+    in property <bool> enabled: true;
+    callback toggled(bool);
+    width: 42px; height: 22px;
+    background: root.on ? Theme.red : Theme.s3;
+    border-width: 1px;
+    border-color: root.on ? Theme.red2 : (ta.has-hover ? #ffffff55 : Theme.ln2);
+    animate background, border-color { duration: Theme.mid; }
+    Rectangle {
+        x: root.on ? 23px : 3px; y: 3px; width: 16px; height: 16px; background: root.on ? white : Theme.dim;
+        animate x { duration: Theme.mid; easing: ease-out-quint; }
+        animate background { duration: Theme.mid; }
+    }
+    ta := TouchArea { x: -8px; y: -8px; width: parent.width + 16px; height: parent.height + 16px; mouse-cursor: pointer; clicked => { if root.enabled { root.on = !root.on; root.toggled(root.on); } } }
+    fs := FocusScope { width: 0px; height: 0px; focus-on-click: false; enabled: root.enabled;
+        key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.on = !root.on; root.toggled(root.on); return accept; } return reject; } }
+    // keyboard focus ring (Tab only; mouse clicks never show it)
+    if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-width: 2px; border-color: Theme.ice; }
+}
+
+export component Dropdown inherits Rectangle {
+    in property <[string]> items;
+    in-out property <int> current: 0;
+    callback changed(int);
+    width: 190px;
+    height: 40px;
+    background: ta.has-hover ? Theme.s2 : Theme.s1;
+    border-width: 1px;
+    border-color: ta.has-hover ? #ffffff66 : Theme.ln2;
+    animate border-color, background { duration: Theme.fast; }
+    Text { x: 14px; width: parent.width - 44px; text: root.items[root.current]; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 500; vertical-alignment: center; overflow: elide; }
+    Icon { x: parent.width - 26px; y: (parent.height - 12px) / 2; d: Ico.down; tint: ta.has-hover ? Theme.tx : Theme.dim; }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { pop.show(); } }
+    // keyboard: Space/Enter opens the list, Up/Down step through it
+    fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
+        key-pressed(e) => {
+            if e.text == " " || e.text == Key.Return { pop.show(); return accept; }
+            if e.text == Key.UpArrow && root.current > 0 { root.current -= 1; root.changed(root.current); return accept; }
+            if e.text == Key.DownArrow && root.current < root.items.length - 1 { root.current += 1; root.changed(root.current); return accept; }
+            return reject;
+        } }
+    // keyboard focus ring (Tab only; mouse clicks never show it)
+    if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-width: 2px; border-color: Theme.ice; }
+    // long lists (e.g. game versions) scroll after 8 rows
+    pop := PopupWindow {
+        x: 0px; y: root.height + 4px; width: root.width; height: Math.min(root.items.length, 8) * 36px + 8px;
+        Rectangle {
+            background: #121217; border-width: 1px; border-color: Theme.ln2;
+            Flickable {
+                y: 4px; height: parent.height - 8px; content-height: root.items.length * 36px;
+                for it[i] in root.items: Rectangle {
+                    y: i * 36px; height: 36px; width: parent.width;
+                    background: t2.has-hover ? Theme.s3 : transparent;
+                    Rectangle { x: 0px; width: 3px; background: Theme.red; visible: root.current == i; }
+                    Text { x: 14px; width: parent.width - 24px; text: it; color: root.current == i || t2.has-hover ? Theme.tx : Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; vertical-alignment: center; overflow: elide; }
+                    t2 := TouchArea { clicked => { root.changed(i); root.current = i; pop.close(); } }
+                }
+            }
+        }
+    }
+}
+
+// Stepped slider with tick marks (memory in GB, HUD scale).
+export component Slider inherits Rectangle {
+    in property <int> min: 1;
+    in property <int> max: 16;
+    in-out property <int> value: 1;
+    in property <bool> enabled: true;
+    in property <int> major: 4;
+    // controlled: the owner updates alue itself from moved() (keeps a binding on value alive)
+    in property <bool> controlled;
+    callback moved(int);
+    callback released(int);
+    property <int> pending;
+    height: 30px;
+    property <int> n: root.max - root.min;
+    property <length> step: (root.width - 10px) / root.n;
+    out property <bool> active: ta.has-hover || ta.pressed;
+    Rectangle { x: 5px; y: 9px; width: parent.width - 10px; height: 4px; background: Theme.s3; }
+    Rectangle { x: 5px; y: 9px; width: (root.value - root.min) * root.step; height: 4px; background: root.active ? Theme.red2 : Theme.ice; animate background { duration: Theme.fast; } }
+    for i in (root.n <= 40 ? root.n + 1 : 0): Rectangle {
+        x: 5px + i * root.step; y: 18px; width: 1px; height: mod(i + root.min, root.major) == 0 ? 7px : 4px;
+        background: i + root.min <= root.value ? Theme.dim : Theme.ln2;
+    }
+    Rectangle {
+        x: (root.value - root.min) * root.step; y: 2px; width: 10px; height: 18px;
+        background: ta.pressed ? Theme.red2 : Theme.ice;
+        animate background { duration: Theme.fast; }
+    }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        enabled: root.enabled;
+        function set(px: length) { root.pending = Math.clamp(Math.round((px - 5px) / root.step) + root.min, root.min, root.max); if !root.controlled { root.value = root.pending; } root.moved(root.pending); }
+        pointer-event(e) => {
+            if e.kind == PointerEventKind.down { self.set(self.mouse-x); }
+            if e.kind == PointerEventKind.up { root.released(root.pending); }
+        }
+        moved => { if self.pressed { self.set(self.mouse-x); } }
+    }
+    // keyboard: Left/Right step one notch
+    fs := FocusScope { width: 0px; height: 0px; focus-on-click: false; enabled: root.enabled;
+        key-pressed(e) => {
+            if e.text == Key.LeftArrow || e.text == Key.RightArrow {
+                root.pending = Math.clamp(root.value + (e.text == Key.LeftArrow ? -1 : 1), root.min, root.max);
+                if !root.controlled { root.value = root.pending; }
+                root.moved(root.pending); root.released(root.pending);
+                return accept;
+            }
+            return reject;
+        } }
+    // keyboard focus ring (Tab only; mouse clicks never show it)
+    if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-width: 2px; border-color: Theme.ice; }
+}
+
+// Single-line text field with a placeholder (optional search glyph).
+export component Field inherits Rectangle {
+    in-out property <string> text <=> inp.text;
+    in property <string> placeholder;
+    in property <bool> search;
+    in property <length> text-size: 14px;
+    callback edited();
+    callback accepted();
+    public function focus-input() { inp.focus(); }
+    height: 40px;
+    background: Theme.s1;
+    border-width: 1px;
+    border-color: inp.has-focus ? Theme.red2 : (ta.has-hover ? #ffffff55 : Theme.ln2);
+    animate border-color { duration: Theme.mid; }
+    ta := TouchArea { mouse-cursor: MouseCursor.text; clicked => { inp.focus(); } }
+    if root.search: Icon { x: 14px; y: (parent.height - 12px) / 2; d: Ico.search; tint: inp.has-focus ? Theme.tx : Theme.mut; }
+    Text { x: root.search ? 38px : 14px; text: root.placeholder; color: Theme.mut; font-family: Theme.ui; font-size: root.text-size * Theme.ts; vertical-alignment: center; visible: inp.text == ""; }
+    inp := TextInput {
+        x: root.search ? 38px : 14px; width: parent.width - self.x - 14px; height: parent.height;
+        vertical-alignment: center; color: Theme.tx; font-family: Theme.ui; font-size: root.text-size * Theme.ts; single-line: true;
+        selection-background-color: Theme.red.with-alpha(0.502);
+        edited => { root.edited(); }
+        accepted => { root.accepted(); }
+    }
+}
+
+// Text tabs with a sliding slanted marker.
+export component UTabs inherits Rectangle {
+    in property <[string]> items;
+    in property <length> item-w: 130px;
+    in-out property <int> current: 0;
+    height: 38px;
+    Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; }
+    for it[i] in root.items: Rectangle {
+        x: i * root.item-w; width: root.item-w; height: parent.height;
+        Text {
+            x: 0px; width: parent.width - 28px;
+            text: it; font-family: Theme.disp; font-size: 18px; font-weight: 600; letter-spacing: 0.8px;
+            color: root.current == i ? Theme.tx : (t.has-hover ? Theme.dim : Theme.mut);
+            vertical-alignment: center;
+            animate color { duration: Theme.mid; }
+        }
+        t := TouchArea { mouse-cursor: pointer; clicked => { root.current = i; } }
+    }
+    fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
+        key-pressed(e) => {
+            if e.text == Key.LeftArrow && root.current > 0 { root.current -= 1; return accept; }
+            if e.text == Key.RightArrow && root.current < root.items.length - 1 { root.current += 1; return accept; }
+            return reject;
+        } }
+    if fs.has-focus: Rectangle { x: root.current * root.item-w - 6px; y: 2px; width: root.item-w - 16px; height: parent.height - 4px; border-width: 2px; border-color: Theme.ice; }
+    Slash {
+        x: root.current * root.item-w - 2px; y: parent.height - 3px; width: root.item-w - 26px; height: 3px; skew: 3px; color: Theme.red2;
+        animate x { duration: Theme.slow; easing: ease-out-quint; }
+    }
+}
+
+// Horizontal gauge: label, bar, value.
+export component Meter inherits Rectangle {
+    in property <string> k;
+    in property <string> v;
+    in property <float> f;
+    height: 30px;
+    Text { x: 0px; text: root.k; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; }
+    Rectangle { x: 96px; y: 13px; width: parent.width - 96px - 84px; height: 4px; background: Theme.s3;
+        Rectangle { x: 0px; height: parent.height; width: parent.width * root.f; background: Theme.ice; } }
+    Text { x: parent.width - 76px; width: 76px; text: root.v; color: Theme.tx; font-family: Theme.mono; font-size: 12px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; }
+}
+
+// Window buttons (minimize, maximize/restore, close): there is no native title bar, so every full-window
+// layer (top bar, sign-in gate, crash page) carries them. `W` = stage width.
+export component WinButtons inherits Rectangle {
+    in property <length> stage-w;
+    for w[i] in [0, 1, 2]: Rectangle {
+        x: root.stage-w - 138px + i * 46px; y: 0px; width: 46px; height: 55px;
+        background: wb.pressed ? (i == 2 ? Theme.press : Theme.s3) : (wb.has-hover ? (i == 2 ? Theme.red : Theme.s2) : transparent);
+        animate background { duration: Theme.fast; }
+        if i == 0: Rectangle { x: 17px; y: 27px; width: 12px; height: 1px; background: wb.has-hover ? Theme.tx : Theme.dim; }
+        if i == 1 && !Backend.win-maxed: Rectangle { x: 17px; y: 22px; width: 11px; height: 11px; border-width: 1px; border-color: wb.has-hover ? Theme.tx : Theme.dim; }
+        if i == 1 && Backend.win-maxed: Rectangle {
+            Rectangle { x: 19px; y: 20px; width: 9px; height: 9px; border-width: 1px; border-color: wb.has-hover ? Theme.tx : Theme.dim; }
+            Rectangle { x: 17px; y: 23px; width: 9px; height: 9px; background: wb.has-hover ? (Theme.s2) : #08080B; border-width: 1px; border-color: wb.has-hover ? Theme.tx : Theme.dim; }
+        }
+        if i == 2: Icon { x: 17px; y: 22px; d: Ico.close; tint: wb.has-hover ? white : Theme.dim; }
+        wb := TouchArea { clicked => { if i == 0 { Backend.win-min(); } else if i == 1 { Backend.win-max(); } else { Backend.win-close(); } } }
+    }
+}
+
+// Keeps keyboard focus inside a dialog: it takes focus when it opens, Tab past the last control wraps to the first,
+// Shift+Tab from the first goes to the last (the sentinels hand the step back to Rust: Backend.focus-step), and
+// Esc anywhere inside calls `escape`.
+export component FocusTrap inherits FocusScope {
+    callback escape();
+    focus-on-click: false;
+    focus-on-tab-navigation: false;
+    // direction of the Tab press being handled (focus moves after the capture runs)
+    property <bool> back;
+    capture-key-pressed(e) => {
+        if e.text == Key.Tab || e.text == Key.Backtab { root.back = e.text == Key.Backtab || e.modifiers.shift; }
+        return reject;
+    }
+    key-pressed(e) => { if e.text == Key.Escape { root.escape(); return accept; } return reject; }
+    head := FocusScope { x: 0px; y: 0px; width: 0px; height: 0px; focus-on-click: false;
+        changed has-focus => { if self.has-focus && root.back { tail.focus(); Backend.focus-step(true); } } }
+    start := FocusScope { x: 0px; y: 0px; width: 0px; height: 0px; focus-on-click: false; focus-on-tab-navigation: false;
+        init => { self.focus(); } }
+    @children
+    tail := FocusScope { x: 0px; y: 0px; width: 0px; height: 0px; focus-on-click: false;
+        changed has-focus => { if self.has-focus && !root.back { head.focus(); Backend.focus-step(false); } } }
+}
+
+// Dimmed backdrop for dialogs; fades in, click outside or Esc dismisses, Tab stays inside.
+export component Scrim inherits Rectangle {
+    callback dismiss();
+    property <bool> shown: false;
+    init => { root.shown = true; }
+    background: #000000c4;
+    opacity: root.shown ? 1 : 0;
+    animate opacity { duration: Theme.mid; easing: ease-out; }
+    FocusTrap {
+        x: 0px; y: 0px; width: root.width; height: root.height;
+        escape => { root.dismiss(); }
+        TouchArea { clicked => { root.dismiss(); } scroll-event(e) => { accept } }
+        Rectangle {
+            y: root.shown ? 0px : 12px;
+            animate y { duration: Theme.slow; easing: ease-out-quint; }
+            @children
+        }
+    }
+}
+
+// Page reveal: fades in and slides 12px when created. Screens are recreated on tab change, so this is the tab transition.
+export component Page inherits Rectangle {
+    property <bool> shown: false;
+    init => { root.shown = true; }
+    opacity: root.shown || Backend.calm ? 1 : 0;
+    animate opacity { duration: Theme.mid; easing: ease-out; }
+    Rectangle {
+        x: root.shown || Backend.calm ? 0px : -12px; y: 0px; width: parent.width; height: parent.height;
+        animate x { duration: Theme.slow; easing: ease-out-quint; }
+        @children
+    }
+}
+
+// Pulsing square for live states (steady when motion is reduced).
+export component Pulse inherits Rectangle {
+    in property <color> tint: Theme.red2;
+    width: 8px; height: 8px;
+    background: root.tint;
+    opacity: Backend.calm ? 1 : 0.45 + 0.55 * Math.abs(sin(Backend.tick / 1.6s * 180deg));
+}
+
+// Click-and-drag over the player preview to turn the model (auto spin runs only while hovered, pauses while held).
+export component SpinArea inherits TouchArea {
+    property <length> last;
+    mouse-cursor: self.pressed ? MouseCursor.grabbing : MouseCursor.grab;
+    changed pressed => { Backend.skin-held = self.pressed; root.last = self.mouse-x; Backend.skin-wake(); }
+    changed has-hover => { Backend.skin-hover = self.has-hover; Backend.skin-wake(); }
+    moved => { if self.pressed { Backend.skin-drag((self.mouse-x - root.last) / 1px); root.last = self.mouse-x; } }
+}
+
+// Settings-style row: title + one-line explanation on the left, a control placed by the caller on the right.
+export component SetRow inherits Rectangle {
+    in property <string> title;
+    in property <string> sub;
+    in property <length> reserve: 280px;
+    in property <bool> dimmed;
+    // text starts here (room for a leading image)
+    in property <length> indent: 0px;
+    height: 64px;
+    Text { x: root.indent; y: 12px; text: root.title; color: root.dimmed ? Theme.mut : Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; }
+    Text { x: root.indent; y: 35px; width: parent.width - root.reserve - root.indent; text: root.sub; color: root.dimmed ? Theme.mut : Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; overflow: elide; }
+    Rectangle { x: 0px; y: parent.height - 1px; height: 1px; background: Theme.ln; }
+    @children
+}

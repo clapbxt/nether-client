@@ -1,0 +1,197 @@
+import { Theme } from "theme.slint";
+import { Backend, SkinLib, Cape } from "structs.slint";
+import { Eyebrow, Heading, Btn, Seg, Chip, IconBtn, Ico, Icon, SpinArea, Hatch, Ticks, Slash, SectionHead, Field, PlayButton, LinkBtn, Scrim } from "components.slint";
+
+// one cape card (account or Nether): outside face on a hatch plate, name, "In use"
+component CapeCard inherits Rectangle {
+    in property <Cape> cape;
+    in property <bool> none;
+    in property <bool> worn;
+    in property <bool> busy;
+    callback clicked();
+    width: 220px; height: 186px;
+    background: ct.has-hover ? Theme.s2 : Theme.s1;
+    opacity: root.busy && !root.worn ? 0.6 : 1;
+    animate background { duration: Theme.fast; }
+    Rectangle {
+        x: 0px; y: 0px; width: parent.width; height: 130px; background: Theme.bg; clip: true;
+        Hatch { width: parent.width; height: parent.height; }
+        if !root.none: Image { y: 12px; height: parent.height - 24px; width: parent.width; source: root.cape.img; image-fit: contain; image-rendering: pixelated; }
+        if root.none: Text { text: "NONE"; color: Theme.mut; font-family: Theme.disp; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; horizontal-alignment: center; vertical-alignment: center; }
+    }
+    Text { x: 14px; y: 146px; width: parent.width - 100px; text: root.cape.name; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; overflow: elide; }
+    if root.worn: Chip { x: parent.width - self.width - 12px; y: 146px; text: "In use"; hot: true; }
+    Rectangle { border-width: root.worn ? 2px : 0px; border-color: Theme.red2; }
+    ct := TouchArea { mouse-cursor: pointer; clicked => { if !root.busy { root.clicked(); } } }
+}
+
+export component WardrobeScreen inherits Rectangle {
+    in-out property <int> page: 0;
+    // dialogs: tile being renamed / deleted (-1 = closed)
+    in-out property <int> ren-idx: -1;
+    in-out property <string> ren-text;
+    in-out property <int> del-idx: -1;
+    property <int> sel: SkinLib.sel;
+    property <bool> picked: root.page == 0 && root.sel >= 0 && root.sel < SkinLib.skins.length;
+    property <bool> signed: Backend.acct-state == 2;
+    init => { SkinLib.refresh(); }
+
+    Heading { x: 53px; y: 22px; text: "WARDROBE"; }
+    Seg { x: 1384px - self.width; y: 40px; items: ["SKINS", "CAPES"]; item-w: 110px; current <=> root.page; }
+
+    // preview plate
+    Rectangle {
+        x: 56px; y: 112px; width: 380px; height: 640px; background: Theme.s1; clip: true;
+        Hatch { width: parent.width; height: parent.height; }
+        Rectangle { x: -60px; y: 240px; width: 500px; height: 500px; background: @radial-gradient(circle, Theme.red.with-alpha(0.267) 0%, Theme.red.with-alpha(0.000) 68%); }
+        Rectangle { x: (parent.width - 160px) / 2; y: 520px; width: 160px; height: 16px; border-radius: 8px; background: #000000aa; visible: Backend.skin-ready; }
+        if Backend.skin-ready: Image { x: 12px; y: 56px; width: parent.width - 24px; height: 490px; source: Backend.skin-frame; image-fit: contain; }
+        SpinArea { height: parent.height - 70px; }
+        if !Backend.skin-ready: Text { text: "Loading skin…"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }
+        Ticks { width: parent.width; height: parent.height; }
+        Slash { x: 14px; y: 16px; width: Math.min(nm.preferred-width, 250px) + 36px; height: 32px; skew: 8px; color: Theme.ice; }
+        nm := Text { x: 31px; y: 16px; width: Math.min(self.preferred-width, 250px); height: 32px; overflow: elide;
+            text: root.picked ? SkinLib.skins[root.sel].name : (root.signed ? Backend.acct-name : "Player");
+            color: Theme.ink; font-family: Theme.disp; font-size: 22px; font-weight: 700; font-italic: true; vertical-alignment: center; }
+        if root.picked: Chip { x: parent.width - self.width - 14px; y: 21px; text: "Preview"; }
+        // signed out: wearing needs the account
+        if root.picked && !root.signed: Rectangle {
+            x: 0px; y: parent.height - 62px - 44px; width: parent.width; height: 44px; background: #0D0D11e8;
+            Rectangle { y: 0px; height: 1px; background: Theme.ln; }
+            Text { x: 16px; height: parent.height; text: "Sign in to wear skins on your account"; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; }
+            LinkBtn { x: parent.width - self.width - 10px; y: 8px; text: "SIGN IN"; clicked => { Backend.acct-open = true; } }
+        }
+        Rectangle { x: 0px; y: parent.height - 62px; width: parent.width; height: 62px; background: #0D0D11e8;
+            Rectangle { y: 0px; height: 1px; background: Theme.ln; }
+            Seg { x: 14px; y: 14px; items: ["CLASSIC", "SLIM"]; item-w: 84px; current: Backend.skin-slim ? 1 : 0;
+                changed(i) => { Backend.skin-slim = i == 1; if root.picked { SkinLib.set-slim(root.sel, i == 1); } } }
+            if !root.picked: Text { x: 200px; width: parent.width - 214px; horizontal-alignment: right; vertical-alignment: center; text: root.page == 0 ? (root.signed ? "Account skin" : "Default (Steve)") : Backend.capes[Backend.cape-idx].name; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; overflow: elide; }
+            if root.picked: PlayButton {
+                x: parent.width - 14px - 150px - 4px; y: 13px; width: 150px; height: 36px; skew: 10px; text-size: 19px; arrow: false;
+                property <bool> worn: SkinLib.worn-id == SkinLib.skins[root.sel].id;
+                label: SkinLib.wearing ? "WEARING…" : (self.worn ? "WORN" : "WEAR");
+                enabled: root.signed && !SkinLib.wearing && !self.worn;
+                clicked => { SkinLib.wear(root.sel); }
+            }
+        }
+    }
+
+    // skins
+    if root.page == 0: Rectangle {
+        SectionHead { x: 468px; y: 112px; width: 916px; idx: "01"; title: "ADD A SKIN"; }
+        Btn { x: 468px; y: 144px; width: 150px; height: 40px; text: "UPLOAD FILE"; icon: Ico.export; enabled: !SkinLib.busy; clicked => { SkinLib.add-file(); } }
+        Text { x: 630px; y: 144px; height: 40px; text: "or"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; }
+        imp := Field { x: 660px; y: 144px; width: 610px; placeholder: "Minecraft username or https:// skin link"; accepted => { if self.text != "" && !SkinLib.busy { SkinLib.import(self.text); self.text = ""; } } }
+        Btn { x: 1384px - 102px; y: 144px; width: 102px; height: 40px; text: SkinLib.busy ? "WORKING…" : "IMPORT"; enabled: imp.text != "" && !SkinLib.busy; clicked => { SkinLib.import(imp.text); imp.text = ""; } }
+        Text { x: 660px; y: 190px; text: "A name like Notch copies that player's current skin. Links must point straight at a 64×64 PNG."; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
+
+        SectionHead { x: 468px; y: 216px; width: 916px; idx: "02"; title: "LIBRARY"; note: SkinLib.skins.length == 1 ? "1 skin" : "\{SkinLib.skins.length} skins"; }
+        Flickable {
+            x: 468px; y: 248px; width: 916px; height: 788px - 248px; content-height: Math.ceil(SkinLib.skins.length / 4) * 252px + 24px;
+            for s[i] in SkinLib.skins: tl := Rectangle {
+                x: mod(i, 4) * 232px; y: floor(i / 4) * 252px; width: 220px; height: 240px;
+                property <bool> on: root.sel == i;
+                property <bool> hot: ta.has-hover || b1.hovered || b2.hovered || b3.hovered;
+                background: self.hot ? Theme.s2 : Theme.s1;
+                animate background { duration: Theme.fast; }
+                Rectangle { x: 0px; y: 0px; width: parent.width; height: 168px; clip: true; background: Theme.bg;
+                    Hatch { width: parent.width; height: parent.height; }
+                    if s.has-img: Image { x: 0px; y: 10px; width: parent.width; height: parent.height - 16px; source: s.img; image-fit: contain; }
+                    if !s.has-img: Text { text: "RENDERING"; color: Theme.mut; font-family: Theme.disp; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; horizontal-alignment: center; vertical-alignment: center; }
+                    Chip { x: 10px; y: 10px; text: s.slim ? "SLIM" : "CLASSIC"; }
+                    if SkinLib.worn-id == s.id: Chip { x: parent.width - self.width - 10px; y: 10px; text: "Wearing"; hot: true; }
+                }
+                ta := TouchArea { mouse-cursor: pointer; clicked => { SkinLib.select(i); } }
+                Text { x: 14px; y: 176px; width: parent.width - 28px; text: s.name; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; overflow: elide; }
+                Rectangle {
+                    x: 14px; y: 204px; width: parent.width - 24px; height: 28px;
+                    Text { x: 0px; width: parent.width - (tl.hot || tl.on ? 100px : 0px); height: parent.height; text: tl.on ? "Previewing" : s.src; color: tl.on ? Theme.redtx : Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; overflow: elide; }
+                    Rectangle {
+                        x: parent.width - 96px; width: 96px;
+                        opacity: tl.hot || tl.on ? 1 : 0; animate opacity { duration: Theme.mid; }
+                        b1 := IconBtn { x: 0px; size: 28px; d: Ico.edit; tip: "Rename"; clicked => { root.ren-text = s.name; root.ren-idx = i; } }
+                        b2 := IconBtn { x: 34px; size: 28px; d: Ico.download; tip: "Save as PNG"; clicked => { SkinLib.export(i); } }
+                        b3 := IconBtn { x: 68px; size: 28px; d: Ico.trash; danger: true; tip: "Delete"; clicked => { root.del-idx = i; } }
+                    }
+                }
+                Rectangle { border-width: tl.on ? 2px : 0px; border-color: Theme.red2; }
+            }
+        }
+        if SkinLib.loaded && SkinLib.skins.length == 0: Rectangle {
+            x: 468px; y: 248px; width: 916px; height: 300px; background: Theme.s1; clip: true;
+            Hatch { width: parent.width; height: parent.height; }
+            Ticks { width: parent.width; height: parent.height; }
+            Heading { x: 36px; y: 30px; text: "NO SKINS YET"; font-size: 64px; color: Theme.dim; }
+            Text { x: 40px; y: 112px; width: 560px; text: "Your library keeps skins on this PC so you can switch in one click. Add your first one:"; color: Theme.dim; font-family: Theme.ui; font-size: 15px * Theme.ts; wrap: word-wrap; }
+            for t[i] in ["Upload a 64×64 PNG from your computer", "Import by username, like Notch or jeb_", "Paste a direct https link to a skin PNG"]: Rectangle {
+                x: 40px; y: 168px + i * 36px; width: 560px; height: 36px;
+                Text { x: 0px; width: 30px; text: "0\{i + 1}"; color: Theme.red2; font-family: Theme.mono; font-size: 12px * Theme.ts; font-weight: 700; vertical-alignment: center; }
+                Text { x: 34px; text: t; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; vertical-alignment: center; }
+                Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; }
+            }
+        }
+    }
+
+    // rename
+    if root.ren-idx >= 0: Scrim {
+        dismiss => { root.ren-idx = -1; }
+        Rectangle {
+            x: (parent.width - 500px) / 2; y: 230px; width: 500px; height: 212px;
+            background: #121217; border-width: 1px; border-color: Theme.ln2;
+            TouchArea { }
+            Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.ice; }
+            Eyebrow { x: 28px; y: 28px; text: "RENAME SKIN"; }
+            rf := Field { x: 28px; y: 56px; width: parent.width - 56px; text <=> root.ren-text; init => { self.focus-input(); }
+                accepted => { if root.ren-text != "" { SkinLib.rename(root.ren-idx, root.ren-text); root.ren-idx = -1; } } }
+            Btn { x: parent.width - 28px - self.width - sb.width - 10px; y: parent.height - 64px; text: "CANCEL"; clicked => { root.ren-idx = -1; } }
+            sb := Btn { x: parent.width - 28px - self.width; y: parent.height - 64px; text: "SAVE"; solid: true; icon: Ico.check; enabled: root.ren-text != "";
+                clicked => { SkinLib.rename(root.ren-idx, root.ren-text); root.ren-idx = -1; } }
+        }
+    }
+    // delete
+    if root.del-idx >= 0 && root.del-idx < SkinLib.skins.length: Scrim {
+        dismiss => { root.del-idx = -1; }
+        Rectangle {
+            x: (parent.width - 500px) / 2; y: 230px; width: 500px; height: 232px;
+            background: #121217; border-width: 1px; border-color: Theme.ln2;
+            TouchArea { }
+            Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.red; }
+            Eyebrow { x: 28px; y: 28px; text: "DELETE SKIN"; color: Theme.redtx; }
+            Text { x: 28px; y: 48px; width: parent.width - 56px; text: SkinLib.skins[root.del-idx].name; color: Theme.tx; font-family: Theme.disp; font-size: 34px; font-weight: 800; font-italic: true; overflow: elide; }
+            Text { x: 28px; y: 98px; width: parent.width - 56px; text: "It is removed from your library on this PC. The skin your account is wearing does not change."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
+            kb := Btn { x: parent.width - 28px - self.width - db.width - 10px; y: parent.height - 64px; text: "KEEP IT"; clicked => { root.del-idx = -1; } }
+            db := Btn { x: parent.width - 28px - self.width; y: parent.height - 64px; text: "DELETE"; danger: true; solid: true; icon: Ico.trash;
+                clicked => { SkinLib.delete(root.del-idx); root.del-idx = -1; } }
+        }
+    }
+
+    // capes: account capes (Minecraft) + Nether capes (our directory; seen by Nether players)
+    if root.page == 1: Flickable {
+        x: 468px; y: 112px; width: 916px; height: parent.height - 112px;
+        property <length> acct-h: Math.ceil(Backend.capes.length / 4) * 198px;
+        property <length> nth-y: 36px + self.acct-h + 18px;
+        content-height: self.nth-y + 36px + (Backend.ncape-state == 2 ? Math.ceil(Backend.ncapes.length / 4) * 198px : 120px) + 24px;
+        init => { Backend.load-ncapes(); }
+        SectionHead { x: 0px; y: 0px; width: 916px; idx: "01"; title: Backend.acct-state == 2 ? "FROM YOUR MICROSOFT ACCOUNT" : "SIGN IN TO SEE YOUR CAPES"; note: "everyone sees these"; }
+        for c[i] in Backend.capes: CapeCard {
+            x: mod(i, 4) * 232px; y: 36px + floor(i / 4) * 198px;
+            cape: c; none: i == 0; worn: Backend.cape-idx == i;
+            clicked => { if Backend.cape-idx != i { Backend.equip-cape(i); } }
+        }
+        SectionHead { x: 0px; y: parent.nth-y; width: 916px; idx: "02"; title: "NETHER CAPES"; note: "seen by Nether players · click again to take off"; }
+        if Backend.ncape-state == 2: Rectangle {
+            y: parent.nth-y + 36px; height: parent.content-height - self.y;
+            for c[i] in Backend.ncapes: CapeCard {
+                x: mod(i, 4) * 232px; y: floor(i / 4) * 198px;
+                cape: c; worn: Backend.ncape-worn == c.id; busy: Backend.ncape-busy;
+                clicked => { Backend.wear-ncape(c.id); }
+            }
+        }
+        if Backend.ncape-state != 2: Rectangle {
+            y: parent.nth-y + 36px; width: 916px; height: 110px; background: Theme.s1; border-width: 1px; border-color: Theme.ln2;
+            Hatch { x: 1px; y: 1px; width: parent.width - 2px; height: parent.height - 2px; }
+            Text { x: 28px; width: parent.width - 56px; vertical-alignment: center; color: Theme.dim; font-family: Theme.ui; font-size: 15px * Theme.ts;
+                text: Backend.ncape-state == 3 ? "The Nether cape directory isn't reachable right now. Check your connection and open this page again." : "Loading Nether capes…"; }
+        }
+    }
+}

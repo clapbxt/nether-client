@@ -1,0 +1,38 @@
+// Design tokens ("Pit Wall"). See NC Obsidian Vault/Design.md.
+export global Theme {
+    // surfaces: obsidian, then three raised steps
+    out property <color> bg: #060608;
+    out property <color> s1: #0D0D11;
+    out property <color> s2: #15151B;
+    out property <color> s3: #1F1F27;
+    // hairlines
+    out property <color> ln: #ffffff14;
+    out property <color> ln2: #ffffff2b;
+    // text: primary, secondary, tertiary; ink = text on ice
+    out property <color> tx: #ECEFF4;
+    out property <color> dim: #A7AFBC;
+    out property <color> mut: #707988;
+    out property <color> ink: #09090C;
+    out property <color> ice: #E9EDF2;
+    // accent, racing red by default (Settings > Personalization swaps it): base, bright, deep,
+    // readable text on dark, pressed, and the dark plate under PLAY
+    in-out property <color> red: #E10600;
+    in-out property <color> red2: #FF3B2F;
+    in-out property <color> red3: #8F0400;
+    in-out property <color> redtx: #FF7A70;
+    in-out property <color> press: #C40500;
+    in-out property <color> plate: #4A0200;
+    // reading-text scale (Settings > Personalization > Text size); display type stays as designed
+    in-out property <float> ts: 1.0;
+    // type: condensed display (titles, buttons, labels), text face, data face
+    out property <string> disp: "Barlow Condensed";
+    out property <string> ui: "Barlow";
+    out property <string> mono: "JetBrains Mono";
+    // motion; Reduce motion (set from Rust with Backend.calm) collapses every transition to none
+    in-out property <bool> calm: false;
+    out property <duration> fast: calm ? 0ms : 110ms;
+    out property <duration> mid: calm ? 0ms : 180ms;
+    out property <duration> slow: calm ? 0ms : 260ms;
+    // full CJK face for text that has Chinese / Japanese / Korean in it (Barlow has none)
+    out property <string> cjk: "Microsoft YaHei UI";
+}

@@ -1,0 +1,769 @@
+import "fonts/BarlowCondensed-SemiBold.ttf";
+import "fonts/BarlowCondensed-Bold.ttf";
+import "fonts/BarlowCondensed-BoldItalic.ttf";
+import "fonts/BarlowCondensed-ExtraBoldItalic.ttf";
+import "fonts/Barlow-Regular.ttf";
+import "fonts/Barlow-Medium.ttf";
+import "fonts/Barlow-SemiBold.ttf";
+import "fonts/JetBrainsMono-Regular.ttf";
+import "fonts/JetBrainsMono-Medium.ttf";
+import "fonts/JetBrainsMono-Bold.ttf";
+
+import { Theme } from "theme.slint";
+export { Theme }
+import { Backend, ClientState, Inst, Row, ClientMod, SetVal, Detail, Link, HostState, SkinLib, HostPlayer, HostBackup, HostServer, ConLine, SkinTile, Wizard, JavaRt, FriendRow } from "structs.slint";
+export { Backend, ClientState, Inst, Row, ClientMod, SetVal, Detail, Link, HostState, SkinLib, HostPlayer, HostBackup, HostServer, ConLine, SkinTile, Wizard, JavaRt, FriendRow }
+import { Btn, Eyebrow, Page, Slash, Hatch, PlayButton, Icon, Ico, Pulse, LinkBtn, Heading, Scrim, WinButtons, Field, FocusTrap, Toggle } from "components.slint";
+import { HomeScreen } from "home.slint";
+import { InstancesScreen } from "instances.slint";
+import { DiscoverScreen } from "discover.slint";
+import { ClientScreen } from "client.slint";
+import { HostScreen } from "host.slint";
+import { WardrobeScreen } from "wardrobe.slint";
+import { SettingsScreen } from "settings.slint";
+
+component TabBtn inherits Rectangle {
+    in property <string> label;
+    in property <bool> active;
+    callback clicked();
+    Text {
+        x: 16px; width: parent.width - 16px;
+        text: root.label;
+        color: root.active ? Theme.tx : (ta.has-hover ? Theme.dim : Theme.mut);
+        font-family: Theme.disp; font-size: 18px; font-weight: 600; letter-spacing: 0.9px;
+        vertical-alignment: center;
+        animate color { duration: Theme.mid; }
+    }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
+        key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
+    if fs.has-focus: Rectangle { x: 8px; y: 10px; width: parent.width - 4px; height: parent.height - 20px; border-width: 2px; border-color: Theme.ice; }
+}
+
+// Top-bar square button (settings cog) with keyboard focus and a hover label below it.
+component BarBtn inherits Rectangle {
+    in property <bool> active;
+    out property <bool> hot: ta.has-hover || fs.has-focus;
+    callback clicked();
+    background: root.active ? Theme.s3 : (ta.has-hover ? Theme.s2 : transparent);
+    animate background { duration: Theme.fast; }
+    @children
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
+        key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
+    if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-width: 2px; border-color: Theme.ice; }
+}
+
+// "Waiting" line used by the sign-in states.
+component Waiting inherits Rectangle {
+    in property <string> text;
+    height: 20px;
+    Pulse { x: 0px; y: 6px; }
+    Text { x: 18px; height: parent.height; text: root.text; color: Theme.redtx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 500; vertical-alignment: center; }
+}
+
+export component AppWindow inherits Window {
+    title: "Nether Client";
+    icon: @image-url("assets/nether-icon.png");
+    preferred-width: 1440px;
+    preferred-height: 900px;
+    min-width: 960px;
+    min-height: 600px;
+    background: #000000;
+    default-font-family: "Barlow";
+
+    in-out property <int> tab: 0;
+    in-out property <int> open-idx: -1;
+    in-out property <int> open-tab: 0;
+    in-out property <int> open-mode: 0;
+    // snapshot only: show the delete confirmation
+    in-out property <bool> snap-confirm: false;
+    // Wardrobe SKINS/CAPES page (kept across tab switches)
+    in-out property <int> ward-page: 0;
+    // uniform UI scale from the 1440x900 design; the stage grows on the longer axis (no letterbox)
+    property <float> s: Math.min(root.width / 1440px, root.height / 900px);
+    property <length> W: root.width / root.s;
+    property <length> H: root.height / root.s;
+    property <[string]> labels: ["HOME", "INSTANCES", "INSTALL PACKS", "CLIENT", "HOST", "WARDROBE"];
+    property <[length]> tx: [0px, 82px, 204px, 362px, 452px, 526px];
+    property <[length]> tw: [82px, 122px, 158px, 90px, 74px, 124px];
+    property <length> top: 56px;
+    property <length> deck: 56px;
+    property <length> body: root.H - root.top - root.deck;
+    property <int> ai: Backend.active-inst;
+    property <bool> has-inst: Backend.instances.length > 0;
+    // a returning player keeps their face and name in the chip while the saved sign-in refreshes (no flicker)
+    property <bool> acct-known: Backend.acct-state == 2 || (Backend.acct-state == 3 && Backend.acct-name != "");
+    // the player preview asks for frames again when its tab opens or the model changes
+    changed tab => { Backend.skin-wake(); }
+    property <bool> slim: Backend.skin-slim;
+    changed slim => { Backend.skin-wake(); }
+    // keyboard shortcuts (every key nothing else took): Ctrl+K command palette, Ctrl+1-6 tabs, Ctrl+, settings, Ctrl+N new instance,
+    // Esc closes the project page, account panel and crash page
+    forward-focus: keys;
+    keys := FocusScope {
+        x: 0px; y: 0px; width: root.width; height: root.height; focus-on-click: false;
+        // Ctrl+K works from anywhere, a focused text field included
+        capture-key-pressed(e) => {
+            if e.modifiers.control && (e.text == "k" || e.text == "K") && !Backend.gate-open { Backend.pal-show(); return accept; }
+            return reject;
+        }
+        key-pressed(e) => {
+            if e.text == Key.Escape {
+                if Backend.detail-open { Backend.detail-open = false; return accept; }
+                if Backend.acct-open { Backend.acct-open = false; return accept; }
+                if Backend.fr-open { Backend.fr-open = false; return accept; }
+                if Backend.crash-open { Backend.crash-open = false; return accept; }
+                return reject;
+            }
+            if !e.modifiers.control || Backend.gate-open { return reject; }
+            if e.text == "," { root.open-idx = -1; root.tab = 6; return accept; }
+            if e.text == "n" || e.text == "N" { Backend.create-open = true; root.open-idx = -1; root.tab = 1; return accept; }
+            if e.text == "1" { root.open-idx = -1; root.tab = 0; return accept; }
+            if e.text == "2" { root.tab = 1; return accept; }
+            if e.text == "3" { root.open-idx = -1; root.tab = 2; return accept; }
+            if e.text == "4" { root.open-idx = -1; root.tab = 3; return accept; }
+            if e.text == "5" { root.open-idx = -1; root.tab = 4; return accept; }
+            if e.text == "6" { root.open-idx = -1; root.tab = 5; return accept; }
+            return reject;
+        }
+
+    // letterbox space around the stage drags the window too
+    TouchArea { pointer-event(e) => { if e.kind == PointerEventKind.down && e.button == PointerEventButton.left { Backend.win-drag(); } } }
+    stage := Rectangle {
+        x: (root.width - root.W) / 2;
+        y: (root.height - root.H) / 2;
+        width: root.W;
+        height: root.H;
+        transform-scale: root.s;
+        background: Theme.bg;
+        clip: true;
+
+        // ---------- top bar ----------
+        Rectangle {
+            x: 0px; y: 0px; width: root.W; height: root.top;
+            background: #08080B;
+            // empty bar = window drag handle (double press maximizes)
+            TouchArea { pointer-event(e) => { if e.kind == PointerEventKind.down && e.button == PointerEventButton.left { Backend.win-drag(); } } }
+            Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; }
+            // window buttons (no native title bar)
+            WinButtons { stage-w: root.W; }
+            Rectangle { x: root.W - 138px - 1px; y: 18px; width: 1px; height: 20px; background: Theme.ln2; }
+            Image { source: @image-url("assets/nether-logo.svg"); x: 20px; y: 10px; width: 36px; height: 36px; }
+            Text { x: 66px; height: parent.height; text: "NETHER"; color: Theme.tx; font-family: Theme.disp; font-size: 25px; font-weight: 800; font-italic: true; letter-spacing: 0.6px; vertical-alignment: center; }
+            Rectangle { x: 158px; y: 18px; width: 1px; height: 20px; background: Theme.ln2; }
+            for l[i] in root.labels: TabBtn {
+                x: 166px + root.tx[i]; y: 0px; width: root.tw[i]; height: parent.height;
+                label: l; active: root.tab == i;
+                clicked => { root.open-idx = -1; root.tab = i; }
+            }
+            Slash {
+                x: 166px + root.tx[Math.min(root.tab, 5)] + 13px; y: parent.height - 4px; width: root.tw[Math.min(root.tab, 5)] - 26px; height: 4px; skew: 4px;
+                visible: root.tab < 6; color: Theme.red2;
+                animate x, width { duration: Theme.slow; easing: ease-out-quint; }
+            }
+            // settings
+            gear := BarBtn {
+                x: root.W - 138px - 12px - 40px; y: 8px; width: 40px; height: 40px; active: root.tab == 6;
+                clicked => { root.open-idx = -1; root.tab = 6; }
+                // Tabler "settings" cog
+                Path {
+                    x: 9px; y: 9px; width: 22px; height: 22px; viewbox-width: 24; viewbox-height: 24;
+                    stroke: root.tab == 6 || gear.hot ? Theme.tx : Theme.dim; stroke-width: 1.6px; fill: transparent;
+                    commands: "M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065z M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0";
+                }
+                if root.tab == 6: Rectangle { x: 0px; y: parent.height - 2px; height: 2px; background: Theme.red2; }
+            }
+            // friends (L3; only when the service has Friends on and you're signed in)
+            if Backend.fr-enabled && Backend.acct-state == 2: frb := BarBtn {
+                x: root.W - 138px - 12px - 40px - 8px - 196px - 8px - 40px; y: 8px; width: 40px; height: 40px; active: Backend.fr-open;
+                clicked => { Backend.acct-open = false; Backend.fr-open = !Backend.fr-open; if Backend.fr-open { Backend.fr-refresh(); } }
+                Icon { x: 12px; y: 12px; d: Ico.user; tint: Backend.fr-open || frb.hot ? Theme.tx : Theme.dim; }
+                // red dot: someone asked to be your friend (incoming requests sort first)
+                if Backend.fr-list.length > 0 && Backend.fr-list[0].state == 1: Rectangle { x: 28px; y: 8px; width: 6px; height: 6px; border-radius: 3px; background: Theme.red2; }
+            }
+            // account
+            chip := BarBtn {
+                x: root.W - 138px - 12px - 40px - 8px - 196px; y: 8px; width: 196px; height: 40px; active: Backend.acct-open;
+                clicked => { Backend.fr-open = false; Backend.acct-open = !Backend.acct-open; }
+                // player head (face + hat layer from the skin)
+                Rectangle { x: 6px; y: 6px; width: 28px; height: 28px; background: Theme.s2; clip: true;
+                    if !(root.acct-known && Backend.skin-ready): Icon { x: 8px; y: 8px; d: Ico.user; tint: Theme.mut; }
+                    if root.acct-known && Backend.skin-ready: Image { width: 28px; height: 28px; source: Backend.acct-head; image-rendering: pixelated; } }
+                Text { x: 44px; y: 4px; width: 126px; text: Backend.acct-state == 2 || (Backend.acct-state == 3 && Backend.acct-name != "") ? Backend.acct-name : "Sign in"; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; overflow: elide; }
+                Text { x: 44px; y: 22px; text: Backend.acct-state == 2 ? (Backend.acct-offline ? "Offline · singleplayer" : "Microsoft account") : (Backend.acct-state == 1 ? "Waiting…" : (Backend.acct-state == 3 ? "Signing in…" : "Not signed in")); color: Backend.acct-state == 0 ? Theme.redtx : Theme.mut; font-family: Theme.ui; font-size: 11px * Theme.ts; }
+                Icon { x: parent.width - 22px; y: 14px; d: Ico.down; tint: chip.hot ? Theme.tx : Theme.mut; }
+            }
+        }
+
+        // screens (recreated on tab change, so selection state resets when you leave)
+        // each Page fades + slides in when its tab is opened (the tab transition)
+        if root.tab == 0: Page { y: root.top; width: root.W; height: root.body;
+            HomeScreen {
+                width: root.W; height: root.body;
+                open-instance(i) => { root.open-idx = i; root.open-tab = 0; root.open-mode = 0; root.tab = 1; }
+                open-crash(i) => { Backend.log-kind = 2; root.open-idx = i; root.open-tab = 5; root.open-mode = 0; root.tab = 1; }
+                go-wardrobe => { root.open-idx = -1; root.tab = 5; }
+                go-discover => { root.open-idx = -1; root.tab = 2; }
+            }
+        }
+        if root.tab == 1: Page { y: root.top; width: root.W; height: root.body;
+            InstancesScreen {
+                width: root.W; height: root.body;
+                sel <=> root.open-idx;
+                itab <=> root.open-tab;
+                mode <=> root.open-mode;
+                confirm-del: root.snap-confirm; del-idx: root.snap-confirm ? 0 : -1;
+                go-discover => { root.open-idx = -1; root.tab = 2; }
+                go-settings => { root.open-idx = -1; root.tab = 6; }
+            }
+        }
+        if root.tab == 2: Page { y: root.top; width: root.W; height: root.body; DiscoverScreen { width: root.W; height: root.body; } }
+        if root.tab == 3: Page { y: root.top; width: root.W; height: root.body; ClientScreen { width: root.W; height: root.body; } }
+        if root.tab == 4: Page { y: root.top; width: root.W; height: root.body; HostScreen { width: root.W; height: root.body; go-instances => { root.open-idx = -1; root.tab = 1; } } }
+        if root.tab == 5: Page { y: root.top; width: root.W; height: root.body; WardrobeScreen { width: root.W; height: root.body; page <=> root.ward-page; } }
+        if root.tab == 6: Page { y: root.top; width: root.W; height: root.body; SettingsScreen { width: root.W; height: root.body; } }
+
+        // settings tooltip, below the cog (drawn over the page)
+        if gear.hot && root.tab != 6: Rectangle {
+            x: gear.x + (gear.width - self.width) / 2; y: 52px; width: gt.preferred-width + 18px; height: 24px;
+            background: #1C1C24; border-width: 1px; border-color: Theme.ln2;
+            gt := Text { text: "Settings"; color: Theme.tx; font-family: Theme.ui; font-size: 12px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }
+        }
+
+        // ---------- bottom deck: launch target + what is running / downloading ----------
+        dk := Rectangle {
+            x: 0px; y: root.H - root.deck; width: root.W; height: root.deck;
+            background: #08080B;
+            TouchArea { }
+            Rectangle { y: 0px; height: 1px; background: Theme.ln; }
+            property <bool> launch: root.tab != 0 && root.has-inst;
+            // launch target (hidden on Home, where the hero is the launch control)
+            if dk.launch: Rectangle {
+                x: 0px; width: 330px;
+                background: pk.has-hover ? Theme.s2 : transparent;
+                animate background { duration: Theme.fast; }
+                Rectangle { x: 20px; y: 10px; width: 36px; height: 36px; background: Theme.s2;
+                    Image { x: 4px; y: 4px; width: 28px; height: 28px; source: Backend.instances[root.ai].icon-img; image-rendering: pixelated; } }
+                Text { x: 68px; y: 9px; width: 222px; text: Backend.instances[root.ai].name; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; overflow: elide; }
+                Text { x: 68px; y: 30px; width: 222px; text: Backend.instances[root.ai].ver + " · " + Backend.instances[root.ai].loader + (Backend.instances[root.ai].last == "" ? "" : " · " + Backend.instances[root.ai].last); color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; overflow: elide; }
+                Icon { x: 302px; y: 22px; d: "M 2 8 L 6 4 L 10 8"; tint: pk.has-hover ? Theme.tx : Theme.mut; }
+                pk := TouchArea { mouse-cursor: pointer; clicked => { pop.show(); } }
+                pop := PopupWindow {
+                    x: 12px; y: -(Math.min(Backend.instances.length, 9) * 40px + 44px); width: 360px; height: Math.min(Backend.instances.length, 9) * 40px + 40px;
+                    Rectangle {
+                        background: #121217; border-width: 1px; border-color: Theme.ln2;
+                        Eyebrow { x: 16px; y: 10px; text: "LAUNCH TARGET"; }
+                        Flickable {
+                            y: 34px; height: parent.height - 38px; content-height: Backend.instances.length * 40px;
+                            for it[i] in Backend.instances: Rectangle {
+                                y: i * 40px; height: 40px; width: parent.width;
+                                background: t2.has-hover ? Theme.s3 : transparent;
+                                Rectangle { x: 0px; width: 3px; background: Theme.red; visible: root.ai == i; }
+                                Image { x: 16px; y: 9px; width: 22px; height: 22px; source: it.icon-img; image-rendering: pixelated; }
+                                Text { x: 50px; width: 200px; text: it.name; color: root.ai == i || t2.has-hover ? Theme.tx : Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 500; vertical-alignment: center; overflow: elide; }
+                                Text { x: parent.width - 106px; width: 90px; text: it.ver; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; }
+                                t2 := TouchArea { clicked => { Backend.active-inst = i; pop.close(); } }
+                            }
+                        }
+                    }
+                }
+            }
+            if dk.launch: PlayButton {
+                x: 344px; y: 10px; width: 128px; height: 34px; skew: 10px; text-size: 20px;
+                label: Backend.instances[root.ai].stopping ? "STOPPING" : (Backend.instances[root.ai].running ? "STOP" : (Backend.instances[root.ai].starting ? "STARTING" : "PLAY"));
+                arrow: !Backend.instances[root.ai].running && !Backend.instances[root.ai].starting;
+                enabled: Backend.instances.length > 0 && !Backend.instances[root.ai].starting && !Backend.instances[root.ai].stopping;
+                clicked => { if Backend.instances[root.ai].running { Backend.stop(Backend.instances[root.ai].name); } else { Backend.play(Backend.instances[root.ai].name); } }
+            }
+            if dk.launch: Rectangle { x: 500px; y: 16px; width: 1px; height: 24px; background: Theme.ln; }
+            // activity
+            Rectangle {
+                x: dk.launch ? 524px : 24px; width: root.W - self.x - 24px;
+                if Backend.job-on: Rectangle {
+                    Pulse { x: 0px; y: 24px; }
+                    Text { x: 20px; width: parent.width - 420px - (Backend.job-more > 0 ? 90px : 0px); text: Backend.job-text; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 500; vertical-alignment: center; overflow: elide; }
+                    if Backend.job-more > 0: Text { x: parent.width - 400px - 90px; width: 80px; text: "+{Backend.job-more} more"; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; }
+                    if Backend.job-cancel: LinkBtn { x: parent.width - 360px - self.width - 18px; y: 14px; text: "CANCEL"; clicked => { Backend.cancel-job(); } }
+                    if Backend.job-prog >= 0: Rectangle {
+                        x: parent.width - (Backend.job-cancel ? 300px : 360px); y: 26px; width: Backend.job-cancel ? 230px : 290px; height: 4px; background: Theme.s3;
+                        Rectangle { x: 0px; width: parent.width * Math.clamp(Backend.job-prog, 0, 1); background: Theme.red2; animate width { duration: Theme.mid; } }
+                    }
+                    if Backend.job-prog >= 0: Text { x: parent.width - 60px; width: 60px; text: "\{Math.floor(Math.clamp(Backend.job-prog, 0, 1) * 100)}%"; color: Theme.tx; font-family: Theme.mono; font-size: 12px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; }
+                }
+                if !Backend.job-on && (Backend.running-count > 0 || HostState.running > 0): Rectangle {
+                    Pulse { x: 0px; y: 24px; }
+                    Text { x: 20px; width: parent.width - 140px; overflow: elide; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 500; vertical-alignment: center;
+                        text: (Backend.running-count == 0 ? "" : Backend.running-label != "" ? Backend.running-label : Backend.running-count == 1 ? "1 game running" : "\{Backend.running-count} games running") + (Backend.running-count > 0 && HostState.running > 0 ? "  ·  " : "") + (HostState.running > 0 ? HostState.deck-text : ""); }
+                }
+                if !Backend.job-on && Backend.running-count == 0 && HostState.running == 0: Text {
+                    x: 0px; text: "Nothing running"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center;
+                }
+                Text { x: 0px; width: parent.width; visible: !Backend.job-on; text: "\{Backend.instances.length} " + (Backend.instances.length == 1 ? "instance" : "instances"); color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; }
+            }
+        }
+
+        // ---------- account panel ----------
+        if Backend.acct-open: Rectangle {
+            x: 0px; y: root.top; width: root.W; height: root.H - root.top;
+            TouchArea { clicked => { Backend.acct-open = false; } }
+            Rectangle {
+                x: root.W - 198px - 340px; y: 6px; width: 340px; height: Backend.acct-state == 1 ? 268px : (Backend.acct-state == 2 ? 112px + Backend.accounts.length * 48px + (Backend.acct-offline ? 26px : 0px) : (Backend.acct-msg != "" ? 210px : 152px));
+                background: #121217; border-width: 1px; border-color: Theme.ln2;
+                TouchArea { }
+                Rectangle { x: 0px; y: 0px; width: 3px; height: parent.height; background: Theme.red; }
+                Eyebrow { x: 22px; y: 18px; text: "MICROSOFT ACCOUNT"; }
+                if Backend.acct-state == 0 || Backend.acct-state == 3: Rectangle {
+                    Text { x: 22px; y: 44px; width: 296px; text: Backend.acct-state == 3 ? "Signing you in…" : "Sign in to play online and use your skin and cape."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
+                    if Backend.acct-state == 0: Btn { x: 22px; y: 96px; text: "SIGN IN WITH MICROSOFT"; solid: true; clicked => { Backend.sign-in(); } }
+                    if Backend.acct-msg != "": Text { x: 22px; y: 146px; width: 296px; text: Backend.acct-msg; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; }
+                }
+                if Backend.acct-state == 1: Rectangle {
+                    Text { x: 22px; y: 44px; width: 296px; text: "Open the page below and enter this code:"; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
+                    Text { x: 22px; y: 70px; text: Backend.acct-code; color: Theme.tx; font-family: Theme.mono; font-size: 34px; font-weight: 700; letter-spacing: 4px; }
+                    Text { x: 22px; y: 126px; text: Backend.acct-url; color: Theme.dim; font-family: Theme.mono; font-size: 11px * Theme.ts; }
+                    Btn { x: 22px; y: 158px; text: "OPEN PAGE"; solid: true; icon: Ico.ext; clicked => { Backend.open-url(Backend.acct-url); } }
+                    Btn { x: 148px; y: 158px; text: "COPY CODE"; icon: Ico.copy; clicked => { Backend.copy-text(Backend.acct-code); } }
+                    Waiting { x: 22px; y: 220px; width: 200px; text: "Waiting for sign-in"; }
+                    LinkBtn { x: 252px; y: 216px; text: "CANCEL"; clicked => { Backend.cancel-sign-in(); } }
+                }
+                // signed in: every saved account (click one to switch), add another, sign the active one out
+                if Backend.acct-state == 2: Rectangle {
+                    for a[i] in Backend.accounts: Rectangle {
+                        x: 12px; y: 42px + i * 48px; width: 316px; height: 44px;
+                        background: a.active ? Theme.s2 : (row.has-hover ? Theme.s1 : transparent);
+                        animate background { duration: Theme.fast; }
+                        Rectangle { x: 10px; y: 8px; width: 28px; height: 28px; background: Theme.s3;
+                            if a.active && Backend.skin-ready: Image { width: 28px; height: 28px; source: Backend.acct-head; image-rendering: pixelated; }
+                            if !(a.active && Backend.skin-ready): Icon { x: 6px; y: 6px; d: Ico.user; tint: Theme.mut; } }
+                        Text { x: 50px; y: 0px; width: 190px; height: parent.height; text: a.name; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; vertical-alignment: center; overflow: elide; }
+                        Text { x: parent.width - 86px; width: 76px; height: parent.height; text: a.active ? "ACTIVE" : (row.has-hover ? "SWITCH" : ""); color: a.active ? Theme.ice : Theme.dim;
+                            font-family: Theme.disp; font-size: 12px * Theme.ts; font-weight: 700; letter-spacing: 0.9px; horizontal-alignment: right; vertical-alignment: center; }
+                        row := TouchArea { mouse-cursor: a.active ? default : pointer; clicked => { if !a.active { Backend.switch-account(a.uuid); } } }
+                    }
+                    if Backend.acct-offline: Text { x: 22px; y: 48px + Backend.accounts.length * 48px; width: 296px; text: "No connection: singleplayer only until you're back online."; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; }
+                    Btn { x: 22px; y: parent.height - 56px; text: "ADD ACCOUNT"; icon: Ico.plus; clicked => { Backend.sign-in(); } }
+                    Btn { x: 186px; y: parent.height - 56px; text: "SIGN OUT"; danger: true; clicked => { Backend.sign-out(); } }
+                }
+            }
+        }
+
+        // ---------- friends panel (L3) ----------
+        if Backend.fr-open: Rectangle {
+            x: 0px; y: root.top; width: root.W; height: root.H - root.top;
+            TouchArea { clicked => { Backend.fr-open = false; } }
+            frp := Rectangle {
+                property <bool> share-row: Backend.fr-on && HostState.addr != "";
+                property <length> list-y: self.share-row ? 210px : 166px;
+                property <int> shown: Math.min(Backend.fr-list.length, 6);
+                x: root.W - 198px - 48px - 400px; y: 6px; width: 400px;
+                height: !Backend.fr-on ? 236px : self.list-y + Math.max(self.shown, 1) * 52px + (Backend.fr-msg != "" ? 30px : 0px) + 64px;
+                background: #121217; border-width: 1px; border-color: Theme.ln2;
+                TouchArea { }
+                Rectangle { x: 0px; y: 0px; width: 3px; height: parent.height; background: Theme.red; }
+                Eyebrow { x: 22px; y: 18px; text: "FRIENDS"; }
+                // not on yet: what it does and what it shares
+                if !Backend.fr-on: Rectangle {
+                    Text { x: 22px; y: 44px; width: 356px; text: Backend.fr-loaded ? "Add friends with a code and join the servers they host in one click." : "Checking your friends…"; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; wrap: word-wrap; }
+                    Text { x: 22px; y: 90px; width: 356px; text: "Only friends you both accept see each other, and only the server you choose to share. No chat, no online status, nobody can find you by name."; color: Theme.dim; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; }
+                    Btn { x: 22px; y: 150px; text: Backend.fr-busy ? "TURNING ON…" : "TURN ON FRIENDS"; solid: true; enabled: Backend.fr-loaded && !Backend.fr-busy; clicked => { Backend.fr-turn-on(); } }
+                    if Backend.fr-msg != "": Text { x: 22px; y: 198px; width: 356px; text: Backend.fr-msg; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; }
+                }
+                if Backend.fr-on: Rectangle {
+                    Text { x: 22px; y: 42px; text: "YOUR CODE"; color: Theme.mut; font-family: Theme.disp; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 0.9px; }
+                    Text { x: 22px; y: 58px; text: Backend.fr-code; color: Theme.tx; font-family: Theme.mono; font-size: 24px; font-weight: 700; letter-spacing: 3px; }
+                    Btn { x: parent.width - 22px - 104px - 8px - 92px; y: 56px; width: 92px; text: "COPY"; icon: Ico.copy; clicked => { Backend.copy-text(Backend.fr-code); } }
+                    Btn { x: parent.width - 22px - 104px; y: 56px; width: 104px; text: "NEW CODE"; enabled: !Backend.fr-busy; clicked => { Backend.fr-new-code(); } }
+                    Field { x: 22px; y: 110px; width: parent.width - 44px - 92px; placeholder: "Friend's code"; text <=> Backend.fr-input;
+                        accepted => { if self.text != "" && !Backend.fr-busy { Backend.fr-add(self.text); } } }
+                    Btn { x: parent.width - 22px - 84px; y: 110px; width: 84px; text: "ADD"; icon: Ico.plus; enabled: Backend.fr-input != "" && !Backend.fr-busy; clicked => { Backend.fr-add(Backend.fr-input); } }
+                    if frp.share-row: Rectangle {
+                        x: 22px; y: 162px; width: parent.width - 44px; height: 36px;
+                        Text { x: 0px; y: 0px; height: parent.height; text: "Show my server to friends"; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; vertical-alignment: center; }
+                        Text { x: 186px; y: 0px; width: parent.width - 186px - 54px; height: parent.height; text: HostState.addr; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; vertical-alignment: center; overflow: elide; }
+                        Toggle { x: parent.width - 42px; y: 7px; on <=> Backend.fr-sharing; toggled(v) => { Backend.fr-share(v); } }
+                    }
+                    Rectangle { x: 22px; y: frp.list-y - 8px; width: parent.width - 44px; height: 1px; background: Theme.ln; }
+                    if Backend.fr-list.length == 0: Text { x: 22px; y: frp.list-y + 8px; width: parent.width - 44px; text: "No friends yet. Send someone your code, or add theirs."; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
+                    Flickable {
+                        x: 12px; y: frp.list-y; width: parent.width - 24px; height: frp.shown * 52px;
+                        content-height: Backend.fr-list.length * 52px;
+                        for f[i] in Backend.fr-list: Rectangle {
+                            y: i * 52px; width: parent.width; height: 48px;
+                            background: frow.has-hover ? Theme.s1 : transparent;
+                            animate background { duration: Theme.fast; }
+                            frow := TouchArea { }
+                            Rectangle { x: 10px; y: 10px; width: 28px; height: 28px; background: Theme.s3;
+                                Icon { x: 6px; y: 6px; d: Ico.user; tint: f.host != "" ? Theme.ice : Theme.mut; } }
+                            Text { x: 50px; y: 6px; width: 150px; text: f.name; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; overflow: elide; }
+                            Text { x: 50px; y: 26px; width: 150px; overflow: elide; font-family: Theme.ui; font-size: 11px * Theme.ts;
+                                text: f.state == 1 ? "Wants to be friends" : (f.state == 2 ? "Request sent" : (f.host != "" ? "Hosting a server" : "Friend"));
+                                color: f.state == 1 || f.host != "" ? Theme.ice : Theme.mut; }
+                            if f.state == 1: Btn { x: parent.width - 8px - 96px - 6px - 88px; y: 6px; width: 88px; text: "ACCEPT"; solid: true; clicked => { Backend.fr-respond(f.uuid, "accept"); } }
+                            if f.state == 1: Btn { x: parent.width - 8px - 96px; y: 6px; width: 96px; text: "DECLINE"; clicked => { Backend.fr-respond(f.uuid, "decline"); } }
+                            if f.state == 1 && frow.has-hover: LinkBtn { x: 50px + 100px; y: 26px; text: "BLOCK"; clicked => { Backend.fr-respond(f.uuid, "block"); } }
+                            if f.state == 0 && f.host != "": Btn { x: parent.width - 8px - 84px - (frow.has-hover ? 44px : 0px); y: 6px; width: 84px; text: "JOIN"; solid: true; icon: Ico.play; clicked => { Backend.fr-open = false; Backend.fr-join(f.name, f.host); } }
+                            if f.state != 1 && frow.has-hover: Btn { x: parent.width - 8px - 36px; y: 6px; width: 36px; icon: Ico.close; clicked => { Backend.fr-respond(f.uuid, "remove"); } }
+                        }
+                    }
+                    if Backend.fr-msg != "": Text { x: 22px; y: frp.list-y + Math.max(frp.shown, 1) * 52px + 4px; width: parent.width - 44px; text: Backend.fr-msg; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; }
+                    LinkBtn { x: 22px; y: frp.height - 42px; text: "TURN OFF FRIENDS"; clicked => { Backend.fr-turn-off(); } }
+                }
+            }
+        }
+
+        // ---------- full-screen Microsoft sign-in gate ----------
+        if Backend.gate-open: Rectangle {
+            x: 0px; y: 0px; width: root.W; height: root.H; background: Theme.bg;
+            // the whole gate drags the window (it has no top bar of its own)
+            TouchArea { pointer-event(e) => { if e.kind == PointerEventKind.down && e.button == PointerEventButton.left { Backend.win-drag(); } } }
+            Rectangle { x: -300px; y: 380px; width: 1100px; height: 900px; background: @radial-gradient(circle, Theme.red.with-alpha(0.220) 0%, Theme.red.with-alpha(0.000) 68%); }
+            // right plate: hatch + giant outlined wordmark, cropped by the edge
+            Rectangle {
+                x: root.W - 680px; y: 0px; width: 680px; height: root.H; background: Theme.s1; clip: true;
+                Hatch { width: parent.width; height: parent.height; }
+                Rectangle { x: 0px; width: 1px; background: Theme.ln; }
+                Text { x: -30px; y: 40px; text: "NETHER"; color: #ffffff09; font-family: Theme.disp; font-size: 300px; font-weight: 800; font-italic: true; }
+                Text { x: 120px; y: 500px; text: "CLIENT"; color: #ffffff09; font-family: Theme.disp; font-size: 300px; font-weight: 800; font-italic: true; }
+                Image { source: @image-url("assets/nether-logo.svg"); x: 170px; y: 250px; width: 340px; height: 340px; }
+            }
+            Slash { x: 96px; y: 196px; width: 64px; height: 8px; skew: 6px; color: Theme.red2; }
+            Heading { x: 96px; y: 216px; text: "NETHER"; font-size: 132px; }
+            Heading { x: 96px; y: 336px; text: "CLIENT"; font-size: 132px; color: Theme.red2; }
+            Text { x: 100px; y: 490px; width: 560px; text: Backend.acct-state == 3 ? "Signing you in…" : "Sign in with your Microsoft account to play."; color: Theme.dim; font-family: Theme.ui; font-size: 19px; }
+
+            // signed out
+            if Backend.acct-state == 0: Rectangle {
+                PlayButton { x: 100px; y: 548px; width: 380px; height: 64px; label: "SIGN IN WITH MICROSOFT"; text-size: 24px; clicked => { Backend.sign-in(); } }
+                Text { x: 100px; y: 640px; width: 560px; text: Backend.acct-msg; color: Theme.redtx; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
+            }
+            // waiting for the user on microsoft.com
+            if Backend.acct-state == 1: Rectangle {
+                Eyebrow { x: 100px; y: 540px; text: "ENTER THIS CODE ON THE MICROSOFT PAGE"; }
+                Text { x: 98px; y: 558px; text: Backend.acct-code; color: Theme.tx; font-family: Theme.mono; font-size: 64px; font-weight: 700; letter-spacing: 8px; }
+                Text { x: 100px; y: 644px; text: Backend.acct-url; color: Theme.dim; font-family: Theme.mono; font-size: 13px * Theme.ts; }
+                Btn { x: 100px; y: 680px; height: 44px; text: "OPEN PAGE"; solid: true; icon: Ico.ext; clicked => { Backend.open-url(Backend.acct-url); } }
+                Btn { x: 240px; y: 680px; height: 44px; text: "COPY CODE"; icon: Ico.copy; clicked => { Backend.copy-text(Backend.acct-code); } }
+                Waiting { x: 100px; y: 752px; width: 320px; text: "Waiting for you to finish signing in"; }
+                LinkBtn { x: 100px; y: 784px; text: "CANCEL"; clicked => { Backend.cancel-sign-in(); } }
+            }
+        }
+
+        // ---------- crash page: what went wrong, our diagnosis, mclo.gs analysis, the log ----------
+        if Backend.crash-open: Rectangle {
+            x: 0px; y: 0px; width: root.W; height: root.H; background: Theme.bg;
+            // keyboard focus stays on the crash page (Tab wraps), Esc closes it
+            FocusTrap { x: 0px; y: 0px; width: root.W; height: root.H; escape => { Backend.crash-open = false; }
+            TouchArea { scroll-event(e) => { accept } pointer-event(e) => { if e.kind == PointerEventKind.down && e.button == PointerEventButton.left && self.mouse-y < 56px { Backend.win-drag(); } } }
+            Rectangle { x: -300px; y: -200px; width: 1100px; height: 900px; background: @radial-gradient(circle, Theme.red.with-alpha(0.188) 0%, Theme.red.with-alpha(0.000) 68%); }
+            // right: the end of the log + facts mclo.gs found
+            Rectangle {
+                x: 900px; y: 0px; width: root.W - 900px; height: root.H; background: Theme.s1; clip: true;
+                Hatch { width: parent.width; height: parent.height; }
+                Rectangle { x: 0px; width: 1px; background: Theme.ln; }
+                Eyebrow { x: 36px; y: 56px; text: Backend.crash-title != "" ? Backend.crash-title : "END OF THE LOG"; }
+                for f[i] in Backend.crash-facts: Text { x: 36px; y: 84px + i * 20px; width: 468px; text: f; color: Theme.dim; font-family: Theme.mono; font-size: 11px * Theme.ts; overflow: elide; }
+                Rectangle {
+                    x: 36px; y: 96px + Backend.crash-facts.length * 20px; width: 468px; height: parent.height - self.y - 40px;
+                    background: #0B0B0E; border-width: 1px; border-color: Theme.ln2; clip: true;
+                    Text { x: 14px; y: 12px; width: parent.width - 28px; height: parent.height - 24px; text: Backend.crash-tail; color: Theme.dim; font-family: Theme.mono; font-size: 11px * Theme.ts; wrap: char-wrap; overflow: elide; }
+                }
+            }
+            // left: title, findings, analysis, actions
+            Flickable {
+                x: 0px; y: 0px; width: 900px; height: root.H - 96px;
+                content-height: 420px + Math.min(Backend.crash-items.length, 5) * 126px + (Backend.crash-state == 2 ? 90px + Backend.crash-problems.length * 110px : 120px);
+                Slash { x: 72px; y: 66px; width: 64px; height: 8px; skew: 6px; color: Theme.red2; }
+                Eyebrow { x: 150px; y: 62px; text: "MINECRAFT CRASHED" + (Backend.crash-code == "" ? "" : " · EXIT CODE " + Backend.crash-code); }
+                Heading { x: 70px; y: 86px; width: 780px; text: Backend.crash-inst.to-uppercase(); font-size: Backend.crash-inst.character-count > 16 ? 60px : 84px; overflow: elide; }
+                Text { x: 74px; y: 196px; width: 760px; text: "The game closed unexpectedly. Here is what went wrong and how to fix it."; color: Theme.dim; font-family: Theme.ui; font-size: 17px; wrap: word-wrap; }
+
+                // 01 our own diagnosis (with one-click fixes)
+                Text { x: 74px; y: 252px; text: "01"; color: Theme.red2; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; }
+                Text { x: 100px; y: 248px; text: "WHAT WE FOUND"; color: Theme.tx; font-family: Theme.disp; font-size: 17px; font-weight: 700; letter-spacing: 0.9px; }
+                if Backend.crash-items.length == 0: Text { x: 74px; y: 282px; width: 760px; text: "Nothing we recognise. The mclo.gs analysis below knows many more crash causes."; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; }
+                for c[i] in Backend.crash-items: Rectangle {
+                    x: 72px; y: 280px + i * 126px; width: 760px; height: 116px; visible: i < 5;
+                    background: Theme.s1; border-width: 1px; border-color: Theme.ln;
+                    Rectangle { x: 0px; width: 3px; background: Theme.red2; }
+                    Text { x: 20px; y: 12px; width: parent.width - 40px - (c.act != "" ? 200px : 0px); text: c.title; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; overflow: elide; }
+                    Text { x: 20px; y: 40px; width: parent.width - 40px; height: 32px; text: c.text; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; overflow: elide; }
+                    Text { x: 20px; y: 74px; width: parent.width - 40px; height: 34px; text: "Fix: " + c.fix; color: Theme.ice; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; overflow: elide; }
+                    if c.act != "": Btn { x: parent.width - self.width - 12px; y: 8px; height: 28px; text: c.act; solid: true; clicked => { Backend.crash-fix(i); } }
+                }
+
+                // 02 mclo.gs: upload for a link + automatic analysis
+                property <length> y2: 300px + Math.max(1, Math.min(Backend.crash-items.length, 5)) * 126px;
+                Text { x: 74px; y: y2 + 4px; text: "02"; color: Theme.red2; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; }
+                Text { x: 100px; y: y2; text: "MCLO.GS ANALYSIS"; color: Theme.tx; font-family: Theme.disp; font-size: 17px; font-weight: 700; letter-spacing: 0.9px; }
+                if Backend.crash-state == 0 || Backend.crash-state == 3: Rectangle {
+                    x: 72px; y: y2 + 32px; width: 760px; height: 100px;
+                    Text { x: 2px; y: 0px; width: 740px; text: Backend.crash-state == 3 ? "Upload failed: " + Backend.crash-err : "Upload the crash log to mclo.gs. You get a link to share with friends or a mod author, and an automatic check against hundreds of known problems. Your Windows user folder and sign-in token are removed first.";
+                        color: Backend.crash-state == 3 ? Theme.redtx : Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
+                    PlayButton { x: 0px; y: 52px; width: 330px; height: 48px; label: Backend.crash-state == 3 ? "TRY AGAIN" : "UPLOAD TO MCLO.GS"; text-size: 20px; clicked => { Backend.crash-upload(); } }
+                }
+                if Backend.crash-state == 1: Waiting { x: 72px; y: y2 + 40px; width: 400px; text: "Uploading and analysing the log"; }
+                if Backend.crash-state == 2: Rectangle {
+                    x: 72px; y: y2 + 32px; width: 760px; height: 70px + Backend.crash-problems.length * 110px;
+                    Rectangle {
+                        x: 0px; y: 0px; width: 760px; height: 44px; background: Theme.s1; border-width: 1px; border-color: Theme.ln2;
+                        Text { x: 16px; width: 480px; text: Backend.crash-url; color: Theme.ice; font-family: Theme.mono; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
+                        Btn { x: parent.width - 236px; y: 6px; height: 32px; text: "COPY LINK"; icon: Ico.copy; clicked => { Backend.copy-text(Backend.crash-url); Backend.toast("Link copied"); } }
+                        Btn { x: parent.width - 108px; y: 6px; height: 32px; width: 100px; text: "OPEN"; icon: Ico.ext; clicked => { Backend.open-url(Backend.crash-url); } }
+                    }
+                    if Backend.crash-problems.length == 0: Text { x: 2px; y: 60px; width: 740px; text: "mclo.gs found no known problem in this log. Share the link with whoever can help."; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
+                    for p[i] in Backend.crash-problems: Rectangle {
+                        y: 58px + i * 110px; width: 760px; height: 100px;
+                        background: Theme.s1; border-width: 1px; border-color: Theme.ln;
+                        Rectangle { x: 0px; width: 3px; background: Theme.ice; }
+                        Text { x: 20px; y: 12px; width: parent.width - 40px; text: p.title; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; wrap: word-wrap; height: 38px; overflow: elide; }
+                        Text { x: 20px; y: 54px; width: parent.width - 40px; height: 40px; text: p.fixes; color: Theme.ice; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; overflow: elide; }
+                    }
+                }
+            }
+            // actions
+            Rectangle {
+                x: 0px; y: root.H - 96px; width: 900px; height: 96px; background: Theme.bg;
+                Rectangle { height: 1px; background: Theme.ln; }
+                PlayButton { x: 72px; y: 22px; width: 250px; height: 52px; label: "PLAY AGAIN"; text-size: 22px; clicked => { Backend.crash-relaunch(); } }
+                vl := Btn { x: 346px; y: 30px; height: 38px; text: "VIEW FULL LOG"; clicked => { Backend.crash-open = false; root.open-idx = Backend.crash-idx; root.open-tab = 5; root.open-mode = 0; root.tab = 1; } }
+                Btn { x: vl.x + vl.width + 10px; y: 30px; height: 38px; text: "SUPPORT BUNDLE"; icon: Ico.export; clicked => { Backend.inst-action(Backend.crash-idx, 6); } }
+                Btn { x: 900px - 72px - self.width; y: 30px; height: 38px; text: "CLOSE"; clicked => { Backend.crash-open = false; } }
+            }
+            WinButtons { stage-w: root.W; }
+            }
+        }
+        if Backend.gate-open && !Backend.crash-open: WinButtons { stage-w: root.W; }
+
+        // ---------- L1: pre-launch check: problems that would stop the game, each with its fix; never blocks ----------
+        if Backend.pre-open: Scrim {
+            x: 0px; y: 0px; width: root.W; height: root.H;
+            dismiss => { Backend.pre-open = false; }
+            pd := Rectangle {
+                property <int> n: Backend.pre-items.length;
+                property <length> list-h: Math.min(Math.max(pd.n, 1), 4) * 120px;
+                x: (root.W - 760px) / 2; y: Math.max(40px, (root.H - self.height) / 2 - 24px); width: 760px; height: 222px + pd.list-h;
+                background: #121217; border-width: 1px; border-color: Theme.ln2;
+                TouchArea { }
+                Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: pd.n > 0 ? Theme.red : Theme.ice; }
+                Eyebrow { x: 32px; y: 30px; text: pd.n > 0 ? "BEFORE YOU PLAY" : "ALL FIXED"; color: pd.n > 0 ? Theme.redtx : Theme.dim; }
+                Text { x: 32px; y: 50px; width: parent.width - 64px; text: Backend.pre-inst.to-uppercase(); color: Theme.tx; font-family: Theme.disp; font-size: 34px; font-weight: 800; font-italic: true; overflow: elide; }
+                Text { x: 32px; y: 98px; width: parent.width - 64px; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap;
+                    text: pd.n == 0 ? "Everything we found is fixed. Ready when you are." : (pd.n == 1 ? "One thing would likely stop the game. Fix it here, or launch anyway." : "\{pd.n} things would likely stop the game. Fix them here, or launch anyway."); }
+                Flickable {
+                    x: 32px; y: 134px; width: parent.width - 64px; height: pd.list-h; content-height: pd.n * 120px;
+                    if pd.n == 0: Rectangle { y: 0px; height: 108px; background: Theme.s1; border-width: 1px; border-color: Theme.ln;
+                        Icon { x: 22px; y: 48px; d: Ico.check; tint: Theme.ice; }
+                        Text { x: 48px; height: parent.height; text: "No problems left. Your changes are saved."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; vertical-alignment: center; } }
+                    for c[i] in Backend.pre-items: Rectangle {
+                        y: i * 120px; height: 110px;
+                        background: Theme.s1; border-width: 1px; border-color: Theme.ln;
+                        Rectangle { x: 0px; width: 3px; background: Theme.red2; }
+                        Text { x: 20px; y: 12px; width: parent.width - 40px - (c.act != "" ? 190px : 0px); text: c.title; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; overflow: elide; }
+                        Text { x: 20px; y: 40px; width: parent.width - 40px; height: 32px; text: c.text; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; overflow: elide; }
+                        Text { x: 20px; y: 74px; width: parent.width - 40px; height: 30px; text: "Fix: " + c.fix; color: Theme.ice; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; overflow: elide; }
+                        if c.act != "": Btn { x: parent.width - self.width - 12px; y: 8px; height: 28px; text: c.act; solid: true; clicked => { Backend.pre-fix(i); } }
+                    }
+                }
+                if pd.n > 0: Btn { x: 32px; y: parent.height - 66px; height: 40px; text: "LAUNCH ANYWAY"; icon: Ico.play; clicked => { Backend.pre-launch(); } }
+                if pd.n > 0: Text { x: 214px; y: parent.height - 66px; width: 340px; height: 40px; text: "These won't be flagged again for this instance."; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; vertical-alignment: center; }
+                if pd.n == 0: PlayButton { x: 32px; y: parent.height - 72px; width: 200px; height: 48px; label: "PLAY"; text-size: 22px; clicked => { Backend.pre-launch(); } }
+                LinkBtn { x: parent.width - 32px - self.width; y: parent.height - 60px; text: "CANCEL"; clicked => { Backend.pre-open = false; } }
+            }
+        }
+
+        // ---------- L1: safe update: what changes (with changelogs), picked rows only; old files are kept for undo ----------
+        if Backend.upd-open: Scrim {
+            x: 0px; y: 0px; width: root.W; height: root.H;
+            dismiss => { Backend.upd-open = false; }
+            ud := Rectangle {
+                // the list is as tall as its rows (up to the window), so a short update has no empty band
+                property <length> list-h: Backend.upd-state == 0 ? 96px : Math.min(ul.preferred-height, Math.min(root.H - 360px, 460px));
+                x: (root.W - 820px) / 2; y: Math.max(40px, (root.H - self.height) / 2 - 24px); width: 820px; height: 232px + ud.list-h;
+                background: #121217; border-width: 1px; border-color: Theme.ln2;
+                TouchArea { }
+                Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.ice; }
+                Eyebrow { x: 32px; y: 30px; text: "UPDATE " + (Backend.upd-rows.length == 1 ? "1 FILE" : "\{Backend.upd-rows.length} FILES"); }
+                Text { x: 32px; y: 50px; width: parent.width - 64px; text: Backend.upd-inst.to-uppercase(); color: Theme.tx; font-family: Theme.disp; font-size: 34px; font-weight: 800; font-italic: true; overflow: elide; }
+                Text { x: 32px; y: 98px; width: parent.width - 64px; text: "Read what changes first. The current files and configs are kept, so one click undoes the update."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
+                if Backend.upd-state == 0: Waiting { x: 32px; y: 150px; width: 400px; text: "Reading changelogs"; }
+                Flickable { visible: Backend.upd-state != 0;
+                    x: 32px; y: 134px; width: parent.width - 64px; height: ud.list-h;
+                    ul := VerticalLayout {
+                        alignment: start;
+                        spacing: 6px;
+                        for u[i] in Backend.upd-rows: Rectangle {
+                            height: u.open ? 236px : 58px;
+                            background: Theme.s1; border-width: 1px; border-color: Theme.ln;
+                            Toggle { x: 16px; y: 18px; on: u.on; toggled(v) => { Backend.upd-pick(i, v); } }
+                            Text { x: 76px; y: 0px; width: parent.width - 76px - 330px; height: 58px; text: u.name; color: u.on ? Theme.tx : Theme.mut; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; vertical-alignment: center; overflow: elide; }
+                            Text { x: parent.width - 330px; y: 0px; width: 190px; height: 58px; text: u.from + "  →  " + u.to; color: u.on ? Theme.ice : Theme.mut; font-family: Theme.mono; font-size: 12px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
+                            if u.notes != "": LinkBtn { x: parent.width - self.width - 16px; y: 15px; text: u.open ? "HIDE" : "CHANGELOG"; clicked => { Backend.upd-pick(-1 - i, !u.open); } }
+                            if u.notes == "": Text { x: parent.width - 126px; y: 0px; width: 110px; height: 58px; text: "No changelog"; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; }
+                            if u.open: Rectangle {
+                                x: 16px; y: 58px; width: parent.width - 32px; height: 164px; background: #0B0B0E; border-width: 1px; border-color: Theme.ln2; clip: true;
+                                Text { x: 14px; y: 10px; width: parent.width - 28px; height: parent.height - 20px; text: u.notes; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; overflow: elide; }
+                            }
+                        }
+                    }
+                }
+                Btn { x: 32px; y: parent.height - 66px; height: 40px; solid: true; icon: Ico.download; enabled: Backend.upd-state == 1 && Backend.upd-picked > 0;
+                    text: Backend.upd-picked == Backend.upd-rows.length ? "UPDATE ALL" : "UPDATE \{Backend.upd-picked}"; clicked => { Backend.upd-apply(); } }
+                LinkBtn { x: parent.width - 32px - self.width; y: parent.height - 60px; text: "CANCEL"; clicked => { Backend.upd-open = false; } }
+            }
+        }
+
+        // ---------- L1: update history: the last 5 updates, each undoable (files + configs) ----------
+        if Backend.hist-open: Scrim {
+            x: 0px; y: 0px; width: root.W; height: root.H;
+            dismiss => { Backend.hist-open = false; }
+            hd := Rectangle {
+                property <int> n: Backend.hist-rows.length;
+                property <length> list-h: Math.max(1, Math.min(hd.n, 5)) * 84px;
+                x: (root.W - 760px) / 2; y: Math.max(40px, (root.H - self.height) / 2 - 24px); width: 760px; height: 222px + hd.list-h;
+                background: #121217; border-width: 1px; border-color: Theme.ln2;
+                TouchArea { }
+                Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.ice; }
+                Eyebrow { x: 32px; y: 30px; text: "UPDATE HISTORY"; }
+                Text { x: 32px; y: 50px; width: parent.width - 64px; text: Backend.hist-inst.to-uppercase(); color: Theme.tx; font-family: Theme.disp; font-size: 34px; font-weight: 800; font-italic: true; overflow: elide; }
+                Text { x: 32px; y: 98px; width: parent.width - 64px; text: "Undo puts the files and configs back exactly as they were before that update. The last 5 updates are kept."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
+                Flickable {
+                    x: 32px; y: 134px; width: parent.width - 64px; height: hd.list-h; content-height: hd.n * 84px;
+                    if hd.n == 0: Rectangle { y: 0px; height: 74px; background: Theme.s1; border-width: 1px; border-color: Theme.ln;
+                        Text { x: 20px; width: parent.width - 40px; height: parent.height; text: "No updates yet. When you update mods here, the previous versions are kept and show up in this list."; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; vertical-alignment: center; } }
+                    for h[i] in Backend.hist-rows: Rectangle {
+                        y: i * 84px; height: 74px;
+                        background: Theme.s1; border-width: 1px; border-color: Theme.ln;
+                        Rectangle { x: 0px; width: 3px; background: i == 0 ? Theme.ice : Theme.ln2; }
+                        Text { x: 20px; y: 12px; width: parent.width - 320px; text: h.title; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; overflow: elide; }
+                        Text { x: parent.width - 300px; y: 12px; width: 170px; text: h.when; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: right; }
+                        Text { x: 20px; y: 38px; width: parent.width - 150px; text: h.sub; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; overflow: elide; }
+                        Btn { x: parent.width - self.width - 16px; y: 20px; height: 34px; text: "UNDO"; clicked => { Backend.hist-revert(h.id); } }
+                    }
+                }
+                Btn { x: parent.width - 32px - self.width; y: parent.height - 66px; height: 40px; text: "CLOSE"; clicked => { Backend.hist-open = false; } }
+            }
+        }
+
+        // ---------- yes/no confirmation (delete world, delete screenshot, install Iris, ...) ----------
+        if Backend.ask-open: Scrim {
+            x: 0px; y: 0px; width: root.W; height: root.H;
+            dismiss => { Backend.ask-answer(false); }
+            Rectangle {
+                x: (root.W - 520px) / 2; y: 260px; width: 520px; height: 96px + at.preferred-height + 70px;
+                background: #121217; border-width: 1px; border-color: Theme.ln2;
+                TouchArea { }
+                Rectangle { x: 0px; width: 4px; background: Backend.ask-danger ? Theme.red2 : Theme.ice; }
+                Text { x: 32px; y: 28px; width: 456px; text: Backend.ask-title; color: Theme.tx; font-family: Theme.disp; font-size: 26px; font-weight: 700; font-italic: true; overflow: elide; }
+                at := Text { x: 32px; y: 72px; width: 456px; text: Backend.ask-text; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
+                Btn { x: 32px; y: parent.height - 62px; text: Backend.ask-yes; solid: !Backend.ask-danger; danger: Backend.ask-danger; clicked => { Backend.ask-answer(true); } }
+                LinkBtn { x: parent.width - 32px - self.width; y: parent.height - 56px; text: "CANCEL"; clicked => { Backend.ask-answer(false); } }
+            }
+        }
+
+        // ---------- L2: restore a restore point: as a new instance (nothing changes here) or in place ----------
+        if Backend.rp-ask >= 0: Scrim {
+            x: 0px; y: 0px; width: root.W; height: root.H;
+            dismiss => { Backend.rp-ask = -1; }
+            rd := Rectangle {
+                property <string> nm: Backend.instances[Math.max(0, Backend.current-inst)].name;
+                x: (root.W - 640px) / 2; y: Math.max(40px, (root.H - self.height) / 2 - 24px); width: 640px; height: 356px;
+                background: #121217; border-width: 1px; border-color: Theme.ln2;
+                TouchArea { }
+                Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.ice; }
+                Eyebrow { x: 32px; y: 30px; text: "RESTORE POINT · " + Backend.rpoints[Backend.rp-ask].kind; }
+                Text { x: 32px; y: 50px; width: parent.width - 64px; text: Backend.rpoints[Backend.rp-ask].date.to-uppercase(); color: Theme.tx; font-family: Theme.disp; font-size: 34px; font-weight: 800; font-italic: true; overflow: elide; }
+                Text { x: 32px; y: 98px; width: parent.width - 64px; text: rd.nm + " as it was then: mods, worlds, configs, settings, version and loader (" + Backend.rpoints[Backend.rp-ask].size + ")."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
+                for o[i] in [{t: "As a new instance", s: "A copy next to this one. Nothing in " + rd.nm + " changes."}, {t: "Replace " + rd.nm, s: "Goes back to that point. Its current state is saved as a restore point first."}]: Rectangle {
+                    x: 32px; y: 150px + i * 70px; width: parent.width - 64px; height: 62px;
+                    background: ota.has-hover ? Theme.s2 : Theme.s1; border-width: 1px; border-color: ota.has-hover ? (i == 1 ? Theme.red2 : #ffffff55) : Theme.ln;
+                    animate background, border-color { duration: Theme.fast; }
+                    Rectangle { x: 0px; width: 3px; background: i == 0 ? Theme.ice : Theme.red2; }
+                    Text { x: 20px; y: 11px; width: parent.width - 60px; text: o.t; color: i == 1 ? Theme.redtx : Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; overflow: elide; }
+                    Text { x: 20px; y: 34px; width: parent.width - 60px; text: o.s; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
+                    Icon { x: parent.width - 30px; y: 25px; d: Ico.chev; tint: ota.has-hover ? Theme.tx : Theme.mut; }
+                    ota := TouchArea { mouse-cursor: pointer; clicked => { Backend.rp-restore(Backend.rp-ask, i == 1); } }
+                    ofs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
+                        key-pressed(e) => { if e.text == " " || e.text == Key.Return { Backend.rp-restore(Backend.rp-ask, i == 1); return accept; } return reject; } }
+                    if ofs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-width: 2px; border-color: Theme.ice; }
+                }
+                LinkBtn { x: parent.width - 32px - self.width; y: parent.height - 52px; text: "CANCEL"; clicked => { Backend.rp-ask = -1; } }
+            }
+        }
+
+        // ---------- L2: command palette (Ctrl+K): type, arrows, Enter; Esc or a click outside closes ----------
+        if Backend.pal-open: Scrim {
+            x: 0px; y: 0px; width: root.W; height: root.H;
+            dismiss => { Backend.pal-open = false; }
+            pp := Rectangle {
+                property <int> n: Backend.pal-rows.length;
+                property <length> rh: 54px;
+                property <length> list-h: Math.max(1, Math.min(pp.n, 8)) * pp.rh;
+                x: (root.W - 760px) / 2; y: 96px; width: 760px; height: 84px + pp.list-h + 44px;
+                background: #121217; border-width: 1px; border-color: Theme.ln2;
+                TouchArea { }
+                Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.red2; }
+                FocusScope {
+                    focus-on-click: false; focus-on-tab-navigation: false;
+                    capture-key-pressed(e) => {
+                        if e.text == Key.UpArrow { Backend.pal-sel = Math.max(0, Backend.pal-sel - 1); return accept; }
+                        if e.text == Key.DownArrow { Backend.pal-sel = Math.min(pp.n - 1, Backend.pal-sel + 1); return accept; }
+                        if e.text == Key.Return { if pp.n > 0 { Backend.pal-run(Backend.pal-sel); } return accept; }
+                        return reject;
+                    }
+                    Field { x: 20px; y: 22px; width: parent.width - 40px; height: 46px; text-size: 16px; search: true; text <=> Backend.pal-query;
+                        placeholder: "Search instances, worlds, mods, settings and actions";
+                        init => { self.focus-input(); }
+                        edited => { Backend.pal-search(); } }
+                    pl := Flickable {
+                        x: 20px; y: 80px; width: parent.width - 40px; height: pp.list-h; content-height: pp.n * pp.rh;
+                        property <int> s: Backend.pal-sel;
+                        // keep the highlighted row in view
+                        changed s => {
+                            if self.s * pp.rh < -self.content-y { self.content-y = -self.s * pp.rh; }
+                            if (self.s + 1) * pp.rh > -self.content-y + self.height { self.content-y = self.height - (self.s + 1) * pp.rh; }
+                        }
+                        if pp.n == 0: Text { x: 14px; height: pp.rh; text: "Nothing matches \"" + Backend.pal-query + "\"."; color: Theme.mut; font-family: Theme.ui; font-size: 14px * Theme.ts; vertical-alignment: center; }
+                        for r[i] in Backend.pal-rows: Rectangle {
+                            y: i * pp.rh; height: pp.rh;
+                            background: Backend.pal-sel == i ? Theme.s3 : (pta.has-hover ? Theme.s2 : transparent);
+                            Rectangle { x: 0px; width: 3px; background: Theme.red2; visible: Backend.pal-sel == i; }
+                            Rectangle { x: 14px; y: (parent.height - 20px) / 2; width: 84px; height: 20px; background: Backend.pal-sel == i ? Theme.s1 : Theme.s2;
+                                Text { text: r.kind; color: r.kind == "PLAY" ? Theme.redtx : Theme.dim; font-family: Theme.mono; font-size: 10px * Theme.ts; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; } }
+                            Text { x: 112px; y: 8px; width: parent.width - 130px; text: r.title; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; overflow: elide; }
+                            Text { x: 112px; y: 30px; width: parent.width - 130px; text: r.sub; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
+                            pta := TouchArea { mouse-cursor: pointer; clicked => { Backend.pal-run(i); } }
+                        }
+                    }
+                }
+                Rectangle { x: 0px; y: parent.height - 40px; width: parent.width; height: 1px; background: Theme.ln; }
+                Text { x: 22px; y: parent.height - 40px; height: 40px; text: "↑ ↓  move     ENTER  open     ESC  close"; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; vertical-alignment: center; }
+                Text { x: parent.width - 22px - self.width; y: parent.height - 40px; height: 40px; text: "CTRL + K"; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; vertical-alignment: center; }
+            }
+        }
+
+        // ---------- toast ----------
+        toast := Rectangle {
+            property <length> act-w: Backend.toast-action == "" ? 0px : 130px;
+            width: Backend.toast-err ? 560px : Math.clamp(tt.preferred-width + 44px + self.act-w, 300px, 600px);
+            height: Backend.toast-err ? 86px : 46px;
+            visible: self.opacity > 0;
+            tta := TouchArea {
+                mouse-cursor: pointer;
+                changed has-hover => { Backend.toast-hover = self.has-hover; }
+                clicked => { Backend.toast-close(); }
+            }
+            x: root.W - self.width - 24px; y: root.H - root.deck - 16px - self.height + (Backend.toast-on ? 0px : 10px);
+            background: #16161C; border-width: 1px; border-color: Backend.toast-err ? Theme.red2.with-alpha(0.533) : Theme.ln2;
+            opacity: Backend.toast-on ? 1 : 0;
+            animate opacity { duration: Theme.mid; }
+            animate y { duration: Theme.slow; easing: ease-out-quint; }
+            Rectangle { x: 0px; width: 4px; background: Backend.toast-err ? Theme.red2 : Theme.ice; }
+            if Backend.toast-err: Text { x: 20px; y: 10px; text: "SOMETHING WENT WRONG"; color: Theme.redtx; font-family: Theme.disp; font-size: 13px * Theme.ts; font-weight: 700; letter-spacing: 0.9px; }
+            if Backend.toast-err: Text { x: 20px; y: 30px; width: 520px - toast.act-w; height: 46px; text: Backend.toast-text; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; overflow: elide; }
+            tt := Text { x: 20px; width: parent.width - 40px - toast.act-w; visible: !Backend.toast-err; text: Backend.toast-text; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 500; vertical-alignment: center; overflow: elide; }
+            if Backend.toast-action != "": Btn { x: parent.width - self.width - 14px; y: (parent.height - self.height) / 2; height: 32px; text: Backend.toast-action; clicked => { Backend.toast-act(); } }
+        }
+    }
+    }
+}

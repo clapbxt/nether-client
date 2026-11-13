@@ -1,0 +1,49 @@
+# Todo
+- [x] Approve v3 direction (`design/mockup.html`)
+- [x] UI toolkit = Slint (prototype Home screen works)
+- [x] Logo APPROVED (ghast, icon/nether-logo.svg) · [ ] wordmark + design tokens file
+- [x] Cargo workspace scaffold (crates/app)
+- [x] Core: vanilla install+launch engine, MS device-code auth
+- [x] Instances finished: create dialog (name/version/Vanilla-Fabric/RAM), filter, open folder, duplicate, .mrpack export, delete (confirm), RAM slider + Java pick, playtime/last-played tracking, packs (resource packs/shaders) installed+browse via Modrinth
+- [x] Modrinth browse/install
+- [x] nether-agent spike: FPS overlay works on vanilla + Fabric 1.21.11; [x] Sodium/Iris ok; [x] input hook, real modules, 1.8.9 (Java 8/LWJGL2) (2026-11-10); [x] Forge/NeoForge (1.21.11 + Forge 1.8.9) · [ ] 26.3
+- [ ] Spike: 1.8.9 and 26.3 adapters
+- [x] Host + UPnP + nether:// link (2026-11-11): outside reachability check, free playit.gg tunnel fallback, address invite + HKCU URL scheme · [ ] cross-network join with a real friend, playit claim + API tunnel creation untested live
+
+
+- [x] Fonts embedded; all 6 screens ported to Slint (sample data)
+- [ ] Split crates: core (instances/auth/java), ui, app
+
+- [x] UI overhaul "Pit Wall" (branch `ui-overhaul`, 2026-11-10): tokens, Barlow type, bottom launch deck + job progress, all screens/dialogs restyled, Forge/NeoForge in create dialog · [x] focus rings/tab order, tooltips, news, skin library, text size (2026-11-12) · [ ] Tab not trapped in dialogs
+
+
+- [x] Azure app registered + client id saved; [x] Mojang approval received 2026-11-11; dev bypass login removed
+- [x] Fabric loader in core (test launch pending result)
+- [x] Forge/NeoForge loaders (core/forge.rs, 2026-11-10) · [x] Legacy Fabric, Quilt in wizard (2026-11-12, launch from UI untested)
+- [ ] Gate offline play (dev-only) so Mojang approval isn't blocked; require owned MS account to launch
+
+
+
+
+- [x] persisted instances, real mod browse/install/toggle (Modrinth)`n- [ ] create-instance dialog, Modrinth modpack (.mrpack) install for Discover, auto-inject agent, per-instance client settings, packs/shaders install
+
+
+- [x] mod icons, version/compat checks, sign-in gate; Modrinth-style mod page (2026-11-09)
+- [x] 3D skin preview + real account capes (equip/hide) · [x] skin library/upload
+- [x] Instance icons/wallpapers from game files, right-click menu, Settings page with shared game settings, mod search/sort/categories, version picker, markdown + images on project pages (2026-11-10)
+- [x] HTTP cache, live install progress, uninstall/switch version, drag-spin skin, launcher settings (GPU, startup, tray, reduce motion, custom icons/wallpapers), Client page + HUD editor + client.json (2026-11-10)
+- [x] In-game menu: agent auto-injected (all versions, Java 8+), launcher Client page shares its JSON · launcher-launched game verified (Fabric 1.21.11 + 1.8.9: agent, Right Shift, HUD, global + per-instance config, live reload) · [x] Controls-screen rebind, armor item icons, own module icon set (menu + Client page, 2026-11-11) (+ armor HUD on 1.8.9) · [ ] Client page UI click path untested; armor/Controls rebind not yet checked in a world with real key presses; freelook/hitcolor (Tier B) not in agent
+- [x] modpack icons/detail, mod update, mod video settings sync (Sodium/Embeddium/OptiFine), Settings rebuilt (accounts, Java overrides, accent + text size, update check) 2026-11-12 · [ ] CurseForge (needs API key, hidden); updater needs a GitHub release
+- [x] 2026-11-10: icon/hash memory cache + instant installed list; Install Packs page (Modrinth modpacks w/ project page, Nether packs, CurseForge placeholder); account skin auto-kept in library; borderless window + ghast icon; modular client (inject on/off + groups hud/pvp/qol/menu per instance, all module settings editable on Client page, armor layouts); Nether title screen + pause button, HUD only in a world (verified Fabric 1.21.11); create wizard + raw instance
+- [x] Host redesign (2026-11-10): setup wizard, standalone servers (`<root>/servers/`, old `<instance>/server` auto-moved), several running at once, Paper + Modrinth plugins / Fabric server mods · [ ] wizard + multi-server not click-tested in the running app
+- [x] Title screen/pause button on 1.8.9 + Forge/NeoForge (2026-11-12) · [ ] real mouse clicks + other GUI scales untested
+- [x] Bug (2026-11-11): client missing on launcher-booted 26.x: bundled agent lacked the SDL3 platform (it only lived in `agent-vers` WIP); merged · [ ] Fabric 26.x untestable from the Claude sandbox (MSIX AppData redirect breaks Knot), check in the real app
+- [x] 2026-11-11 (overnight, from NoRisk/LiquidLauncher review): multi-account + token cache/retry, no sample seed data (first run empty, CurseForge seg removed from instance page), live News (Mojang patch-notes + Fabric meta), instance WORLDS tab (Quick Play worlds 1.20+, saved servers from servers.dat, join by address, backups) + LOGS tab (game/last start/crash, mclo.gs share link, redacts home path + token), crash dialog on abnormal exit (crash::diagnose), STOP button (taskkill tree), import (.mrpack/CF zip/Prism), per-instance JVM args + window size, default G1 tuning, mod Update / Update all, Settings 04 Storage & About, agent Session Timer module · [ ] none of these click-tested in the real app; Supabase backend (news/packs) not started: user not signed in to supabase.com
+- [x] 2026-11-11 detail pass (from NoRisk strings/LiquidLauncher): Screenshots tab (copy image, show in folder, delete), world search/import (.minecraft)/delete with confirm, saved-server ping (players/ms/motd via SLP), log filter + issues-only + live follow + line count, crash one-click fixes (more RAM, auto Java), Iris offer after shader install, generic confirm dialog, fullscreen toggle, RAM slider vs system memory, hourly instances.json.bak (+ fallback on corrupt), tooltips on every icon button, add files / open folder for mods+packs, running names in deck, played-time toast, instance disk size, offline news state; agent: Coords Nether/Overworld match + direction toggle, Clock date · [ ] not click-tested in the real app
+- [x] 2026-11-11 crash page (full screen: our findings + one-click fixes, mclo.gs upload + insights problems/solutions via core/mclogs.rs, log tail, play again); client: Lunar-style item icons on module cards (in game via Icons, launcher via art::item_icons + schema "icon"), ENABLED tab, HUD style options on every HUD module (outline, rainbow, label colour, hide labels) + USE STYLE ON ALL HUD, FPS frame time/colour, CPS right-click toggle, Ping colour, new Pack Display + Precision Mouse modules · [x] Precision Mouse (sens 0.5 -> 0.254 held, restored) + Pack Display verified in a world (Fabric 1.21.11)
+- [x] 2026-11-11 fixes: stage fills any window aspect (no letterbox), Instances header overlap, Client settings header, skin always spins, home skin dropdown wears library skins, Host STOP works while booting · [ ] cross-network join untested by a real friend
+- [x] Backend scaffold (GitHub content + Worker/D1 cape API, core client, news/packs wired) · [x] live 2026-11-11: content `clapbxt/nether-content` (jsDelivr), API `nether-api.nbhowell1.workers.dev` (D1 `nether`) · [ ] real-account Wear + friend sees cape/icon untested · [x] Wardrobe NETHER CAPES section (wear/take off, preview) · [x] Nether capes drawn in game (Fabric 1.21.11 verified, dev cape) · [x] nametag ghast icon for Nether players (glyph verified in chat, Fabric 1.21.11) · [x] capes + icon on vanilla/Forge/NeoForge 1.21.11, 26.x, 1.20.2+, 1.8.9 (verified vanilla 1.21.11 cape, 1.8.9 cape + icon) · [ ] in-game check Forge/NeoForge/26.x/Forge 1.8.9; live API path untested
+- [x] 2026-11-12 overnight: launcher Phase 1 + sweep 1 + L1 (preflight/repair/safe update/bundle) + L2 (restore points/groups/notes/Ctrl+K); client title/pause on all loaders, sweep 1, C1 foundation, armor Vanilla, C2 media+lyrics, C3 main menu v2, C4 mod menu/HUD editor · [x] C5 modules wave (Fabric 1.21.11 verified; [ ] 1.8.9, real clicks for reach/combo, streamer own-name, names.js rerun for new names, `strict-servers.json` + launcher `-Dnether.content`) · [x] sweep 2, security fixes (pass 2), final sweep (clippy clean) · [ ] L3 (auth handshake, Friends-lite, Discord RPC) — plan in `.overnight/final-plan.md` · [ ] nothing click-tested in the real app/real media session
+- [x] Security pass 2 (2026-11-13) · [ ] NEEDS USER: deploy Worker (`wrangler d1 execute nether --remote --file schema.sql`, `wrangler secret put SESSION_KEY`, `wrangler deploy`); [x] signed content live on nether-content 2026-11-13 (expires 2027-02-10: re-sign + push) · [ ] open: M3 player-lookup privacy, playit Authenticode, deeplink port squatting
+- [x] L3 code (2026-11-13): Discord RPC + Friends-lite (local Worker tests 20/20) · [ ] NEEDS USER: Discord app id (discord.com/developers, asset `nether`); Friends security review then `FRIENDS = "1"`; Friends panel not visually checked
+- [x] Installer + auto-updater (2026-11-13; install/update/uninstall tested end to end) · [ ] NEEDS USER: create public `clapbxt/nether-releases` + first release; code-signing cert (SmartScreen warns on unsigned setup); back up `%USERPROFILE%\.nether-signing`

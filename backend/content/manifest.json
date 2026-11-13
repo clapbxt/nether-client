@@ -1,0 +1,27 @@
+{
+ "version": 1794505873,
+ "issued": 1794505873,
+ "expires": 1802281873,
+ "files": {
+  "capes/ice.png": {
+   "sha256": "c498d00a4214493c71527c26689210ab92776b016946fd7f250271e5e14799d9",
+   "size": 817
+  },
+  "capes/index.json": {
+   "sha256": "d4249bf9623b13c29c70f1656bca61eaf711d3373c0f6f47b5d42ca06e8a24f9",
+   "size": 170
+  },
+  "capes/obsidian.png": {
+   "sha256": "09626e47391a40a80ba2375306c40eb4227ae157872283368452a5d11f2396d2",
+   "size": 819
+  },
+  "news.json": {
+   "sha256": "03d9024b9986651ca6603654de25207e9055b99bad82645282d4ede7fc15c9f3",
+   "size": 115
+  },
+  "packs.json": {
+   "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+   "size": 3
+  }
+ }
+}

@@ -1,0 +1,577 @@
+// java: index into Auto/8/17/21/25; secs: total play time; last-ts: unix time of the last launch
+export struct Inst { name: string, title: string, kind: string, ver: string, loader: string, hours: int, mods: int, ram: int, client: string, last: string, running: bool, java: int, secs: int, last-ts: int,
+    // icon = block texture key ("" = grass), cover = wallpaper version ("" = own version); images filled in by Rust
+    icon: string, cover: string, icon-img: image, cover-img: image, has-cover: bool, shared: bool,
+    // extra JVM arguments as typed; game window size (0 = default)
+    jvm: string, win-w: int, win-h: int, fullscreen: bool,
+    // starting = being prepared / launched (PLAY shows STARTING), stopping = asked to close (STOP shows STOPPING)
+    starting: bool, stopping: bool,
+    // L2: group ("" = none), notes, last session crashed, restore points (auto before launch weekly, automatic ones kept)
+    group: string, notes: string, crashed: bool, bk-auto: bool, bk-keep: int }
+// a pickable icon (block texture) or wallpaper (version panorama)
+export struct Art { key: string, label: string, img: image }
+// a downloadable mod version (for the version picker)
+export struct VerOpt { id: string, label: string }
+// one rendered block of a project description: 0 text, 1-3 headings, 4 code, 5 image, 6 quote, 7 rule
+export struct MdBlock { kind: int, text: styled-text, plain: string, img: image, ratio: float, has-img: bool }
+// an account cape (id "" = no cape); img = its outside face
+export struct Cape { id: string, name: string, img: image }
+// L3 Friends: state 0 friend, 1 asked you, 2 you asked; host = their shared server address while they host
+export struct FriendRow { uuid: string, name: string, state: int, host: string }
+// a saved Microsoft account (account panel); active = the one Play uses
+export struct Acct { uuid: string, name: string, active: bool }
+// Settings > Java: one major version, what the launcher will run for it (custom = picked by the user)
+export struct JavaRt { major: int, title: string, sub: string, custom: bool }
+// one Home news line (live: Minecraft releases/snapshots, Fabric loader)
+export struct News { tag: string, title: string, url: string }
+// a world (or, server: true, a saved server; folder = its address) in an instance; sub = mode · version · last played · size
+export struct WorldRow { folder: string, name: string, sub: string, icon: image, has-icon: bool, hardcore: bool, server: bool, status: string, online: bool }
+// a screenshot thumbnail (screenshots tab)
+export struct Shot { path: string, date: string, img: image }
+// one crash finding: what happened and what to try
+export struct CrashItem { title: string, text: string, fix: string, act: string }
+// L1: a mod in the update dialog (from -> to, changelog as plain text; on = included, open = changelog shown)
+export struct UpdRow { name: string, from: string, to: string, notes: string, on: bool, open: bool }
+// L1: one update snapshot in History (title = what was done, sub = what changed, when = how long ago)
+export struct HistRow { id: string, title: string, sub: string, when: string }
+// a problem mclo.gs found in the log, with its suggested fixes (one per line)
+export struct CrashProblem { title: string, fixes: string }
+// ok: 0 unknown, 1 compatible with the opened instance, 2 not compatible; mc = game version the mod version targets
+// vid = installed version id; vlabels/vids/pick = quick version choice in Browse; busy/prog = download progress (0-1)
+// path = the file on disk (installed rows; actions use it, never the row number); sel = picked for a bulk action;
+// cjk = the text needs a CJK font (Barlow has none)
+export struct Row { id: string, name: string, sub: string, meta: string, ver: string, mc: string, ok: int, icon: image, has-icon: bool, on: bool, upd: bool,
+    vid: string, vlabels: [string], vids: [string], pick: int, busy: bool, prog: float, path: string, sel: bool, cjk: bool }
+
+export struct Link { k: string, url: string }
+// Modrinth-style project page: header, version strip, description + sidebar (compatibility, categories, links, details)
+export struct Detail {
+    id: string, title: string, summary: string, desc: string, author: string, downloads: string, followers: string,
+    tags: [string], loaders: [string], versions: [string], more-versions: string, env: string,
+    license: string, published: string, updated: string, page-url: string, links: [Link],
+    mod-ver: string, mod-mc: string, mod-loader: string, mod-size: string, mod-date: string,
+    compat-text: string, compat-ok: int, installed: bool, can-install: bool,
+    icon: image, has-icon: bool, loading: bool,
+    vers: [VerOpt], vlabels: [string], pick: int, blocks: [MdBlock], gallery: [image],
+    // installed project: its version id and file; busy/prog = download progress
+    cur-vid: string, file: string, busy: bool, prog: float,
+    // the description needs a CJK font
+    cjk: bool,
+}
+// a client module; x/y = HUD position as 0..1 of the free space, scale = HUD size
+// one module setting (from the agent's schema): t 0 toggle, 1 slider, 2 colour, 3 choice, 4 key; num/on/str = current value
+export struct SetVal { t: int, key: string, label: string, min: float, max: float, step: float, num: float, on: bool, str: string, opts: [string], pick: int,
+    // L2: hint = explanation line under the label; unset = KEY with no key bound
+    hint: string, unset: bool, col: color, rainbow: bool }
+// group = injection group (hud, pvp, qol); variant = look of the HUD preview (armor layout)
+export struct ClientMod { id: string, name: string, desc: string, cat: string, ci: int, on: bool, hud: bool, x: float, y: float, scale: float, group: string, sets: [SetVal], variant: string, icon: image, has-icon: bool, pixel-icon: bool, safety: string, moved: bool }
+
+// Everything the Rust side provides or handles.
+// L2: a restore point row (date = "12 Nov 2026 · 13:40", when = "3 days ago", kind = MANUAL / AUTO / BEFORE RESTORE)
+export struct RestorePt { file: string, date: string, when: string, kind: string, size: string }
+// L2: instance list row: idx = instance index, or a group header (head != "", n = its instance count, folded); num = list number
+export struct InstRow { idx: int, head: string, n: int, folded: bool, num: int }
+// L2: command palette row (kind = INSTANCE / PLAY / WORLD / MOD / SETTING / ACTION)
+export struct PalRow { kind: string, title: string, sub: string }
+export global Backend {
+    in-out property <[Inst]> instances;
+    in-out property <string> toast-text;
+    in-out property <bool> toast-on;
+    // toast-err: the toast reports a failure (stays longer, marked red)
+    in-out property <bool> toast-err;
+    // toast action button ("" = none, e.g. VIEW LOG); hovering the toast keeps it up
+    in-out property <string> toast-action;
+    in-out property <bool> toast-hover;
+    callback toast-act();
+    callback toast-close();
+    // long tasks shown in the bottom deck (launch prep, installs, export): the newest one, job-more = how many others run;
+    // job-prog < 0 = no percentage; job-cancel = the shown one can be cancelled
+    in-out property <bool> job-on;
+    in-out property <string> job-text;
+    in-out property <float> job-prog;
+    in-out property <int> job-more;
+    in-out property <bool> job-cancel;
+    callback cancel-job();
+    in-out property <int> active-inst: 0;
+    in-out property <int> running-count: 0;
+    // instance currently opened on the Instances page (-1 = none); mod browsing results from Modrinth
+    in-out property <int> current-inst: -1;
+    in-out property <[Row]> browse-rows;
+    in-out property <bool> browse-loading: false;
+    in-out property <[Row]> installed-rows;
+    in-out property <bool> detail-open: false;
+    in-out property <Detail> detail;
+    in-out property <bool> gate-open: true;
+    callback refresh-installed();
+    // installed rows with a newer compatible build; update-mods(row) updates one, -1 updates all
+    in-out property <int> update-count: 0;
+    callback update-mods(int);
+    // installed list: open the content folder / copy local files (.jar, .zip) into it
+    callback content-folder(int);
+    // overview: disk size of the opened instance
+    in-out property <string> inst-size;
+    callback measure-inst();
+    callback add-content-files(int);
+    callback open-detail(int, int);
+    callback install-detail();
+    callback pick-version(int);
+    callback uninstall-detail();
+    callback pick-row-version(int, int);
+    callback uninstall(int);
+    callback search-mods();
+    // browse search: text, sort (0 relevance, 1 downloads, 2 follows, 3 newest, 4 updated), category index (0 = any)
+    in-out property <string> browse-query;
+    in-out property <int> browse-sort: 1;
+    in-out property <int> browse-cat: 0;
+    callback install-mod(int);
+    callback toggle-mod(int, bool);
+    callback toast(string);
+    callback play(string);
+    // Install Packs page: source 0 Modrinth, 2 Nether (1 = CurseForge, hidden until there is an API key); detail-pack = the project page shows a pack
+    in-out property <int> pack-src: 0;
+    in-out property <[Row]> pack-rows;
+    in-out property <bool> pack-loading: false;
+    in-out property <string> pack-query;
+    in-out property <int> pack-sort: 0;
+    // Modrinth modpack category (0 = all; packs.rs PACK_CATS)
+    in-out property <int> pack-cat: 0;
+    in-out property <bool> detail-pack: false;
+    callback load-packs();
+    callback open-pack(int);
+
+    // instances page: grid filter (0 all, 1 modded, 2 vanilla) -> indices shown; create dialog version lists
+    in-out property <int> inst-filter: 0;
+    in-out property <[int]> visible-insts;
+    callback refilter();
+    // instances list search + sort (0 last played, 1 name, 2 playtime, 3 created); recent = indices, last played first (Home)
+    in-out property <string> inst-query;
+    in-out property <int> inst-sort: 0;
+    in-out property <[int]> recent;
+    // rename an instance (index, new name); false = refused (a toast says why)
+    callback rename-instance(int, string) -> bool;
+    // installed list: filter text, bulk actions on the picked rows (0 enable, 1 disable, 2 remove, 3 pick all shown, 4 pick none)
+    in-out property <string> mod-query;
+    in-out property <int> mod-picked;
+    callback filter-installed();
+    callback pick-installed(string, bool);
+    callback bulk-installed(int);
+    in-out property <[string]> mc-versions;
+    in-out property <[string]> fabric-versions;
+    // game versions the Quilt and Legacy Fabric loaders support (their meta services)
+    in-out property <[string]> quilt-versions;
+    in-out property <[string]> legacy-versions;
+    callback create-instance(string, string, int, int, string, string) -> bool;
+    // pickers: block icons and version wallpapers (cover-choices[0] = "own version"); version-cover = art for the dialog's version
+    in-out property <[Art]> icon-choices;
+    in-out property <[Art]> cover-choices;
+    in-out property <image> version-cover;
+    callback cover-for(string);
+    callback set-inst-art(int, string, string);
+    callback set-inst-shared(int, bool);
+    // shared game settings (Settings page)
+    in-out property <bool> sync-on: true;
+    in-out property <bool> sync-controls: true;
+    in-out property <bool> sync-video: true;
+    in-out property <bool> sync-audio: true;
+    in-out property <bool> sync-other: true;
+    in-out property <bool> sync-mods: true;
+    callback save-sync();
+    callback import-settings();
+    callback open-settings-file();
+    // launcher settings: uploads (kind 0 icon, 1 wallpaper), renderer, startup, launch/close behaviour, reduced motion
+    in-out property <[Art]> custom-icons;
+    in-out property <[Art]> custom-covers;
+    callback upload-art(int);
+    callback remove-art(int, string);
+    in-out property <bool> lp-gpu: true;
+    in-out property <bool> lp-autostart: false;
+    in-out property <int> lp-on-launch: 1;
+    in-out property <int> lp-on-close: 0;
+    in-out property <bool> calm: false;
+    // look: accent 0 racing red, 1 ember, 2 acid, 3 cobalt, 4 violet; text size 0 default, 1 large, 2 larger
+    in-out property <int> lp-accent: 0;
+    in-out property <int> lp-text: 0;
+    // Settings > Java: one row per major version; pick a java(w).exe or go back to automatic
+    in-out property <[JavaRt]> javas;
+    callback java-pick(int);
+    callback java-reset(int);
+    // Settings > Accounts: forget a saved (not active) account
+    callback remove-account(string);
+    // Settings > Storage: launcher folders (k = label, url = path) and opening one
+    in-out property <[Link]> folders;
+    callback open-path(string);
+    // updates (GitHub releases): 0 checking, 1 up to date, 2 newer version (update-ver, update-url), 3 couldn't check,
+    // 4 downloaded + verified, installs on close (update-restart installs now), 5 downloading
+    in-out property <int> update-state: 0;
+    in-out property <string> update-ver;
+    in-out property <string> update-url;
+    callback check-updates();
+    callback update-restart();
+    in-out property <bool> lp-auto-update: true;
+    // Settings > Support: launcher log folder, system info to the clipboard
+    callback open-logs();
+    callback copy-sysinfo();
+    // ambient-animation clock (stops when reduced motion is on, so the window stops redrawing)
+    out property <duration> tick: Backend.calm ? 0ms : animation-tick();
+    callback save-launcher();
+    // 0 open folder, 1 duplicate, 2 export .mrpack, 3 delete
+    callback inst-action(int, int);
+    callback set-inst-ram(int, int);
+    callback set-inst-java(int, int);
+    // launch options (overview): extra JVM args as typed, window width/height as typed
+    callback set-inst-jvm(int, string);
+    callback set-inst-window(int, string, string);
+    // worlds tab: worlds-quick = this version can launch straight into a world; world-action 0 play, 1 back up, 2 folder
+    in-out property <[WorldRow]> worlds;
+    in-out property <bool> worlds-quick: false;
+    callback load-worlds();
+    callback world-action(int, int, int);
+    callback join-server(int, string);
+    in-out property <string> world-query;
+    callback filter-worlds();
+    callback import-world(int);
+    // screenshots tab: shot-action 0 open, 1 copy image, 2 show in folder (-1 = the folder), 3 delete
+    in-out property <[Shot]> shots;
+    callback load-shots();
+    callback shot-action(int, int);
+    // overview: total system memory (GB) for the RAM slider; fullscreen launch
+    in-out property <int> sys-ram: 16;
+    callback set-inst-fullscreen(int, bool);
+    // generic yes/no dialog (Rust holds what happens on yes)
+    in-out property <bool> ask-open: false;
+    in-out property <string> ask-title;
+    in-out property <string> ask-text;
+    in-out property <string> ask-yes;
+    in-out property <bool> ask-danger: false;
+    callback ask-answer(bool);
+    // crash dialog one-click fix for finding i
+    callback crash-fix(int);
+    // logs tab: kind 0 latest.log, 1 launcher.log, 2 newest crash report; note = why the log is empty
+    in-out property <int> log-kind: 0;
+    in-out property <string> log-text;
+    in-out property <string> log-note;
+    in-out property <string> log-filter;
+    in-out property <bool> log-issues: false;
+    in-out property <string> log-count;
+    callback load-log(int);
+    callback share-log(int);
+    // crash report after a game exits abnormally
+    in-out property <bool> crash-open: false;
+    in-out property <string> crash-inst;
+    in-out property <int> crash-idx: -1;
+    in-out property <string> crash-code;
+    in-out property <[CrashItem]> crash-items;
+    // crash page: mclo.gs upload (state 0 idle, 1 working, 2 done, 3 failed), its link and analysis, the log tail
+    in-out property <int> crash-state: 0;
+    in-out property <string> crash-url;
+    in-out property <string> crash-title;
+    in-out property <string> crash-err;
+    in-out property <[CrashProblem]> crash-problems;
+    in-out property <[string]> crash-facts;
+    in-out property <string> crash-tail;
+    callback crash-upload();
+    callback crash-relaunch();
+    // import an instance from a file or another launcher folder; stop a running game
+    callback import-instance();
+    callback stop(string);
+    // content kind for the opened instance lists: 0 mods, 1 resource packs, 2 shaders
+    in-out property <int> pack-kind: 0;
+    in-out property <bool> create-open: false;
+
+    // player preview (software-rendered 3D skin) and account capes (index 0 = no cape)
+    in-out property <image> skin-frame;
+    in-out property <bool> skin-ready: false;
+    in-out property <bool> skin-spin: true;
+    in-out property <bool> skin-slim: false;
+    in-out property <[Cape]> capes: [{ id: "", name: "No cape" }];
+    in-out property <int> cape-idx: 0;
+    in-out property <[string]> cape-names: ["No cape"];
+    // account chip head; drag on the preview turns the model (skin-held pauses the auto spin)
+    in-out property <image> acct-head;
+    in-out property <bool> skin-held: false;
+    in-out property <bool> skin-hover: false;
+    callback skin-drag(float);
+    // the preview needs frames again (hover, tab change, new skin)
+    callback skin-wake();
+    callback equip-cape(int);
+    // Nether capes (backend cape directory): 0 not loaded, 1 loading, 2 ready, 3 service not set up / offline
+    in-out property <[Cape]> ncapes;
+    in-out property <int> ncape-state: 0;
+    in-out property <string> ncape-worn;
+    in-out property <bool> ncape-busy;
+    callback load-ncapes();
+    callback wear-ncape(string);
+
+    // Microsoft account (0 signed out, 1 waiting on microsoft.com code, 2 signed in, 3 restoring)
+    in-out property <int> acct-state: 0;
+    in-out property <string> acct-name;
+    in-out property <string> acct-code;
+    in-out property <string> acct-url;
+    in-out property <string> acct-msg;
+    in-out property <bool> acct-open: false;
+    // every saved account; acct-offline = restored from cache without network (singleplayer only)
+    in-out property <[Acct]> accounts;
+    in-out property <bool> acct-offline: false;
+    in-out property <[News]> news;
+    // bottom deck: names of the running games
+    in-out property <string> running-label;
+    // settings: storage & about
+    in-out property <string> app-version;
+    in-out property <string> data-path;
+    in-out property <string> cache-size;
+    callback open-data();
+    callback clear-cache();
+    callback switch-account(string);
+    callback sign-in();
+    callback sign-out();
+    callback cancel-sign-in();
+    callback open-url(string);
+    callback copy-text(string);
+    // custom window chrome (no native title bar)
+    in-out property <bool> win-maxed;
+    callback win-drag();
+    callback win-min();
+    callback win-max();
+    callback win-close();
+    // L1: pre-launch check (rows reuse CrashItem; pre-fix(i) runs row i's fix, pre-launch = LAUNCH ANYWAY / PLAY)
+    in-out property <bool> pre-open: false;
+    in-out property <string> pre-inst;
+    in-out property <[CrashItem]> pre-items;
+    callback pre-fix(int);
+    callback pre-launch();
+    // L1: safe update dialog (state 0 loading changelogs, 1 ready, 2 updating), update history (snapshots)
+    in-out property <bool> upd-open: false;
+    in-out property <int> upd-state: 0;
+    in-out property <string> upd-inst;
+    in-out property <[UpdRow]> upd-rows;
+    // rows picked; upd-pick(i, on) picks row i, upd-pick(-1 - i, open) shows/hides its changelog
+    in-out property <int> upd-picked: 0;
+    callback upd-pick(int, bool);
+    callback upd-apply();
+    in-out property <bool> hist-open: false;
+    in-out property <string> hist-inst;
+    in-out property <[HistRow]> hist-rows;
+    callback hist-revert(string);
+    // L1: Tab past the last control of a dialog wraps to its first (back = Shift+Tab to the last)
+    callback focus-step(bool);
+
+    // L2: restore points of the opened instance (rp-busy = one is being made or restored); rp-ask = row whose
+    // restore dialog is open (-1 none); rp-restore(row, in place)
+    in-out property <[RestorePt]> rpoints;
+    in-out property <bool> rp-busy;
+    in-out property <int> rp-ask: -1;
+    callback load-rpoints();
+    callback rp-create();
+    callback rp-restore(int, bool);
+    callback rp-delete(int);
+    callback set-inst-backup(int, bool, int);
+    // L2: instance list rows with group headers (folded groups hide their instances); group names in use
+    in-out property <[InstRow]> inst-rows;
+    in-out property <[string]> groups;
+    callback fold-group(string);
+    callback set-inst-group(int, string);
+    callback set-inst-notes(int, string);
+    // L2: Home news could not be fetched (the section is hidden); Settings section to scroll to (-1 none)
+    in-out property <bool> news-failed;
+    in-out property <int> settings-goto: -1;
+    // L2: Settings > Privacy: Nether capes in game (cape service lookups)
+    in-out property <bool> lp-capes: true;
+    // L3: Discord Rich Presence (row hidden until a Discord app id is configured)
+    in-out property <bool> lp-discord: false;
+    in-out property <bool> discord-ready: false;
+    // L3: Friends-lite (top-bar button + panel, hidden unless the Nether API enables Friends)
+    in-out property <bool> fr-enabled: false;
+    in-out property <bool> fr-open: false;
+    in-out property <bool> fr-on: false;
+    in-out property <bool> fr-loaded: false;
+    in-out property <bool> fr-busy: false;
+    in-out property <bool> fr-sharing: false;
+    in-out property <string> fr-code;
+    in-out property <string> fr-msg;
+    in-out property <string> fr-input;
+    in-out property <[FriendRow]> fr-list;
+    callback fr-refresh();
+    callback fr-turn-on();
+    callback fr-turn-off();
+    callback fr-new-code();
+    callback fr-add(string);
+    callback fr-respond(string, string);
+    callback fr-join(string, string);
+    callback fr-share(bool);
+    // L2: command palette (Ctrl+K): query, matching rows, highlighted row; pal-run(row) runs it and closes
+    in-out property <bool> pal-open;
+    in-out property <string> pal-query;
+    in-out property <[PalRow]> pal-rows;
+    in-out property <int> pal-sel;
+    callback pal-show();
+    callback pal-search();
+    callback pal-run(int);
+}
+
+
+// Host page (crates/app/src/host.rs). One server runs at a time.
+export struct HostPlayer { name: string, op: bool, wl: bool }
+export struct HostBackup { name: string, size: string, date: string }
+// one server in the picker; status as HostState.status
+export struct HostServer { name: string, meta: string, status: int, players: int }
+// console line; k: 0 output, 1 warning/error, 2 typed command
+export struct ConLine { t: string, k: int }
+export global HostState {
+    // every server (crates/app/src/host.rs); idx = the one the page shows
+    in-out property <[HostServer]> servers;
+    in-out property <int> idx: -1;
+    // servers running right now (feeds the bottom deck)
+    in-out property <int> running;
+    // open tab: 0 console, 1 players, 2 add-ons, 3 settings, 4 world
+    in-out property <int> tab: 0;
+    in-out property <string> inst-name;
+    in-out property <string> inst-meta;
+    // "vanilla" | "fabric" | "paper"
+    in-out property <string> kind;
+    // 0 loading, 2 not set up yet (jar missing), 3 set up
+    in-out property <int> phase: 0;
+    in-out property <string> phase-note;
+    // 0 stopped, 1 starting, 2 running, 3 stopping, 4 crashed (exit-code)
+    in-out property <int> status: 0;
+    in-out property <int> exit-code: 0;
+    // install / start in flight for the shown server; live = its process exists
+    in-out property <bool> busy;
+    in-out property <bool> live;
+    in-out property <string> deck-text;
+    in-out property <string> uptime: "—";
+    in-out property <bool> eula-open;
+    in-out property <[ConLine]> console;
+    in-out property <int> console-rev;
+    in-out property <[HostPlayer]> players;
+    in-out property <[string]> whitelist;
+    in-out property <[string]> ops;
+    // singleplayer worlds of every instance: name = world, sub = instance
+    in-out property <[Row]> saves;
+    in-out property <[HostBackup]> backups;
+    // add-ons: installed jars (id = file name) and Modrinth results
+    in-out property <[Row]> addons;
+    in-out property <[Row]> hits;
+    in-out property <bool> hits-loading;
+    // settings (server.properties + launcher-side RAM / UPnP)
+    in-out property <string> port: "25565";
+    in-out property <string> motd;
+    in-out property <string> max-players: "20";
+    in-out property <int> difficulty: 1;
+    in-out property <int> gamemode: 0;
+    in-out property <bool> pvp: true;
+    in-out property <bool> online: true;
+    in-out property <bool> wl-on;
+    in-out property <bool> upnp: true;
+    in-out property <int> ram: 2;
+    // sharing: addresses, invite; upnp-state 0 off, 1 opening, 2 open, 3 failed, 4 turned off
+    in-out property <string> lan;
+    in-out property <string> pub-addr;
+    in-out property <string> addr;    // best invite address (tunnel > checked public > LAN)
+    in-out property <int> upnp-state;
+    in-out property <string> upnp-msg;
+    // checked from outside: 0 not yet, 1 checking, 2 reachable, 3 blocked, 4 couldn't check
+    in-out property <int> reach;
+    in-out property <string> reach-msg;
+    // playit.gg tunnel: 0 off, 1 starting, 2 waiting for the claim, 3 linked but no tunnel, 4 online, 5 failed
+    in-out property <int> tun;
+    in-out property <string> tun-msg;
+    in-out property <string> tun-url;
+    in-out property <string> tun-addr;
+    callback tunnel(int);   // 0 start, 1 stop
+    callback recheck();
+    // setup wizard
+    in-out property <bool> wiz-open;
+    in-out property <string> wiz-name;
+    in-out property <string> wiz-port: "25565";
+    in-out property <[string]> paper-versions;
+    callback opened();
+    callback select(int);
+    callback primary();
+    callback accept-eula();
+    callback send(string);
+    callback history(int) -> string;
+    callback player(string, int);
+    callback list-add(int, string);
+    callback list-remove(int, string);
+    callback save-settings();
+    callback import-save(int);
+    callback backup();
+    callback open-backups();
+    callback open-folder();
+    callback new-server();
+    // name, kind (0 vanilla 1 fabric 2 paper), version, RAM GB, port, world (-1 fresh, else index into saves), whitelist, online mode, UPnP
+    callback create(string, int, string, int, string, int, bool, bool, bool);
+    callback delete-server();
+    callback addon-search(string);
+    callback addon-install(string);
+    callback addon-remove(string);
+}
+
+// Wardrobe skin library (crates/app/src/wardrobe.rs).
+export struct SkinTile { id: string, name: string, slim: bool, img: image, has-img: bool, src: string }
+export global SkinLib {
+    in-out property <[SkinTile]> skins;
+    in-out property <bool> loaded;
+    // selected tile (previewed on the model, not applied); -1 = the account's skin
+    in-out property <int> sel: -1;
+    in-out property <string> worn-id;
+    // Home skin dropdown: "Account skin" + library names; picked row (0 = account skin)
+    in-out property <[string]> names: ["Account skin"];
+    in-out property <int> home-idx: 0;
+    in-out property <bool> busy;
+    in-out property <bool> wearing;
+    callback refresh();
+    callback add-file();
+    callback import(string);
+    callback select(int);
+    callback rename(int, string);
+    callback set-slim(int, bool);
+    callback export(int);
+    callback delete(int);
+    callback wear(int);
+}
+
+export global ClientState {
+    in-out property <[ClientMod]> modules;
+    // -1 = global setup, else the instance being edited (which may follow the global one)
+    in-out property <int> scope: -1;
+    in-out property <bool> use-global: true;
+    in-out property <int> sel: -1;
+    in-out property <string> menu-key: "RIGHT SHIFT";
+    in-out property <[string]> cats: ["ALL"];
+    // instance injection: client on/off + groups; main-menu = our title screen (global)
+    in-out property <bool> inject: true;
+    in-out property <bool> g-hud: true;
+    in-out property <bool> g-pvp: true;
+    in-out property <bool> g-qol: true;
+    in-out property <bool> g-menu: true;
+    in-out property <bool> main-menu: true;
+    callback load(int);
+    callback save();
+    callback set-use-global(bool);
+    callback save-injection();
+    callback set-main-menu(bool);
+    callback set-bool(int, string, bool);
+    callback set-num(int, string, float);
+    callback set-str(int, string, string);
+}
+
+// New-instance setup wizard (crates/app/src/wizard.rs). packs: Nether packs (ok = has built-in client settings);
+// rps: resource pack picks for rp-ver (on = chosen); mode: 0 global settings, 1 own copy, 2 the pack's built-in settings
+export global Wizard {
+    in-out property <[Row]> packs;
+    in-out property <[Row]> rps;
+    in-out property <string> rp-ver;
+    in-out property <bool> rp-loading;
+    in-out property <string> pack;
+    in-out property <bool> pack-has-client;
+    in-out property <bool> inject: true;
+    in-out property <bool> g-hud: true;
+    in-out property <bool> g-pvp: true;
+    in-out property <bool> g-qol: true;
+    in-out property <bool> g-menu: true;
+    in-out property <int> mode: 0;
+    callback pick-pack(string);
+    callback load-rps(string);
+    callback finish(string, string);
+}

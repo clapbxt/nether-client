@@ -1,0 +1,25 @@
+target/
+*.png
+
+
+!backend/content/capes/*.png
+!crates/core/res/nether-pack/*.png
+!design/screens/module-icons-*.png
+!docs/screens/*.png
+
+# content signing key must never be committed
+.nether-signing/
+*ed25519.key
+*.key
+
+# wrangler local dev state (local D1, bundles)
+.wrangler/
+
+# release builds (tools/release.ps1)
+dist/
+
+
+# Obsidian app state + plugin data (local tokens)
+NC Obsidian Vault/.obsidian/
+.worktrees/
+.overnight/

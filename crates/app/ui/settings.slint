@@ -1,0 +1,255 @@
+import { Theme } from "theme.slint";
+import { Backend, Art, Acct, JavaRt, Link } from "structs.slint";
+import { Eyebrow, Heading, Btn, Toggle, Dropdown, IconBtn, Ico, Icon, SectionHead, SetRow, Slash, Seg, Chip } from "components.slint";
+
+// A row with a switch on the right. A disabled row must not flip (the change would never be saved).
+component SyncRow inherits SetRow {
+    in property <bool> enabled: true;
+    in-out property <bool> on;
+    callback toggled(bool);
+    reserve: 90px;
+    dimmed: !root.enabled;
+    Toggle { x: parent.width - 42px; y: 21px; on <=> root.on; enabled: root.enabled; opacity: root.enabled ? 1 : 0.4; toggled(v) => { root.toggled(v); } }
+}
+
+// A row with a dropdown on the right.
+component ChoiceRow inherits SetRow {
+    in property <[string]> items;
+    in-out property <int> current;
+    callback changed(int);
+    reserve: 270px;
+    Dropdown { x: parent.width - 240px; y: 12px; width: 240px; items: root.items; current <=> root.current; changed(i) => { root.changed(i); } }
+}
+
+// Uploaded icons / wallpapers with an add tile; hover a tile to delete it.
+component Uploads inherits Rectangle {
+    in property <[Art]> items;
+    in property <length> tile;
+    in property <bool> pixel;
+    callback add();
+    callback remove(string);
+    property <int> cols: Math.floor((self.width + 8px) / (root.tile + 8px));
+    height: Math.ceil((root.items.length + 1) / root.cols) * (root.tile + 8px);
+    for a[i] in root.items: Rectangle {
+        x: mod(i, root.cols) * (root.tile + 8px); y: floor(i / root.cols) * (root.tile + 8px);
+        width: root.tile; height: root.tile; clip: true;
+        background: Theme.s2;
+        Image { x: root.pixel ? 8px : 0px; y: root.pixel ? 8px : 0px; width: parent.width - (root.pixel ? 16px : 0px); height: parent.height - (root.pixel ? 16px : 0px);
+            source: a.img; image-fit: root.pixel ? contain : cover; image-rendering: root.pixel ? pixelated : smooth; }
+        ut := TouchArea { }
+        Rectangle { x: parent.width - 28px; y: 4px; width: 24px; height: 24px; background: #060608d0; opacity: ut.has-hover || rm.hovered ? 1 : 0; animate opacity { duration: Theme.fast; }
+            rm := IconBtn { size: 24px; d: Ico.trash; danger: true; tip: "Remove"; clicked => { root.remove(a.key); } } }
+    }
+    Rectangle {
+        x: mod(root.items.length, root.cols) * (root.tile + 8px); y: floor(root.items.length / root.cols) * (root.tile + 8px);
+        width: root.tile; height: root.tile;
+        background: at.has-hover ? Theme.s2 : transparent; border-width: 1px; border-color: at.has-hover ? Theme.red2 : Theme.ln2;
+        animate background, border-color { duration: Theme.mid; }
+        Icon { x: (parent.width - 12px) / 2; y: (parent.height - 12px) / 2; d: Ico.plus; tint: at.has-hover ? Theme.tx : Theme.dim; }
+        at := TouchArea { mouse-cursor: pointer; clicked => { root.add(); } }
+        fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
+            key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.add(); return accept; } return reject; } }
+        if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-width: 2px; border-color: Theme.ice; }
+    }
+}
+
+// Index entry on the left: jumps to a section.
+component Jump inherits Rectangle {
+    in property <string> idx;
+    in property <string> label;
+    in property <bool> active;
+    callback clicked();
+    height: 40px;
+    background: ta.has-hover ? Theme.s2 : transparent;
+    animate background { duration: Theme.fast; }
+    Rectangle { x: 0px; width: 3px; background: Theme.red2; opacity: root.active ? 1 : 0; animate opacity { duration: Theme.mid; } }
+    Text { x: 16px; text: root.idx; color: root.active ? Theme.red2 : Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; vertical-alignment: center; }
+    Text { x: 44px; text: root.label; color: root.active ? Theme.tx : Theme.dim; font-family: Theme.disp; font-size: 17px; font-weight: 600; letter-spacing: 0.8px; vertical-alignment: center; }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
+        key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
+    if fs.has-focus: Rectangle { border-width: 2px; border-color: Theme.ice; }
+}
+
+// A saved Microsoft account: head, name, what it is used for; switch / remove on the right.
+component AcctRow inherits SetRow {
+    in property <Acct> acct;
+    reserve: 240px;
+    indent: 52px;
+    title: root.acct.name;
+    sub: root.acct.active ? (Backend.acct-offline ? "Plays now · offline until the connection is back" : "Plays now · your skin and capes come from here") : "Saved on this PC · switch any time";
+    // indent the text past the head
+    Rectangle { x: 0px; y: 14px; width: 36px; height: 36px; background: Theme.s2; clip: true;
+        if root.acct.active && Backend.skin-ready: Image { width: 36px; height: 36px; source: Backend.acct-head; image-rendering: pixelated; }
+        if !(root.acct.active && Backend.skin-ready): Icon { x: 12px; y: 12px; d: Ico.user; tint: Theme.mut; } }
+    if root.acct.active: Chip { x: parent.width - 52px - self.width - 12px; y: 21px; text: "ACTIVE"; hot: true; }
+    if !root.acct.active: Btn { x: parent.width - 52px - self.width - 10px; y: 14px; text: "USE"; clicked => { Backend.switch-account(root.acct.uuid); } }
+    IconBtn { x: parent.width - 36px; y: 16px; d: Ico.trash; danger: true; tip: root.acct.active ? "Sign out" : "Remove account";
+        clicked => { if root.acct.active { Backend.sign-out(); } else { Backend.remove-account(root.acct.uuid); } } }
+}
+
+export component SettingsScreen inherits Rectangle {
+    property <length> cw: 760px;
+    // section tops (each follows the one before it)
+    property <int> nacc: Math.max(1, Backend.accounts.length);
+    property <length> y2: 540px;
+    property <length> y3: root.y2 + 40px + root.nacc * 64px + 68px;
+    property <length> y4: root.y3 + 40px + Backend.javas.length * 64px + 40px;
+    property <length> y5: root.y4 + 40px + 6 * 64px + 40px;
+    property <length> y6: root.y5 + 40px + 2 * 64px + 150px + ic.height + wp.height + 40px;
+    property <length> py: root.y5 + 152px;
+    property <length> sy: root.y6 + 24px + Backend.folders.length * 64px;
+    // L2: privacy (what the launcher and client connect to)
+    property <length> y7: root.sy + 5 * 64px + 40px;
+    property <length> dy: Backend.discord-ready ? 64px : 0px;
+    property <length> pos: -fl.content-y;
+    property <length> end: fl.content-height - fl.height - 2px;
+    property <[length]> tops: [0px, root.y2, root.y3, root.y4, root.y5, root.y6, root.y7];
+    property <int> at: root.pos >= Math.min(root.y7 - 120px, root.end) ? 6 : (root.pos >= root.y6 - 120px ? 5 : (root.pos >= root.y5 - 120px ? 4 : (root.pos >= root.y4 - 120px ? 3 : (root.pos >= root.y3 - 120px ? 2 : (root.pos >= root.y2 - 120px ? 1 : 0)))));
+    property <[string]> accent-names: ["Racing red", "Ember", "Acid", "Cobalt", "Violet"];
+    property <[color]> accents: [#E10600, #E8590C, #22A845, #1F6FEB, #8B3DFF];
+    // L2: what connects where (Rule 6); k = what for, url = hosts and when
+    property <[Link]> hosts: [
+        {k: "Sign-in", url: "login.microsoftonline.com, xboxlive.com, api.minecraftservices.com · your token goes only to Microsoft and Mojang"},
+        {k: "Game files", url: "piston-meta.mojang.com, launchermeta.mojang.com, libraries.minecraft.net, resources.download.minecraft.net"},
+        {k: "Mod loaders", url: "meta.fabricmc.net, meta.quiltmc.org, meta.legacyfabric.net, maven.minecraftforge.net, maven.neoforged.net"},
+        {k: "Mods and modpacks", url: "api.modrinth.com, cdn.modrinth.com · searches and downloads you start"},
+        {k: "Skins, capes and news", url: "sessionserver.mojang.com, api.mojang.com, textures.minecraft.net, launchercontent.mojang.com"},
+        {k: "Nether content and capes", url: "the Nether service (signed news, packs and cape list; your cape, and lookups in game)"},
+        {k: "Launcher updates", url: "api.github.com, github.com · checking for and downloading signed updates"},
+        {k: "Hosting", url: "api.playit.gg, api.ipify.org, api.mcstatus.io, fill.papermc.io · only while you use the Host tab"},
+        {k: "Sharing logs", url: "api.mclo.gs · only when you press Share or Upload"},
+        {k: "In game", url: "lrclib.net for Lyrics (off by default), sessionserver.mojang.com for your head on the title screen · media helper: local only"},
+    ];
+
+    Heading { x: 53px; y: 22px; text: "SETTINGS"; }
+
+    // section index
+    // L2: the command palette opens a section (Backend.settings-goto)
+    property <int> goto: Backend.settings-goto;
+    function jump() { if Backend.settings-goto >= 0 { fl.content-y = -Math.max(0px, Math.min(root.tops[Backend.settings-goto], fl.content-height - fl.height)); Backend.settings-goto = -1; } }
+    init => { root.jump(); }
+    changed goto => { root.jump(); }
+
+    for s[i] in ["GAME", "ACCOUNTS", "JAVA", "LAUNCHER", "PERSONALIZATION", "STORAGE & ABOUT", "PRIVACY"]: Jump {
+        x: 56px; y: 124px + i * 40px; width: 210px; idx: "0\{i + 1}"; label: s; active: root.at == i;
+        clicked => { fl.content-y = -Math.max(0px, Math.min(root.tops[i], fl.content-height - fl.height)); }
+    }
+
+    fl := Flickable {
+        x: 306px; y: 112px; width: root.cw + 20px; height: parent.height - 112px;
+        content-height: root.y7 + 24px + 64px + root.dy + root.hosts.length * 64px + 60px;
+
+        // ---------- 01 shared game settings ----------
+        SectionHead { x: 0px; y: 12px; width: root.cw; idx: "01"; title: "SHARED GAME SETTINGS"; }
+        SyncRow { x: 0px; y: 36px; width: root.cw; title: "Share settings between instances"; sub: "Set a keybind or your FOV once and it follows you into every instance."; on <=> Backend.sync-on; toggled(v) => { Backend.save-sync(); } }
+        Rectangle { x: 0px; y: 100px; width: root.cw; height: 320px;
+            Rectangle { x: 6px; y: 12px; width: 1px; height: parent.height - 24px; background: Theme.ln2; }
+            SyncRow { x: 28px; y: 0px; width: parent.width - 28px; title: "Controls & keybinds"; sub: "Every keybind (mod keys included), mouse sensitivity, toggle sprint / crouch"; enabled: Backend.sync-on; on <=> Backend.sync-controls; toggled => { Backend.save-sync(); } }
+            SyncRow { x: 28px; y: 64px; width: parent.width - 28px; title: "Video"; sub: "FOV, brightness, GUI scale, render distance, max FPS, VSync, fullscreen"; enabled: Backend.sync-on; on <=> Backend.sync-video; toggled => { Backend.save-sync(); } }
+            SyncRow { x: 28px; y: 128px; width: parent.width - 28px; title: "Audio"; sub: "Master, music and every sound category, output device, subtitles"; enabled: Backend.sync-on; on <=> Backend.sync-audio; toggled => { Backend.save-sync(); } }
+            SyncRow { x: 28px; y: 192px; width: parent.width - 28px; title: "Chat, language & accessibility"; sub: "Chat scale and opacity, language, narrator, other options"; enabled: Backend.sync-on; on <=> Backend.sync-other; toggled => { Backend.save-sync(); } }
+            SyncRow { x: 28px; y: 256px; width: parent.width - 28px; title: "Mod video settings"; sub: "Sodium, Embeddium and OptiFine options; the copy changed last wins"; enabled: Backend.sync-on; on <=> Backend.sync-mods; toggled => { Backend.save-sync(); } }
+        }
+        imp := Btn { x: 0px; y: 440px; text: "IMPORT FROM MINECRAFT LAUNCHER"; icon: Ico.download; clicked => { Backend.import-settings(); } }
+        Btn { x: imp.width + 10px; y: 440px; text: "OPEN SETTINGS FILE"; icon: Ico.ext; clicked => { Backend.open-settings-file(); } }
+
+        // ---------- 02 accounts ----------
+        SectionHead { x: 0px; y: root.y2; width: root.cw; idx: "02"; title: "ACCOUNTS"; note: Backend.accounts.length == 1 ? "1 account" : "\{Backend.accounts.length} accounts"; }
+        for a[i] in Backend.accounts: AcctRow { x: 0px; y: root.y2 + 24px + i * 64px; width: root.cw; acct: a; }
+        if Backend.accounts.length == 0: SetRow { x: 0px; y: root.y2 + 24px; width: root.cw; reserve: 260px;
+            title: "No account yet"; sub: "Sign in with Microsoft to play, join servers and wear your skin.";
+            Btn { x: parent.width - self.width; y: 14px; text: "SIGN IN WITH MICROSOFT"; solid: true; clicked => { Backend.acct-open = true; Backend.sign-in(); } } }
+        if Backend.accounts.length > 0: Btn { x: 0px; y: root.y2 + 24px + root.nacc * 64px + 16px; text: "ADD ACCOUNT"; icon: Ico.plus; clicked => { Backend.acct-open = true; Backend.sign-in(); } }
+
+        // ---------- 03 java ----------
+        SectionHead { x: 0px; y: root.y3; width: root.cw; idx: "03"; title: "JAVA"; note: "picked per instance on its Overview"; }
+        for j[i] in Backend.javas: SetRow {
+            x: 0px; y: root.y3 + 24px + i * 64px; width: root.cw; reserve: j.custom ? 330px : 150px;
+            title: j.title; sub: j.sub;
+            if j.custom: Rectangle {
+                rs := Btn { x: parent.width - 130px - self.width; y: 14px; text: "RESET"; clicked => { Backend.java-reset(j.major); } }
+                Chip { x: rs.x - self.width - 12px; y: 21px; text: "CUSTOM"; }
+            }
+            Btn { x: parent.width - 120px; y: 14px; width: 120px; text: "CHOOSE"; icon: Ico.folder; clicked => { Backend.java-pick(j.major); } }
+        }
+
+        // ---------- 04 launcher ----------
+        SectionHead { x: 0px; y: root.y4; width: root.cw; idx: "04"; title: "LAUNCHER"; }
+        SyncRow { x: 0px; y: root.y4 + 24px; width: root.cw; title: "Hardware acceleration"; sub: "Draw the launcher on the GPU. Turn off if it flickers or crashes (applies after a restart)."; on <=> Backend.lp-gpu; toggled => { Backend.save-launcher(); } }
+        SyncRow { x: 0px; y: root.y4 + 88px; width: root.cw; title: "Start with Windows"; sub: "Open Nether Client when you sign in to Windows."; on <=> Backend.lp-autostart; toggled => { Backend.save-launcher(); } }
+        ChoiceRow { x: 0px; y: root.y4 + 152px; width: root.cw; title: "When a game starts"; sub: "The launcher comes back when the game closes."; items: ["Keep launcher open", "Minimize launcher", "Hide to tray"]; current <=> Backend.lp-on-launch; changed => { Backend.save-launcher(); } }
+        ChoiceRow { x: 0px; y: root.y4 + 216px; width: root.cw; title: "Close button"; sub: "Quit, or keep running in the system tray."; items: ["Quit the launcher", "Hide to tray"]; current <=> Backend.lp-on-close; changed => { Backend.save-launcher(); } }
+        SyncRow { x: 0px; y: root.y4 + 280px; width: root.cw; title: "Reduce motion"; sub: "Turn off page transitions and pulsing indicators; saves power on laptops."; on <=> Backend.calm; toggled => { Backend.save-launcher(); } }
+        SetRow { x: 0px; y: root.y4 + 344px; width: root.cw; reserve: 0px; title: "Keyboard shortcuts"; sub: "Ctrl+K search everything  ·  Ctrl+1-6 pages  ·  Ctrl+, settings  ·  Ctrl+N new instance  ·  Esc closes"; }
+
+        // ---------- 05 personalization ----------
+        SectionHead { x: 0px; y: root.y5; width: root.cw; idx: "05"; title: "PERSONALIZATION"; }
+        SetRow { x: 0px; y: root.y5 + 24px; width: root.cw; reserve: 230px; title: "Accent colour"; sub: root.accent-names[Backend.lp-accent] + " · PLAY, selection marks and live states";
+            for c[i] in root.accents: Rectangle {
+                x: parent.width - 5 * 36px + 6px + i * 36px; y: 18px; width: 28px; height: 28px; background: c;
+                border-width: Backend.lp-accent == i ? 2px : 0px; border-color: Theme.ice;
+                Rectangle { x: 6px; y: 6px; width: 16px; height: 16px; background: transparent; border-width: Backend.lp-accent == i ? 2px : 0px; border-color: #060608; }
+                sw := TouchArea { mouse-cursor: pointer; clicked => { Backend.lp-accent = i; Backend.save-launcher(); } }
+                sf := FocusScope { width: 0px; height: 0px; focus-on-click: false;
+                    key-pressed(e) => { if e.text == " " || e.text == Key.Return { Backend.lp-accent = i; Backend.save-launcher(); return accept; } return reject; } }
+                if sf.has-focus || sw.has-hover: Rectangle { x: -4px; y: -4px; width: parent.width + 8px; height: parent.height + 8px; border-width: 1px; border-color: sf.has-focus ? Theme.ice : Theme.ln2; }
+            }
+        }
+        SetRow { x: 0px; y: root.y5 + 88px; width: root.cw; reserve: 340px; title: "Text size"; sub: "Bigger reading text. Titles keep their size.";
+            Seg { x: parent.width - self.width; y: 15px; items: ["DEFAULT", "LARGE", "LARGER"]; item-w: 104px; current: Backend.lp-text; changed(i) => { Backend.lp-text = i; Backend.save-launcher(); } }
+        }
+        Text { x: 0px; y: root.py + 24px; text: "Your instance icons"; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; }
+        Text { x: 0px; y: root.py + 46px; width: root.cw; text: "PNG, JPG or WebP. Pixel art stays crisp; large images are scaled to 64px."; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; }
+        ic := Uploads { x: 0px; y: root.py + 76px; width: root.cw; tile: 56px; pixel: true; items: Backend.custom-icons; add => { Backend.upload-art(0); } remove(k) => { Backend.remove-art(0, k); } }
+        Text { x: 0px; y: ic.y + ic.height + 24px; text: "Your wallpapers"; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; }
+        Text { x: 0px; y: ic.y + ic.height + 46px; width: root.cw; text: "Screenshots or any image. They appear next to the version wallpapers when you make or edit an instance."; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; }
+        wp := Uploads { x: 0px; y: ic.y + ic.height + 76px; width: root.cw; tile: 100px; pixel: false; items: Backend.custom-covers; add => { Backend.upload-art(1); } remove(k) => { Backend.remove-art(1, k); } }
+
+        // ---------- 06 storage & about ----------
+        SectionHead { x: 0px; y: root.y6; width: root.cw; idx: "06"; title: "STORAGE & ABOUT"; }
+        for f[i] in Backend.folders: SetRow { x: 0px; y: root.y6 + 24px + i * 64px; width: root.cw; reserve: 140px; title: f.k; sub: f.url;
+            Btn { x: parent.width - self.width; y: 14px; text: "OPEN"; icon: Ico.folder; clicked => { Backend.open-path(f.url); } } }
+        SetRow { x: 0px; y: root.sy; width: root.cw; reserve: 140px; title: "Download cache"; sub: Backend.cache-size + " of saved icons and lookups. Safe to clear; it refills as you browse.";
+            Btn { x: parent.width - self.width; y: 14px; text: "CLEAR"; clicked => { Backend.clear-cache(); } } }
+        SetRow { x: 0px; y: root.sy + 64px; width: root.cw; reserve: 260px; title: "Updates";
+            sub: Backend.update-state == 0 ? "Checking for a newer version…" : (Backend.update-state == 2 ? "Nether Client " + Backend.update-ver + " is out. Get it from the release page." : (Backend.update-state == 3 ? "Couldn't reach GitHub to check. Try again later." : (Backend.update-state == 4 ? "Nether Client " + Backend.update-ver + " is downloaded. It installs when you close the launcher." : (Backend.update-state == 5 ? "Downloading Nether Client " + Backend.update-ver + "…" : "You're on the newest version."))));
+            if Backend.update-state == 2: Btn { x: parent.width - self.width; y: 14px; text: "GET " + Backend.update-ver; solid: true; icon: Ico.download; clicked => { Backend.open-url(Backend.update-url); } }
+            if Backend.update-state == 4: Btn { x: parent.width - self.width; y: 14px; text: "RESTART NOW"; solid: true; icon: Ico.download; clicked => { Backend.update-restart(); } }
+            if Backend.update-state != 2 && Backend.update-state != 4: Btn { x: parent.width - self.width; y: 14px; text: "CHECK NOW"; enabled: Backend.update-state != 0 && Backend.update-state != 5; clicked => { Backend.check-updates(); } } }
+        SyncRow { x: 0px; y: root.sy + 128px; width: root.cw; title: "Install updates automatically";
+            sub: "New versions download in the background, are checked against our signing key, and install when you close Nether."; on <=> Backend.lp-auto-update; toggled => { Backend.save-launcher(); } }
+        SetRow { x: 0px; y: root.sy + 192px; width: root.cw; reserve: 330px; title: "Support"; sub: "The launcher's own log, and a summary of this PC for a bug report.";
+            Btn { x: parent.width - self.width - 186px; y: 14px; text: "LOGS"; icon: Ico.folder; clicked => { Backend.open-logs(); } }
+            Btn { x: parent.width - self.width; y: 14px; width: 176px; text: "COPY SYSTEM INFO"; icon: Ico.copy; clicked => { Backend.copy-sysinfo(); } } }
+        SetRow { x: 0px; y: root.sy + 256px; width: root.cw; reserve: 0px; title: "Nether Client " + Backend.app-version; sub: "Beta. No telemetry, no ads. Sign-in tokens stay in Windows Credential Manager."; }
+
+        // ---------- 07 privacy (L2): every service the launcher and client talk to, and when ----------
+        SectionHead { x: 0px; y: root.y7; width: root.cw; idx: "07"; title: "PRIVACY"; note: "no telemetry, no analytics"; }
+        SyncRow { x: 0px; y: root.y7 + 24px; width: root.cw; title: "Nether capes in game";
+            sub: "Shows Nether capes. The client asks the cape service about the players it sees (their UUIDs only)."; on <=> Backend.lp-capes; toggled => { Backend.save-launcher(); } }
+        if Backend.discord-ready: SyncRow { x: 0px; y: root.y7 + 88px; width: root.cw; title: "Discord status";
+            sub: "Shows \"Minecraft <version>\" and your play time on Discord. Only the Discord app on this PC is told; never your server or world."; on <=> Backend.lp-discord; toggled => { Backend.save-launcher(); } }
+        for h[i] in root.hosts: SetRow { x: 0px; y: root.y7 + 88px + root.dy + i * 64px; width: root.cw; reserve: 0px; title: h.k; sub: h.url; }
+    }
+
+    // how sharing works (beside the Game section it explains)
+    Rectangle {
+        x: 1124px; y: 0px; width: 316px; height: parent.height; background: Theme.s1;
+        opacity: root.at == 0 ? 1 : 0;
+        animate opacity { duration: Theme.mid; }
+        Rectangle { x: 0px; width: 1px; background: Theme.ln; }
+        Eyebrow { x: 28px; y: 124px; text: "HOW SHARING WORKS"; }
+        for t[i] in [
+            {h: "Every loader", b: "Settings are merged into each instance's own options.txt before launch, so Vanilla, Fabric, Quilt, Forge and NeoForge all read them the normal way."},
+            {h: "Different mods per instance", b: "Mod keybinds are kept even in instances without that mod, and come back in any instance that has it."},
+            {h: "Old and new versions", b: "1.8.9-1.12 key codes are translated to and from modern key names, so binds carry between eras."},
+            {h: "Changes made in game", b: "When the game closes, what you changed is saved back. Instances can opt out on their Overview page."},
+        ]: Rectangle {
+            x: 28px; y: 156px + i * 124px * Theme.ts; height: 124px * Theme.ts; width: parent.width - 56px;
+            Text { x: 0px; y: 0px; text: "0\{i + 1}"; color: Theme.red2; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; }
+            Text { x: 0px; y: 18px; width: parent.width; text: t.h; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; }
+            Text { x: 0px; y: 40px; width: parent.width; text: t.b; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
+        }
+    }
+}
