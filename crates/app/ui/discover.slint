@@ -4,7 +4,7 @@ import { Heading, Seg, Hatch, Chip, Btn, ModIcon, Field, Dropdown, Icon, Ico } f
 import { ModDetail } from "moddetail.slint";
 
 component ColHead inherits Text {
-    font-family: Theme.disp; font-size: 16px; font-weight: 600; letter-spacing: 0.9px; color: Theme.mut; vertical-alignment: center;
+    font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; color: Theme.mut; vertical-alignment: center;
 }
 
 // Install Packs: Modrinth modpacks and Nether packs (pack-src 0 / 2; CurseForge stays hidden until there is an API key).
@@ -96,7 +96,7 @@ export component DiscoverScreen inherits Rectangle {
                     x: parent.width - 120px; y: 17px; width: 104px; height: 34px;
                     background: ta.has-hover ? Theme.red : transparent; border-width: 1px; border-color: ta.has-hover ? Theme.red : Theme.ln2;
                     animate background, border-color { duration: Theme.fast; }
-                    Text { text: "VIEW"; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.9px; horizontal-alignment: center; vertical-alignment: center; }
+                    Text { text: "VIEW"; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; horizontal-alignment: center; vertical-alignment: center; }
                 }
                 Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; }
             }

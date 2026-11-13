@@ -37,7 +37,7 @@ export component HomeScreen inherits Rectangle {
             color: root.cur.running || root.cur.crashed ? Theme.red2 : #ffffffb8; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.5px;
             text: root.cur.running ? "RUNNING NOW" : (root.cur.crashed ? "LAST SESSION CRASHED" : (root.cur.last == "" ? "READY TO PLAY" : "LAST PLAYED · " + root.cur.last)); }
         if root.cur.crashed && !root.cur.running && !root.cur.starting: LinkBtn { x: ey.x + ey.preferred-width + 18px; y: -2px; text: "VIEW CRASH"; clicked => { root.open-crash(root.ai); } }
-        Text { x: 0px; y: 36px; width: 640px; height: 72px; vertical-alignment: center; overflow: elide;
+        Text { x: 0px; y: 36px; width: 900px; height: 72px; vertical-alignment: center; overflow: elide;
             text: root.cur.title; color: #FFFFFF; font-family: Theme.disp; font-size: 64px; font-weight: 700; }
         Text { x: 0px; y: 116px; width: 640px; height: 24px; vertical-alignment: center; overflow: elide;
             text: root.cur.ver + "  ·  " + root.cur.loader + "  ·  " + root.cur.ram + " GB  ·  " + root.cur.hours + " h played  ·  " + root.cur.mods + " mods";

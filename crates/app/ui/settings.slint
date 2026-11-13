@@ -64,7 +64,7 @@ component Jump inherits Rectangle {
     animate background { duration: Theme.fast; }
     Rectangle { x: 0px; width: 3px; background: Theme.red2; opacity: root.active ? 1 : 0; animate opacity { duration: Theme.mid; } }
     Text { x: 16px; text: root.idx; color: root.active ? Theme.red2 : Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; vertical-alignment: center; }
-    Text { x: 44px; text: root.label; color: root.active ? Theme.tx : Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 600; letter-spacing: 0.8px; vertical-alignment: center; }
+    Text { x: 44px; text: root.label; color: root.active ? Theme.tx : Theme.dim; font-family: Theme.ui; font-size: 17px; font-weight: 600; letter-spacing: 0.8px; vertical-alignment: center; }
     ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
         key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }

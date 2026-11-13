@@ -1,33 +1,27 @@
-# Design  (direction: **"Pit Wall"**, 2026-11; before/after in `design/screens/`)
-Motorsport timing wall crossed with a mech garage: dense tables, one slanted red action, hard edges, the user's own imagery. `design/mockup.html` (v3 "Ice & Ember") is history, not the target.
+# Design  (direction: **v6**, approved 2026-11-13; replaces "Pit Wall"; ref `design/direction-v4.html`)
+Calm, dark, rounded: OLED by default, one accent, Nether Pixel type, thin line icons. The user's own imagery carries Home.
 ## Brief
-- **One focal action per screen: PLAY.** Red slanted slab on a dark offset plate; pressing seats it onto the plate. Nothing else is solid red.
-- **Rows over cards.** Lists are timing-tower tables (position number, column heads, hairlines, red left bar on hover/selection). Cards only where an image is the content.
-- **Asymmetry:** content left, a fixed side column right (preview / player / notes). No centred layouts, no card grids.
-- **Signature shape = the slash** (parallelogram): Play, tab marker, nameplate, section ticks. Zero corner radius everywhere. Logo keeps its chamfer; the UI does not use chamfers.
-- **Imagery is the user's:** instance wallpaper, block icon, skin. Where nothing exists: hatch plate (`assets/hatch.svg`) + corner ticks, never a "placeholder" box.
-- **No ambient decoration:** no orbs, embers, glass gradients, blur. One static red glow only behind the player and on the gate. Player preview auto-rotates always on Home/Wardrobe (off with Reduce motion or the Auto-rotate toggle); every other screen idles at zero redraws.
-- **Case:** condensed caps for titles, buttons, section labels; sentence case for everything you read. No wide-tracked mono eyebrows.
-## Tokens (`crates/app/ui/theme.slint`)
-- Surfaces: bg #060608 · s1 #0D0D11 · s2 #15151B · s3 #1F1F27 · hairlines white 8% / 17%.
-- Text: tx #ECEFF4 · dim #A7AFBC · mut #707988 · ice #E9EDF2 with ink #09090C (one ice slab max per screen: selected segment, nameplate, invite ticket).
-- Red: #E10600 · bright #FF3B2F · deep #8F0400 · red text on dark #FF7A70. Red = action, selection marker, live/error. Never decoration.
-- Accent (`red`/`red2`/`red3`/`redtx`/`press`/`plate`) + `Theme.ts` text scale (1/1.1/1.2, text ≤16px only) set from Rust (`settings::apply_look`); never hard-code accent hex. Ice focus ring on keyboard focus only; Esc closes dialogs.
-- Type: **Barlow Condensed** 600/700 + 700/800 italic (display: titles 44-132 italic, buttons 15, tabs 18, labels 12-13) · **Barlow** 400/500/600 (text 12-16) · **JetBrains Mono** (versions, numbers, 11-13). All OFL, `ui/fonts/README.txt`. Min size 11px.
-- In-game menu text never below 9 px (`Gfx.minPx`); menu key shown on title screen, pause button and a one-time world toast (`client.hintShown`).
-- Spacing: 56 page gutter, 32 column gap, rows 52-64, controls 34-40 high. Motion: 110 hover · 180 state · 260 page/slide (ease-out-quint). No loops except the live pulse and skeletons; "Reduce motion" stops those and page transitions.
+- **One accent action per screen: PLAY.** Accent fill, radius 8. Accent = action, selection, live/error; never decoration.
+- **Rows over cards.** Lists are rows with hairlines; in game: River sidebar + Console list rows with inline settings. Cards only where an image is the content.
+- **Shape:** radius 4-6 controls/rows, 8 panels, 10-12 floating glass (Home). No glow, no gradients on controls, no slanted shapes (`Slash` is now a flat bar, `PlayButton` a flat button).
+- **Imagery is the user's:** instance wallpaper (Home full-bleed), block icon, skin. Player preview always turns on Home/Wardrobe (Reduce motion or the Auto-rotate toggle stop it).
+- **Case:** Nether Pixel for titles, nav, buttons, names, labels; sentence case for what you read.
+## Tokens (`ui/theme.slint`, `Th.java` in game)
+- Themes (picker in launcher Settings + in-game Settings > General, shared via `client.json` `modules.client.theme`): **OLED** (default) bg #000 s1 #0B0B0D s2 #141418 s3 #1D1D23 text #F1F2F5 dim #A3A8B3 mut #6B707B · **Obsidian** #14151A/#1B1D23/#23262E/#2D313B · **Slate** #1A2130/#202839/#283245/#334057 · **Ice** (light) #EEF1F5/#FFF/#F4F6F9/#E4E8EE, text #171A21. Hairlines 8% / 16%. Glass = s1 at ~66% + 10% hairline (no backdrop blur in Slint).
+- Accent default #E5372D, bright #FF6157 (5 swatches in Settings, also written to client.json `accent`/`accent2`); set from Rust (`settings::apply_look`/`apply_theme`), never hard-code accent hex.
+- Type: **Nether Pixel** (`design/fonts`, OFL, 8 px per em) at 16/24/32/48/64 only (game: sizes snap to multiples of 8 in `Gfx.pxSize`); **Barlow** only for small secondary text (<16) and paragraphs. Min size in launcher 11px for Barlow.
+- Icons: `design/module-icons/*.svg`, 20 grid, 1.6 stroke, round caps/joins, one colour; the same files in launcher (Image `colorize`) and agent (`ModIcons`, one filled mask per size). No item-texture fallback.
+- HUD modules keep fixed colours (they read over the world); only menu/wardrobe/editor chrome follows the theme.
+- Motion: 110 hover · 180 state · 260 page. Reduce motion stops loops and transitions.
 ## Components (`components.slint`)
-`PlayButton` · `Btn` (outline / solid ice / danger, optional icon, 1px press) · `IconBtn` · `LinkBtn` · `Seg` (ice thumb) · `Toggle` (square, red on) · `Dropdown` · `Slider` (ticks) · `Field` · `UTabs` · `SectionHead` (01 + rule) · `Stat` · `SetRow` · `Meter` · `Hatch` · `Ticks` · `Slash` · `Scrim` · `Page` · `Pulse`. Icons: 12px line set in `Ico`. **Module icons** (2026-11-11): own set, `design/module-icons/<id>.svg` (24 grid, 2.5 stroke, square ends, ice glyph + one red #E10600 accent); agent rasterises the same SVGs (`ov/ModIcons` -> `Gfx.mask`, atlas, tinted), launcher Client page loads them; item textures only for ids without one.
+`PlayButton` (flat accent) · `Btn` (outline / solid / danger) · `IconBtn` · `LinkBtn` · `Seg` · `Toggle` · `Dropdown` · `Slider` · `Field` · `UTabs` · `SectionHead` · `Stat` · `SetRow` · `Glass` · `TabBtn` (pill tab, active = ln2 fill). In game: `Menu.pill` (30x17), row/expand renderer, sidebar items.
 ## Shell
-- Top bar 56: logo, italic wordmark, tabs with sliding slash marker, account chip, settings cog.
-- **Bottom deck 56 (every screen):** launch target (last played; click to change) + PLAY, then what is running / downloading with a progress bar (`Backend.job-*`). On Home the deck shows status only (the hero is the launch control).
-- Toasts above the deck; failures are red-marked, wrap to two lines and stay 7s.
+- Top bar 56: logo + "Nether", centred glass tab pill (Home, Instances, Discover, Host, Wardrobe; active = ln2), account chip, Client, settings cog. Transparent on Home.
+- Bottom deck 56 on every screen except Home (job progress there is a small glass bar above the dock).
+- In-game menu (Right Shift): ~86% centred translucent panel; sidebar 210 (brand, MODULES: Favorites/All/HUD/Visual/PvP/Utility, CLIENT: Wardrobe/HUD Editor/Settings, profile chip), top bar (title, "N of M on", search), list rows 44 (icon box, name + description, star, key chip, pill), click row = inline settings (one open), footer hints.
 ## Screens
-- **Home:** hero = launch target on its wallpaper (huge italic title, spec strip, PLAY, target picker), "Jump back in" tower with per-row play; right column = player on hatch plate, skin/cape, news as text rows.
-- **Instances:** tower list left (click = edit, right-click = menu, hover = preview) · preview column right (wallpaper, specs, PLAY, EDIT, folder/duplicate/export/delete). `NEW INSTANCE` button top right.
-- **Instance:** wallpaper banner, tabs Overview / Mods / Packs / Client. Overview = spec strip + numbered sections of setting rows; Manage list right.
-- **Create dialog:** setup left (name, loader Vanilla/Fabric/Forge/NeoForge, version, memory), look right (live preview, icon, wallpaper).
-- **Discover:** featured plate + chart table. **Client:** module grid + 16:9 HUD editor. **Host:** server picker (status dots, NEW SERVER) + folder/delete + START/STOP slab, status plate, ice invite ticket; tabs Console/Players/Plugins-Mods/Settings/World left; 5-step wizard (type, version, world, players, finish + EULA agree), addresses + UPnP or port-forward hint right; EULA dialog before first start. **Wardrobe:** player plate (WEAR slab while a library skin is previewed) + rendered skin tiles. **Settings:** section index left, rows centre, "how sharing works" right. **Gate:** split, wordmark left, logo plate right.
+- **Home = Dock:** wallpaper full-bleed; bottom-left "LAST PLAYED" label, title 64, spec line, PLAY + "Change instance"; bottom-centre glass dock of instance icons (+ new); right glass News card; skin right of centre.
+- Other screens keep their v5 layouts, restyled with the tokens, font and radii only (Instances list, Instance page, Create wizard, Discover, Client, Host, Wardrobe, Settings).
 ## Identity (unchanged)
 - **Logo** (v4.2): original ghast mark, flat 2D, white/grey on black chamfered badge with nether dust and lava. `design/icon/ghast-mark.svg`, `nether-logo.svg`. Deliberately unlike Lunar/Feather.
 - Palette identity: obsidian black, ice grey, racing red.

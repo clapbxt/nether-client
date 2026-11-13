@@ -59,7 +59,7 @@ component SettingRow inherits Rectangle {
     height: 50px;
     if root.s.t != 6: Text { x: 0px; y: 0px; width: 220px; height: root.s.hint == "" ? root.height : 31px; text: root.s.label; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; vertical-alignment: center; overflow: elide; }
     if root.s.t != 6 && root.s.hint != "": Text { x: 0px; y: 29px; width: 330px; height: 16px; text: root.s.hint; color: Theme.mut; font-family: Theme.ui; font-size: 11px * Theme.ts; overflow: elide; }
-    if root.s.t == 6: Text { x: 0px; y: 16px; width: parent.width; height: 28px; text: root.s.label.to-uppercase(); color: Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 1.4px; vertical-alignment: center; }
+    if root.s.t == 6: Text { x: 0px; y: 16px; width: parent.width; height: 28px; text: root.s.label.to-uppercase(); color: Theme.dim; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 1.4px; vertical-alignment: center; }
     if root.s.t == 5: Field { x: parent.width - 240px; y: 5px; width: 240px; height: 40px; text-size: 13px; text: root.s.str; edited => { ClientState.set-str(root.mi, root.s.key, self.text); } }
     Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; visible: root.s.t != 6; }
     if root.s.t == 0: Toggle { x: parent.width - 42px; y: 14px; on: root.s.on; enabled: !root.locked; toggled(v) => { ClientState.set-bool(root.mi, root.s.key, v); } }
@@ -134,7 +134,7 @@ export component ClientEditor inherits Rectangle {
                 Rectangle { x: 14px; y: 14px; width: 44px; height: 44px; background: m.on ? Theme.red.with-alpha(0.149) : Theme.s2; border-width: 1px; border-color: m.on ? Theme.red.with-alpha(0.502) : Theme.ln;
                     animate background, border-color { duration: Theme.mid; }
                     if m.has-icon: Image { x: 8px; y: 8px; width: 28px; height: 28px; source: m.icon; colorize: m.on ? Theme.red2 : Theme.dim; image-rendering: m.pixel-icon ? ImageRendering.pixelated : ImageRendering.smooth; }
-                    if !m.has-icon: Text { text: m.name; color: Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; } }
+                    if !m.has-icon: Text { text: m.name; color: Theme.dim; font-family: Theme.ui; font-size: 18px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; } }
                 Text { x: 70px; y: 11px; width: parent.width - 134px; text: m.name; color: m.on ? Theme.tx : Theme.dim; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; overflow: elide; }
                 Text { x: 70px; y: 32px; width: parent.width - 134px; text: m.desc; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
                 Text { x: 70px; y: 51px; text: m.cat; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; }

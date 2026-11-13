@@ -157,7 +157,8 @@ def build(style):
     fb.setupHorizontalMetrics({k: (v[0], glyphs[k].xMin if hasattr(glyphs[k], "xMin") and glyphs[k].numberOfContours else 0) for k, v in metrics.items()})
     fb.setupHorizontalHeader(ascent=800, descent=-200)
     fb.setupNameTable({"familyName": "Nether Pixel", "styleName": style,
-                       "copyright": "Nether Client. SIL Open Font License 1.1"})
+                       "copyright": "Nether Client. SIL Open Font License 1.1",
+                       "fullName": f"Nether Pixel {style}", "psName": f"NetherPixel-{style}"})  # Java's Font.createFont needs name IDs 4 and 6
     fb.setupOS2(sTypoAscender=800, sTypoDescender=-200, sTypoLineGap=0, usWinAscent=800, usWinDescent=200,
                 sxHeight=500, sCapHeight=700, usWeightClass=700 if bold else 400, fsSelection=0x20 if bold else 0x40)
     fb.setupPost(); fb.setupHead(unitsPerEm=UPM, macStyle=1 if bold else 0)

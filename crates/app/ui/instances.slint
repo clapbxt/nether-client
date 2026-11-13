@@ -43,7 +43,7 @@ component CoverPicker inherits Rectangle {
         Rectangle {
             width: root.tile; height: root.tile; y: 0px; clip: true; background: Theme.s2;
             Image { width: parent.width; height: parent.height; source: i == 0 ? root.own : a.img; image-fit: cover; opacity: cell.on || t.has-hover ? 1 : 0.75; }
-            if i == 0 && root.own.width == 0: Text { text: "AUTO"; color: Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+            if i == 0 && root.own.width == 0: Text { text: "AUTO"; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
             Rectangle { border-width: cell.on ? 2px : 0px; border-color: Theme.red2; }
         }
         Text { y: root.tile + 4px; width: parent.width; text: i == 0 ? root.own-label : a.label; color: parent.on ? Theme.tx : Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: center; overflow: elide; }
@@ -107,7 +107,7 @@ component Cover inherits Rectangle {
 }
 
 component ColHead inherits Text {
-    font-family: Theme.disp; font-size: 16px; font-weight: 600; letter-spacing: 0.9px; color: Theme.mut; vertical-alignment: center;
+    font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; color: Theme.mut; vertical-alignment: center;
 }
 
 export component InstancesScreen inherits Rectangle {
@@ -158,7 +158,7 @@ export component InstancesScreen inherits Rectangle {
 
     // ---------- instance list + preview ----------
     if root.sel < 0: Page {
-        hd := Heading { x: 53px; y: 22px; text: "INSTANCES"; }
+        hd := Heading { x: 53px; y: 28px; text: "INSTANCES"; font-size: 32px; }
         Text { x: hd.x + hd.preferred-width + 6px; y: 58px; text: Backend.instances.length < 10 ? "0\{Backend.instances.length}" : "\{Backend.instances.length}"; color: Theme.red2; font-family: Theme.mono; font-size: 13px * Theme.ts; font-weight: 700; }
         Btn { x: 836px - 160px - 10px - 104px; y: 40px; width: 104px; height: 34px; text: "IMPORT"; icon: Ico.download; clicked => { Backend.import-instance(); } }
         Seg { x: 836px - self.width - 172px - 114px; y: 40px; items: ["ALL", "MODDED", "VANILLA"]; item-w: 76px; current <=> Backend.inst-filter; changed(i) => { Backend.refilter(); } }
@@ -197,7 +197,7 @@ export component InstancesScreen inherits Rectangle {
                 if card.head: Rectangle {
                     Rectangle { x: 0px; y: parent.height - 1px; height: 1px; background: Theme.ln2; }
                     Icon { x: 18px; y: 22px; d: row.folded ? Ico.chev : Ico.down; tint: hta.has-hover ? Theme.tx : Theme.mut; }
-                    Text { x: 44px; y: 14px; height: 28px; text: row.head.to-uppercase(); color: hta.has-hover ? Theme.tx : Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 1.2px; vertical-alignment: center; }
+                    Text { x: 44px; y: 14px; height: 28px; text: row.head.to-uppercase(); color: hta.has-hover ? Theme.tx : Theme.dim; font-family: Theme.ui; font-size: 16px; font-weight: 600; letter-spacing: 1.2px; vertical-alignment: center; }
                     Text { x: parent.width - 120px; y: 14px; width: 104px; height: 28px; text: row.n == 1 ? "1 instance" : "\{row.n} instances"; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; }
                     hta := TouchArea { mouse-cursor: pointer; clicked => { Backend.fold-group(row.head); } }
                 }
@@ -302,7 +302,7 @@ export component InstancesScreen inherits Rectangle {
         Rectangle { x: 56px; y: 60px; width: 68px; height: 68px; background: #060608d0;
             Image { x: 8px; y: 8px; width: 52px; height: 52px; source: Backend.instances[root.sel].icon-img; image-rendering: pixelated; } }
         Eyebrow { x: 144px; y: 54px; text: Backend.instances[root.sel].ver + "  ·  " + Backend.instances[root.sel].kind; color: Theme.dim; font-size: 15px * Theme.ts; }
-        ht := Heading { x: 141px; y: 68px; width: Math.min(self.preferred-width, 880px); text: Backend.instances[root.sel].title; font-size: 60px; overflow: elide; }
+        ht := Heading { x: 141px; y: 68px; width: Math.min(self.preferred-width, 880px); text: Backend.instances[root.sel].title; font-size: 64px; overflow: elide; }
         IconBtn { x: ht.x + ht.width + 14px; y: 92px; size: 30px; d: Ico.edit; tip: "Rename"; clicked => { root.act(root.sel, 6); } }
         PlayButton { x: 1384px - 250px; y: 62px; width: 250px; height: 64px; skew: 16px; text-size: 34px;
             label: Backend.instances[root.sel].stopping ? "STOPPING" : (Backend.instances[root.sel].running ? "STOP" : (Backend.instances[root.sel].starting ? "STARTING" : "PLAY"));
@@ -621,7 +621,7 @@ export component InstancesScreen inherits Rectangle {
             Rectangle {
                 x: 740px; y: 196px; width: 150px; height: 34px;
                 background: Backend.log-issues ? Theme.red.with-alpha(0.188) : (ita.has-hover ? Theme.s2 : Theme.s1); border-width: 1px; border-color: Backend.log-issues ? Theme.red2 : Theme.ln2;
-                Text { text: "ISSUES ONLY"; color: Backend.log-issues ? Theme.redtx : Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.8px; horizontal-alignment: center; vertical-alignment: center; }
+                Text { text: "ISSUES ONLY"; color: Backend.log-issues ? Theme.redtx : Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.8px; horizontal-alignment: center; vertical-alignment: center; }
                 ita := TouchArea { mouse-cursor: pointer; clicked => { Backend.log-issues = !Backend.log-issues; Backend.load-log(Backend.log-kind); } }
             }
             Btn { x: 1384px - 112px - 8px - 150px - 8px - 110px; y: 196px; width: 110px; height: 34px; text: "REFRESH"; clicked => { Backend.load-log(Backend.log-kind); } }
@@ -654,7 +654,7 @@ export component InstancesScreen inherits Rectangle {
             Rectangle {
                 x: 56px; y: 196px; width: 1328px; height: 40px;
                 Toggle { x: 0px; y: 9px; on: ClientState.use-global; toggled(v) => { ClientState.set-use-global(v); } }
-                Text { x: 54px; y: 0px; height: 22px; text: "USE GLOBAL SETUP"; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.8px; vertical-alignment: center; }
+                Text { x: 54px; y: 0px; height: 22px; text: "USE GLOBAL SETUP"; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 0.8px; vertical-alignment: center; }
                 Text { x: 54px; y: 22px; width: 520px; text: ClientState.use-global ? "Modules and HUD follow the Client tab." : "This instance has its own modules, settings and HUD."; color: Theme.dim; font-family: Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
             }
             ClientEditor { x: 56px; y: 248px; width: 1328px; height: parent.height - 248px - 16px; scope: root.sel; }
@@ -765,7 +765,7 @@ export component InstancesScreen inherits Rectangle {
             init => { Backend.cover-for(dlg.ver); Wizard.pick-pack(""); Wizard.load-rps(""); Wizard.mode = 0; }
             TouchArea { }
             Slash { x: 32px; y: 34px; width: 30px; height: 7px; skew: 5px; color: Theme.red2; }
-            Heading { x: 30px; y: 44px; text: dlg.raw ? "RAW INSTANCE" : "NEW INSTANCE"; font-size: 44px; }
+            Heading { x: 30px; y: 44px; text: dlg.raw ? "RAW INSTANCE" : "NEW INSTANCE"; font-size: 48px; }
             IconBtn { x: parent.width - 32px - 34px; y: 28px; size: 34px; d: Ico.close; tip: "Close"; clicked => { Backend.create-open = false; } }
 
             // step rail
@@ -777,7 +777,7 @@ export component InstancesScreen inherits Rectangle {
                     opacity: self.skip ? 0.35 : 1;
                     Rectangle { y: parent.height - 2px; height: 2px; background: i < dlg.step ? Theme.ice : (dlg.step == i ? Theme.red2 : Theme.ln2); }
                     Text { x: 10px; height: parent.height; text: "0\{i + 1}"; color: dlg.step == i ? Theme.red2 : Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; vertical-alignment: center; }
-                    Text { x: 34px; width: parent.width - 40px; height: parent.height; overflow: elide; text: s; color: dlg.step == i ? Theme.tx : (i < dlg.step ? Theme.dim : Theme.mut); font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.8px; vertical-alignment: center; }
+                    Text { x: 34px; width: parent.width - 40px; height: parent.height; overflow: elide; text: s; color: dlg.step == i ? Theme.tx : (i < dlg.step ? Theme.dim : Theme.mut); font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.8px; vertical-alignment: center; }
                     TouchArea { mouse-cursor: i < dlg.step && !parent.skip ? pointer : default; clicked => { if i < dlg.step && !parent.skip { dlg.go(i); } } }
                 }
             }

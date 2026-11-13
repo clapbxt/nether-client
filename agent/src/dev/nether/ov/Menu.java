@@ -567,7 +567,7 @@ final class Menu {
         Gfx.rect(mx, py + ph - FOOT, mw, 1, 0, Th.ln);
         String foot = Profiles.status();
         boolean bad = Profiles.statusBad();
-        if (foot == null) foot = tab < T_WARDROBE ? "↑↓ move  ·  Enter toggle  ·  → settings  ·  Esc close" : "Esc close";
+        if (foot == null) foot = tab < T_WARDROBE ? "Up/Down move  ·  Enter toggle  ·  Right settings  ·  Esc close" : "Esc close";
         Gfx.text(Gfx.UI, 11, mx + 20, py + ph - FOOT / 2f, bad ? Th.ac2 : Th.mut, foot);
         if (modules) {
             String r = onCount(tab) + " of " + count(tab) + " on";
@@ -632,7 +632,7 @@ final class Menu {
         drawX(cx + 14, cy, 4.2f, Gfx.mix(Th.mut, Th.tx, xt));
         if (hit(cx, cy - 14, 28, 28)) Input.setMenu(false);
         float sx = cx - 12 - 250;
-        if (searchable && page == null) {
+        if (searchable) {
             boolean sh = in(sx, cy - 15, 250, 30);
             float qx = sx + 250 - 40;
             if (!search.isEmpty() && hit(qx, cy - 12, 22, 24)) { search = ""; searchFocus = true; scroll = scrollT = 0; }

@@ -87,6 +87,8 @@ export component AppWindow inherits Window {
     property <length> H: root.height / root.s;
     property <[string]> labels: ["Home", "Instances", "Discover", "Host", "Wardrobe"];
     property <[int]> ids: [0, 1, 2, 4, 5];
+    property <[length]> ptx: [0px, 78px, 212px, 336px, 414px];
+    property <[length]> ptw: [74px, 130px, 120px, 74px, 130px];
     property <[length]> tx: [0px, 82px, 204px, 362px, 452px, 526px];
     property <[length]> tw: [82px, 122px, 158px, 90px, 74px, 124px];
     property <length> top: 56px;
@@ -181,10 +183,10 @@ export component AppWindow inherits Window {
             Text { x: 66px; height: parent.height; text: "Nether"; color: root.tab == 0 ? #FFFFFF : Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; vertical-alignment: center; }
             // glass tab pill
             Rectangle {
-                x: (root.W - self.width) / 2; y: 10px; width: 5 * 116px + 16px; height: 36px; border-radius: 10px;
+                x: (root.W - self.width) / 2; y: 10px; width: 560px + 16px; height: 36px; border-radius: 10px;
                 background: Theme.glass; border-width: 1px; border-color: Theme.glass-ln;
                 for l[i] in root.labels: TabBtn {
-                    x: 8px + i * 116px; y: 4px; width: 112px;
+                    x: 8px + root.ptx[i]; y: 4px; width: root.ptw[i];
                     label: l; active: root.tab == root.ids[i];
                     clicked => { root.open-idx = -1; root.tab = root.ids[i]; }
                 }
@@ -204,19 +206,19 @@ export component AppWindow inherits Window {
 
             // client (global in-game modules)
             cl := BarBtn {
-                x: root.W - 138px - 12px - 40px - 8px - 80px; y: 8px; width: 80px; height: 40px; active: root.tab == 3;
+                x: root.W - 138px - 12px - 40px - 8px - 72px; y: 8px; width: 72px; height: 40px; active: root.tab == 3;
                 clicked => { root.open-idx = -1; root.tab = 3; }
                 Text { text: "Client"; color: root.tab == 3 || cl.hot ? Theme.tx : Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
             }
             // account
             chip := BarBtn {
-                x: root.W - 138px - 12px - 40px - 8px - 80px - 8px - 196px; y: 8px; width: 196px; height: 40px; active: Backend.acct-open;
+                x: root.W - 138px - 12px - 40px - 8px - 72px - 8px - 160px; y: 8px; width: 160px; height: 40px; active: Backend.acct-open;
                 clicked => { Backend.acct-open = !Backend.acct-open; }
                 // player head (face + hat layer from the skin)
                 Rectangle { x: 6px; y: 6px; width: 28px; height: 28px; background: Theme.s2; border-radius: 4px; clip: true;
                     if !(root.acct-known && Backend.skin-ready): Icon { x: 8px; y: 8px; d: Ico.user; tint: Theme.mut; }
                     if root.acct-known && Backend.skin-ready: Image { width: 28px; height: 28px; source: Backend.acct-head; image-rendering: pixelated; } }
-                Text { x: 44px; y: 4px; width: 126px; text: Backend.acct-state == 2 || (Backend.acct-state == 3 && Backend.acct-name != "") ? Backend.acct-name : "Sign in"; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; overflow: elide; }
+                Text { x: 44px; y: 4px; width: 92px; text: Backend.acct-state == 2 || (Backend.acct-state == 3 && Backend.acct-name != "") ? Backend.acct-name : "Sign in"; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; overflow: elide; }
                 Text { x: 44px; y: 22px; text: Backend.acct-state == 2 ? (Backend.acct-offline ? "Offline · singleplayer" : "Microsoft account") : (Backend.acct-state == 1 ? "Waiting…" : (Backend.acct-state == 3 ? "Signing in…" : "Not signed in")); color: Backend.acct-state == 0 ? Theme.redtx : Theme.mut; font-family: Theme.ui; font-size: 11px * Theme.ts; }
                 Icon { x: parent.width - 22px; y: 14px; d: Ico.down; tint: chip.hot ? Theme.tx : Theme.mut; }
             }
@@ -364,8 +366,8 @@ export component AppWindow inherits Window {
                 Image { source: @image-url("assets/nether-logo.svg"); x: 170px; y: 250px; width: 340px; height: 340px; }
             }
             Slash { x: 96px; y: 196px; width: 64px; height: 8px; skew: 6px; color: Theme.red2; }
-            Heading { x: 96px; y: 216px; text: "NETHER"; font-size: 132px; }
-            Heading { x: 96px; y: 336px; text: "CLIENT"; font-size: 132px; color: Theme.red2; }
+            Heading { x: 96px; y: 216px; text: "NETHER"; font-size: 64px; }
+            Heading { x: 96px; y: 336px; text: "CLIENT"; font-size: 64px; color: Theme.red2; }
             Text { x: 100px; y: 490px; width: 560px; text: Backend.acct-state == 3 ? "Signing you in…" : "Sign in with your Microsoft account to play."; color: Theme.dim; font-family: Theme.ui; font-size: 19px; }
 
             // signed out
