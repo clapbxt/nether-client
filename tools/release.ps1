@@ -71,6 +71,8 @@ if ($Publish) {
     git add $toml Cargo.lock
     git commit -m "Release $Version" | Out-Host
     git tag "v$Version"
+    git push origin HEAD "v$Version" | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw "git push failed (the release is committed and tagged locally)" }
     if ($Notes -eq "") { $Notes = "Nether Client $Version" }
     & $gh release create "v$Version" "dist\$name" "dist\$name.sig" --repo $repo --title "Nether Client $Version" --notes $Notes
     if ($LASTEXITCODE -ne 0) { throw "GitHub release failed (the build is still in dist\)" }
