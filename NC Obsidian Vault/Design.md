@@ -37,7 +37,7 @@ Motorsport timing wall crossed with a mech garage: dense tables, one slanted red
 - Unpositioned Rectangle centres itself; a Text with `y` set needs `height` to centre vertically.
 - `mouse-cursor: text` clashes with a `text` property: write `MouseCursor.text`.
 - Text `stroke` (outline type) does not render with a transparent fill here; use a faint fill instead.
-- **Chrome:** no native title bar/border; min/max/close (46px, close red) at the top bar's right, empty bar + letterbox drag the window.
+- **Chrome:** no native title bar/border; min/max/close (46px, close red) at the top bar's right, empty bar + letterbox drag the window; no double-click maximise.
 - **Install Packs:** Seg MODRINTH/CURSEFORGE/NETHER, search+sort, 68px rows (icon, MC, loader, downloads, VIEW) -> shared project page (strip says "BUILDS A NEW INSTANCE").
 - **Create wizard:** step rail (01 LOADER … 06 FINISH), big selectable cards/tiles, red border = picked; footer CREATE RAW INSTANCE link left, BACK/NEXT right.
 - **Client page:** modules grid left; right Seg SETTINGS | HUD LAYOUT; settings rows by type (toggle, slider + value, 9-swatch palette, Seg/Dropdown, key chip). Instance: client toggle + group chips row.

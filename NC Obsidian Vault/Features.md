@@ -7,11 +7,10 @@
  - ★ isolated instances, any version/loader, auto Java (8/17/21/25), logs ◆ import/export (.mrpack, CF zip, Prism), backups, worlds, crash analyzer.
 **Discover**: modpacks from Modrinth + CurseForge, source filter, one-click install → creates an instance. ◆ categories.
 **Client** (in-game, injected agent): module list, each tri-state Inherit/On/Off; HUD layout editor + per-module settings; scope switcher Global | Instance (| Profile ◆).
- - ★ FPS, CPS, ping, keystrokes, coords, armor/potion HUD, toggle sprint, zoom, fullbright ◆ drag HUD editor, waypoints, crosshair, freelook (Tier B), replay ○ plugins.
+ - ★ FPS, CPS, ping, keystrokes, coords, armor/potion HUD, zoom, fullbright ◆ drag HUD editor, waypoints, crosshair, freelook (Tier B), replay ○ plugins.
 **Host**: standalone local servers (Vanilla/Fabric/Paper, setup wizard, several at once, Modrinth plugins/mods), status, console, whitelist/backup, invite address + `nether://join/<address>` (UPnP, outside check, free playit.gg tunnel fallback), players, perf.
 **Wardrobe**: *Skins* — library, upload, import by username/URL, select, download, delete, classic/slim, 3D preview ★. *Capes* — vanilla capes from account (equip/none) ★, custom image capes (upload) ◆; sharing/community ○ (later).
 **Settings**: accounts, Java, paths, themes, updater.
-**Friends** ◆ presence, join, party (ties to Host).
 ## Client scope model
 Global → Profile → Instance, last wins. Instance stores only overrides (`client.toml`). Overrides = red dot + reset.
 ## Versions (for client, not launcher)
