@@ -1,11 +1,20 @@
 // Nether player API: who plays Nether (nametag icon) and which Nether cape they wear. Cloudflare Workers + D1, free plan.
-// Auth never sees a Minecraft access token: the launcher proves its account through Mojang's join / hasJoined handshake
-// (/v1/auth/start -> sessionserver join -> /v1/auth/finish) and gets a 24 h HMAC session token bound to its UUID.
+// Auth never sees a Minecraft access token and never calls Mojang (Mojang answers 403 to Cloudflare's egress): the
+// launcher gets its Mojang player certificate (the chat-signing key pair, signed by Mojang for its UUID) and signs our
+// one-time nonce with it. /v1/auth/start -> nonce; /v1/auth/finish checks Mojang's signature over (uuid, expiry,
+// public key) with Mojang's published certificate keys and the nonce signature with that public key, then returns a
+// 24 h HMAC session token bound to the UUID.
 // Secret: `wrangler secret put SESSION_KEY` (32+ random bytes, any string).
 const UUID = /^[0-9a-f]{32}$/;
 const NAME = /^[A-Za-z0-9_]{1,16}$/;
 const NONCE = /^[0-9a-f]{32}$/;
 const SESSION_SECS = 24 * 3600;
+// api.minecraftservices.com/publickeys -> playerCertificateKeys (X.509 SPKI, base64). Rotate here if Mojang does.
+const MOJANG_CERT_KEYS = [
+  "MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAylB4B6m5lz7jwrcFz6Fd/fnfUhcvlxsTSn5kIK/2aGG1C3kMy4VjhwlxF6BFUSnfxhNswPjh3ZitkBxEAFY25uzkJFRwHwVA9mdwjashXILtR6OqdLXXFVyUPIURLOSWqGNBtb08EN5fMnG8iFLgEJIBMxs9BvF3s3/FhuHyPKiVTZmXY0WY4ZyYqvoKR+XjaTRPPvBsDa4WI2u1zxXMeHlodT3lnCzVvyOYBLXL6CJgByuOxccJ8hnXfF9yY4F0aeL080Jz/3+EBNG8RO4ByhtBf4Ny8NQ6stWsjfeUIvH7bU/4zCYcYOq4WrInXHqS8qruDmIl7P5XXGcabuzQstPf/h2CRAUpP/PlHXcMlvewjmGU6MfDK+lifScNYwjPxRo4nKTGFZf/0aqHCh/EAsQyLKrOIYRE0lDG3bzBh8ogIMLAugsAfBb6M3mqCqKaTMAf/VAjh5FFJnjS+7bE+bZEV0qwax1CEoPPJL1fIQjOS8zj086gjpGRCtSy9+bTPTfTR/SJ+VUB5G2IeCItkNHpJX2ygojFZ9n5Fnj7R9ZnOM+L8nyIjPu3aePvtcrXlyLhH/hvOfIOjPxOlqW+O5QwSFP4OEcyLAUgDdUgyW36Z5mB285uKW/ighzZsOTevVUG2QwDItObIV6i8RCxFbN2oDHyPaO5j1tTaBNyVt8CAwEAAQ==",
+  "MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAt4t9NPuu7cktclnaH7eZj0omkLcJHeLz5MKsyJEntHZ0INtuBjSSul3Pp3pBeJN8k3ADdcdBLUN90bcAi7WsQqTx3Ft363q3W7TbM8j2iTEdp/0uVspoRt/DP1tkaWFs/w2WwUv9jbVoBUzfUc4pSTIxRwdjmqjZQfvjwKNDbOx3IhP2H0WXodbISejPi1wBZqNW4m1rnZAXp/EpUguxA8mobCa4vUCBkyFDyXdl69/wUSJHyCPmgcMJ364OlAhIqtwVPShBZObvrK/f0BYk6ShJD3N7TFDatSYsIIdcTKRknaIm91s+EsMrdB9U4Yw+ZJ/pyCB4S3vk8zfDCnb0DWIxYH3/EMzaxl77djmTmMzi/JDITup5z3jfWtRZmrAhU2/+W5IO5hEpo3/bCS9PXIY5xb41Lmp2ZO8dXKtyD66Chchy0W129n8vPl2GIruOdrxsjZAHnneyAb9jm0uaGaphwnEnuecX/qgHY6ZMtayvLLsPst8PO6R1vufMy8WqjK+j7LnC1krL7CPDg0NEhyQTmw5l+NCNjSlvB1juM9V4PARg0bYCOkGXm7ydRCjSSH8CJXZpwnd5cBB5WKAX3KPzutRgMi/LFwNSMZzFuUyXaYOZPpD259yqph1LmGqegEdDriACVU+dVEONFMm8eIuBofe7ljmsAFKW9BINwK0CAwEAAQ==",
+];
+const B64 = /^[A-Za-z0-9+/_-]+={0,2}$/;
 const PURGE_DAYS = 180;
 const enc = new TextEncoder();
 const json = (body, status = 200, extra = {}) =>
@@ -54,6 +63,36 @@ async function caller(req, env) {
   } catch { return null; }
 }
 
+// ---- Mojang player certificate check ----
+// expiresAt as Java's Instant.toEpochMilli (fractions past milliseconds are cut, not rounded)
+function isoMillis(iso) {
+  const m = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?Z$/.exec(iso);
+  if (!m) return NaN;
+  return Date.parse(m[1] + "Z") + Number(((m[2] || "") + "000").slice(0, 3));
+}
+async function certificateOk(b, uuid) {
+  try {
+    const exp = isoMillis(b.expiresAt);
+    if (!(exp > Date.now())) return false;
+    const spki = unb64(b.publicKey);
+    // Mojang signed (uuid msb/lsb, expiry ms, public key) with SHA1withRSA, all big-endian
+    const payload = new Uint8Array(24 + spki.length);
+    for (let i = 0; i < 16; i++) payload[i] = parseInt(uuid.slice(i * 2, i * 2 + 2), 16);
+    new DataView(payload.buffer).setBigUint64(16, BigInt(exp));
+    payload.set(spki, 24);
+    const keySig = unb64(b.keySig);
+    let signedByMojang = false;
+    for (const k of MOJANG_CERT_KEYS) {
+      const key = await crypto.subtle.importKey("spki", unb64(k), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-1" }, false, ["verify"]);
+      if (await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, keySig, payload)) { signedByMojang = true; break; }
+    }
+    if (!signedByMojang) return false;
+    // the launcher holds the private key: it signed our nonce (SHA256withRSA)
+    const player = await crypto.subtle.importKey("spki", spki, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+    return await crypto.subtle.verify("RSASSA-PKCS1-v1_5", player, unb64(b.sig), enc.encode(`nether-auth:${b.serverId}:${uuid}`));
+  } catch { return false; }
+}
+
 // rate limits: Workers Rate Limiting bindings when configured (see wrangler.toml); absent = no limit (local dev)
 async function limited(env, binding, key) {
   const l = env[binding];
@@ -97,7 +136,7 @@ async function handle(req, env, ctx) {
     return res;
   }
 
-  // step 1 of the handshake: a one-time server id the launcher passes to Mojang's session server
+  // step 1 of the handshake: a one-time nonce the launcher signs with its Mojang player certificate key
   if (req.method === "POST" && url.pathname === "/v1/auth/start") {
     if (await limited(env, "RL_AUTH", ip)) return tooMany();
     const serverId = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -109,26 +148,17 @@ async function handle(req, env, ctx) {
     return json({ serverId });
   }
 
-  // step 2: Mojang confirms (hasJoined) the launcher joined that server id under that name -> session token
+  // step 2: the nonce signed with the player's Mojang certificate key -> session token
   if (req.method === "POST" && url.pathname === "/v1/auth/finish") {
     if (await limited(env, "RL_AUTH", ip)) return tooMany();
     if (!env.SESSION_KEY) return fail(503, "service unavailable");
-    const b = await readJson(req);
-    if (!b || !NAME.test(b.name || "") || !NONCE.test(b.serverId || "")) return fail(400, "bad request");
+    const b = await readJson(req, 4096);
+    if (!b || !NONCE.test(b.serverId || "") || !UUID.test(b.uuid || "") || typeof b.expiresAt !== "string" || b.expiresAt.length > 40
+      || ![b.publicKey, b.keySig, b.sig].every((v) => typeof v === "string" && v.length < 1400 && B64.test(v))) return fail(400, "bad request");
     const used = await env.DB.prepare("DELETE FROM nonces WHERE id = ? AND exp >= ? RETURNING id").bind(b.serverId, now()).first();
     if (!used) return fail(401, "sign-in step expired, try again");
-    // Mojang's session servers can take a moment to show a fresh join: 204 gets two more tries
-    let r;
-    for (let i = 0; i < 3; i++) {
-      if (i) await new Promise((ok) => setTimeout(ok, 500));
-      try { r = await fetch(`https://sessionserver.mojang.com/session/minecraft/hasJoined?username=${b.name}&serverId=${b.serverId}`, { signal: AbortSignal.timeout(4000) }); }
-      catch { return fail(503, "try again later", { "retry-after": "30" }); }
-      if (r.status !== 204) break;
-    }
-    if (r.status === 204 || r.status === 403 || r.status === 401) return fail(401, "Mojang didn't confirm the join (" + r.status + ")");
-    if (!r.ok) return fail(503, "try again later", { "retry-after": "30" });
-    const id = String((await r.json().catch(() => ({}))).id || "").toLowerCase();
-    if (!UUID.test(id)) return fail(401, "sign in with Minecraft");
+    const id = b.uuid;
+    if (!(await certificateOk(b, id))) return fail(401, "Mojang's certificate didn't check out, sign in again");
     const s = await mint(env, id);
     return json({ token: s.token, uuid: id, exp: s.exp });
   }

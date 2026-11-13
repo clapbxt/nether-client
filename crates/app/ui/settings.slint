@@ -165,13 +165,13 @@ export component SettingsScreen inherits Rectangle {
         // ---------- 03 java ----------
         SectionHead { x: 0px; y: root.y3; width: root.cw; idx: "03"; title: "JAVA"; note: "picked per instance on its Overview"; }
         for j[i] in Backend.javas: SetRow {
-            x: 0px; y: root.y3 + 24px + i * 64px; width: root.cw; reserve: j.custom ? 330px : 150px;
+            x: 0px; y: root.y3 + 24px + i * 64px; width: root.cw; reserve: j.custom ? 360px : 170px;
             title: j.title; sub: j.sub;
+            ch := Btn { x: parent.width - self.width; y: 14px; text: "CHOOSE"; icon: Ico.folder; clicked => { Backend.java-pick(j.major); } }
             if j.custom: Rectangle {
-                rs := Btn { x: parent.width - 130px - self.width; y: 14px; text: "RESET"; clicked => { Backend.java-reset(j.major); } }
+                rs := Btn { x: ch.x - 10px - self.width; y: 14px; text: "RESET"; clicked => { Backend.java-reset(j.major); } }
                 Chip { x: rs.x - self.width - 12px; y: 21px; text: "CUSTOM"; }
             }
-            Btn { x: parent.width - self.width; y: 14px; text: "CHOOSE"; icon: Ico.folder; clicked => { Backend.java-pick(j.major); } }
         }
 
         // ---------- 04 launcher ----------
@@ -181,7 +181,7 @@ export component SettingsScreen inherits Rectangle {
         ChoiceRow { x: 0px; y: root.y4 + 152px; width: root.cw; title: "When a game starts"; sub: "The launcher comes back when the game closes."; items: ["Keep launcher open", "Minimize launcher", "Hide to tray"]; current <=> Backend.lp-on-launch; changed => { Backend.save-launcher(); } }
         ChoiceRow { x: 0px; y: root.y4 + 216px; width: root.cw; title: "Close button"; sub: "Quit, or keep running in the system tray."; items: ["Quit the launcher", "Hide to tray"]; current <=> Backend.lp-on-close; changed => { Backend.save-launcher(); } }
         SyncRow { x: 0px; y: root.y4 + 280px; width: root.cw; title: "Reduce motion"; sub: "Turn off page transitions and pulsing indicators; saves power on laptops."; on <=> Backend.calm; toggled => { Backend.save-launcher(); } }
-        SetRow { x: 0px; y: root.y4 + 344px; width: root.cw; reserve: 0px; title: "Keyboard shortcuts"; sub: "Ctrl+K search everything  ·  Ctrl+1-6 pages  ·  Ctrl+, settings  ·  Ctrl+N new instance  ·  Esc closes"; }
+        SetRow { x: 0px; y: root.y4 + 344px; width: root.cw; reserve: 0px; title: "Keyboard shortcuts"; sub: "Ctrl+K search everything  ·  Ctrl+1-5 pages  ·  Ctrl+, settings  ·  Ctrl+N new instance  ·  Esc closes"; }
 
         // ---------- 05 personalization ----------
         SectionHead { x: 0px; y: root.y5; width: root.cw; idx: "05"; title: "PERSONALIZATION"; }
@@ -189,18 +189,18 @@ export component SettingsScreen inherits Rectangle {
             for c[i] in root.accents: Rectangle {
                 x: parent.width - 5 * 36px + 6px + i * 36px; y: 18px; width: 28px; height: 28px; background: c;
                 border-width: Backend.lp-accent == i ? 2px : 0px; border-color: Theme.ice; border-radius: 8px;
-                Rectangle { x: 6px; y: 6px; width: 16px; height: 16px; background: transparent; border-width: Backend.lp-accent == i ? 2px : 0px; border-color: Theme.bg; }
+                Rectangle { x: 2px; y: 2px; width: 24px; height: 24px; border-radius: 6px; background: transparent; border-width: Backend.lp-accent == i ? 2px : 0px; border-color: Theme.bg; }
                 sw := TouchArea { mouse-cursor: pointer; clicked => { Backend.lp-accent = i; Backend.save-launcher(); } }
                 sf := FocusScope { width: 0px; height: 0px; focus-on-click: false;
                     key-pressed(e) => { if e.text == " " || e.text == Key.Return { Backend.lp-accent = i; Backend.save-launcher(); return accept; } return reject; } }
-                if sf.has-focus || sw.has-hover: Rectangle { x: -4px; y: -4px; width: parent.width + 8px; height: parent.height + 8px; border-width: 1px; border-color: sf.has-focus ? Theme.ice : Theme.ln2; }
+                if sf.has-focus || (sw.has-hover && Backend.lp-accent != i): Rectangle { x: -4px; y: -4px; width: parent.width + 8px; height: parent.height + 8px; border-radius: 10px; border-width: 1px; border-color: sf.has-focus ? Theme.ice : Theme.ln2; }
             }
         }
-        SetRow { x: 0px; y: root.y5 + 152px; width: root.cw; reserve: 440px; title: "Theme"; sub: "Also the in-game menu's look. Ice is light.";
-            Seg { x: parent.width - self.width; y: 15px; items: ["OLED", "OBSIDIAN", "SLATE", "ICE"]; item-w: 104px; current: Backend.lp-theme; changed(i) => { Backend.lp-theme = i; Backend.save-launcher(); } }
+        SetRow { x: 0px; y: root.y5 + 152px; width: root.cw; reserve: 420px; title: "Theme"; sub: "Also the in-game menu's look. Ice is light.";
+            Seg { x: parent.width - self.width; y: 15px; items: ["OLED", "OBSIDIAN", "SLATE", "ICE"]; current: Backend.lp-theme; changed(i) => { Backend.lp-theme = i; Backend.save-launcher(); } }
         }
         SetRow { x: 0px; y: root.y5 + 88px; width: root.cw; reserve: 340px; title: "Text size"; sub: "Bigger reading text. Titles keep their size.";
-            Seg { x: parent.width - self.width; y: 15px; items: ["DEFAULT", "LARGE", "LARGER"]; item-w: 104px; current: Backend.lp-text; changed(i) => { Backend.lp-text = i; Backend.save-launcher(); } }
+            Seg { x: parent.width - self.width; y: 15px; items: ["DEFAULT", "LARGE", "LARGER"]; current: Backend.lp-text; changed(i) => { Backend.lp-text = i; Backend.save-launcher(); } }
         }
         Text { x: 0px; y: root.py + 24px; text: "Your instance icons"; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; }
         Text { x: 0px; y: root.py + 46px; width: root.cw; text: "PNG, JPG or WebP. Pixel art stays crisp; large images are scaled to 64px."; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; }
@@ -222,9 +222,9 @@ export component SettingsScreen inherits Rectangle {
             if Backend.update-state != 2 && Backend.update-state != 4: Btn { x: parent.width - self.width; y: 14px; text: "CHECK NOW"; enabled: Backend.update-state != 0 && Backend.update-state != 5; clicked => { Backend.check-updates(); } } }
         SyncRow { x: 0px; y: root.sy + 128px; width: root.cw; title: "Install updates automatically";
             sub: "New versions download in the background, are checked against our signing key, and install when you close Nether."; on <=> Backend.lp-auto-update; toggled => { Backend.save-launcher(); } }
-        SetRow { x: 0px; y: root.sy + 192px; width: root.cw; reserve: 330px; title: "Support"; sub: "The launcher's own log, and a summary of this PC for a bug report.";
-            Btn { x: parent.width - self.width - 186px; y: 14px; text: "LOGS"; icon: Ico.folder; clicked => { Backend.open-logs(); } }
-            Btn { x: parent.width - self.width; y: 14px; text: "COPY SYSTEM INFO"; icon: Ico.copy; clicked => { Backend.copy-sysinfo(); } } }
+        SetRow { x: 0px; y: root.sy + 192px; width: root.cw; reserve: 420px; title: "Support"; sub: "The launcher's own log, and a summary of this PC for a bug report.";
+            Btn { x: csi.x - 10px - self.width; y: 14px; text: "LOGS"; icon: Ico.folder; clicked => { Backend.open-logs(); } }
+            csi := Btn { x: parent.width - self.width; y: 14px; text: "COPY SYSTEM INFO"; icon: Ico.copy; clicked => { Backend.copy-sysinfo(); } } }
         SetRow { x: 0px; y: root.sy + 256px; width: root.cw; reserve: 0px; title: "Nether Client " + Backend.app-version; sub: "Beta. No telemetry, no ads. Sign-in tokens stay in Windows Credential Manager."; }
 
         // ---------- 07 privacy (L2): every service the launcher and client talk to, and when ----------

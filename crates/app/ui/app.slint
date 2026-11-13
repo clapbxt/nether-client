@@ -9,13 +9,12 @@ import "fonts/JetBrainsMono-Bold.ttf";
 
 import { Theme } from "theme.slint";
 export { Theme }
-import { Backend, ClientState, Inst, Row, ClientMod, SetVal, Detail, Link, HostState, SkinLib, HostPlayer, HostBackup, HostServer, ConLine, SkinTile, Wizard, JavaRt } from "structs.slint";
-export { Backend, ClientState, Inst, Row, ClientMod, SetVal, Detail, Link, HostState, SkinLib, HostPlayer, HostBackup, HostServer, ConLine, SkinTile, Wizard, JavaRt }
+import { Backend, Inst, Row, Detail, Link, HostState, SkinLib, HostPlayer, HostBackup, HostServer, ConLine, SkinTile, Wizard, JavaRt } from "structs.slint";
+export { Backend, Inst, Row, Detail, Link, HostState, SkinLib, HostPlayer, HostBackup, HostServer, ConLine, SkinTile, Wizard, JavaRt }
 import { Btn, Eyebrow, Page, Slash, Hatch, PlayButton, Icon, Ico, Pulse, LinkBtn, Heading, Scrim, WinButtons, Field, FocusTrap, Toggle } from "components.slint";
 import { HomeScreen } from "home.slint";
 import { InstancesScreen } from "instances.slint";
 import { DiscoverScreen } from "discover.slint";
-import { ClientScreen } from "client.slint";
 import { HostScreen } from "host.slint";
 import { WardrobeScreen } from "wardrobe.slint";
 import { SettingsScreen } from "settings.slint";
@@ -102,7 +101,7 @@ export component AppWindow inherits Window {
     changed tab => { Backend.skin-wake(); }
     property <bool> slim: Backend.skin-slim;
     changed slim => { Backend.skin-wake(); }
-    // keyboard shortcuts (every key nothing else took): Ctrl+K command palette, Ctrl+1-6 tabs, Ctrl+, settings, Ctrl+N new instance,
+    // keyboard shortcuts (every key nothing else took): Ctrl+K command palette, Ctrl+1-5 tabs, Ctrl+, settings, Ctrl+N new instance,
     // Esc closes the project page, account panel and crash page
     forward-focus: keys;
     keys := FocusScope {
@@ -125,14 +124,11 @@ export component AppWindow inherits Window {
             if e.text == "1" { root.open-idx = -1; root.tab = 0; return accept; }
             if e.text == "2" { root.tab = 1; return accept; }
             if e.text == "3" { root.open-idx = -1; root.tab = 2; return accept; }
-            if e.text == "4" { root.open-idx = -1; root.tab = 3; return accept; }
-            if e.text == "5" { root.open-idx = -1; root.tab = 4; return accept; }
-            if e.text == "6" { root.open-idx = -1; root.tab = 5; return accept; }
+            if e.text == "4" { root.open-idx = -1; root.tab = 4; return accept; }
+            if e.text == "5" { root.open-idx = -1; root.tab = 5; return accept; }
             return reject;
         }
 
-    // letterbox space around the stage drags the window too
-    TouchArea { pointer-event(e) => { if e.kind == PointerEventKind.down && e.button == PointerEventButton.left { Backend.win-drag(); } } }
     stage := Rectangle {
         x: (root.width - root.W) / 2;
         y: (root.height - root.H) / 2;
@@ -165,12 +161,11 @@ export component AppWindow inherits Window {
             }
         }
         if root.tab == 2: Page { y: root.top; width: root.W; height: root.body; DiscoverScreen { width: root.W; height: root.body; } }
-        if root.tab == 3: Page { y: root.top; width: root.W; height: root.body; ClientScreen { width: root.W; height: root.body; } }
         if root.tab == 4: Page { y: root.top; width: root.W; height: root.body; HostScreen { width: root.W; height: root.body; go-instances => { root.open-idx = -1; root.tab = 1; } } }
         if root.tab == 5: Page { y: root.top; width: root.W; height: root.body; WardrobeScreen { width: root.W; height: root.body; page <=> root.ward-page; } }
         if root.tab == 6: Page { y: root.top; width: root.W; height: root.body; SettingsScreen { width: root.W; height: root.body; } }
 
-        // ---------- top bar: logo + name, glass tab pill, account / client / settings (transparent on Home) ----------
+        // ---------- top bar: logo + name, glass tab pill, account / settings (transparent on Home) ----------
         Rectangle {
             x: 0px; y: 0px; width: root.W; height: root.top;
             background: root.tab == 0 ? transparent : Theme.bg;
@@ -204,15 +199,9 @@ export component AppWindow inherits Window {
                 
             }
 
-            // client (global in-game modules)
-            cl := BarBtn {
-                x: root.W - 138px - 12px - 40px - 8px - 72px; y: 8px; width: 72px; height: 40px; active: root.tab == 3;
-                clicked => { root.open-idx = -1; root.tab = 3; }
-                Text { text: "Client"; color: root.tab == 3 || cl.hot ? Theme.tx : Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
-            }
             // account
             chip := BarBtn {
-                x: root.W - 138px - 12px - 40px - 8px - 72px - 8px - 160px; y: 8px; width: 160px; height: 40px; active: Backend.acct-open;
+                x: root.W - 138px - 12px - 40px - 8px - 160px; y: 8px; width: 160px; height: 40px; active: Backend.acct-open;
                 clicked => { Backend.acct-open = !Backend.acct-open; }
                 // player head (face + hat layer from the skin)
                 Rectangle { x: 6px; y: 6px; width: 28px; height: 28px; background: Theme.s2; border-radius: 4px; clip: true;
@@ -310,42 +299,41 @@ export component AppWindow inherits Window {
             x: 0px; y: root.top; width: root.W; height: root.H - root.top;
             TouchArea { clicked => { Backend.acct-open = false; } }
             Rectangle {
-                x: root.W - 198px - 340px; y: 6px; width: 340px; height: Backend.acct-state == 1 ? 268px : (Backend.acct-state == 2 ? 112px + Backend.accounts.length * 48px + (Backend.acct-offline ? 26px : 0px) : (Backend.acct-msg != "" ? 210px : 152px));
+                x: root.W - 198px - 400px; y: 6px; width: 400px; height: Backend.acct-state == 1 ? 268px : (Backend.acct-state == 2 ? 112px + Backend.accounts.length * 48px + (Backend.acct-offline ? 26px : 0px) : (Backend.acct-msg != "" ? 210px : 152px));
                 background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
                 TouchArea { }
-                Rectangle { x: 0px; y: 0px; width: 3px; height: parent.height; background: Theme.red; }
                 Eyebrow { x: 22px; y: 18px; text: "MICROSOFT ACCOUNT"; }
                 if Backend.acct-state == 0 || Backend.acct-state == 3: Rectangle {
-                    Text { x: 22px; y: 44px; width: 296px; text: Backend.acct-state == 3 ? "Signing you in…" : "Sign in to play online and use your skin and cape."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
+                    Text { x: 22px; y: 44px; width: 356px; text: Backend.acct-state == 3 ? "Signing you in…" : "Sign in to play online and use your skin and cape."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
                     if Backend.acct-state == 0: Btn { x: 22px; y: 96px; text: "SIGN IN WITH MICROSOFT"; solid: true; clicked => { Backend.sign-in(); } }
-                    if Backend.acct-msg != "": Text { x: 22px; y: 146px; width: 296px; text: Backend.acct-msg; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; }
+                    if Backend.acct-msg != "": Text { x: 22px; y: 146px; width: 356px; text: Backend.acct-msg; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; }
                 }
                 if Backend.acct-state == 1: Rectangle {
-                    Text { x: 22px; y: 44px; width: 296px; text: "Open the page below and enter this code:"; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
+                    Text { x: 22px; y: 44px; width: 356px; text: "Open the page below and enter this code:"; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
                     Text { x: 22px; y: 70px; text: Backend.acct-code; color: Theme.tx; font-family: Theme.mono; font-size: 34px; font-weight: 700; letter-spacing: 4px; }
                     Text { x: 22px; y: 126px; text: Backend.acct-url; color: Theme.dim; font-family: Theme.mono; font-size: 11px * Theme.ts; }
-                    Btn { x: 22px; y: 158px; text: "OPEN PAGE"; solid: true; icon: Ico.ext; clicked => { Backend.open-url(Backend.acct-url); } }
-                    Btn { x: 148px; y: 158px; text: "COPY CODE"; icon: Ico.copy; clicked => { Backend.copy-text(Backend.acct-code); } }
+                    op := Btn { x: 22px; y: 158px; text: "OPEN PAGE"; solid: true; icon: Ico.ext; clicked => { Backend.open-url(Backend.acct-url); } }
+                    Btn { x: op.x + op.width + 8px; y: 158px; text: "COPY CODE"; icon: Ico.copy; clicked => { Backend.copy-text(Backend.acct-code); } }
                     Waiting { x: 22px; y: 220px; width: 200px; text: "Waiting for sign-in"; }
-                    LinkBtn { x: 252px; y: 216px; text: "CANCEL"; clicked => { Backend.cancel-sign-in(); } }
+                    LinkBtn { x: parent.width - 22px - self.width; y: 216px; text: "CANCEL"; clicked => { Backend.cancel-sign-in(); } }
                 }
                 // signed in: every saved account (click one to switch), add another, sign the active one out
                 if Backend.acct-state == 2: Rectangle {
                     for a[i] in Backend.accounts: Rectangle {
-                        x: 12px; y: 42px + i * 48px; width: 316px; height: 44px;
+                        x: 12px; y: 42px + i * 48px; width: 376px; height: 44px; border-radius: 6px;
                         background: a.active ? Theme.s2 : (row.has-hover ? Theme.s1 : transparent);
                         animate background { duration: Theme.fast; }
                         Rectangle { x: 10px; y: 8px; width: 28px; height: 28px; background: Theme.s3;
                             if a.active && Backend.skin-ready: Image { width: 28px; height: 28px; source: Backend.acct-head; image-rendering: pixelated; }
                             if !(a.active && Backend.skin-ready): Icon { x: 6px; y: 6px; d: Ico.user; tint: Theme.mut; } }
-                        Text { x: 50px; y: 0px; width: 190px; height: parent.height; text: a.name; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; vertical-alignment: center; overflow: elide; }
+                        Text { x: 50px; y: 0px; width: 230px; height: parent.height; text: a.name; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; vertical-alignment: center; overflow: elide; }
                         Text { x: parent.width - 86px; width: 76px; height: parent.height; text: a.active ? "ACTIVE" : (row.has-hover ? "SWITCH" : ""); color: a.active ? Theme.ice : Theme.dim;
                             font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.9px; horizontal-alignment: right; vertical-alignment: center; }
                         row := TouchArea { mouse-cursor: a.active ? default : pointer; clicked => { if !a.active { Backend.switch-account(a.uuid); } } }
                     }
-                    if Backend.acct-offline: Text { x: 22px; y: 48px + Backend.accounts.length * 48px; width: 296px; text: "No connection: singleplayer only until you're back online."; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; }
-                    Btn { x: 22px; y: parent.height - 56px; text: "ADD ACCOUNT"; icon: Ico.plus; clicked => { Backend.sign-in(); } }
-                    Btn { x: 186px; y: parent.height - 56px; text: "SIGN OUT"; danger: true; clicked => { Backend.sign-out(); } }
+                    if Backend.acct-offline: Text { x: 22px; y: 48px + Backend.accounts.length * 48px; width: 356px; text: "No connection: singleplayer only until you're back online."; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; }
+                    aa := Btn { x: 22px; y: parent.height - 56px; text: "ADD ACCOUNT"; icon: Ico.plus; clicked => { Backend.sign-in(); } }
+                    Btn { x: aa.x + aa.width + 8px; y: parent.height - 56px; text: "SIGN OUT"; danger: true; clicked => { Backend.sign-out(); } }
                 }
             }
         }
@@ -353,36 +341,33 @@ export component AppWindow inherits Window {
         // ---------- full-screen Microsoft sign-in gate ----------
         if Backend.gate-open: Rectangle {
             x: 0px; y: 0px; width: root.W; height: root.H; background: Theme.bg;
-            // the whole gate drags the window (it has no top bar of its own)
-            TouchArea { pointer-event(e) => { if e.kind == PointerEventKind.down && e.button == PointerEventButton.left { Backend.win-drag(); } } }
-            Rectangle { x: -300px; y: 380px; width: 1100px; height: 900px; background: @radial-gradient(circle, Theme.red.with-alpha(0.220) 0%, Theme.red.with-alpha(0.000) 68%); }
-            // right plate: hatch + giant outlined wordmark, cropped by the edge
+            // only the top strip drags the window (like the top bar everywhere else)
+            TouchArea { pointer-event(e) => { if e.kind == PointerEventKind.down && e.button == PointerEventButton.left && self.mouse-y < root.top { Backend.win-drag(); } } }
+            Image { source: @image-url("assets/nether-logo.svg"); x: 20px; y: 10px; width: 36px; height: 36px; }
+            Text { x: 66px; height: root.top; text: "Nether"; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; vertical-alignment: center; }
+            // right: the mark on a flat plate
             Rectangle {
-                x: root.W - 680px; y: 0px; width: 680px; height: root.H; background: Theme.s1; clip: true;
-                Hatch { width: parent.width; height: parent.height; }
-                Rectangle { x: 0px; width: 1px; background: Theme.ln; }
-                Text { x: -30px; y: 40px; text: "NETHER"; color: #ffffff09; font-family: Theme.disp; font-size: 64px; font-weight: 800;  }
-                Text { x: 120px; y: 500px; text: "CLIENT"; color: #ffffff09; font-family: Theme.disp; font-size: 64px; font-weight: 800;  }
-                Image { source: @image-url("assets/nether-logo.svg"); x: 170px; y: 250px; width: 340px; height: 340px; }
+                x: root.W - 600px; y: root.top; width: 560px; height: root.H - root.top - 40px; background: Theme.s1; border-radius: 8px; border-width: 1px; border-color: Theme.ln;
+                Image { source: @image-url("assets/nether-logo.svg"); x: (parent.width - 300px) / 2; y: (parent.height - 300px) / 2; width: 300px; height: 300px; }
             }
             Heading { x: 96px; y: 216px; text: "NETHER"; font-size: 64px; }
-            Heading { x: 96px; y: 336px; text: "CLIENT"; font-size: 64px; color: Theme.red2; }
-            Text { x: 100px; y: 490px; width: 560px; text: Backend.acct-state == 3 ? "Signing you in…" : "Sign in with your Microsoft account to play."; color: Theme.dim; font-family: Theme.ui; font-size: 19px; }
+            Heading { x: 96px; y: 296px; text: "CLIENT"; font-size: 64px; color: Theme.red2; }
+            Text { x: 100px; y: 420px; width: 560px; text: Backend.acct-state == 3 ? "Signing you in…" : "Sign in with your Microsoft account to play."; color: Theme.dim; font-family: Theme.ui; font-size: 19px; }
 
             // signed out
             if Backend.acct-state == 0: Rectangle {
-                PlayButton { x: 100px; y: 548px; width: 380px; height: 64px; label: "SIGN IN WITH MICROSOFT"; text-size: 24px; clicked => { Backend.sign-in(); } }
-                Text { x: 100px; y: 640px; width: 560px; text: Backend.acct-msg; color: Theme.redtx; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
+                PlayButton { x: 100px; y: 476px; width: 420px; height: 64px; label: "SIGN IN WITH MICROSOFT"; text-size: 24px; arrow: false; clicked => { Backend.sign-in(); } }
+                Text { x: 100px; y: 568px; width: 560px; text: Backend.acct-msg; color: Theme.redtx; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
             }
             // waiting for the user on microsoft.com
             if Backend.acct-state == 1: Rectangle {
-                Eyebrow { x: 100px; y: 540px; text: "ENTER THIS CODE ON THE MICROSOFT PAGE"; }
-                Text { x: 98px; y: 558px; text: Backend.acct-code; color: Theme.tx; font-family: Theme.mono; font-size: 64px; font-weight: 700; letter-spacing: 8px; }
-                Text { x: 100px; y: 644px; text: Backend.acct-url; color: Theme.dim; font-family: Theme.mono; font-size: 13px * Theme.ts; }
-                Btn { x: 100px; y: 680px; height: 44px; text: "OPEN PAGE"; solid: true; icon: Ico.ext; clicked => { Backend.open-url(Backend.acct-url); } }
-                Btn { x: 240px; y: 680px; height: 44px; text: "COPY CODE"; icon: Ico.copy; clicked => { Backend.copy-text(Backend.acct-code); } }
-                Waiting { x: 100px; y: 752px; width: 320px; text: "Waiting for you to finish signing in"; }
-                LinkBtn { x: 100px; y: 784px; text: "CANCEL"; clicked => { Backend.cancel-sign-in(); } }
+                Eyebrow { x: 100px; y: 476px; text: "ENTER THIS CODE ON THE MICROSOFT PAGE"; }
+                Text { x: 98px; y: 496px; text: Backend.acct-code; color: Theme.tx; font-family: Theme.mono; font-size: 64px; font-weight: 700; letter-spacing: 8px; }
+                Text { x: 100px; y: 584px; text: Backend.acct-url; color: Theme.dim; font-family: Theme.mono; font-size: 13px * Theme.ts; }
+                gop := Btn { x: 100px; y: 620px; height: 44px; text: "OPEN PAGE"; solid: true; icon: Ico.ext; clicked => { Backend.open-url(Backend.acct-url); } }
+                Btn { x: gop.x + gop.width + 10px; y: 620px; height: 44px; text: "COPY CODE"; icon: Ico.copy; clicked => { Backend.copy-text(Backend.acct-code); } }
+                Waiting { x: 100px; y: 692px; width: 320px; text: "Waiting for you to finish signing in"; }
+                LinkBtn { x: 100px; y: 724px; text: "CANCEL"; clicked => { Backend.cancel-sign-in(); } }
             }
         }
 
@@ -392,11 +377,9 @@ export component AppWindow inherits Window {
             // keyboard focus stays on the crash page (Tab wraps), Esc closes it
             FocusTrap { x: 0px; y: 0px; width: root.W; height: root.H; escape => { Backend.crash-open = false; }
             TouchArea { scroll-event(e) => { accept } pointer-event(e) => { if e.kind == PointerEventKind.down && e.button == PointerEventButton.left && self.mouse-y < 56px { Backend.win-drag(); } } }
-            Rectangle { x: -300px; y: -200px; width: 1100px; height: 900px; background: @radial-gradient(circle, Theme.red.with-alpha(0.188) 0%, Theme.red.with-alpha(0.000) 68%); }
             // right: the end of the log + facts mclo.gs found
             Rectangle {
                 x: 900px; y: 0px; width: root.W - 900px; height: root.H; background: Theme.s1; clip: true;
-                Hatch { width: parent.width; height: parent.height; }
                 Rectangle { x: 0px; width: 1px; background: Theme.ln; }
                 Eyebrow { x: 36px; y: 56px; text: Backend.crash-title != "" ? Backend.crash-title : "END OF THE LOG"; }
                 for f[i] in Backend.crash-facts: Text { x: 36px; y: 84px + i * 20px; width: 468px; text: f; color: Theme.dim; font-family: Theme.mono; font-size: 11px * Theme.ts; overflow: elide; }
@@ -442,8 +425,8 @@ export component AppWindow inherits Window {
                     Rectangle {
                         x: 0px; y: 0px; width: 760px; height: 44px; background: Theme.s1; border-width: 1px; border-color: Theme.ln2;
                         Text { x: 16px; width: 480px; text: Backend.crash-url; color: Theme.ice; font-family: Theme.mono; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
-                        Btn { x: parent.width - 236px; y: 6px; height: 32px; text: "COPY LINK"; icon: Ico.copy; clicked => { Backend.copy-text(Backend.crash-url); Backend.toast("Link copied"); } }
-                        Btn { x: parent.width - 8px - self.width; y: 6px; height: 32px; text: "OPEN"; icon: Ico.ext; clicked => { Backend.open-url(Backend.crash-url); } }
+                        Btn { x: cop.x - 8px - self.width; y: 6px; height: 32px; text: "COPY LINK"; icon: Ico.copy; clicked => { Backend.copy-text(Backend.crash-url); Backend.toast("Link copied"); } }
+                        cop := Btn { x: parent.width - 8px - self.width; y: 6px; height: 32px; text: "OPEN"; icon: Ico.ext; clicked => { Backend.open-url(Backend.crash-url); } }
                     }
                     if Backend.crash-problems.length == 0: Text { x: 2px; y: 60px; width: 740px; text: "mclo.gs found no known problem in this log. Share the link with whoever can help."; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
                     for p[i] in Backend.crash-problems: Rectangle {

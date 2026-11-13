@@ -434,12 +434,12 @@ fn play_session(sh: &Shared) -> Result<Session, String> {
 }
 
 /// Launch options for an instance (shared by Play and the launcher-path test).
-fn launch_opts(sh: &Shared, name: &str, version: &str, ram_gb: i32, loader_label: &str, java: u32, session: Session) -> LaunchOpts {
+fn launch_opts(sh: &Shared, name: &str, version: &str, ram_gb: i32, loader_label: &str, java: u32, shared: bool, session: Session) -> LaunchOpts {
     client::migrate(sh, name);
     let saved = instances::load(&sh.paths).and_then(|l| l.into_iter().find(|d| d.name == name)).unwrap_or_default();
     LaunchOpts {
         loader: Loader::from_label(loader_label), version: version.into(), game_dir: sh.paths.instance(name), session, ram_mb: (ram_gb.max(1) * 1024) as u32,
-        java_major: (java > 0).then_some(java), client_config: client::instance_file(sh, name), client: true, groups: None,
+        java_major: (java > 0).then_some(java), client_config: client::instance_file(sh, name, shared), client: true, groups: None,
         extra_jvm: nether_core::launch::split_args(&saved.jvm_args),
         window: (saved.width >= 320 && saved.height >= 240).then_some((saved.width, saved.height)),
         fullscreen: saved.fullscreen,
@@ -532,7 +532,7 @@ fn start_launch(weak: slint::Weak<AppWindow>, sh: Arc<Shared>, name: String, ver
         // shared game settings (keybinds, video, audio…) go into this instance before it starts
         let game_dir = sh.paths.instance(&name);
         if shared { let _ = std::fs::create_dir_all(&game_dir); let _ = gamesettings::before_launch(&sh.paths, &game_dir, &version, &loader_label); }
-        let mut opts = launch_opts(&sh, &name, &version, ram_gb, &loader_label, java, session);
+        let mut opts = launch_opts(&sh, &name, &version, ram_gb, &loader_label, java, shared, session);
         opts.quick_play = quick;
         opts.cancel = Some(cancel);
         match launch(&sh.paths, &opts, progress) {
@@ -1409,26 +1409,6 @@ fn main() -> Result<(), slint::PlatformError> {
         backend.on_cancel_job(|| JOBS.with(|j| if let Some(c) = j.borrow().last().and_then(|x| x.cancel.clone()) { c.store(true, Ordering::SeqCst); }));
     }
 
-    // client modules: load/save per scope (global or an instance)
-    {
-        let (weak, sh) = (ui.as_weak(), shared.clone());
-        ui.global::<ClientState>().on_load(move |s| if let Some(ui) = weak.upgrade() { client::load(&ui, &sh, s) });
-    }
-    {
-        let (weak, sh) = (ui.as_weak(), shared.clone());
-        ui.global::<ClientState>().on_save(move || if let Some(ui) = weak.upgrade() { client::save(&ui, &sh) });
-    }
-    {
-        let (weak, sh) = (ui.as_weak(), shared.clone());
-        ui.global::<ClientState>().on_set_use_global(move |v| if let Some(ui) = weak.upgrade() { client::set_use_global(&ui, &sh, v) });
-        let (weak, sh) = (ui.as_weak(), shared.clone());
-        ui.global::<ClientState>().on_set_bool(move |r, k, v| if let Some(ui) = weak.upgrade() { client::set(&ui, &sh, r, &k, v.into()) });
-        let (weak, sh) = (ui.as_weak(), shared.clone());
-        ui.global::<ClientState>().on_set_num(move |r, k, v| if let Some(ui) = weak.upgrade() { client::set(&ui, &sh, r, &k, ((v as f64 * 1000.0).round() / 1000.0).into()) });
-        let (weak, sh) = (ui.as_weak(), shared.clone());
-        ui.global::<ClientState>().on_set_str(move |r, k, v| if let Some(ui) = weak.upgrade() { client::set(&ui, &sh, r, &k, v.as_str().into()) });
-    }
-
     // `--snapshot out.png [tab] [open-instance]`: render one frame to PNG and exit (visual checks).
     let args: Vec<String> = std::env::args().collect();
     if let Some(i) = args.iter().position(|a| a == "--snapshot").filter(|_| snapshot) {
@@ -1583,7 +1563,7 @@ mod tests {
         let (name, ver, loader) = (env("NC_TEST_NAME", "nctest"), env("NC_TEST_VER", "1.21.11"), env("NC_TEST_LOADER", "Fabric"));
         let secs: u64 = env("NC_TEST_SECS", "60").parse().unwrap();
         let session = play_session(&sh).expect("build with --features dev and set NETHER_DEV_OFFLINE=1");
-        let opts = launch_opts(&sh, &name, &ver, 2, &loader, 0, session);
+        let opts = launch_opts(&sh, &name, &ver, 2, &loader, 0, true, session);
         println!("client_config = {:?}", opts.client_config);
         let progress: Progress = Arc::new(|m, f| println!("[{:>3}%] {m}", (f * 100.0) as i32));
         let mut child = launch(&sh.paths, &opts, progress).unwrap();

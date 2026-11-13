@@ -56,14 +56,6 @@ export struct Detail {
     // the description needs a CJK font
     cjk: bool,
 }
-// a client module; x/y = HUD position as 0..1 of the free space, scale = HUD size
-// one module setting (from the agent's schema): t 0 toggle, 1 slider, 2 colour, 3 choice, 4 key; num/on/str = current value
-export struct SetVal { t: int, key: string, label: string, min: float, max: float, step: float, num: float, on: bool, str: string, opts: [string], pick: int,
-    // L2: hint = explanation line under the label; unset = KEY with no key bound
-    hint: string, unset: bool, col: color, rainbow: bool }
-// variant = look of the HUD preview (armor layout)
-export struct ClientMod { id: string, name: string, desc: string, cat: string, ci: int, on: bool, hud: bool, x: float, y: float, scale: float, sets: [SetVal], variant: string, icon: image, has-icon: bool, pixel-icon: bool, moved: bool }
-
 // Everything the Rust side provides or handles.
 // L2: a restore point row (date = "12 Nov 2026 · 13:40", when = "3 days ago", kind = MANUAL / AUTO / BEFORE RESTORE)
 export struct RestorePt { file: string, date: string, when: string, kind: string, size: string }
@@ -509,22 +501,6 @@ export global SkinLib {
     callback export(int);
     callback delete(int);
     callback wear(int);
-}
-
-export global ClientState {
-    in-out property <[ClientMod]> modules;
-    // -1 = global setup, else the instance being edited (which may follow the global one)
-    in-out property <int> scope: -1;
-    in-out property <bool> use-global: true;
-    in-out property <int> sel: -1;
-    in-out property <string> menu-key: "RIGHT SHIFT";
-    in-out property <[string]> cats: ["ALL"];
-    callback load(int);
-    callback save();
-    callback set-use-global(bool);
-    callback set-bool(int, string, bool);
-    callback set-num(int, string, float);
-    callback set-str(int, string, string);
 }
 
 // New-instance setup wizard (crates/app/src/wizard.rs). packs: Nether packs (ok = has built-in client settings);

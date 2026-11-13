@@ -161,7 +161,6 @@ export component HostScreen inherits Rectangle {
         Rectangle {
             x: 56px; y: 132px; width: 860px; height: 240px; background: Theme.s1; border-radius: 8px; border-width: 1px; border-color: Theme.ln; clip: true;
             Hatch { width: parent.width; height: parent.height; }
-            if root.st == 2: Rectangle { x: -200px; y: 40px; width: 700px; height: 500px; background: @radial-gradient(circle, Theme.red.with-alpha(0.251) 0%, Theme.red.with-alpha(0.000) 68%); }
             Ticks { width: parent.width; height: parent.height; }
             if root.live: Pulse { x: 32px; y: 34px; width: 10px; height: 10px; }
             if !root.live: Rectangle { x: 32px; y: 34px; width: 10px; height: 10px; background: root.st == 4 ? Theme.red2 : Theme.mut; }

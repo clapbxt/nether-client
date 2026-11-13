@@ -7,7 +7,7 @@ use nether_core::{instances, modrinth, netherpack};
 use slint::{ComponentHandle, Model, ModelRc, VecModel};
 
 use crate::mods::{cached_icon, count, icon_image, icon_px, update_rows};
-use crate::{show_toast, ui_do, AppWindow, Backend, Row, Shared, Wizard};
+use crate::{show_toast, ui_do, AppWindow, Row, Shared, Wizard};
 
 /// Pack list (built-ins + user packs) for the Nether pack step.
 pub fn init(ui: &AppWindow, sh: &Arc<Shared>) {
@@ -25,7 +25,6 @@ pub fn pick_pack(ui: &AppWindow, sh: &Arc<Shared>, id: &str) {
     let p = (!id.is_empty()).then(|| netherpack::find(&sh.paths, id)).flatten();
     let preset = p.as_ref().is_some_and(|p| p.client.is_some());
     w.set_pack_has_client(preset);
-    w.set_mode(if preset { 2 } else if w.get_mode() == 2 { 0 } else { w.get_mode() });
 }
 
 /// Popular resource packs for `ver` (the resource pack step), icons streamed in.
@@ -65,22 +64,12 @@ pub fn load_rps(ui: &AppWindow, sh: &Arc<Shared>, ver: &str) {
     });
 }
 
-/// After `create-instance` made `name`: client setup, then pack mods + resource packs in the background.
+/// After `create-instance` made `name`: the pack's client settings, then pack mods + resource packs in the background.
 pub fn finish(ui: &AppWindow, sh: &Arc<Shared>, name: &str, ver: &str) {
     let name = name.trim();
     let w = ui.global::<Wizard>();
     let pack = (!w.get_pack().is_empty()).then(|| netherpack::find(&sh.paths, w.get_pack().as_str())).flatten();
-    let mode = w.get_mode();
-    crate::client::setup_instance(&sh.paths, name, mode, pack.as_ref().and_then(|p| p.client.as_ref()));
-    // instance card label
-    let b = ui.global::<Backend>();
-    let m = b.get_instances();
-    if let Some(i) = m.iter().position(|i| i.name == name) {
-        let mut r = m.row_data(i).unwrap();
-        r.client = (if mode == 0 { "Global" } else { "Custom" }).into();
-        m.set_row_data(i, r);
-        crate::persist(&sh.paths, &m);
-    }
+    crate::client::setup_instance(&sh.paths, name, pack.as_ref().and_then(|p| p.client.as_ref()));
     let rps: Vec<(String, String)> = w.get_rps().iter().filter(|r| r.on).map(|r| (r.id.to_string(), r.name.to_string())).collect();
     if pack.is_none() && rps.is_empty() { return; }
     let (weak, sh, name, ver) = (ui.as_weak(), sh.clone(), name.to_string(), ver.to_string());

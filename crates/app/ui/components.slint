@@ -1,5 +1,5 @@
 import { Theme } from "theme.slint";
-import { ClientState, Backend } from "structs.slint";
+import { Backend } from "structs.slint";
 
 // ---------- surfaces ----------
 
@@ -277,34 +277,35 @@ export component LinkBtn inherits Rectangle {
 
 // ---------- inputs ----------
 
-// Segmented control with a sliding ice thumb.
+// Segmented control: each item is as wide as its label (Nether Pixel runs wide, so widths are measured, never guessed).
 export component Seg inherits Rectangle {
     border-radius: 6px;
     in property <[string]> items;
-    in property <length> item-w: 110px;
+    // minimum item width (labels never get narrower than their text + padding)
+    in property <length> item-w: 0px;
     in-out property <int> current: 0;
     callback changed(int);
-    // Nether Pixel runs wide: the nominal item width is scaled once here
-    property <length> iw: root.item-w * 1.4;
-    width: root.items.length * root.iw + 6px;
+    width: hl.preferred-width;
     height: 34px;
     background: Theme.s1;
     border-width: 1px;
     border-color: Theme.ln;
-    Rectangle {
-        x: 3px + root.current * root.iw; y: 3px; width: root.iw; height: parent.height - 6px;
-        background: Theme.s3; border-radius: 4px;
-        animate x { duration: Theme.slow; easing: ease-out-quint; }
-    }
-    for it[i] in root.items: Rectangle {
-        x: 3px + i * root.iw; width: root.iw; height: parent.height;
-        Text {
-            text: it; color: root.current == i ? Theme.tx : (st.has-hover ? Theme.tx : Theme.dim);
-            font-family: Theme.disp; font-size: 16px; font-weight: 700;
-            horizontal-alignment: center; vertical-alignment: center;
-            animate color { duration: Theme.mid; }
+    hl := HorizontalLayout {
+        padding: 3px; spacing: 0px; alignment: start;
+        for it[i] in root.items: Rectangle {
+            min-width: Math.max(root.item-w, lt.preferred-width + 28px);
+            horizontal-stretch: 0;
+            border-radius: 4px;
+            background: root.current == i ? Theme.s3 : (st.has-hover ? Theme.hov : transparent);
+            animate background { duration: Theme.mid; }
+            lt := Text {
+                text: it; color: root.current == i ? Theme.tx : (st.has-hover ? Theme.tx : Theme.dim);
+                font-family: Theme.disp; font-size: 16px; font-weight: 700;
+                horizontal-alignment: center; vertical-alignment: center;
+                animate color { duration: Theme.mid; }
+            }
+            st := TouchArea { mouse-cursor: pointer; clicked => { root.current = i; root.changed(i); } }
         }
-        st := TouchArea { mouse-cursor: pointer; clicked => { root.current = i; root.changed(i); } }
     }
     // keyboard: Left/Right move the thumb
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;

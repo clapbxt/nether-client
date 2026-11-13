@@ -1,8 +1,6 @@
 import { Theme } from "theme.slint";
 import { Backend, Row, Inst, Art, Wizard } from "structs.slint";
 import { Glass, PlayButton, Eyebrow, Heading, Slot, Chip, Btn, ModIcon, Seg, UTabs, Toggle, Dropdown, VerTag, Icon, Ico, Page, IconBtn, Hatch, Ticks, Slash, SectionHead, Stat, LinkBtn, Slider, Field, Scrim, SetRow, Pulse } from "components.slint";
-import { ClientEditor } from "client.slint";
-import { ClientState } from "structs.slint";
 import { ModDetail } from "moddetail.slint";
 
 // Block-texture icon grid; "" means the default (grass block).
@@ -159,9 +157,9 @@ export component InstancesScreen inherits Rectangle {
     // ---------- instance list + preview ----------
     if root.sel < 0: Page {
         hd := Heading { x: 56px; y: 28px; text: "INSTANCES"; font-size: 32px; }
-        Text { x: hd.x + hd.preferred-width + 6px; y: 58px; text: Backend.instances.length < 10 ? "0\{Backend.instances.length}" : "\{Backend.instances.length}"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; }
+        Text { x: hd.x + hd.preferred-width + 12px; y: hd.y; height: hd.height; text: "\{Backend.instances.length}"; color: Theme.mut; font-family: Theme.mono; font-size: 13px * Theme.ts; vertical-alignment: center; }
         Btn { x: ni.x - 10px - self.width; y: 40px; height: 34px; text: "IMPORT"; icon: Ico.download; clicked => { Backend.import-instance(); } }
-        Seg { x: 328px; y: 84px; items: ["ALL", "MODDED", "VANILLA"]; item-w: 70px; current <=> Backend.inst-filter; changed(i) => { Backend.refilter(); } }
+        Seg { x: 328px; y: 84px; items: ["ALL", "MODDED", "VANILLA"]; current <=> Backend.inst-filter; changed(i) => { Backend.refilter(); } }
         // search (name, version, loader) + sort
         Field { x: 56px; y: 84px; width: 250px; height: 34px; text-size: 13px; search: true; placeholder: "Search instances"; text <=> Backend.inst-query;
             edited => { Backend.refilter(); } }
@@ -217,7 +215,7 @@ export component InstancesScreen inherits Rectangle {
                 }
                 Rectangle { x: 18px; y: 10px; width: 36px; height: 36px; background: Theme.s3; border-radius: 6px;
                     Image { x: 4px; y: 4px; width: 28px; height: 28px; source: card.inst.icon-img; image-rendering: pixelated; } }
-                Text { x: 66px; width: 320px; text: card.inst.title; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; vertical-alignment: center; overflow: elide; }
+                Text { x: 66px; width: 320px; text: card.inst.title; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; overflow: elide; }
                 Text { x: 396px; width: 80px; text: card.inst.ver; color: Theme.dim; font-family: Theme.mono; font-size: 12px * Theme.ts; vertical-alignment: center; }
                 Text { x: 482px; width: 112px; text: card.inst.loader; color: card.inst.loader == "Vanilla" ? Theme.mut : Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
                 if !card.inst.running && !card.inst.starting && !card.inst.crashed: Text { x: 600px; width: 110px; text: card.inst.last; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
@@ -250,9 +248,11 @@ export component InstancesScreen inherits Rectangle {
                 x: 0px; y: 40px; width: parent.width; height: 240px;
                 Text { x: 18px; y: 0px; text: Backend.instances.length == 0 ? "NO INSTANCES YET" : "NOTHING MATCHES"; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 700; }
                 Text { x: 18px; y: 44px; width: 520px; text: Backend.instances.length == 0 ? "An instance is one Minecraft setup with its own version, mods and worlds. Make one, or start from a modpack." : "No instance has that in its name, version or loader. Clear the search or set the filter to All."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
-                if Backend.instances.length == 0: Btn { x: 18px; y: 110px; text: "NEW INSTANCE"; solid: true; icon: Ico.plus; clicked => { Backend.create-open = true; } }
-                if Backend.instances.length == 0: Btn { x: 190px; y: 110px; text: "BROWSE MODPACKS"; clicked => { root.go-discover(); } }
-                if Backend.instances.length == 0: LinkBtn { x: 370px; y: 120px; text: "IMPORT FROM ANOTHER LAUNCHER"; clicked => { Backend.import-instance(); } }
+                if Backend.instances.length == 0: Rectangle {
+                    eb1 := Btn { x: 18px; y: 110px; text: "NEW INSTANCE"; solid: true; icon: Ico.plus; clicked => { Backend.create-open = true; } }
+                    eb2 := Btn { x: eb1.x + eb1.width + 10px; y: 110px; text: "BROWSE MODPACKS"; clicked => { root.go-discover(); } }
+                    LinkBtn { x: eb2.x + eb2.width + 18px; y: 114px; text: "IMPORT FROM ANOTHER LAUNCHER"; clicked => { Backend.import-instance(); } }
+                }
             }
         }
         Text { x: 56px; y: 758px; text: "Click to preview · double-click to edit · right-click for more · drop modpacks on the window to import"; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; visible: Backend.instances.length > 0; }
@@ -275,9 +275,9 @@ export component InstancesScreen inherits Rectangle {
                 Stat { x: 344px; width: 90px; size: 16px; k: "PLAYED"; v: "\{root.pk.hours} h"; }
                 Stat { x: 434px; width: 74px; size: 16px; k: "MODS"; v: "\{root.pk.mods}"; }
             }
-            PlayButton { x: 32px; y: 452px; width: 280px; height: 64px; text-size: 32px;
+            PlayButton { x: 32px; y: 452px; width: 260px; height: 64px; text-size: 32px;
                 label: root.pk.stopping ? "STOPPING" : (root.pk.running ? "STOP" : (root.pk.starting ? "STARTING" : "PLAY")); arrow: !root.pk.running && !root.pk.starting; enabled: !root.pk.starting && !root.pk.stopping; clicked => { if root.pk.running { Backend.stop(root.pk.name); } else { Backend.play(root.pk.name); } } }
-            Btn { x: 328px; y: 452px; width: 212px; height: 64px; text: "EDIT INSTANCE"; icon: Ico.edit; clicked => { root.open(root.pick); } }
+            Btn { x: 308px; y: 452px; height: 64px; text: "EDIT INSTANCE"; icon: Ico.edit; clicked => { root.open(root.pick); } }
             SectionHead { x: 32px; y: 566px; width: parent.width - 64px; title: "MANAGE"; }
             IconBtn { x: 32px; y: 600px; size: 36px; d: Ico.folder; tip: "Open folder"; clicked => { root.act(root.pick, 2); } }
             IconBtn { x: 76px; y: 600px; size: 36px; d: Ico.copy; tip: "Duplicate"; clicked => { root.act(root.pick, 3); } }
@@ -307,7 +307,7 @@ export component InstancesScreen inherits Rectangle {
             arrow: !Backend.instances[root.sel].running && !Backend.instances[root.sel].starting;
             enabled: !Backend.instances[root.sel].starting && !Backend.instances[root.sel].stopping;
             clicked => { if Backend.instances[root.sel].running { Backend.stop(Backend.instances[root.sel].name); } else { Backend.play(Backend.instances[root.sel].name); } } }
-        UTabs { x: 56px; y: 148px; width: 1328px; item-w: 188px; items: ["OVERVIEW", "MODS", "PACKS", "WORLDS", "SCREENSHOTS", "LOGS", "CLIENT"]; current <=> root.itab; }
+        UTabs { x: 56px; y: 148px; width: 1328px; item-w: 188px; items: ["OVERVIEW", "MODS", "PACKS", "WORLDS", "SCREENSHOTS", "LOGS"]; current <=> root.itab; }
 
         // overview (scrolls)
         if root.itab == 0: Page {
@@ -345,12 +345,10 @@ export component InstancesScreen inherits Rectangle {
                         text: Backend.instances[root.sel].win-h > 0 ? "\{Backend.instances[root.sel].win-h}" : ""; edited => { Backend.set-inst-window(root.sel, ww.text, wh.text); } }
                 }
 
-                SectionHead { x: 56px; y: 424px; width: 880px; idx: "02"; title: "CLIENT & GAME SETTINGS"; }
-                SetRow { x: 56px; y: 448px; width: 880px; title: "Client modules"; sub: "Uses your global module setup unless you give this instance its own.";
-                    Btn { x: parent.width - self.width; y: 14px; text: "EDIT MODULES"; clicked => { root.itab = 6; } }
-                }
+                SectionHead { x: 56px; y: 424px; width: 880px; idx: "02"; title: "GAME & CLIENT SETTINGS"; }
+                SetRow { x: 56px; y: 448px; width: 880px; reserve: 0px; title: "Client modules"; sub: "Set in game with Right Shift. They follow the switch below, like your other game settings."; }
                 SetRow { x: 56px; y: 512px; width: 880px; title: "Share game settings";
-                    sub: !Backend.sync-on ? "Sharing is turned off in Settings." : (Backend.instances[root.sel].shared ? "Keybinds, video, audio and controls follow you between instances." : "This instance keeps its own game settings.");
+                    sub: !Backend.sync-on ? "Sharing is turned off in Settings: this instance keeps its own settings and client modules." : (Backend.instances[root.sel].shared ? "Keybinds, video, audio and client modules follow you between instances." : "This instance keeps its own game settings and client modules.");
                     LinkBtn { x: parent.width - 200px; y: 18px; text: "SETTINGS"; clicked => { root.go-settings(); } }
                     Toggle { x: parent.width - 42px; y: 21px; on: Backend.instances[root.sel].shared; toggled(v) => { Backend.set-inst-shared(root.sel, v); } }
                 }
@@ -646,18 +644,6 @@ export component InstancesScreen inherits Rectangle {
         }
 
 
-        // per-instance client: follows the global setup (Client tab) unless switched to its own
-        if root.itab == 6: Page {
-            // the client is always on; this switch only picks global or per-instance module settings
-            Rectangle {
-                x: 56px; y: 196px; width: 1328px; height: 40px;
-                Toggle { x: 0px; y: 9px; on: ClientState.use-global; toggled(v) => { ClientState.set-use-global(v); } }
-                Text { x: 54px; y: 0px; height: 22px; text: "USE GLOBAL SETUP"; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 0.8px; vertical-alignment: center; }
-                Text { x: 54px; y: 22px; width: 520px; text: ClientState.use-global ? "Modules and HUD follow the Client tab." : "This instance has its own modules, settings and HUD."; color: Theme.dim; font-family: Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
-            }
-            ClientEditor { x: 56px; y: 248px; width: 1328px; height: parent.height - 248px - 16px; scope: root.sel; }
-        }
-
         // Modrinth-style mod page (on top of everything in the instance)
         if Backend.detail-open && !Backend.detail-pack: ModDetail {
             x: 0px; y: 0px; width: root.width; height: parent.height;
@@ -741,23 +727,24 @@ export component InstancesScreen inherits Rectangle {
             property <int> ram: 4;
             property <string> icon: "";
             property <string> wall: "";
-            // 0 loader, 1 version, 2 Nether pack (Fabric only), 3 client, 4 resource packs, 5 finish
+            // 0 loader, 1 version, 2 Nether pack (Fabric only), 4 resource packs, 5 finish (3, the old client step, is skipped:
+            // client modules are set in game)
             property <int> step: Wizard.snap-step;
             property <bool> raw: false;
             property <string> name;
-            property <[string]> steps: ["LOADER", "VERSION", "NETHER PACK", "CLIENT", "RESOURCE PACKS", "FINISH"];
+            property <[{t: string, s: int}]> steps: [{t: "LOADER", s: 0}, {t: "VERSION", s: 1}, {t: "NETHER PACK", s: 2}, {t: "RESOURCE PACKS", s: 4}, {t: "FINISH", s: 5}];
             property <[string]> vers: dlg.loader == 1 ? Backend.fabric-versions : (dlg.loader == 4 ? Backend.quilt-versions : (dlg.loader == 5 ? Backend.legacy-versions : Backend.mc-versions));
             property <[string]> loader-names: ["Vanilla", "Fabric", "Forge", "NeoForge", "Quilt", "Legacy Fabric"];
             property <string> ver: dlg.vers.length > 0 ? dlg.vers[Math.min(dlg.vi, dlg.vers.length - 1)] : "";
             property <string> loader-name: dlg.loader-names[dlg.loader];
             changed ver => { Backend.cover-for(dlg.ver); }
             function go(s: int) {
-                dlg.step = (s == 2 && dlg.loader != 1) ? (dlg.step < 2 ? 3 : 1) : s;
+                dlg.step = s == 3 ? (dlg.step < 3 ? 4 : (dlg.loader == 1 ? 2 : 1)) : ((s == 2 && dlg.loader != 1) ? (dlg.step < 2 ? 4 : 1) : s);
                 if dlg.step == 4 { Wizard.load-rps(dlg.ver); }
             }
             x: (parent.width - 1040px) / 2; y: 30px; width: 1040px; height: 728px;
             background: Theme.s1; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
-            init => { Backend.cover-for(dlg.ver); Wizard.pick-pack(""); Wizard.load-rps(""); Wizard.mode = 0; }
+            init => { Backend.cover-for(dlg.ver); Wizard.pick-pack(""); Wizard.load-rps(""); }
             TouchArea { }
             Heading { x: 30px; y: 44px; text: dlg.raw ? "RAW INSTANCE" : "NEW INSTANCE"; font-size: 48px; }
             IconBtn { x: parent.width - 32px - 34px; y: 28px; size: 34px; d: Ico.close; tip: "Close"; clicked => { Backend.create-open = false; } }
@@ -765,14 +752,15 @@ export component InstancesScreen inherits Rectangle {
             // step rail
             if !dlg.raw: HorizontalLayout {
                 x: 32px; y: 112px; width: parent.width - 64px; height: 30px; spacing: 6px;
-                for s[i] in dlg.steps: Rectangle {
-                    property <bool> skip: i == 2 && dlg.loader != 1;
-                    background: dlg.step == i ? Theme.s3 : transparent;
+                for st[i] in dlg.steps: Rectangle {
+                    property <bool> skip: st.s == 2 && dlg.loader != 1;
+                    border-radius: 4px;
+                    background: dlg.step == st.s ? Theme.s3 : transparent;
                     opacity: self.skip ? 0.35 : 1;
-                    Rectangle { y: parent.height - 2px; height: 2px; background: i < dlg.step ? Theme.ice : (dlg.step == i ? Theme.red2 : Theme.ln2); }
-                    Text { x: 10px; height: parent.height; text: "0\{i + 1}"; color: dlg.step == i ? Theme.red2 : Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; vertical-alignment: center; }
-                    Text { x: 34px; width: parent.width - 40px; height: parent.height; overflow: elide; text: s; color: dlg.step == i ? Theme.tx : (i < dlg.step ? Theme.dim : Theme.mut); font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.8px; vertical-alignment: center; }
-                    TouchArea { mouse-cursor: i < dlg.step && !parent.skip ? pointer : default; clicked => { if i < dlg.step && !parent.skip { dlg.go(i); } } }
+                    Rectangle { y: parent.height - 2px; height: 2px; background: st.s < dlg.step ? Theme.ice : (dlg.step == st.s ? Theme.red2 : Theme.ln2); }
+                    Text { x: 10px; height: parent.height; text: "0\{i + 1}"; color: dlg.step == st.s ? Theme.red2 : Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; vertical-alignment: center; }
+                    Text { x: 34px; width: parent.width - 40px; height: parent.height; overflow: elide; text: st.t; color: dlg.step == st.s ? Theme.tx : (st.s < dlg.step ? Theme.dim : Theme.mut); font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.8px; vertical-alignment: center; }
+                    TouchArea { mouse-cursor: st.s < dlg.step && !parent.skip ? pointer : default; clicked => { if st.s < dlg.step && !parent.skip { dlg.go(st.s); } } }
                 }
             }
 
@@ -844,24 +832,6 @@ export component InstancesScreen inherits Rectangle {
                 }
             }
 
-            // ---- 04 client ----
-            if dlg.step == 3: Rectangle {
-                x: 32px; y: 166px; width: parent.width - 64px; height: 450px;
-                Text { x: 0px; y: 0px; width: parent.width; text: "The Nether client is part of every instance: HUD, PvP tools, title screen and the in-game menu."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
-                Eyebrow { x: 0px; y: 50px; text: "MODULE SETTINGS"; }
-                for o[i] in [{t: "GLOBAL", d: "Follow your global setup from the Client tab. Change it once, every instance follows."},
-                             {t: "CUSTOM", d: "Start from your global setup, then tune this instance on its own."},
-                             {t: "PACK", d: "Use the Nether pack's built-in settings (laid over your global setup)."}]: Rectangle {
-                    visible: i < 2 || Wizard.pack-has-client;
-                    x: i * (parent.width / 3 + 4px); y: 76px; width: parent.width / 3 - 8px; height: 118px;
-                    background: Wizard.mode == i ? Theme.red.with-alpha(0.094) : (ot.has-hover ? Theme.s2 : Theme.s1);
-                    border-width: 1px; border-color: Wizard.mode == i ? Theme.red2 : Theme.ln; border-radius: 8px;
-                    Text { x: 18px; y: 16px; text: o.t; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 800;  }
-                    Text { x: 18px; y: 50px; width: parent.width - 36px; text: o.d; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
-                    ot := TouchArea { mouse-cursor: pointer; clicked => { Wizard.mode = i; } }
-                }
-            }
-
             // ---- 05 resource packs ----
             if dlg.step == 4: Rectangle {
                 x: 32px; y: 166px; width: parent.width - 64px; height: 450px;
@@ -899,7 +869,7 @@ export component InstancesScreen inherits Rectangle {
                     x: 32px; y: 88px; width: 460px; height: 120px; background: Theme.s1;
                     Eyebrow { x: 18px; y: 14px; text: "SUMMARY"; }
                     Text { x: 18px; y: 36px; width: parent.width - 36px; text: dlg.ver + " · " + dlg.loader-name + (Wizard.pack == "" ? "" : " · Nether pack"); color: Theme.tx; font-family: Theme.mono; font-size: 13px * Theme.ts; }
-                    Text { x: 18px; y: 60px; width: parent.width - 36px; text: "Client · " + (Wizard.mode == 0 ? "global settings" : (Wizard.mode == 1 ? "own settings" : "pack settings")); color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; }
+                    Text { x: 18px; y: 60px; width: parent.width - 36px; text: "Client modules · set in game with Right Shift"; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; }
                     Text { x: 18px; y: 84px; width: parent.width - 36px; text: "\{Wizard.rps.length > 0 ? "Resource packs are downloaded right after." : "No resource packs."}"; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
                 }
                 Eyebrow { x: 32px; y: 232px; text: "MEMORY"; }
@@ -933,7 +903,7 @@ export component InstancesScreen inherits Rectangle {
             Rectangle { x: 0px; y: parent.height - 76px; width: parent.width; height: 1px; background: Theme.ln; }
             if dlg.step < 5: HorizontalLayout {
                 x: 32px; y: parent.height - 58px; width: parent.width - 64px - 330px; height: 40px; spacing: 24px; alignment: start;
-                LinkBtn { text: "CREATE RAW INSTANCE"; clicked => { dlg.raw = true; Wizard.pick-pack(""); Wizard.mode = 0; dlg.step = 5; } }
+                LinkBtn { text: "CREATE RAW INSTANCE"; clicked => { dlg.raw = true; Wizard.pick-pack(""); dlg.step = 5; } }
                 Text { text: "Just a name and a version. Skips packs and setup."; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; overflow: elide; }
             }
             Btn { x: parent.width - 32px - nx.width - 12px - self.width; y: parent.height - 58px; height: 40px; text: dlg.step == 0 || dlg.raw ? "CANCEL" : "BACK";

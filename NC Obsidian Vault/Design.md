@@ -16,13 +16,13 @@ Calm, dark, rounded: OLED by default, one accent, Nether Pixel type, thin line i
 ## Components (`components.slint`)
 `PlayButton` (flat accent) · `Btn` (outline / solid / danger) · `IconBtn` · `LinkBtn` · `Seg` · `Toggle` · `Dropdown` · `Slider` · `Field` · `UTabs` · `SectionHead` · `Stat` · `SetRow` · `Glass` · `TabBtn` (pill tab, active = ln2 fill). In game: `Menu.pill` (30x17), row/expand renderer, sidebar items.
 ## Shell
-- Top bar 56: logo + "Nether", centred glass tab pill (Home, Instances, Discover, Host, Wardrobe; active = ln2), account chip, Client, settings cog. Transparent on Home.
+- Top bar 56: logo + "Nether", centred glass tab pill (Home, Instances, Discover, Host, Wardrobe; active = ln2), account chip, settings cog (no Client button: modules are in game only). Transparent on Home.
 - Bottom deck 56 on every screen except Home (job progress there is a small glass bar above the dock).
 - In-game menu (Right Shift): ~86% centred translucent panel; sidebar 210 (brand, MODULES: Favorites/All/HUD/Visual/PvP/Utility, CLIENT: Wardrobe/HUD Editor/Settings, profile chip), top bar (title, "N of M on", search), list rows 44 (icon box, name + description, star, key chip, pill), click row = inline settings (one open), footer hints.
 ## Screens
 - **Home = Dock:** wallpaper full-bleed; bottom-left "LAST PLAYED" label, title 64, spec line, PLAY + "Change instance"; bottom-centre glass dock of instance icons (+ new); right glass News card; skin right of centre.
 - **Other pages (v6 pass 2):** Console list rows with hover fill + 3px accent bar (Instances, Discover, Client modules, mods); River-style left nav where a page has sections (Settings, Client categories); Instances = list + right detail pane (wallpaper, PLAY, icon actions); Wardrobe = left preview plate (drag spin, CLASSIC/SLIM, WEAR) + right skin/cape grid, worn = accent border + check + "Equipped"; Host invite card dark; installer same language (OLED, Nether Pixel, PLAY-style button). Panels radius 8, no hatch/ticks/slash, section heads unnumbered.
-- Nether Pixel is wide (~13 px per char at 16): give buttons auto width (`Btn` without `width`, chain with `self.width`); `Seg` scales `item-w` by 1.4; stat values in tight spots use size 16; `if`-scoped ids are not reachable outside the `if`.
+- Nether Pixel is wide (~13 px per char at 16): give buttons auto width (`Btn` without `width`, chain with `self.width`); never place two buttons at fixed x (chain `a.x + a.width + gap`); `Seg` items size to their labels (`item-w` = minimum); stat values in tight spots use size 16; `if`-scoped ids are not reachable outside the `if`.
 ## Identity (unchanged)
 - **Logo** (v4.2): original ghast mark, flat 2D, white/grey on black chamfered badge with nether dust and lava. `design/icon/ghast-mark.svg`, `nether-logo.svg`. Deliberately unlike Lunar/Feather.
 - Palette identity: obsidian black, ice grey, racing red.
@@ -32,8 +32,7 @@ Calm, dark, rounded: OLED by default, one accent, Nether Pixel type, thin line i
 - Unpositioned Rectangle centres itself; a Text with `y` set needs `height` to centre vertically.
 - `mouse-cursor: text` clashes with a `text` property: write `MouseCursor.text`.
 - Text `stroke` (outline type) does not render with a transparent fill here; use a faint fill instead.
-- **Chrome:** no native title bar/border; min/max/close (46px, close red) at the top bar's right, empty bar + letterbox drag the window; no double-click maximise.
+- **Chrome:** no native title bar/border; min/max/close (46px, close red) at the top bar's right; only the top 56px strip drags the window (sign-in gate and crash page too); no double-click maximise.
 - **Install Packs:** Seg MODRINTH/CURSEFORGE/NETHER, search+sort, 68px rows (icon, MC, loader, downloads, VIEW) -> shared project page (strip says "BUILDS A NEW INSTANCE").
 - **Create wizard:** step rail (01 LOADER … 06 FINISH), big selectable cards/tiles, red border = picked; footer CREATE RAW INSTANCE link left, BACK/NEXT right.
-- **Client page:** modules grid left; right Seg SETTINGS | HUD LAYOUT; settings rows by type (toggle, slider + value, 9-swatch palette, Seg/Dropdown, key chip). Instance: client toggle + group chips row.
 - **In-game title screen:** obsidian backdrop (solid top, fading over the panorama), flat ghast mark, NETHER wordmark, 230px flat buttons with red hover bar, NETHER CLIENT button red.

@@ -196,9 +196,10 @@ pub fn players(c: &Client, uuids: &[&str]) -> Result<HashMap<String, String>> {
     Ok(c.get(format!("{api}/v1/players")).query(&[("u", ids.join(","))]).send()?.error_for_status()?.json()?)
 }
 
-// The API never sees the Minecraft access token. The launcher joins a one-time server id at Mojang's session server
-// itself (the token goes only to Mojang), the API confirms that with hasJoined and returns a 24 h session token
-// bound to the UUID. Kept in memory only; a 401 re-runs the handshake once.
+// The API never sees the Minecraft access token. The launcher fetches its Mojang player certificate (the chat-signing
+// key pair Mojang signs for this UUID; the token goes only to Mojang) and signs the API's one-time nonce with it; the
+// API checks Mojang's signature and ours offline and returns a 24 h session token bound to the UUID. (It used to ask
+// Mojang's hasJoined, which answers 403 to Cloudflare Workers.) Kept in memory only; a 401 re-runs the handshake once.
 struct Tok { uuid: String, token: String, exp: i64 }
 static TOKEN: Mutex<Option<Tok>> = Mutex::new(None);
 
@@ -210,14 +211,32 @@ fn step(r: Response, what: &str) -> Result<Response> {
     bail!("{what} failed (HTTP {code}{})", if msg.is_empty() { String::new() } else { format!(": {msg}") })
 }
 
+/// Proof for `/v1/auth/finish`: the player's Mojang certificate (public key + Mojang's signature + expiry) and the
+/// nonce signed with its private key (SHA256withRSA over "nether-auth:<nonce>:<uuid>").
+pub fn certificate_proof(c: &Client, s: &Session, nonce: &str) -> Result<serde_json::Value> {
+    use base64::Engine;
+    let b64 = base64::engine::general_purpose::STANDARD;
+    let cert: serde_json::Value = step(c.post("https://api.minecraftservices.com/player/certificates").bearer_auth(&s.access_token).send()?,
+        "Mojang certificate")?.json()?;
+    let pem = |k: &str| cert["keyPair"][k].as_str().unwrap_or_default().lines().filter(|l| !l.starts_with("-----")).collect::<String>();
+    let (private, public) = (b64.decode(pem("privateKey"))?, pem("publicKey"));
+    let key_sig = cert["publicKeySignatureV2"].as_str().unwrap_or_default();
+    let expires = cert["expiresAt"].as_str().unwrap_or_default();
+    if public.is_empty() || key_sig.is_empty() || expires.is_empty() { bail!("Mojang sent no certificate"); }
+    let kp = ring::signature::RsaKeyPair::from_pkcs8(&private).or_else(|_| ring::signature::RsaKeyPair::from_der(&private))
+        .map_err(|e| anyhow!("Mojang certificate key unusable ({e})"))?;
+    let uuid = s.uuid.replace('-', "").to_lowercase();
+    let mut sig = vec![0u8; kp.public().modulus_len()];
+    kp.sign(&ring::signature::RSA_PKCS1_SHA256, &ring::rand::SystemRandom::new(), format!("nether-auth:{nonce}:{uuid}").as_bytes(), &mut sig)
+        .map_err(|_| anyhow!("signing failed"))?;
+    Ok(serde_json::json!({ "serverId": nonce, "uuid": uuid, "name": s.name, "publicKey": public, "keySig": key_sig, "expiresAt": expires, "sig": b64.encode(sig) }))
+}
+
 fn handshake(c: &Client, api: &str, s: &Session) -> Result<String> {
     let started: serde_json::Value = step(c.post(format!("{api}/v1/auth/start")).send()?, "Nether sign-in")?.json()?;
     let server_id = started["serverId"].as_str().filter(|v| v.len() == 32).ok_or_else(|| anyhow!("bad auth start"))?;
-    step(c.post("https://sessionserver.mojang.com/session/minecraft/join")
-        .json(&serde_json::json!({ "accessToken": s.access_token, "selectedProfile": s.uuid.replace('-', ""), "serverId": server_id }))
-        .send()?, "Mojang join")?;
-    let done: serde_json::Value = step(c.post(format!("{api}/v1/auth/finish")).json(&serde_json::json!({ "name": s.name, "serverId": server_id }))
-        .send()?, "Nether sign-in")?.json()?;
+    let proof = certificate_proof(c, s, server_id)?;
+    let done: serde_json::Value = step(c.post(format!("{api}/v1/auth/finish")).json(&proof).send()?, "Nether sign-in")?.json()?;
     let (token, uuid) = (done["token"].as_str().unwrap_or_default(), done["uuid"].as_str().unwrap_or_default());
     if token.is_empty() || uuid != s.uuid.replace('-', "").to_lowercase() { bail!("bad auth reply"); }
     *TOKEN.lock().unwrap_or_else(|e| e.into_inner()) = Some(Tok { uuid: uuid.into(), token: token.into(), exp: done["exp"].as_i64().unwrap_or(0) });
