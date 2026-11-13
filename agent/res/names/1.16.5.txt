@@ -85,6 +85,7 @@ method_31043	a	(Ldjl;)V
 method_31044	g	()Ldjl;
 method_3734	aD	()Ldc;
 method_3739	aE	()Ldb;
+method_4055	b	(Laqm;)Z
 method_4309	a	(Ljava/io/InputStream;)Ldet;
 method_4495	s	()D
 method_4616	a	(Lvk;Lejq;)V
@@ -134,3 +135,4 @@ net.minecraft.class_526	dsj
 net.minecraft.class_5498	djl	
 net.minecraft.class_639	dwy	
 net.minecraft.class_642	dwz	
+net.minecraft.class_922	efr	

@@ -118,10 +118,11 @@ final class HudEditor {
 
     /** {dx, dy, guide x, guide y} pulling a w x h box at (x, y) onto the nearest target within thr pixels (guide -1: none). */
     private static float[] snapTo(List<Module> els, float x, float y, float w, float h, int fbW, int fbH, float thr) {
-        float e = Modules.edge();
+        float e = Modules.edge(), g = Gfx.gui;
         List<Float> tx = new ArrayList<>(), ty = new ArrayList<>();
-        tx.add(e); tx.add(fbW / 2f); tx.add(fbW - e);
-        ty.add(e); ty.add(fbH / 2f); ty.add(fbH - e);
+        tx.add(0f); tx.add(e); tx.add(fbW / 2f); tx.add(fbW - e); tx.add((float) fbW);
+        ty.add(0f); ty.add(e); ty.add(fbH / 2f); ty.add(fbH - e); ty.add((float) fbH);
+        tx.add(fbW / 2f - 91 * g); tx.add(fbW / 2f + 91 * g); ty.add(fbH - 22 * g); // the hotbar's sides and top
         for (Module m : els) {
             if (sel.contains(m.id)) continue;
             float bw = m.w * m.lk, bh = m.h * m.lk;
@@ -139,7 +140,7 @@ final class HudEditor {
 
     /** Moves every box in ids by (dx, dy) pixels from its start position, as one group kept on screen. */
     private static void moveGroup(List<Module> els, Map<String, float[]> from, float dx, float dy, int fbW, int fbH) {
-        float e = Modules.edge(), x0 = Float.MAX_VALUE, y0 = Float.MAX_VALUE, x1 = -Float.MAX_VALUE, y1 = -Float.MAX_VALUE;
+        float x0 = Float.MAX_VALUE, y0 = Float.MAX_VALUE, x1 = -Float.MAX_VALUE, y1 = -Float.MAX_VALUE;
         for (Module m : els) {
             float[] p = from.get(m.id);
             if (p == null) continue;
@@ -147,8 +148,8 @@ final class HudEditor {
             x1 = Math.max(x1, p[0] + m.w * m.lk); y1 = Math.max(y1, p[1] + m.h * m.lk);
         }
         if (x0 == Float.MAX_VALUE) return;
-        dx = Modules.clamp(dx, e - x0, fbW - e - x1);
-        dy = Modules.clamp(dy, e - y0, fbH - e - y1);
+        dx = Modules.clamp(dx, -x0, fbW - x1);
+        dy = Modules.clamp(dy, -y0, fbH - y1);
         for (Module m : els) { float[] p = from.get(m.id); if (p != null) Modules.setPos(m, p[0] + dx, p[1] + dy, fbW, fbH, true); }
     }
 

@@ -65,6 +65,9 @@ public final class Agent {
     /** Player class -> {name method, descriptor}: the nametag hook in every naming the game can run with. */
     private static final Map<String, String[]> NAME_HOOKS = new HashMap<>();
 
+    /** Living entity renderer class -> {method, descriptor start}: its show-name test is filtered by Hook.label (own nametag). */
+    private static final Map<String, String[]> LABEL_HOOKS = new HashMap<>();
+
     /** Chat HUD class -> chat component type: each of its add-message methods gets its message from Hook.chat first. */
     private static final Map<String, String> CHAT_HOOKS = new HashMap<>();
 
@@ -75,13 +78,17 @@ public final class Agent {
         NAME_HOOKS.put("net/minecraft/class_1657", new String[] {"method_7299", "(Lnet/minecraft/class_5250;)Lnet/minecraft/class_5250;"}); // Fabric
         NAME_HOOKS.put("net/minecraft/world/entity/player/Player", new String[] {"decorateDisplayNameComponent", "(Lnet/minecraft/network/chat/MutableComponent;)Lnet/minecraft/network/chat/MutableComponent;"}); // Forge/NeoForge, 26.x
         NAME_HOOKS.put("net/minecraft/entity/player/EntityPlayer", new String[] {"func_145748_c_", "()Lnet/minecraft/util/IChatComponent;"}); // Forge 1.8.9 getDisplayName (SRG)
+        LABEL_HOOKS.put("net/minecraft/class_922", new String[] {"method_4055", "(Lnet/minecraft/class_1309;"}); // Fabric hasLabel / shouldShowName
+        LABEL_HOOKS.put("net/minecraft/client/renderer/entity/LivingEntityRenderer", new String[] {"shouldShowName", "(Lnet/minecraft/world/entity/LivingEntity;"}); // Forge/NeoForge, 26.x
+        LABEL_HOOKS.put("net/minecraft/client/renderer/entity/RenderLivingBase", new String[] {"func_110813_b", "(Lnet/minecraft/entity/EntityLivingBase;"}); // Forge 1.12.2 canRenderName
+        LABEL_HOOKS.put("net/minecraft/client/renderer/entity/RendererLivingEntity", new String[] {"func_110813_b", "(Lnet/minecraft/entity/EntityLivingBase;"}); // Forge 1.8.9 canRenderName
         String[] a = String.valueOf(System.getProperty("sun.java.command")).split(" ");
         String v = null;
         for (int i = 0; i + 1 < a.length; i++) if (a[i].equals("--version")) v = a[i + 1];
         if (v == null) return;
         if (v.equals("1.8.9")) NAME_HOOKS.put("wn", new String[] {"f_", "()Leu;"}); // vanilla 1.8.9 EntityPlayer.getDisplayName
         try { // obfuscated vanilla with a name table (rows: intermediary, obfuscated, descriptor)
-            String cls = null, m = null, d = null, chat = null, comp = null;
+            String cls = null, m = null, d = null, chat = null, comp = null, lr = null, lm = null, ld = null;
             for (String l : new String(read("/names/" + v + ".txt"), StandardCharsets.UTF_8).split("\\r?\\n")) {
                 String[] r = l.split("\t", -1);
                 if (r.length < 3) continue;
@@ -90,9 +97,12 @@ public final class Agent {
                 else if (r[0].equals("method_7299")) { m = r[1]; d = r[2]; }
                 else if (r[0].equals("net.minecraft.class_338")) chat = r[1];
                 else if (r[0].equals("net.minecraft.class_2561")) comp = r[1];
+                else if (r[0].equals("net.minecraft.class_922")) lr = r[1];
+                else if (r[0].equals("method_4055")) { lm = r[1]; ld = r[2]; }
             }
             if (chat != null && comp != null) CHAT_HOOKS.put(chat.replace('.', '/'), comp.replace('.', '/'));
             if (cls != null && m != null && !d.isEmpty()) NAME_HOOKS.put(cls.replace('.', '/'), new String[] {m, d});
+            if (lr != null && lm != null && ld.length() > 1) LABEL_HOOKS.put(lr.replace('.', '/'), new String[] {lm, ld.substring(0, ld.indexOf(';') + 1)});
         } catch (Throwable t) { } // no table for this version
     }
 
@@ -201,6 +211,8 @@ public final class Agent {
             if ("net/minecraft/client/main/Main".equals(name) && System.getProperty("nether.world") != null) return devArgs(bytes);
             String[] nh = name == null ? null : NAME_HOOKS.get(name);
             if (nh != null) return playerName(bytes, nh[0], nh[1]);
+            String[] lh = name == null ? null : LABEL_HOOKS.get(name);
+            if (lh != null) return label(bytes, lh[0], lh[1]);
             String ct = name == null ? null : CHAT_HOOKS.get(name);
             if (ct != null) return chat(bytes, ct);
             if (name == null || !name.startsWith("org/lwjgl/")) return null;
@@ -227,6 +239,43 @@ public final class Agent {
                 return cw.toByteArray();
             } catch (Throwable t) {
                 System.out.println("[nether-agent] hook failed: " + t);
+                return null;
+            }
+        }
+
+        /**
+         * LivingEntityRenderer.shouldShowName(entity[, distance]) returns Hook.label(result, entity): the game draws your own
+         * nametag in third person (as third-person-nametags does), so it moves with the rendered player. Only the result.
+         */
+        private static byte[] label(byte[] bytes, final String method, final String descStart) {
+            try {
+                ClassReader cr = new ClassReader(bytes);
+                ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+                final boolean[] done = {false};
+                cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
+                    @Override
+                    public MethodVisitor visitMethod(int access, String mname, String desc, String sig, String[] ex) {
+                        MethodVisitor mv = super.visitMethod(access, mname, desc, sig, ex);
+                        if (!method.equals(mname) || !desc.startsWith(descStart) || !desc.endsWith(")Z") || (access & Opcodes.ACC_STATIC) != 0) return mv;
+                        done[0] = true;
+                        return new MethodVisitor(Opcodes.ASM9, mv) {
+                            @Override
+                            public void visitInsn(int op) {
+                                if (op == Opcodes.IRETURN) {
+                                    super.visitVarInsn(Opcodes.ALOAD, 1);
+                                    super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "label", "(ZLjava/lang/Object;)Z", false);
+                                }
+                                super.visitInsn(op);
+                            }
+                        };
+                    }
+                }, 0);
+                if (!done[0]) return null;
+                Hook.labelHooked = true;
+                System.out.println("[nether-agent] hooked nametag visibility");
+                return cw.toByteArray();
+            } catch (Throwable t) {
+                System.out.println("[nether-agent] nametag visibility hook failed: " + t);
                 return null;
             }
         }

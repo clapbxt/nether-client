@@ -167,8 +167,8 @@ final class Modules {
                 }
             } else {
                 float ax = af(a, true), ay = af(a, false), g = Gfx.gui;
-                x = clamp(ax * fbW + (float) Config.num(m.id, "ox", 0) * g - ax * bw, e, fbW - bw - e);
-                y = clamp(ay * fbH + (float) Config.num(m.id, "oy", 0) * g - ay * bh, e, fbH - bh - e);
+                x = clamp(ax * fbW + (float) Config.num(m.id, "ox", 0) * g - ax * bw, 0, fbW - bw); // placed boxes may sit flush (like the hotbar)
+                y = clamp(ay * fbH + (float) Config.num(m.id, "oy", 0) * g - ay * bh, 0, fbH - bh);
             }
             m.bx = x;
             m.by = y;
@@ -239,9 +239,9 @@ final class Modules {
      * thirds), offset in GUI pixels. fractions = also refresh the old x/y keys (the launcher still reads those).
      */
     static void setPos(Module m, float x, float y, int fbW, int fbH, boolean fractions) {
-        float bw = m.w * m.lk, bh = m.h * m.lk, e = edge(), g = Gfx.gui;
-        x = clamp(x, e, fbW - bw - e);
-        y = clamp(y, e, fbH - bh - e);
+        float bw = m.w * m.lk, bh = m.h * m.lk, g = Gfx.gui;
+        x = clamp(x, 0, fbW - bw);
+        y = clamp(y, 0, fbH - bh);
         float cx = (x + bw / 2) / fbW, cy = (y + bh / 2) / fbH;
         String a = (cy < 1 / 3f ? "t" : cy > 2 / 3f ? "b" : "m") + (cx < 1 / 3f ? "l" : cx > 2 / 3f ? "r" : "c");
         float ax = af(a, true), ay = af(a, false);
@@ -295,7 +295,7 @@ final class Modules {
         boolean world = Input.inWorld() && !Game.hudHidden();
         if (WAYPOINTS.enabled() && world) WAYPOINTS.drawMarkers(fbW, fbH);
         if (LYRICS.enabled() && world) LYRICS.drawWorld(fbW, fbH);
-        if (SELFTAG.enabled() && world) SELFTAG.drawWorld(fbW, fbH);
+        SELFTAG.drawWorld(fbW, fbH, SELFTAG.enabled() && world);
         if (world) { Toast.draw(fbW); menuHint(fbW); }
     }
 

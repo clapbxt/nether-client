@@ -94,6 +94,7 @@ method_36877	a	(Leuq;Lenn;Lfga;Lffd;Z)V
 method_37067	n	()V
 method_3734	aC	()Ldt;
 method_3739	aD	()Lds;
+method_4055	b	(Lbfz;)Z
 method_41735	w	()Lezk;
 method_41899	a	(Leuq;Ljava/lang/String;ZZ)V
 method_4309	a	(Ljava/io/InputStream;)Lehk;
@@ -152,3 +153,4 @@ net.minecraft.class_5498	ena
 net.minecraft.class_639	fga	
 net.minecraft.class_642	ffd	
 net.minecraft.class_6599	evk	
+net.minecraft.class_922	fpz	

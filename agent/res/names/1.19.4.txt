@@ -93,6 +93,7 @@ method_36877	a	(Letd;Lemh;Lfen;Lfdq;)V
 method_37067	o	()V
 method_3734	aC	()Lds;
 method_3739	aD	()Ldr;
+method_4055	b	(Lbfx;)Z
 method_41735	w	()Lexx;
 method_41899	a	(Letd;Ljava/lang/String;ZZ)V
 method_4309	a	(Ljava/io/InputStream;)Legf;
@@ -151,3 +152,4 @@ net.minecraft.class_5498	elu
 net.minecraft.class_639	fen	
 net.minecraft.class_642	fdq	
 net.minecraft.class_6599	etw	
+net.minecraft.class_922	fof	

@@ -94,6 +94,7 @@ method_36877	a	(Lgsb;Lgfj;Lhjw;Lhit;ZLhix;)V
 method_37067	t	()V
 method_3734	aF	()Lee;
 method_3739	aG	()Led;
+method_4055	a	(Lchl;D)Z
 method_41735	B	()Lgyk;
 method_4309	a	(Ljava/io/InputStream;)Lfyh;
 method_43470	b	(Ljava/lang/String;)Lyw;
@@ -146,6 +147,7 @@ net.minecraft.class_2583	zf
 net.minecraft.class_2960	amo	
 net.minecraft.class_304$class_11900	gfh$a	
 net.minecraft.class_310	gfj	
+net.minecraft.class_338	gjf	
 net.minecraft.class_3675$class_307	fyc$b	
 net.minecraft.class_408	gqy	
 net.minecraft.class_412	grb	
@@ -158,4 +160,4 @@ net.minecraft.class_5498	ges
 net.minecraft.class_639	hjw	
 net.minecraft.class_642	hit	
 net.minecraft.class_6599	gwj	
-net.minecraft.class_338	gjf	
+net.minecraft.class_922	hxs	

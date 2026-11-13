@@ -252,7 +252,8 @@ final class MainMenu {
         float e = 1 - (float) Math.pow(1 - t, 3);
         if (t < 0.6f) click = false;
         modal = panelOpen ? new float[] {12, 52, PW, PH} : null;
-        if (panelOpen && click && !over(12, 52, PW, PH) && !inside(custBox)) { panelOpen = false; click = false; modal = null; }
+        boolean inPanel = MX >= 12 && MY >= 52 && MX < 12 + PW && MY < 52 + PH; // raw test: over() is false under the open panel
+        if (panelOpen && click && !inPanel && !inside(custBox)) { panelOpen = false; click = false; modal = null; }
         account();
 
         String kind = MODULE.str("bg");

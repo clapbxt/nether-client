@@ -53,6 +53,16 @@ public final class Hook {
         }
     }
 
+    /** The entity whose nametag the game must show (you, in third person, Own Nametag on), else null; set by the overlay. */
+    public static volatile Object self;
+    /** The show-name test was hooked (the overlay then leaves the tag to the game). */
+    public static volatile boolean labelHooked;
+
+    /** End of LivingEntityRenderer.shouldShowName: true for {@link #self}, else the game's answer. */
+    public static boolean label(boolean shown, Object entity) {
+        return shown || (entity != null && entity == self);
+    }
+
     /** component -> chat line to show; set by the overlay (the Nether badge before Nether players' names). */
     public static volatile java.util.function.Function<Object, Object> chat;
 

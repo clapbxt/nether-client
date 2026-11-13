@@ -1,10 +1,12 @@
 package dev.nether.ov;
 
+import dev.nether.agent.Hook;
+
 /**
- * Own Nametag: your name above your head in third person, the way other players see it (vanilla hides your own). Drawn
- * by the overlay in the game's look: its bitmap font ({@link Vanilla}, resource packs apply), a quarter-black box, the
- * Nether badge for Nether players, sized as the game sizes nametags (0.025 blocks per font pixel). No renderer code:
- * the head position comes from the camera ray (third person always looks along it at you), so it stays smooth.
+ * Own Nametag: your name above your head in third person, the way other players see it (vanilla hides your own). Like
+ * third-person-nametags, the game's own show-name test answers yes for you ({@link Hook#label}), so the game draws the tag
+ * on the rendered player: it moves with you, sneaking dims it, F1 hides it. Where that test could not be hooked the
+ * overlay draws it instead (projected from the camera ray, its bitmap font, the Nether badge).
  */
 final class SelfTag extends Module {
     SelfTag() {
@@ -26,12 +28,13 @@ final class SelfTag extends Module {
         return name;
     }
 
-    /** HUD loop, in a world: the tag, in third person only. */
-    void drawWorld(int fbW, int fbH) {
-        if (Game.firstPerson()) return;
-        Object me = Game.player0();
+    /** HUD loop: tells the game whose tag to show (you, in a world, in third person, when on); unhooked: draws it. */
+    void drawWorld(int fbW, int fbH, boolean on) {
+        Object me = on && !Game.firstPerson() ? Game.player0() : null;
+        Hook.self = me;
+        if (me == null || Hook.labelHooked) return;
         double[] p = Game.player();
-        if (me == null || p == null) return;
+        if (p == null) return;
         float prev = Gfx.s;
         try {
             Gfx.s = Gfx.base;

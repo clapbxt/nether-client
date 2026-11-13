@@ -93,6 +93,7 @@ method_36877	a	(Ledw;Ldyr;Lend;Lemx;)V
 method_37067	l	()V
 method_3734	aA	()Ldn;
 method_3739	aB	()Ldm;
+method_4055	b	(Laxy;)Z
 method_4309	a	(Ljava/io/InputStream;)Ldsn;
 method_4495	s	()D
 method_4616	a	(Lyt;Lfam;)V
@@ -143,3 +144,4 @@ net.minecraft.class_5498	dyc
 net.minecraft.class_639	end	
 net.minecraft.class_642	emx	
 net.minecraft.class_6599	eep	
+net.minecraft.class_922	ewk	
