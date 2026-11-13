@@ -55,7 +55,7 @@ final class Modules {
         Runtime.getRuntime().addShutdownHook(new Thread(Modules::exitHook));
     }
 
-    /** Profile-wide: switches off every module that could be an advantage (sprint, sneak, zoom, fullbright). */
+    /** Profile-wide: switches off every module that could be an advantage (zoom, fullbright, reach). */
     static boolean safe() { return Config.bool("client", "safeMode", false); }
     static void setSafe(boolean on) { Config.set("client", "safeMode", on); }
 
@@ -82,6 +82,7 @@ final class Modules {
 
     /** Overlay death: options back (the game must keep no value we set for it). */
     static void release() {
+        dev.nether.agent.Hook.crosshair = false;
         restoreOptions();
     }
 
@@ -283,6 +284,7 @@ final class Modules {
             chat = new float[] {(cb[0] + 12) * g, fbH - (cb[1] > 0 ? cb[1] + 44 : 16) * g, fbH - 16 * g};
         }
         float prev = Gfx.s;
+        dev.nether.agent.Hook.crosshair = false;
         for (Module m : all) m.tick();
         place(fbW, fbH);
         for (Module m : all) {
@@ -296,8 +298,9 @@ final class Modules {
         boolean world = Input.inWorld() && !Game.hudHidden();
         if (WAYPOINTS.enabled() && world && !Streamer.hides("waypoints")) WAYPOINTS.drawMarkers(fbW, fbH);
         if (LYRICS.enabled() && world && !Streamer.hides("lyrics")) LYRICS.drawWorld(fbW, fbH);
-        // vanilla hides its crosshair in third person; ours follows (it cannot hide vanilla's: it draws over it)
+        // vanilla hides its crosshair in third person; ours follows. While ours shows, the game's own crosshair method returns early (agent hook)
         if (CROSSHAIR.enabled() && world && Game.firstPerson()) {
+            dev.nether.agent.Hook.crosshair = true;
             Gfx.s = Gfx.base;
             CROSSHAIR.drawAt(fbW / 2f / Gfx.s, fbH / 2f / Gfx.s);
         }
@@ -984,7 +987,7 @@ final class Modules {
 
     static final class Crosshair extends Module {
         Crosshair() {
-            super("crosshair", "Crosshair", "Visual", "Custom crosshair drawn over the vanilla one, in first person (like vanilla's).", false, false, 0, 0);
+            super("crosshair", "Crosshair", "Visual", "Custom crosshair that replaces the vanilla one, in first person.", false, false, 0, 0);
             add(Setting.choice("style", "Style", "Cross", "Cross", "Plus", "Dot", "Circle", "Square"));
             add(Setting.color("color", "Color", "#EAEEF3"));
             add(Setting.slider("size", "Size", 2, 14, 1, 5));

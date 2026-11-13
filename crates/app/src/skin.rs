@@ -152,6 +152,8 @@ pub fn load(weak: slint::Weak<AppWindow>, sh: Arc<Shared>, skins: Vec<Value>, ca
             b.set_acct_head(LOOK.with(|l| l.borrow().as_ref().map(|l| head(&l.skin))).unwrap_or_default());
             b.set_skin_ready(true);
             if added { ui.global::<SkinLib>().invoke_refresh(); }
+            export(ui, &sh);
+            load_ncapes(ui, &sh); // the in-game wardrobe needs the Nether cape list even if this window never opens the Wardrobe
         });
     });
 }
@@ -175,6 +177,7 @@ pub fn equip(ui: &AppWindow, sh: &Arc<Shared>, idx: i32) {
         let ok = r.map(|r| r.status().is_success()).unwrap_or(false);
         ui_do(&weak, move |ui| {
             if ok {
+                export(ui, &sh);
                 show_toast(ui, &sh, &if id.is_empty() { "Cape hidden".to_string() } else { format!("{name} equipped") });
             } else {
                 let b = ui.global::<Backend>();
@@ -209,6 +212,7 @@ pub fn load_ncapes(ui: &AppWindow, sh: &Arc<Shared>) {
     let uuid = msa_uuid(sh);
     NUUID.with(|u| *u.borrow_mut() = uuid.clone());
     let weak = ui.as_weak();
+    let sh = sh.clone();
     std::thread::spawn(move || {
         let c = client();
         let list: Vec<(nether_core::backend::Cape, RgbaImage)> = nether_core::backend::capes(&c).into_iter()
@@ -221,6 +225,7 @@ pub fn load_ncapes(ui: &AppWindow, sh: &Arc<Shared>) {
             NCAPES.with(|v| *v.borrow_mut() = list.into_iter().map(|(c, img)| CapeTex { id: c.id, img }).collect());
             set_worn(ui, &worn);
             b.set_ncape_state(2);
+            export(ui, &sh);
         });
     });
 }
@@ -244,12 +249,79 @@ pub fn wear_ncape(ui: &AppWindow, sh: &Arc<Shared>, id: &str) {
             match r {
                 Ok(()) => {
                     set_worn(ui, if off { "" } else { &id });
+                    export(ui, &sh);
                     show_toast(ui, &sh, &if off { format!("{name} taken off") } else { format!("You're now wearing {name}") });
                 }
                 Err(e) => show_toast(ui, &sh, &format!("Couldn't change your Nether cape: {e:#}")),
             }
         });
     });
+}
+
+// ---------------- in-game wardrobe bridge ----------------
+// The game's WARDROBE tab never gets a token: the launcher publishes the account's skin and capes to
+// `<root>/client/wardrobe/` (state.json + PNGs) and applies the requests the game writes there (request.json).
+
+fn safe_id(id: &str) -> bool { !id.is_empty() && id.len() <= 64 && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-') }
+
+/// Publish skin + capes + what is worn for the in-game wardrobe.
+pub fn export(ui: &AppWindow, sh: &Shared) {
+    let dir = sh.paths.root.join("client").join("wardrobe");
+    let Some((skin, slim)) = ACCOUNT.with(|a| a.borrow().clone()).or_else(|| LOOK.with(|l| l.borrow().as_ref().map(|l| (l.skin.clone(), l.slim)))) else { return };
+    let b = ui.global::<Backend>();
+    let mut st = serde_json::json!({ "v": 1, "uuid": msa_uuid(sh).unwrap_or_default(), "slim": slim, "skin": "skin.png", "netherWorn": b.get_ncape_worn().to_string(), "nether": [], "account": [] });
+    let ok = std::fs::create_dir_all(&dir).is_ok() && skin.save(dir.join("skin.png")).is_ok();
+    if !ok { return; }
+    let mut wanted = vec!["skin.png".to_string(), "state.json".to_string()];
+    for c in b.get_ncapes().iter() {
+        let tex = NCAPES.with(|v| v.borrow().iter().find(|t| t.id == c.id.as_str()).map(|t| t.img.clone()));
+        let (Some(img), true) = (tex, safe_id(&c.id)) else { continue };
+        let f = format!("n_{}.png", c.id);
+        if img.save(dir.join(&f)).is_ok() { st["nether"].as_array_mut().unwrap().push(serde_json::json!({ "id": c.id.as_str(), "name": c.name.as_str(), "png": f })); wanted.push(f); }
+    }
+    let active = account_cape_id(ui);
+    st["accountWorn"] = active.into();
+    for c in b.get_capes().iter().filter(|c| !c.id.is_empty()) {
+        let tex = CAPES.with(|v| v.borrow().iter().find(|t| t.id == c.id.as_str()).map(|t| t.img.clone()));
+        let (Some(img), true) = (tex, safe_id(&c.id)) else { continue };
+        let f = format!("a_{}.png", c.id);
+        if img.save(dir.join(&f)).is_ok() { st["account"].as_array_mut().unwrap().push(serde_json::json!({ "id": c.id.as_str(), "name": c.name.as_str(), "png": f })); wanted.push(f); }
+    }
+    if let Ok(rd) = std::fs::read_dir(&dir) {
+        for e in rd.flatten() {
+            let n = e.file_name().to_string_lossy().to_string();
+            if (n.starts_with("n_") || n.starts_with("a_")) && n.ends_with(".png") && !wanted.contains(&n) { let _ = std::fs::remove_file(e.path()); }
+        }
+    }
+    let _ = nether_core::store::write_atomic(&dir.join("state.json"), &serde_json::to_vec_pretty(&st).unwrap_or_default());
+}
+
+/// Apply what the game asks for (a request.json in the wardrobe folder), polled while the launcher runs.
+pub fn watch(ui: &AppWindow, sh: Arc<Shared>) {
+    let weak = ui.as_weak();
+    std::thread::spawn(move || {
+        let f = sh.paths.root.join("client").join("wardrobe").join("request.json");
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(1500));
+            let Ok(bytes) = std::fs::read(&f) else { continue };
+            let _ = std::fs::remove_file(&f);
+            let Ok(req) = serde_json::from_slice::<Value>(&bytes) else { continue };
+            let sh = sh.clone();
+            ui_do(&weak, move |ui| apply_request(ui, &sh, &req));
+        }
+    });
+}
+
+fn apply_request(ui: &AppWindow, sh: &Arc<Shared>, req: &Value) {
+    let b = ui.global::<Backend>();
+    if let Some(n) = req["nether"].as_str() {
+        let worn = b.get_ncape_worn().to_string();
+        if n.is_empty() { if !worn.is_empty() { wear_ncape(ui, sh, &worn); } } // wearing the worn one takes it off
+        else if worn != n && b.get_ncapes().iter().any(|c| c.id == n) { wear_ncape(ui, sh, n); }
+    }
+    if let Some(a) = req["account"].as_str() {
+        if let Some(i) = b.get_capes().iter().position(|c| c.id == a) { if b.get_cape_idx() != i as i32 { equip(ui, sh, i as i32); } }
+    }
 }
 
 fn set_preview_cape(id: &str) {

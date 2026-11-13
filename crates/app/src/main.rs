@@ -889,6 +889,7 @@ fn main() -> Result<(), slint::PlatformError> {
     if backend.get_acct_state() == 3 { skin::load_cached(ui.as_weak(), shared.clone()); } else { skin::load(ui.as_weak(), shared.clone(), vec![], vec![]); }
     backend.on_skin_drag(skin::drag);
     skin::init(&ui);
+    skin::watch(&ui, shared.clone());
     backend.on_skin_wake(skin::wake);
     {
         let (weak, sh) = (ui.as_weak(), shared.clone());

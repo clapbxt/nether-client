@@ -36,6 +36,11 @@ public final class Hook {
     /** Dev only (-Dnether.world=<save folder>): the world is opened by quick play (set by args, 1.20+; 1.8.9/1.12.2 load it from Game). */
     public static volatile boolean quickPlay;
 
+    /** The Nether crosshair module draws its own this frame: the game's HUD method skips the vanilla one (set by the overlay). */
+    public static volatile boolean crosshair;
+
+    public static boolean crosshair() { return crosshair; }
+
     /** (player, name component) -> name to show; set by the overlay (Nametag). */
     public static volatile java.util.function.BiFunction<Object, Object, Object> name;
 

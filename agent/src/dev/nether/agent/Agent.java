@@ -65,7 +65,12 @@ public final class Agent {
     /** Player class -> {name method, descriptor}: the nametag hook in every naming the game can run with. */
     private static final Map<String, String[]> NAME_HOOKS = new HashMap<>();
 
+    /** Gui class -> {render-crosshair method, exact descriptor or null = any}: Fabric/Quilt (intermediary), Mojang names (Forge, NeoForge, 26.x), vanilla 1.21.11. */
+    private static final Map<String, String[]> CROSS_HOOKS = new HashMap<>();
+
     private static void nameTargets() {
+        CROSS_HOOKS.put("net/minecraft/class_329", new String[] {"method_1736", null});
+        CROSS_HOOKS.put("net/minecraft/client/gui/Gui", new String[] {"renderCrosshair", null});
         NAME_HOOKS.put("net/minecraft/class_1657", new String[] {"method_7299", "(Lnet/minecraft/class_5250;)Lnet/minecraft/class_5250;"}); // Fabric
         NAME_HOOKS.put("net/minecraft/world/entity/player/Player", new String[] {"decorateDisplayNameComponent", "(Lnet/minecraft/network/chat/MutableComponent;)Lnet/minecraft/network/chat/MutableComponent;"}); // Forge/NeoForge, 26.x
         NAME_HOOKS.put("net/minecraft/entity/player/EntityPlayer", new String[] {"func_145748_c_", "()Lnet/minecraft/util/IChatComponent;"}); // Forge 1.8.9 getDisplayName (SRG)
@@ -74,6 +79,7 @@ public final class Agent {
         for (int i = 0; i + 1 < a.length; i++) if (a[i].equals("--version")) v = a[i + 1];
         if (v == null) return;
         if (v.equals("1.8.9")) NAME_HOOKS.put("wn", new String[] {"f_", "()Leu;"}); // vanilla 1.8.9 EntityPlayer.getDisplayName
+        if (v.equals("1.21.11")) CROSS_HOOKS.put("giq", new String[] {"k", "(Lgir;Lgez;)V"}); // vanilla 1.21.11 Gui.renderCrosshair
         try { // obfuscated vanilla with a name table (rows: intermediary, obfuscated, descriptor)
             String cls = null, m = null, d = null;
             for (String l : new String(read("/names/" + v + ".txt"), StandardCharsets.UTF_8).split("\\r?\\n")) {
@@ -192,6 +198,8 @@ public final class Agent {
             if ("net/minecraft/client/main/Main".equals(name) && System.getProperty("nether.world") != null) return devArgs(bytes);
             String[] nh = name == null ? null : NAME_HOOKS.get(name);
             if (nh != null) return playerName(bytes, nh[0], nh[1]);
+            String[] ch = name == null ? null : CROSS_HOOKS.get(name);
+            if (ch != null) return crosshair(bytes, ch[0], ch[1]);
             if (name == null || !name.startsWith("org/lwjgl/")) return null;
             final boolean glfw = "org/lwjgl/glfw/GLFW".equals(name);
             final boolean display = "org/lwjgl/opengl/Display".equals(name);
@@ -252,6 +260,44 @@ public final class Agent {
                 return cw.toByteArray();
             } catch (Throwable t) {
                 System.out.println("[nether-agent] name hook failed: " + t);
+                return null;
+            }
+        }
+
+        /**
+         * Gui.renderCrosshair returns at once while Hook.crosshair() says the Nether crosshair module draws its own. The game's HUD
+         * method only: no renderer class is touched.
+         */
+        private static byte[] crosshair(byte[] bytes, final String method, final String mdesc) {
+            try {
+                ClassReader cr = new ClassReader(bytes);
+                ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+                final boolean[] done = {false};
+                cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
+                    @Override
+                    public MethodVisitor visitMethod(int access, String mname, String desc, String sig, String[] ex) {
+                        MethodVisitor mv = super.visitMethod(access, mname, desc, sig, ex);
+                        if (!method.equals(mname) || (mdesc != null && !mdesc.equals(desc)) || !desc.endsWith(")V") || (access & Opcodes.ACC_STATIC) != 0) return mv;
+                        done[0] = true;
+                        return new MethodVisitor(Opcodes.ASM9, mv) {
+                            @Override
+                            public void visitCode() {
+                                super.visitCode();
+                                dev.nether.shaded.asm.Label go = new dev.nether.shaded.asm.Label();
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "crosshair", "()Z", false);
+                                super.visitJumpInsn(Opcodes.IFEQ, go);
+                                super.visitInsn(Opcodes.RETURN);
+                                super.visitLabel(go);
+                                super.visitFrame(Opcodes.F_SAME, 0, null, 0, null);
+                            }
+                        };
+                    }
+                }, 0);
+                if (!done[0]) { System.out.println("[nether-agent] crosshair method not found"); return null; }
+                System.out.println("[nether-agent] hooked crosshair");
+                return cw.toByteArray();
+            } catch (Throwable t) {
+                System.out.println("[nether-agent] crosshair hook failed: " + t);
                 return null;
             }
         }

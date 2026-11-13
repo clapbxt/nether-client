@@ -169,7 +169,7 @@ final class PlatSdl extends Plat implements Hook.Sdl {
         ByteBuffer s = (ByteBuffer) state;
         int n = s.capacity();
         if (keys == null || keys.capacity() != n) keys = memAlloc(n);
-        for (int i = 0; i < n; i++) keys.put(i, 0);
+        for (int i = 0; i < n; i++) keys.put(i, (byte) 0);
         return keys;
     }
 
