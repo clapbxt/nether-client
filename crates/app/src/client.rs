@@ -2,7 +2,6 @@
 //! Module/setting definitions come from the agent itself (`agent/build/schema.json`, embedded at build time),
 //! so this page and the in-game menu always show the same thing.
 //! Values: global `client/global.json`; an instance may opt out (`use_global: false`) into `<instance>/nether-client.json`.
-//! Injection (always per instance, in `nether-client.json`): `inject` = client on/off, `groups` = which module groups load.
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -16,18 +15,15 @@ use crate::{AppWindow, Backend, ClientMod, ClientState, SetVal, Shared};
 struct SSet { t: i32, key: String, label: String, min: f64, max: f64, step: f64, def: Value, #[serde(default)] opts: Vec<String>, #[serde(default)] hint: String }
 
 #[derive(Deserialize, Clone)]
-struct SMod { id: String, name: String, cat: String, group: String, desc: String, hud: bool, on: bool, x: f64, y: f64, settings: Vec<SSet>, #[serde(default)] icon: String, #[serde(default)] safety: String }
+struct SMod { id: String, name: String, cat: String, group: String, desc: String, hud: bool, on: bool, x: f64, y: f64, settings: Vec<SSet>, #[serde(default)] icon: String }
 
 #[derive(Deserialize)]
 struct Schema { modules: Vec<SMod> }
 
-/// Every injectable group, in display order.
-pub const GROUPS: [&str; 4] = ["hud", "pvp", "qol", "menu"];
-
 /// Nether's own module glyph (`design/module-icons/<id>.svg`, ice + red, also bundled in the agent jar).
 fn mod_icon(id: &str) -> Option<slint::Image> {
     macro_rules! svgs { ($($i:literal),*) => { match id { $($i => include_bytes!(concat!("../../../design/module-icons/", $i, ".svg")).as_slice(),)* _ => return None } } }
-    let b = svgs!("fps", "cps", "coords", "clock", "session", "memory", "sprint", "sneak", "keys", "precision", "crosshair", "zoom",
+    let b = svgs!("fps", "cps", "coords", "clock", "session", "memory", "keys", "crosshair", "zoom",
         "fullbright", "armor", "potions", "ping", "packs", "server", "worldtime", "speed", "compass", "waypoints");
     slint::Image::load_from_svg_data(b).ok()
 }
@@ -68,25 +64,12 @@ pub fn instance_file(sh: &Shared, name: &str) -> Option<PathBuf> {
     (!uses_global(&read_json(&p))).then_some(p)
 }
 
-/// Injection settings of an instance: (client on, groups). Defaults: on, every group.
-pub fn injection(sh: &Shared, name: &str) -> (bool, Vec<String>) {
-    let v = read_json(&file(sh, Some(name)));
-    let on = v.get("inject").and_then(|b| b.as_bool()).unwrap_or(true);
-    let groups = v.get("groups").and_then(|g| g.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_else(|| GROUPS.iter().map(|s| s.to_string()).collect());
-    (on, groups)
-}
-
-/// Instance injection settings (written by packs and the create wizard): client on, these module groups.
-pub fn apply_groups(paths: &nether_core::paths::Paths, inst: &str, groups: &[String]) {
-    set_injection(&paths.instance(inst).join("nether-client.json"), true, groups);
-}
-
-fn set_injection(p: &std::path::Path, on: bool, groups: &[String]) {
-    let mut root = read_json(p);
-    if root.get("use_global").is_none() { root["use_global"] = true.into(); }
-    root["inject"] = on.into();
-    root["groups"] = groups.into();
-    write_json(p, &root);
+/// Old instance configs carried `inject` / `groups` (client on/off, module groups): every instance now gets the whole client, so drop them.
+pub fn migrate(sh: &Shared, name: &str) {
+    let p = file(sh, Some(name));
+    let mut v = read_json(&p);
+    let Some(o) = v.as_object_mut() else { return };
+    if o.remove("inject").is_some() | o.remove("groups").is_some() { write_json(&p, &v); }
 }
 
 /// "#RRGGBB" / "#RRGGBBAA" (alpha last); anything else = transparent.
@@ -119,7 +102,6 @@ fn rows(own: Option<&Value>, global: &Value) -> Vec<ClientMod> {
     let mods = schema();
     mods.iter().enumerate().map(|(n, m)| {
         let get = |k: &str| value(own, global, &m.id, k);
-        let menu_on = value(own, global, "client", "mainMenu").and_then(|v| v.as_bool());
         let num = |k: &str, d: f64| get(k).and_then(|v| v.as_f64()).unwrap_or(d);
         // ACTION buttons run inside the game, so they are not listed here
         let sets: Vec<SetVal> = m.settings.iter().filter(|s| s.t != 7).map(|s| {
@@ -146,8 +128,7 @@ fn rows(own: Option<&Value>, global: &Value) -> Vec<ClientMod> {
         let variant = if m.id == "armor" { get("layout").and_then(|v| v.as_str()).unwrap_or("List").to_string() } else { String::new() };
         ClientMod {
             id: m.id.as_str().into(), name: m.name.as_str().into(), desc: m.desc.as_str().into(), cat: m.cat.to_uppercase().into(), ci, hud: m.hud,
-            on: if m.id == "menu" { menu_on.or(get("enabled").and_then(|v| v.as_bool())).unwrap_or(m.on) } else { get("enabled").and_then(|v| v.as_bool()).unwrap_or(m.on) },
-            safety: m.safety.to_uppercase().replace("RULES", "CHECK RULES").into(), moved: false,
+            on: get("enabled").and_then(|v| v.as_bool()).unwrap_or(m.on), moved: false,
             x: num("x", m.x) as f32, y: num("y", m.y) as f32, scale: num("scale", 1.0) as f32,
             group: m.group.as_str().into(), variant: variant.into(),
             has_icon: icon.is_some(), pixel_icon: pixel, icon: icon.unwrap_or_default(),
@@ -165,6 +146,7 @@ pub fn load(ui: &AppWindow, sh: &Arc<Shared>, scope: i32) {
     let cs = ui.global::<ClientState>();
     let global = read_json(&file(sh, None));
     let name = inst_name(ui, scope);
+    if let Some(n) = &name { migrate(sh, n); }
     let inst = name.as_ref().map(|n| read_json(&file(sh, Some(n))));
     let own = inst.as_ref().filter(|v| !uses_global(v));
     cs.set_scope(scope);
@@ -175,13 +157,6 @@ pub fn load(ui: &AppWindow, sh: &Arc<Shared>, scope: i32) {
     cs.set_cats(ModelRc::new(VecModel::from(cats.iter().map(|c| c.as_str().into()).collect::<Vec<slint::SharedString>>())));
     cs.set_modules(ModelRc::new(VecModel::from(rows(own, &global))));
     cs.set_menu_key(glfw_label(global.get("menuKey").and_then(|k| k.as_i64()).unwrap_or(344)).into());
-    cs.set_main_menu(global["modules"]["client"].get("mainMenu").and_then(|b| b.as_bool()).unwrap_or(true));
-    let (on, groups) = match &name { Some(n) => injection(sh, n), None => (true, GROUPS.iter().map(|s| s.to_string()).collect()) };
-    cs.set_inject(on);
-    cs.set_g_hud(groups.iter().any(|g| g == "hud"));
-    cs.set_g_pvp(groups.iter().any(|g| g == "pvp"));
-    cs.set_g_qol(groups.iter().any(|g| g == "qol"));
-    cs.set_g_menu(groups.iter().any(|g| g == "menu"));
 }
 
 /// The file edits go to: the instance's own config, else the global one.
@@ -220,7 +195,6 @@ pub fn save(ui: &AppWindow, sh: &Arc<Shared>) {
             if let Some(o) = e.as_object_mut() { for k in ["anchor", "ox", "oy"] { o.remove(k); } }
         }
         if m.hud && (e.get("scale").is_some() || m.scale != 1.0) { e["scale"] = (m.scale as f64).into(); }
-        if id == "menu" { root["modules"]["client"]["mainMenu"] = m.on.into(); }
     }
     write_json(&p, &root);
     let mods = ui.global::<ClientState>().get_modules();
@@ -262,40 +236,12 @@ pub fn set_use_global(ui: &AppWindow, sh: &Arc<Shared>, on: bool) {
     load(ui, sh, cs.get_scope());
 }
 
-/// Instance: client on/off and which groups are injected. Keeps the instance card's client label in step.
-pub fn save_injection(ui: &AppWindow, sh: &Arc<Shared>) {
-    let cs = ui.global::<ClientState>();
-    let Some(n) = inst_name(ui, cs.get_scope()) else { return };
-    let mut groups = vec![];
-    for (on, g) in [(cs.get_g_hud(), "hud"), (cs.get_g_pvp(), "pvp"), (cs.get_g_qol(), "qol"), (cs.get_g_menu(), "menu")] { if on { groups.push(g.to_string()); } }
-    set_injection(&file(sh, Some(&n)), cs.get_inject(), &groups);
-    let b = ui.global::<Backend>();
-    let m = b.get_instances();
-    if let Some(mut i) = m.row_data(cs.get_scope() as usize) {
-        i.client = (if !cs.get_inject() { "Off" } else if cs.get_use_global() { "Global" } else { "Custom" }).into();
-        m.set_row_data(cs.get_scope() as usize, i);
-        crate::persist(&sh.paths, &m);
-    }
-}
-
-/// Global: our title screen on/off (agent `modules.client.mainMenu`).
-pub fn set_main_menu(ui: &AppWindow, sh: &Arc<Shared>, on: bool) {
-    let p = file(sh, None);
-    let mut root = read_json(&p);
-    if !root["modules"].is_object() { root["modules"] = json!({}); }
-    if !root["modules"]["client"].is_object() { root["modules"]["client"] = json!({}); }
-    root["modules"]["client"]["mainMenu"] = on.into();
-    write_json(&p, &root);
-    ui.global::<ClientState>().set_main_menu(on);
-}
-
-/// New instance (setup wizard): injection, and where its module settings come from:
+/// New instance (setup wizard): where its module settings come from:
 /// 0 the global setup, 1 its own copy of the global setup, 2 the pack's built-in settings laid over the global setup.
-pub fn setup_instance(paths: &nether_core::paths::Paths, inst: &str, on: bool, groups: &[String], mode: i32, preset: Option<&Value>) {
+pub fn setup_instance(paths: &nether_core::paths::Paths, inst: &str, mode: i32, preset: Option<&Value>) {
     let p = paths.instance(inst).join("nether-client.json");
     let mut root = read_json(&p);
-    root["inject"] = on.into();
-    root["groups"] = groups.into();
+    root.as_object_mut().map(|o| { o.remove("inject"); o.remove("groups"); });
     root["use_global"] = (mode == 0).into();
     if mode != 0 {
         let mut m = read_json(&paths.root.join("client").join("global.json"))["modules"].clone();

@@ -79,7 +79,7 @@ const JAVAS: [u32; 5] = [0, 8, 17, 21, 25];
 
 fn inst_from(d: &InstanceData) -> Inst {
     let secs = if d.played_secs > 0 { d.played_secs } else { d.hours as u64 * 3600 };
-    let mut i = inst(&d.name, &d.version, &d.loader, (secs / 3600) as i32, d.mods as i32, d.ram_gb as i32, &d.client, &d.last, false);
+    let mut i = inst(&d.name, &d.version, &d.loader, (secs / 3600) as i32, d.mods as i32, d.ram_gb as i32, if d.client == "Off" { "Global" } else { &d.client }, &d.last, false);
     i.java = JAVAS.iter().position(|j| *j == d.java).unwrap_or(0) as i32;
     i.secs = secs as i32;
     i.last_ts = d.last_ts as i32;
@@ -436,11 +436,11 @@ fn play_session(sh: &Shared) -> Result<Session, String> {
 
 /// Launch options for an instance (shared by Play and the launcher-path test).
 fn launch_opts(sh: &Shared, name: &str, version: &str, ram_gb: i32, loader_label: &str, java: u32, session: Session) -> LaunchOpts {
-    let inj = client::injection(sh, name);
+    client::migrate(sh, name);
     let saved = instances::load(&sh.paths).and_then(|l| l.into_iter().find(|d| d.name == name)).unwrap_or_default();
     LaunchOpts {
         loader: Loader::from_label(loader_label), version: version.into(), game_dir: sh.paths.instance(name), session, ram_mb: (ram_gb.max(1) * 1024) as u32,
-        java_major: (java > 0).then_some(java), client_config: client::instance_file(sh, name), client: inj.0, groups: Some(inj.1.join(",")),
+        java_major: (java > 0).then_some(java), client_config: client::instance_file(sh, name), client: true, groups: None,
         extra_jvm: nether_core::launch::split_args(&saved.jvm_args),
         window: (saved.width >= 320 && saved.height >= 240).then_some((saved.width, saved.height)),
         fullscreen: saved.fullscreen,
@@ -1418,10 +1418,6 @@ fn main() -> Result<(), slint::PlatformError> {
     {
         let (weak, sh) = (ui.as_weak(), shared.clone());
         ui.global::<ClientState>().on_set_use_global(move |v| if let Some(ui) = weak.upgrade() { client::set_use_global(&ui, &sh, v) });
-        let (weak, sh) = (ui.as_weak(), shared.clone());
-        ui.global::<ClientState>().on_save_injection(move || if let Some(ui) = weak.upgrade() { client::save_injection(&ui, &sh) });
-        let (weak, sh) = (ui.as_weak(), shared.clone());
-        ui.global::<ClientState>().on_set_main_menu(move |v| if let Some(ui) = weak.upgrade() { client::set_main_menu(&ui, &sh, v) });
         let (weak, sh) = (ui.as_weak(), shared.clone());
         ui.global::<ClientState>().on_set_bool(move |r, k, v| if let Some(ui) = weak.upgrade() { client::set(&ui, &sh, r, &k, v.into()) });
         let (weak, sh) = (ui.as_weak(), shared.clone());

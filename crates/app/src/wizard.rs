@@ -18,16 +18,11 @@ pub fn init(ui: &AppWindow, sh: &Arc<Shared>) {
     ui.global::<Wizard>().set_packs(ModelRc::new(VecModel::from(rows)));
 }
 
-/// A pack was picked ("" = none): preset its module groups and offer its built-in settings.
+/// A pack was picked ("" = none): offer its built-in settings.
 pub fn pick_pack(ui: &AppWindow, sh: &Arc<Shared>, id: &str) {
     let w = ui.global::<Wizard>();
     w.set_pack(id.into());
     let p = (!id.is_empty()).then(|| netherpack::find(&sh.paths, id)).flatten();
-    let has = |g: &str| p.as_ref().map(|p| p.groups.iter().any(|x| x == g)).unwrap_or(true);
-    w.set_g_hud(has("hud"));
-    w.set_g_pvp(has("pvp"));
-    w.set_g_qol(has("qol"));
-    w.set_g_menu(has("menu"));
     let preset = p.as_ref().is_some_and(|p| p.client.is_some());
     w.set_pack_has_client(preset);
     w.set_mode(if preset { 2 } else if w.get_mode() == 2 { 0 } else { w.get_mode() });
@@ -74,17 +69,15 @@ pub fn load_rps(ui: &AppWindow, sh: &Arc<Shared>, ver: &str) {
 pub fn finish(ui: &AppWindow, sh: &Arc<Shared>, name: &str, ver: &str) {
     let name = name.trim();
     let w = ui.global::<Wizard>();
-    let mut groups = vec![];
-    for (on, g) in [(w.get_g_hud(), "hud"), (w.get_g_pvp(), "pvp"), (w.get_g_qol(), "qol"), (w.get_g_menu(), "menu")] { if on { groups.push(g.to_string()); } }
     let pack = (!w.get_pack().is_empty()).then(|| netherpack::find(&sh.paths, w.get_pack().as_str())).flatten();
     let mode = w.get_mode();
-    crate::client::setup_instance(&sh.paths, name, w.get_inject(), &groups, mode, pack.as_ref().and_then(|p| p.client.as_ref()));
+    crate::client::setup_instance(&sh.paths, name, mode, pack.as_ref().and_then(|p| p.client.as_ref()));
     // instance card label
     let b = ui.global::<Backend>();
     let m = b.get_instances();
     if let Some(i) = m.iter().position(|i| i.name == name) {
         let mut r = m.row_data(i).unwrap();
-        r.client = (if !w.get_inject() { "Off" } else if mode == 0 { "Global" } else { "Custom" }).into();
+        r.client = (if mode == 0 { "Global" } else { "Custom" }).into();
         m.set_row_data(i, r);
         crate::persist(&sh.paths, &m);
     }

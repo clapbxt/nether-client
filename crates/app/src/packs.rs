@@ -252,7 +252,6 @@ pub fn install(ui: &AppWindow, sh: &Arc<Shared>, insts: &Rc<VecModel<Inst>>) {
         let mut i = crate::inst(&name, &pick, "Fabric", 0, 0, 4, "Global", "Never", false);
         i.secs = 0;
         add_instance(ui, sh, insts, i);
-        crate::client::apply_groups(&sh.paths, &name, &pack.groups);
         std::thread::spawn(move || {
             let dir = instances::content_dir(&sh2.paths, &name, 0);
             let res = netherpack::install(&client(), &pack, &pick, &dir, &prog);

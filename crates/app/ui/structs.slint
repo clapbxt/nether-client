@@ -64,7 +64,7 @@ export struct SetVal { t: int, key: string, label: string, min: float, max: floa
     // L2: hint = explanation line under the label; unset = KEY with no key bound
     hint: string, unset: bool, col: color, rainbow: bool }
 // group = injection group (hud, pvp, qol); variant = look of the HUD preview (armor layout)
-export struct ClientMod { id: string, name: string, desc: string, cat: string, ci: int, on: bool, hud: bool, x: float, y: float, scale: float, group: string, sets: [SetVal], variant: string, icon: image, has-icon: bool, pixel-icon: bool, safety: string, moved: bool }
+export struct ClientMod { id: string, name: string, desc: string, cat: string, ci: int, on: bool, hud: bool, x: float, y: float, scale: float, group: string, sets: [SetVal], variant: string, icon: image, has-icon: bool, pixel-icon: bool, moved: bool }
 
 // Everything the Rust side provides or handles.
 // L2: a restore point row (date = "12 Nov 2026 · 13:40", when = "3 days ago", kind = MANUAL / AUTO / BEFORE RESTORE)
@@ -539,18 +539,9 @@ export global ClientState {
     in-out property <int> sel: -1;
     in-out property <string> menu-key: "RIGHT SHIFT";
     in-out property <[string]> cats: ["ALL"];
-    // instance injection: client on/off + groups; main-menu = our title screen (global)
-    in-out property <bool> inject: true;
-    in-out property <bool> g-hud: true;
-    in-out property <bool> g-pvp: true;
-    in-out property <bool> g-qol: true;
-    in-out property <bool> g-menu: true;
-    in-out property <bool> main-menu: true;
     callback load(int);
     callback save();
     callback set-use-global(bool);
-    callback save-injection();
-    callback set-main-menu(bool);
     callback set-bool(int, string, bool);
     callback set-num(int, string, float);
     callback set-str(int, string, string);
@@ -565,11 +556,6 @@ export global Wizard {
     in-out property <bool> rp-loading;
     in-out property <string> pack;
     in-out property <bool> pack-has-client;
-    in-out property <bool> inject: true;
-    in-out property <bool> g-hud: true;
-    in-out property <bool> g-pvp: true;
-    in-out property <bool> g-qol: true;
-    in-out property <bool> g-menu: true;
     in-out property <int> mode: 0;
     callback pick-pack(string);
     callback load-rps(string);

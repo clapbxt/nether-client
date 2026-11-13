@@ -1,7 +1,7 @@
 import { Theme } from "theme.slint";
 import { Backend, Row, Inst, Art, Wizard } from "structs.slint";
 import { Glass, PlayButton, Eyebrow, Heading, Slot, Chip, Btn, ModIcon, Seg, UTabs, Toggle, Dropdown, VerTag, Icon, Ico, Page, IconBtn, Hatch, Ticks, Slash, SectionHead, Stat, LinkBtn, Slider, Field, Scrim, SetRow, Pulse } from "components.slint";
-import { ClientEditor, GroupChip } from "client.slint";
+import { ClientEditor } from "client.slint";
 import { ClientState } from "structs.slint";
 import { ModDetail } from "moddetail.slint";
 
@@ -650,22 +650,12 @@ export component InstancesScreen inherits Rectangle {
 
         // per-instance client: follows the global setup (Client tab) unless switched to its own
         if root.itab == 6: Page {
-            // injection: client on/off and which module groups go into the game
+            // the client is always on; this switch only picks global or per-instance module settings
             Rectangle {
                 x: 56px; y: 196px; width: 1328px; height: 40px;
-                Toggle { x: 0px; y: 9px; on: ClientState.inject; toggled(v) => { ClientState.inject = v; ClientState.save-injection(); } }
-                Text { x: 54px; width: 190px; text: ClientState.inject ? "NETHER CLIENT ON" : "CLIENT OFF · VANILLA"; color: ClientState.inject ? Theme.tx : Theme.redtx; font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 700; letter-spacing: 0.8px; vertical-alignment: center; }
-                HorizontalLayout {
-                    x: 250px; y: 3px; height: 34px; spacing: 8px; alignment: start;
-                    GroupChip { label: "HUD"; on: ClientState.g-hud; enabled: ClientState.inject; toggled(v) => { ClientState.g-hud = v; ClientState.save-injection(); } }
-                    GroupChip { label: "PVP"; on: ClientState.g-pvp; enabled: ClientState.inject; toggled(v) => { ClientState.g-pvp = v; ClientState.save-injection(); } }
-                    GroupChip { label: "QOL"; on: ClientState.g-qol; enabled: ClientState.inject; toggled(v) => { ClientState.g-qol = v; ClientState.save-injection(); } }
-                    GroupChip { label: "MAIN MENU"; on: ClientState.g-menu; enabled: ClientState.inject; toggled(v) => { ClientState.g-menu = v; ClientState.save-injection(); } }
-                }
-                Rectangle { x: 728px; y: 6px; width: 1px; height: 28px; background: Theme.ln2; }
-                Toggle { x: 752px; y: 9px; on: ClientState.use-global; enabled: ClientState.inject; toggled(v) => { ClientState.set-use-global(v); } }
-                Text { x: 808px; y: 0px; height: 22px; text: "USE GLOBAL SETUP"; color: ClientState.inject ? Theme.tx : Theme.mut; font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 700; letter-spacing: 0.8px; vertical-alignment: center; }
-                Text { x: 808px; y: 22px; width: 520px; text: ClientState.use-global ? "Modules and HUD follow the Client tab." : "This instance has its own modules, settings and HUD."; color: Theme.dim; font-family: Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
+                Toggle { x: 0px; y: 9px; on: ClientState.use-global; toggled(v) => { ClientState.set-use-global(v); } }
+                Text { x: 54px; y: 0px; height: 22px; text: "USE GLOBAL SETUP"; color: Theme.tx; font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 700; letter-spacing: 0.8px; vertical-alignment: center; }
+                Text { x: 54px; y: 22px; width: 520px; text: ClientState.use-global ? "Modules and HUD follow the Client tab." : "This instance has its own modules, settings and HUD."; color: Theme.dim; font-family: Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
             }
             ClientEditor { x: 56px; y: 248px; width: 1328px; height: parent.height - 248px - 16px; scope: root.sel; }
         }
@@ -772,7 +762,7 @@ export component InstancesScreen inherits Rectangle {
             }
             x: (parent.width - 1040px) / 2; y: 30px; width: 1040px; height: 728px;
             background: #101014; border-width: 1px; border-color: Theme.ln2;
-            init => { Backend.cover-for(dlg.ver); Wizard.pick-pack(""); Wizard.load-rps(""); Wizard.inject = true; Wizard.mode = 0; }
+            init => { Backend.cover-for(dlg.ver); Wizard.pick-pack(""); Wizard.load-rps(""); Wizard.mode = 0; }
             TouchArea { }
             Slash { x: 32px; y: 34px; width: 30px; height: 7px; skew: 5px; color: Theme.red2; }
             Heading { x: 30px; y: 44px; text: dlg.raw ? "RAW INSTANCE" : "NEW INSTANCE"; font-size: 44px; }
@@ -864,33 +854,18 @@ export component InstancesScreen inherits Rectangle {
             // ---- 04 client ----
             if dlg.step == 3: Rectangle {
                 x: 32px; y: 166px; width: parent.width - 64px; height: 450px;
-                Rectangle {
-                    height: 84px; background: Theme.s1; border-width: 1px; border-color: Wizard.inject ? Theme.red2 : Theme.ln;
-                    Toggle { x: 22px; y: 31px; on: Wizard.inject; toggled(v) => { Wizard.inject = v; } }
-                    Text { x: 82px; y: 16px; text: Wizard.inject ? "NETHER CLIENT ON" : "NETHER CLIENT OFF"; color: Theme.tx; font-family: Theme.disp; font-size: 22px; font-weight: 700; }
-                    Text { x: 82px; y: 48px; width: parent.width - 110px; text: Wizard.inject ? "Our in-game client is injected into this instance. Pick what it brings below." : "The game launches untouched: no HUD, no menu, no title screen."; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; }
-                }
-                Eyebrow { x: 0px; y: 108px; text: "WHAT TO INJECT"; }
-                HorizontalLayout {
-                    x: 0px; y: 130px; height: 34px; spacing: 8px; alignment: start;
-                    GroupChip { label: "HUD"; on: Wizard.g-hud; enabled: Wizard.inject; toggled(v) => { Wizard.g-hud = v; } }
-                    GroupChip { label: "PVP"; on: Wizard.g-pvp; enabled: Wizard.inject; toggled(v) => { Wizard.g-pvp = v; } }
-                    GroupChip { label: "QOL"; on: Wizard.g-qol; enabled: Wizard.inject; toggled(v) => { Wizard.g-qol = v; } }
-                    GroupChip { label: "MAIN MENU"; on: Wizard.g-menu; enabled: Wizard.inject; toggled(v) => { Wizard.g-menu = v; } }
-                }
-                Text { x: 0px; y: 174px; width: parent.width; text: "HUD: FPS, coordinates, armor, potions and more · PVP: keystrokes, CPS, toggle sprint/sneak, crosshair · QOL: zoom, fullbright, waypoints · MAIN MENU: our title screen and pause button"; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; }
-                Eyebrow { x: 0px; y: 226px; text: "MODULE SETTINGS"; }
+                Text { x: 0px; y: 0px; width: parent.width; text: "The Nether client is part of every instance: HUD, PvP tools, title screen and the in-game menu."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
+                Eyebrow { x: 0px; y: 50px; text: "MODULE SETTINGS"; }
                 for o[i] in [{t: "GLOBAL", d: "Follow your global setup from the Client tab. Change it once, every instance follows."},
                              {t: "CUSTOM", d: "Start from your global setup, then tune this instance on its own."},
                              {t: "PACK", d: "Use the Nether pack's built-in settings (laid over your global setup)."}]: Rectangle {
                     visible: i < 2 || Wizard.pack-has-client;
-                    x: i * (parent.width / 3 + 4px); y: 250px; width: parent.width / 3 - 8px; height: 118px;
+                    x: i * (parent.width / 3 + 4px); y: 76px; width: parent.width / 3 - 8px; height: 118px;
                     background: Wizard.mode == i ? Theme.red.with-alpha(0.094) : (ot.has-hover ? Theme.s2 : Theme.s1);
                     border-width: 1px; border-color: Wizard.mode == i ? Theme.red2 : Theme.ln;
-                    opacity: Wizard.inject ? 1 : 0.45;
                     Text { x: 18px; y: 16px; text: o.t; color: Theme.tx; font-family: Theme.disp; font-size: 22px; font-weight: 800; font-italic: true; }
                     Text { x: 18px; y: 50px; width: parent.width - 36px; text: o.d; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
-                    ot := TouchArea { mouse-cursor: Wizard.inject ? pointer : default; clicked => { if Wizard.inject { Wizard.mode = i; } } }
+                    ot := TouchArea { mouse-cursor: pointer; clicked => { Wizard.mode = i; } }
                 }
             }
 
@@ -931,7 +906,7 @@ export component InstancesScreen inherits Rectangle {
                     x: 32px; y: 88px; width: 460px; height: 120px; background: Theme.s1;
                     Eyebrow { x: 18px; y: 14px; text: "SUMMARY"; }
                     Text { x: 18px; y: 36px; width: parent.width - 36px; text: dlg.ver + " · " + dlg.loader-name + (Wizard.pack == "" ? "" : " · Nether pack"); color: Theme.tx; font-family: Theme.mono; font-size: 13px * Theme.ts; }
-                    Text { x: 18px; y: 60px; width: parent.width - 36px; text: !Wizard.inject ? "Client off" : ("Client on · " + (Wizard.mode == 0 ? "global settings" : (Wizard.mode == 1 ? "own settings" : "pack settings"))); color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; }
+                    Text { x: 18px; y: 60px; width: parent.width - 36px; text: "Client · " + (Wizard.mode == 0 ? "global settings" : (Wizard.mode == 1 ? "own settings" : "pack settings")); color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; }
                     Text { x: 18px; y: 84px; width: parent.width - 36px; text: "\{Wizard.rps.length > 0 ? "Resource packs are downloaded right after." : "No resource packs."}"; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
                 }
                 Eyebrow { x: 32px; y: 232px; text: "MEMORY"; }

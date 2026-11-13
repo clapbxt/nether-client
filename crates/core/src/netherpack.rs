@@ -43,7 +43,7 @@ pub fn builtin() -> Vec<NetherPack> {
             client: Some(serde_json::json!({
                 "keys": {"enabled": true}, "cps": {"enabled": true}, "fps": {"enabled": true},
                 "armor": {"enabled": true, "layout": "Icons", "value": "Durability"}, "potions": {"enabled": true},
-                "sprint": {"enabled": true}, "crosshair": {"enabled": true}
+                "crosshair": {"enabled": true}
             })),
             ..pack("pvp", "Nether PvP", "Lean and high-FPS for servers, with the full PvP HUD.", &["sodium", "lithium", "ferrite-core", "entityculling", "immediatelyfast"], &["hud", "pvp", "qol", "menu"])
         },

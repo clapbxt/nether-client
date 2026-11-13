@@ -9,7 +9,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::*;
 
 /// What the window procedure reports back (run on the UI thread through the event loop).
 pub struct Handlers {
-    /// The window was maximized (true) or restored (false) by any means (button, snap, double-click).
+    /// The window was maximized (true) or restored (false) by any means (button, snap).
     pub maxed: fn(bool),
     /// Files dropped onto the window.
     pub dropped: fn(Vec<std::path::PathBuf>),
@@ -71,6 +71,8 @@ unsafe extern "system" fn chrome_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPAR
             }
             HTCLIENT as LRESULT
         }
+        // no double-click-to-maximize on the top bar (the max button and snap still work)
+        WM_NCLBUTTONDBLCLK => 0,
         WM_SIZE => {
             if let Some(h) = HANDLERS.get() {
                 let (f, m) = (h.maxed, wp as u32 == SIZE_MAXIMIZED);
@@ -105,21 +107,8 @@ pub fn borderless(ui: &slint::Window) -> bool {
 }
 
 /// Start a native window move from the app's top bar (snap layouts and Aero snap included).
-/// A second press within the double-click time toggles maximize instead.
 pub fn drag(ui: &slint::Window) {
-    use std::sync::Mutex;
-    static LAST: Mutex<Option<std::time::Instant>> = Mutex::new(None);
     let Some(h) = hwnd_of(ui) else { return };
-    let dbl = std::time::Duration::from_millis(unsafe { windows_sys::Win32::UI::Input::KeyboardAndMouse::GetDoubleClickTime() } as u64);
-    let mut last = LAST.lock().unwrap();
-    if last.is_some_and(|t| t.elapsed() < dbl) {
-        *last = None;
-        drop(last);
-        toggle_max(ui);
-        return;
-    }
-    *last = Some(std::time::Instant::now());
-    drop(last);
     unsafe {
         ReleaseCapture();
         PostMessageW(h, WM_NCLBUTTONDOWN, HTCAPTION as usize, 0);

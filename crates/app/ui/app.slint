@@ -143,7 +143,7 @@ export component AppWindow inherits Window {
         Rectangle {
             x: 0px; y: 0px; width: root.W; height: root.top;
             background: #08080B;
-            // empty bar = window drag handle (double press maximizes)
+            // empty bar = window drag handle
             TouchArea { pointer-event(e) => { if e.kind == PointerEventKind.down && e.button == PointerEventButton.left { Backend.win-drag(); } } }
             Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; }
             // window buttons (no native title bar)
