@@ -21,7 +21,8 @@ Calm, dark, rounded: OLED by default, one accent, Nether Pixel type, thin line i
 - In-game menu (Right Shift): ~86% centred translucent panel; sidebar 210 (brand, MODULES: Favorites/All/HUD/Visual/PvP/Utility, CLIENT: Wardrobe/HUD Editor/Settings, profile chip), top bar (title, "N of M on", search), list rows 44 (icon box, name + description, star, key chip, pill), click row = inline settings (one open), footer hints.
 ## Screens
 - **Home = Dock:** wallpaper full-bleed; bottom-left "LAST PLAYED" label, title 64, spec line, PLAY + "Change instance"; bottom-centre glass dock of instance icons (+ new); right glass News card; skin right of centre.
-- Other screens keep their v5 layouts, restyled with the tokens, font and radii only (Instances list, Instance page, Create wizard, Discover, Client, Host, Wardrobe, Settings).
+- **Other pages (v6 pass 2):** Console list rows with hover fill + 3px accent bar (Instances, Discover, Client modules, mods); River-style left nav where a page has sections (Settings, Client categories); Instances = list + right detail pane (wallpaper, PLAY, icon actions); Wardrobe = left preview plate (drag spin, CLASSIC/SLIM, WEAR) + right skin/cape grid, worn = accent border + check + "Equipped"; Host invite card dark; installer same language (OLED, Nether Pixel, PLAY-style button). Panels radius 8, no hatch/ticks/slash, section heads unnumbered.
+- Nether Pixel is wide (~13 px per char at 16): give buttons auto width (`Btn` without `width`, chain with `self.width`); `Seg` scales `item-w` by 1.4; stat values in tight spots use size 16; `if`-scoped ids are not reachable outside the `if`.
 ## Identity (unchanged)
 - **Logo** (v4.2): original ghast mark, flat 2D, white/grey on black chamfered badge with nether dust and lava. `design/icon/ghast-mark.svg`, `nether-logo.svg`. Deliberately unlike Lunar/Feather.
 - Palette identity: obsidian black, ice grey, racing red.

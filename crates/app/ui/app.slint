@@ -365,7 +365,6 @@ export component AppWindow inherits Window {
                 Text { x: 120px; y: 500px; text: "CLIENT"; color: #ffffff09; font-family: Theme.disp; font-size: 64px; font-weight: 800;  }
                 Image { source: @image-url("assets/nether-logo.svg"); x: 170px; y: 250px; width: 340px; height: 340px; }
             }
-            Slash { x: 96px; y: 196px; width: 64px; height: 8px; skew: 6px; color: Theme.red2; }
             Heading { x: 96px; y: 216px; text: "NETHER"; font-size: 64px; }
             Heading { x: 96px; y: 336px; text: "CLIENT"; font-size: 64px; color: Theme.red2; }
             Text { x: 100px; y: 490px; width: 560px; text: Backend.acct-state == 3 ? "Signing you in…" : "Sign in with your Microsoft account to play."; color: Theme.dim; font-family: Theme.ui; font-size: 19px; }
@@ -403,7 +402,7 @@ export component AppWindow inherits Window {
                 for f[i] in Backend.crash-facts: Text { x: 36px; y: 84px + i * 20px; width: 468px; text: f; color: Theme.dim; font-family: Theme.mono; font-size: 11px * Theme.ts; overflow: elide; }
                 Rectangle {
                     x: 36px; y: 96px + Backend.crash-facts.length * 20px; width: 468px; height: parent.height - self.y - 40px;
-                    background: #0B0B0E; border-width: 1px; border-color: Theme.ln2; clip: true;
+                    background: Theme.bg; border-radius: 8px; border-width: 1px; border-color: Theme.ln2; clip: true;
                     Text { x: 14px; y: 12px; width: parent.width - 28px; height: parent.height - 24px; text: Backend.crash-tail; color: Theme.dim; font-family: Theme.mono; font-size: 11px * Theme.ts; wrap: char-wrap; overflow: elide; }
                 }
             }
@@ -411,14 +410,12 @@ export component AppWindow inherits Window {
             Flickable {
                 x: 0px; y: 0px; width: 900px; height: root.H - 96px;
                 content-height: 420px + Math.min(Backend.crash-items.length, 5) * 126px + (Backend.crash-state == 2 ? 90px + Backend.crash-problems.length * 110px : 120px);
-                Slash { x: 72px; y: 66px; width: 64px; height: 8px; skew: 6px; color: Theme.red2; }
-                Eyebrow { x: 150px; y: 62px; text: "MINECRAFT CRASHED" + (Backend.crash-code == "" ? "" : " · EXIT CODE " + Backend.crash-code); }
-                Heading { x: 70px; y: 86px; width: 780px; text: Backend.crash-inst.to-uppercase(); font-size: Backend.crash-inst.character-count > 16 ? 60px : 84px; overflow: elide; }
-                Text { x: 74px; y: 196px; width: 760px; text: "The game closed unexpectedly. Here is what went wrong and how to fix it."; color: Theme.dim; font-family: Theme.ui; font-size: 17px; wrap: word-wrap; }
+                Eyebrow { x: 74px; y: 62px; text: "MINECRAFT CRASHED" + (Backend.crash-code == "" ? "" : " · EXIT CODE " + Backend.crash-code); }
+                Heading { x: 70px; y: 86px; width: 780px; text: Backend.crash-inst.to-uppercase(); font-size: Backend.crash-inst.character-count > 16 ? 48px : 64px; overflow: elide; }
+                Text { x: 74px; y: 176px; width: 760px; text: "The game closed unexpectedly. Here is what went wrong and how to fix it."; color: Theme.dim; font-family: Theme.ui; font-size: 17px; wrap: word-wrap; }
 
                 // 01 our own diagnosis (with one-click fixes)
-                Text { x: 74px; y: 252px; text: "01"; color: Theme.red2; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; }
-                Text { x: 100px; y: 248px; text: "WHAT WE FOUND"; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.9px; }
+                                Text { x: 74px; y: 248px; text: "WHAT WE FOUND"; color: Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; }
                 if Backend.crash-items.length == 0: Text { x: 74px; y: 282px; width: 760px; text: "Nothing we recognise. The mclo.gs analysis below knows many more crash causes."; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; }
                 for c[i] in Backend.crash-items: Rectangle {
                     x: 72px; y: 280px + i * 126px; width: 760px; height: 116px; visible: i < 5;
@@ -432,13 +429,12 @@ export component AppWindow inherits Window {
 
                 // 02 mclo.gs: upload for a link + automatic analysis
                 property <length> y2: 300px + Math.max(1, Math.min(Backend.crash-items.length, 5)) * 126px;
-                Text { x: 74px; y: y2 + 4px; text: "02"; color: Theme.red2; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; }
-                Text { x: 100px; y: y2; text: "MCLO.GS ANALYSIS"; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.9px; }
+                                Text { x: 74px; y: y2; text: "MCLO.GS ANALYSIS"; color: Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; }
                 if Backend.crash-state == 0 || Backend.crash-state == 3: Rectangle {
                     x: 72px; y: y2 + 32px; width: 760px; height: 100px;
                     Text { x: 2px; y: 0px; width: 740px; text: Backend.crash-state == 3 ? "Upload failed: " + Backend.crash-err : "Upload the crash log to mclo.gs. You get a link to share with friends or a mod author, and an automatic check against hundreds of known problems. Your Windows user folder and sign-in token are removed first.";
                         color: Backend.crash-state == 3 ? Theme.redtx : Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
-                    PlayButton { x: 0px; y: 52px; width: 330px; height: 48px; label: Backend.crash-state == 3 ? "TRY AGAIN" : "UPLOAD TO MCLO.GS"; text-size: 24px; clicked => { Backend.crash-upload(); } }
+                    PlayButton { x: 0px; y: 52px; width: 400px; height: 48px; label: Backend.crash-state == 3 ? "TRY AGAIN" : "UPLOAD TO MCLO.GS"; text-size: 24px; clicked => { Backend.crash-upload(); } }
                 }
                 if Backend.crash-state == 1: Waiting { x: 72px; y: y2 + 40px; width: 400px; text: "Uploading and analysing the log"; }
                 if Backend.crash-state == 2: Rectangle {
@@ -447,7 +443,7 @@ export component AppWindow inherits Window {
                         x: 0px; y: 0px; width: 760px; height: 44px; background: Theme.s1; border-width: 1px; border-color: Theme.ln2;
                         Text { x: 16px; width: 480px; text: Backend.crash-url; color: Theme.ice; font-family: Theme.mono; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
                         Btn { x: parent.width - 236px; y: 6px; height: 32px; text: "COPY LINK"; icon: Ico.copy; clicked => { Backend.copy-text(Backend.crash-url); Backend.toast("Link copied"); } }
-                        Btn { x: parent.width - 108px; y: 6px; height: 32px; width: 100px; text: "OPEN"; icon: Ico.ext; clicked => { Backend.open-url(Backend.crash-url); } }
+                        Btn { x: parent.width - 8px - self.width; y: 6px; height: 32px; text: "OPEN"; icon: Ico.ext; clicked => { Backend.open-url(Backend.crash-url); } }
                     }
                     if Backend.crash-problems.length == 0: Text { x: 2px; y: 60px; width: 740px; text: "mclo.gs found no known problem in this log. Share the link with whoever can help."; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
                     for p[i] in Backend.crash-problems: Rectangle {
@@ -463,9 +459,9 @@ export component AppWindow inherits Window {
             Rectangle {
                 x: 0px; y: root.H - 96px; width: 900px; height: 96px; background: Theme.bg;
                 Rectangle { height: 1px; background: Theme.ln; }
-                PlayButton { x: 72px; y: 22px; width: 250px; height: 52px; label: "PLAY AGAIN"; text-size: 24px; clicked => { Backend.crash-relaunch(); } }
-                vl := Btn { x: 346px; y: 30px; height: 38px; text: "VIEW FULL LOG"; clicked => { Backend.crash-open = false; root.open-idx = Backend.crash-idx; root.open-tab = 5; root.open-mode = 0; root.tab = 1; } }
-                Btn { x: vl.x + vl.width + 10px; y: 30px; height: 38px; text: "SUPPORT BUNDLE"; icon: Ico.export; clicked => { Backend.inst-action(Backend.crash-idx, 6); } }
+                PlayButton { x: 72px; y: 22px; width: 260px; height: 52px; label: "PLAY AGAIN"; text-size: 24px; clicked => { Backend.crash-relaunch(); } }
+                vl := Btn { x: 348px; y: 30px; height: 38px; text: "FULL LOG"; clicked => { Backend.crash-open = false; root.open-idx = Backend.crash-idx; root.open-tab = 5; root.open-mode = 0; root.tab = 1; } }
+                Btn { x: vl.x + vl.width + 10px; y: 30px; height: 38px; text: "SUPPORT ZIP"; icon: Ico.export; clicked => { Backend.inst-action(Backend.crash-idx, 6); } }
                 Btn { x: 900px - 72px - self.width; y: 30px; height: 38px; text: "CLOSE"; clicked => { Backend.crash-open = false; } }
             }
             WinButtons { stage-w: root.W; }
@@ -689,7 +685,7 @@ export component AppWindow inherits Window {
                 clicked => { Backend.toast-close(); }
             }
             x: root.W - self.width - 24px; y: root.H - root.deck - 16px - self.height + (Backend.toast-on ? 0px : 10px);
-            background: #16161C; border-width: 1px; border-color: Backend.toast-err ? Theme.red2.with-alpha(0.533) : Theme.ln2; border-radius: 8px;
+            background: Theme.s2; border-width: 1px; border-color: Backend.toast-err ? Theme.red2.with-alpha(0.533) : Theme.ln2; border-radius: 8px;
             opacity: Backend.toast-on ? 1 : 0;
             animate opacity { duration: Theme.mid; }
             animate y { duration: Theme.slow; easing: ease-out-quint; }

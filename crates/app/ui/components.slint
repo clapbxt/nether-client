@@ -284,18 +284,20 @@ export component Seg inherits Rectangle {
     in property <length> item-w: 110px;
     in-out property <int> current: 0;
     callback changed(int);
-    width: root.items.length * root.item-w + 6px;
+    // Nether Pixel runs wide: the nominal item width is scaled once here
+    property <length> iw: root.item-w * 1.4;
+    width: root.items.length * root.iw + 6px;
     height: 34px;
     background: Theme.s1;
     border-width: 1px;
     border-color: Theme.ln;
     Rectangle {
-        x: 3px + root.current * root.item-w; y: 3px; width: root.item-w; height: parent.height - 6px;
+        x: 3px + root.current * root.iw; y: 3px; width: root.iw; height: parent.height - 6px;
         background: Theme.s3; border-radius: 4px;
         animate x { duration: Theme.slow; easing: ease-out-quint; }
     }
     for it[i] in root.items: Rectangle {
-        x: 3px + i * root.item-w; width: root.item-w; height: parent.height;
+        x: 3px + i * root.iw; width: root.iw; height: parent.height;
         Text {
             text: it; color: root.current == i ? Theme.tx : (st.has-hover ? Theme.tx : Theme.dim);
             font-family: Theme.disp; font-size: 16px; font-weight: 700;
@@ -469,7 +471,7 @@ export component UTabs inherits Rectangle {
     for it[i] in root.items: Rectangle {
         x: i * root.item-w; width: root.item-w; height: parent.height;
         Text {
-            x: 0px; width: parent.width - 28px;
+            x: 0px; width: parent.width - 8px;
             text: it; font-family: Theme.disp; font-size: 16px; font-weight: 700;
             color: root.current == i ? Theme.tx : (t.has-hover ? Theme.dim : Theme.mut);
             vertical-alignment: center;
@@ -485,7 +487,7 @@ export component UTabs inherits Rectangle {
         } }
     if fs.has-focus: Rectangle { x: root.current * root.item-w - 6px; y: 2px; width: root.item-w - 16px; height: parent.height - 4px; border-width: 2px; border-color: Theme.ice; }
     Rectangle {
-        x: root.current * root.item-w; y: parent.height - 2px; width: root.item-w - 28px; height: 2px; background: Theme.red2;
+        x: root.current * root.item-w; y: parent.height - 2px; width: root.item-w - 8px; height: 2px; background: Theme.red2;
         animate x { duration: Theme.slow; easing: ease-out-quint; }
     }
 }

@@ -140,13 +140,13 @@ export component HostScreen inherits Rectangle {
                 }
             }
         }
-        Btn { x: 540px; y: 38px; height: 40px; text: "NEW SERVER"; icon: Ico.plus; clicked => { HostState.new-server(); } }
-        IconBtn { x: 700px; y: 38px; size: 40px; d: Ico.folder; tip: "Open folder"; clicked => { HostState.open-folder(); } }
-        IconBtn { x: 746px; y: 38px; size: 40px; d: Ico.trash; danger: true; tip: "Delete server"; clicked => { if root.live { Backend.toast("Stop the server before deleting it"); } else { root.confirm-del = true; } } }
+        nsb := Btn { x: 540px; y: 38px; height: 40px; text: "NEW SERVER"; icon: Ico.plus; clicked => { HostState.new-server(); } }
+        IconBtn { x: nsb.x + nsb.width + 8px; y: 38px; size: 40px; d: Ico.folder; tip: "Open folder"; clicked => { HostState.open-folder(); } }
+        IconBtn { x: nsb.x + nsb.width + 56px; y: 38px; size: 40px; d: Ico.trash; danger: true; tip: "Delete server"; clicked => { if root.live { Backend.toast("Stop the server before deleting it"); } else { root.confirm-del = true; } } }
 
         // ---------- primary action: the one red slab ----------
         PlayButton {
-            x: 1384px - 250px; y: 30px; width: 250px; height: 56px; skew: 14px; text-size: 24px;
+            x: 1384px - 330px; y: 30px; width: 330px; height: 56px; text-size: 24px;
             arrow: root.ready && !root.live && !HostState.busy;
             label: HostState.phase == 2 ? (HostState.busy ? "SETTING UP…" : "SET UP SERVER")
                 : HostState.phase != 3 ? "START SERVER"
@@ -159,7 +159,7 @@ export component HostScreen inherits Rectangle {
 
         // ---------- status plate ----------
         Rectangle {
-            x: 56px; y: 132px; width: 860px; height: 240px; background: Theme.s1; clip: true;
+            x: 56px; y: 132px; width: 860px; height: 240px; background: Theme.s1; border-radius: 8px; border-width: 1px; border-color: Theme.ln; clip: true;
             Hatch { width: parent.width; height: parent.height; }
             if root.st == 2: Rectangle { x: -200px; y: 40px; width: 700px; height: 500px; background: @radial-gradient(circle, Theme.red.with-alpha(0.251) 0%, Theme.red.with-alpha(0.000) 68%); }
             Ticks { width: parent.width; height: parent.height; }
@@ -167,7 +167,7 @@ export component HostScreen inherits Rectangle {
             if !root.live: Rectangle { x: 32px; y: 34px; width: 10px; height: 10px; background: root.st == 4 ? Theme.red2 : Theme.mut; }
             Eyebrow { x: 52px; y: 30px; width: parent.width - 80px; text: HostState.inst-name.to-uppercase() + "  ·  " + HostState.inst-meta; color: Theme.dim; font-size: 15px * Theme.ts; overflow: elide; }
             Heading {
-                x: 28px; y: 40px; font-size: 132px;
+                x: 28px; y: 40px; font-size: 128px;
                 text: HostState.phase == 0 ? "…" : HostState.phase == 2 ? "NOT SET UP"
                     : root.st == 1 ? "STARTING" : root.st == 2 ? "ONLINE" : root.st == 3 ? "STOPPING" : root.st == 4 ? "CRASHED" : "OFFLINE";
                 color: root.st == 4 ? Theme.red2 : (root.st == 2 || root.st == 1 ? Theme.tx : Theme.dim);
@@ -177,7 +177,7 @@ export component HostScreen inherits Rectangle {
                 Stat { x: 0px; width: 160px; rule: false; k: "PLAYERS"; v: root.live ? "\{HostState.players.length} / \{HostState.max-players}" : "— / \{HostState.max-players}"; }
                 Stat { x: 160px; width: 160px; k: root.st == 4 ? "EXIT CODE" : "UPTIME"; v: root.st == 4 ? "\{HostState.exit-code}" : HostState.uptime; }
                 Stat { x: 320px; width: 160px; k: "PORT"; v: HostState.port; }
-                Stat { x: 480px; width: 300px; k: "REACHABLE VIA";
+                Stat { x: 480px; width: 300px; size: 16px; k: "REACHABLE VIA";
                     v: !root.live ? "—" : HostState.tun == 4 ? "Internet · tunnel" : HostState.reach == 2 ? "Internet · checked"
                         : HostState.reach == 1 || HostState.upnp-state == 1 ? "Checking…" : "Your network only"; }
             }
@@ -187,37 +187,34 @@ export component HostScreen inherits Rectangle {
         // ---------- invite ticket: the one ice slab on this screen ----------
         tk := Rectangle {
             x: 948px; y: 132px; width: 436px; height: 240px; clip: true;
-            background: Theme.ice;
+            background: Theme.s1; border-radius: 8px; border-width: 1px; border-color: Theme.ln;
             property <bool> has: HostState.addr != "" && root.live;
-            Text { x: 28px; y: 24px; text: "INVITE FRIENDS"; color: #4b505a; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; }
+            Text { x: 28px; y: 24px; text: "INVITE FRIENDS"; color: Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; }
             if tk.has: Rectangle {
                 x: parent.width - 28px - cc.preferred-width; y: 20px; width: cc.preferred-width; height: 24px;
-                cc := Text { text: "COPY ADDRESS"; color: ccta.has-hover ? Theme.red : #4b505a; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; animate color { duration: Theme.fast; } }
+                cc := Text { text: "COPY ADDRESS"; color: ccta.has-hover ? Theme.red : Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; animate color { duration: Theme.fast; } }
                 ccta := TouchArea { mouse-cursor: pointer; clicked => { Backend.copy-text(HostState.addr); Backend.toast("Address copied"); } }
             }
-            if tk.has: Text { x: 28px; y: 50px; width: parent.width - 56px; height: 60px; text: HostState.addr; color: Theme.ink; font-family: Theme.mono; font-size: HostState.addr.character-count > 17 ? 22px : 34px; font-weight: 700; vertical-alignment: center; overflow: elide; }
-            if !tk.has: Text { x: 28px; y: 50px; width: parent.width - 56px; height: 60px; text: "Not running"; color: #8a919c; font-family: Theme.disp; font-size: 32px; font-weight: 800;  vertical-alignment: center; }
-            Rectangle { x: 28px; y: 118px; width: parent.width - 56px; height: 1px; background: Theme.ink; }
-            Rectangle { x: 28px; y: 166px; width: parent.width - 56px; height: 1px; background: Theme.ink; }
-            Text { x: 28px; y: 118px; width: parent.width - 56px - 96px; height: 48px; text: "Minecraft › Multiplayer › Add Server › paste"; color: tk.has ? Theme.ink : #8a919c; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
+            if tk.has: Text { x: 28px; y: 50px; width: parent.width - 56px; height: 60px; text: HostState.addr; color: Theme.tx; font-family: Theme.mono; font-size: HostState.addr.character-count > 17 ? 22px : 34px; font-weight: 700; vertical-alignment: center; overflow: elide; }
+            if !tk.has: Text { x: 28px; y: 50px; width: parent.width - 56px; height: 60px; text: "Not running"; color: Theme.mut; font-family: Theme.disp; font-size: 32px; font-weight: 800;  vertical-alignment: center; }
+            Rectangle { x: 28px; y: 118px; width: parent.width - 56px; height: 1px; background: Theme.ln2; }
+            Rectangle { x: 28px; y: 166px; width: parent.width - 56px; height: 1px; background: Theme.ln2; }
+            Text { x: 28px; y: 118px; width: parent.width - 56px - 96px; height: 48px; text: "Minecraft › Multiplayer › Add Server › paste"; color: tk.has ? Theme.tx : Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
             if tk.has: Rectangle {
                 x: parent.width - 28px - 84px; y: 125px; width: 84px; height: 34px;
-                background: cp.pressed ? #2a2a33 : (cp.has-hover ? Theme.red : Theme.ink);
+                background: cp.pressed ? Theme.press : (cp.has-hover ? Theme.red : Theme.s3);
                 animate background { duration: Theme.fast; }
                 Text { y: cp.pressed ? 1px : 0px; height: parent.height; text: "COPY"; color: white; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 0.7px; horizontal-alignment: center; vertical-alignment: center; }
                 cp := TouchArea { mouse-cursor: pointer; clicked => { Backend.copy-text(HostState.addr); Backend.toast("Address copied"); } }
             }
             Text {
-                x: 28px; y: 180px; width: parent.width - 56px; color: #3b4350; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap;
+                x: 28px; y: 180px; width: parent.width - 56px; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap;
                 text: !tk.has ? "Start the server and the address for your friends appears here."
                     : HostState.tun == 4 ? "Through the playit.gg tunnel: friends anywhere can join with this address, from any launcher."
                     : HostState.reach == 2 ? "Checked from the internet: friends anywhere can join with this address, from any launcher."
                     : HostState.reach == 1 || HostState.upnp-state == 1 ? "Checking whether friends outside your network can reach it…"
                     : "Friends on your network only. For everyone else, start the free tunnel below.";
             }
-            // ticket notches
-            Rectangle { x: -9px; y: 133px; width: 18px; height: 18px; border-radius: 9px; background: Theme.bg; }
-            Rectangle { x: parent.width - 9px; y: 133px; width: 18px; height: 18px; border-radius: 9px; background: Theme.bg; }
         }
 
         // ---------- addresses (right column) ----------
@@ -354,7 +351,7 @@ export component HostScreen inherits Rectangle {
             if root.list == 0: Toggle { x: 860px - 42px; y: 0px; on <=> HostState.wl-on; toggled => { HostState.save-settings(); } }
             if root.list == 0: Text { x: 760px; y: 0px; width: 50px; height: 22px; text: HostState.wl-on ? "ON" : "OFF"; color: HostState.wl-on ? Theme.tx : Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.8px; horizontal-alignment: right; vertical-alignment: center; }
             nf := Field { x: 532px; y: 40px; width: 328px - 86px; placeholder: "Minecraft name"; accepted => { if self.text != "" { HostState.list-add(root.list, self.text); self.text = ""; } } }
-            Btn { x: 860px - 76px; y: 40px; width: 76px; height: 40px; text: "ADD"; icon: Ico.plus; enabled: nf.text != ""; clicked => { HostState.list-add(root.list, nf.text); nf.text = ""; } }
+            Btn { x: 860px - self.width; y: 40px; height: 40px; text: "ADD"; icon: Ico.plus; enabled: nf.text != ""; clicked => { HostState.list-add(root.list, nf.text); nf.text = ""; } }
             Flickable {
                 x: 532px; y: 92px; width: 328px; height: 202px; content-height: root.names.length * 40px;
                 for n[i] in root.names: Rectangle {
@@ -396,7 +393,7 @@ export component HostScreen inherits Rectangle {
 
             SectionHead { x: 330px; y: 0px; width: 530px; idx: "02"; title: "FROM MODRINTH"; note: HostState.inst-meta; }
             sf := Field { x: 330px; y: 30px; width: 530px - 108px; search: true; placeholder: HostState.kind == "paper" ? "Search plugins" : "Search server mods"; accepted => { HostState.addon-search(self.text); } }
-            Btn { x: 860px - 100px; y: 30px; width: 100px; height: 40px; text: "SEARCH"; clicked => { HostState.addon-search(sf.text); } }
+            Btn { x: 860px - self.width; y: 30px; height: 40px; text: "SEARCH"; clicked => { HostState.addon-search(sf.text); } }
             Flickable {
                 x: 330px; y: 78px; width: 530px; height: 216px; content-height: HostState.hits.length * 54px;
                 for r[i] in HostState.hits: Rectangle {
@@ -407,7 +404,7 @@ export component HostScreen inherits Rectangle {
                     Text { x: 52px; y: 8px; width: parent.width - 52px - 176px; text: r.name; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; overflow: elide; }
                     Text { x: 52px; y: 28px; width: parent.width - 52px - 176px; text: r.sub; color: Theme.dim; font-family: Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
                     Text { x: parent.width - 172px; width: 60px; text: r.meta; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; }
-                    Btn { x: parent.width - self.width - 4px; y: 11px; height: 32px; width: 100px; text: r.busy ? "ADDING…" : "INSTALL"; enabled: !r.busy; clicked => { HostState.addon-install(r.id); } }
+                    Btn { x: parent.width - self.width - 4px; y: 11px; height: 32px; text: r.busy ? "ADDING…" : "INSTALL"; enabled: !r.busy; clicked => { HostState.addon-install(r.id); } }
                     Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; }
                 }
             }
@@ -534,7 +531,6 @@ export component HostScreen inherits Rectangle {
             x: (parent.width - 1040px) / 2; y: 30px; width: 1040px; height: 728px;
             background: Theme.s1; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
             TouchArea { }
-            Slash { x: 32px; y: 34px; width: 30px; height: 7px; skew: 5px; color: Theme.red2; }
             Heading { x: 30px; y: 44px; text: "NEW SERVER"; font-size: 48px; }
             IconBtn { x: parent.width - 32px - 34px; y: 28px; size: 34px; d: Ico.close; tip: "Close"; clicked => { HostState.wiz-open = false; } }
 

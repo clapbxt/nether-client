@@ -20,10 +20,10 @@ component CapeCard inherits Rectangle {
         if !root.none: Image { y: 12px; height: parent.height - 24px; width: parent.width; source: root.cape.img; image-fit: contain; image-rendering: pixelated; }
         if root.none: Text { text: "NONE"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; horizontal-alignment: center; vertical-alignment: center; }
     }
-    Text { x: 14px; y: 142px; width: parent.width - 110px; height: 28px; text: root.cape.name; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; overflow: elide; }
-    if root.worn: Icon { x: parent.width - 96px; y: 150px; d: Ico.check; tint: Theme.redtx; }
-    if root.worn: Text { x: parent.width - 78px; y: 142px; width: 66px; height: 28px; text: "Equipped"; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 600; vertical-alignment: center; }
-    if !root.worn && ct.has-hover && !root.none: Text { x: parent.width - 78px; y: 142px; width: 66px; height: 28px; text: "Wear"; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; horizontal-alignment: right; vertical-alignment: center; }
+    Text { x: 14px; y: 136px; width: parent.width - 28px; height: 28px; text: root.cape.name; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; overflow: elide; }
+    if root.worn: Icon { x: 14px; y: 168px; d: Ico.check; tint: Theme.redtx; }
+    if root.worn: Text { x: 32px; y: 162px; width: 120px; height: 22px; text: "Equipped"; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 600; vertical-alignment: center; }
+    if !root.worn && ct.has-hover && !root.none: Text { x: 14px; y: 162px; width: 120px; height: 22px; text: "Wear"; color: Theme.tx; font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 600; vertical-alignment: center; }
     Rectangle { border-radius: 8px; border-width: root.worn ? 2px : 1px; border-color: root.worn ? Theme.red2 : Theme.ln; }
     ct := TouchArea { mouse-cursor: pointer; clicked => { if !root.busy { root.clicked(); } } }
 }
@@ -78,11 +78,11 @@ export component WardrobeScreen inherits Rectangle {
     // skins
     if root.page == 0: Rectangle {
         SectionHead { x: 468px; y: 100px; width: 916px; title: "ADD A SKIN"; }
-        Btn { x: 468px; y: 132px; width: 150px; height: 40px; text: "UPLOAD FILE"; icon: Ico.export; enabled: !SkinLib.busy; clicked => { SkinLib.add-file(); } }
-        Text { x: 630px; y: 132px; height: 40px; text: "or"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; }
-        imp := Field { x: 660px; y: 132px; width: 580px; placeholder: "Minecraft username or https:// skin link"; accepted => { if self.text != "" && !SkinLib.busy { SkinLib.import(self.text); self.text = ""; } } }
-        Btn { x: 1384px - 130px; y: 132px; width: 130px; height: 40px; text: SkinLib.busy ? "WORKING…" : "IMPORT"; enabled: imp.text != "" && !SkinLib.busy; clicked => { SkinLib.import(imp.text); imp.text = ""; } }
-        Text { x: 660px; y: 178px; text: "A name like Notch copies that player's current skin. Links must point straight at a 64×64 PNG."; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
+        Btn { x: 468px; y: 132px; height: 40px; text: "UPLOAD FILE"; icon: Ico.export; enabled: !SkinLib.busy; clicked => { SkinLib.add-file(); } }
+        Text { x: 688px; y: 132px; height: 40px; text: "or"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; }
+        imp := Field { x: 716px; y: 132px; width: 500px; placeholder: "Minecraft username or https:// skin link"; accepted => { if self.text != "" && !SkinLib.busy { SkinLib.import(self.text); self.text = ""; } } }
+        Btn { x: 1384px - self.width; y: 132px; height: 40px; text: SkinLib.busy ? "WORKING…" : "IMPORT"; enabled: imp.text != "" && !SkinLib.busy; clicked => { SkinLib.import(imp.text); imp.text = ""; } }
+        Text { x: 716px; y: 178px; text: "A name like Notch copies that player's current skin. Links must point straight at a 64×64 PNG."; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
 
         SectionHead { x: 468px; y: 208px; width: 916px; title: "LIBRARY"; note: SkinLib.skins.length == 1 ? "1 skin" : "\{SkinLib.skins.length} skins"; }
         Flickable {

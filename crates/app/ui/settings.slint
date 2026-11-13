@@ -171,7 +171,7 @@ export component SettingsScreen inherits Rectangle {
                 rs := Btn { x: parent.width - 130px - self.width; y: 14px; text: "RESET"; clicked => { Backend.java-reset(j.major); } }
                 Chip { x: rs.x - self.width - 12px; y: 21px; text: "CUSTOM"; }
             }
-            Btn { x: parent.width - 120px; y: 14px; width: 120px; text: "CHOOSE"; icon: Ico.folder; clicked => { Backend.java-pick(j.major); } }
+            Btn { x: parent.width - self.width; y: 14px; text: "CHOOSE"; icon: Ico.folder; clicked => { Backend.java-pick(j.major); } }
         }
 
         // ---------- 04 launcher ----------
@@ -224,7 +224,7 @@ export component SettingsScreen inherits Rectangle {
             sub: "New versions download in the background, are checked against our signing key, and install when you close Nether."; on <=> Backend.lp-auto-update; toggled => { Backend.save-launcher(); } }
         SetRow { x: 0px; y: root.sy + 192px; width: root.cw; reserve: 330px; title: "Support"; sub: "The launcher's own log, and a summary of this PC for a bug report.";
             Btn { x: parent.width - self.width - 186px; y: 14px; text: "LOGS"; icon: Ico.folder; clicked => { Backend.open-logs(); } }
-            Btn { x: parent.width - self.width; y: 14px; width: 176px; text: "COPY SYSTEM INFO"; icon: Ico.copy; clicked => { Backend.copy-sysinfo(); } } }
+            Btn { x: parent.width - self.width; y: 14px; text: "COPY SYSTEM INFO"; icon: Ico.copy; clicked => { Backend.copy-sysinfo(); } } }
         SetRow { x: 0px; y: root.sy + 256px; width: root.cw; reserve: 0px; title: "Nether Client " + Backend.app-version; sub: "Beta. No telemetry, no ads. Sign-in tokens stay in Windows Credential Manager."; }
 
         // ---------- 07 privacy (L2): every service the launcher and client talk to, and when ----------

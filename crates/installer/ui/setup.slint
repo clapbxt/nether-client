@@ -1,14 +1,12 @@
-import "../../app/ui/fonts/BarlowCondensed-SemiBold.ttf";
-import "../../app/ui/fonts/BarlowCondensed-Bold.ttf";
-import "../../app/ui/fonts/BarlowCondensed-BoldItalic.ttf";
-import "../../app/ui/fonts/BarlowCondensed-ExtraBoldItalic.ttf";
+import "../../app/ui/fonts/NetherPixel-Regular.ttf";
+import "../../app/ui/fonts/NetherPixel-Bold.ttf";
 import "../../app/ui/fonts/Barlow-Regular.ttf";
 import "../../app/ui/fonts/Barlow-Medium.ttf";
 import "../../app/ui/fonts/Barlow-SemiBold.ttf";
 import "../../app/ui/fonts/JetBrainsMono-Regular.ttf";
 import "../../app/ui/fonts/JetBrainsMono-Medium.ttf";
 import { Theme } from "../../app/ui/theme.slint";
-import { Btn, PlayButton, Slash, Hatch, Icon, Ico, Heading, Eyebrow, Toggle, LinkBtn } from "../../app/ui/components.slint";
+import { Btn, PlayButton, Icon, Ico, Heading, Eyebrow, Toggle, LinkBtn } from "../../app/ui/components.slint";
 
 // Nether Client setup: install wizard, uninstall, and the small "updating" window the launcher's auto-updater opens.
 export global Setup {
@@ -43,7 +41,7 @@ component Opt inherits Rectangle {
     in property <string> sub;
     in-out property <bool> on;
     height: 58px;
-    Text { x: 0px; y: 9px; text: root.title; color: Theme.tx; font-family: Theme.ui; font-size: 15px; font-weight: 600; }
+    Text { x: 0px; y: 7px; height: 24px; text: root.title; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; }
     Text { x: 0px; y: 31px; width: parent.width - 64px; text: root.sub; color: Theme.dim; font-family: Theme.ui; font-size: 12px; overflow: elide; }
     Toggle { x: parent.width - 42px; y: 18px; on <=> root.on; }
     Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; }
@@ -51,8 +49,8 @@ component Opt inherits Rectangle {
 
 component Bar inherits Rectangle {
     in property <float> f;
-    height: 6px; background: Theme.s3;
-    Rectangle { x: 0px; width: parent.width * Math.clamp(root.f, 0, 1); background: Theme.red; animate width { duration: 160ms; } }
+    height: 8px; border-radius: 4px; background: Theme.s3; clip: true;
+    Rectangle { x: 0px; width: parent.width * Math.clamp(root.f, 0, 1); border-radius: 4px; background: Theme.red; animate width { duration: 160ms; } }
 }
 
 export component SetupWindow inherits Window {
@@ -70,10 +68,9 @@ export component SetupWindow inherits Window {
 
     // ---------- compact: auto-update ----------
     if root.compact: Rectangle {
-        Rectangle { x: 0px; y: 0px; width: 3px; height: parent.height; background: Theme.red; }
         Image { x: 28px; y: 28px; width: 44px; height: 44px; source: @image-url("../../app/ui/assets/nether-logo.svg"); }
         Eyebrow { x: 90px; y: 30px; text: "NETHER CLIENT " + Setup.version; color: Theme.mut; }
-        Text { x: 90px; y: 48px; width: parent.width - 120px; text: Setup.error != "" ? "Update failed" : "Updating Nether Client"; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; font-italic: true; }
+        Text { x: 90px; y: 48px; width: parent.width - 120px; text: Setup.error != "" ? "Update failed" : "Updating Nether Client"; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; }
         Bar { x: 28px; y: 104px; width: parent.width - 56px; f: Setup.progress; }
         Text { x: 28px; y: 122px; width: parent.width - 56px; text: Setup.error != "" ? Setup.error : Setup.status; color: Setup.error != "" ? Theme.redtx : Theme.dim; font-family: Theme.ui; font-size: 12px; wrap: word-wrap; }
         if Setup.error != "": LinkBtn { x: parent.width - 90px; y: 26px; text: "CLOSE"; clicked => { Setup.close(); } }
@@ -81,23 +78,21 @@ export component SetupWindow inherits Window {
 
     // ---------- wizard: install / uninstall ----------
     if !root.compact: Rectangle {
-        // left plate: hatch, outlined wordmark, logo, step rail
+        // left plate: logo, step rail
         Rectangle {
             x: 0px; y: 0px; width: 300px; height: parent.height; background: Theme.s1; clip: true;
-            Hatch { width: parent.width; height: parent.height; }
             Rectangle { x: parent.width - 1px; width: 1px; background: Theme.ln; }
-            Rectangle { x: -200px; y: 300px; width: 700px; height: 600px; background: @radial-gradient(circle, Theme.red.with-alpha(0.18) 0%, Theme.red.with-alpha(0) 68%); }
-            Text { x: -18px; y: 300px; text: "NETHER"; color: #ffffff08; font-family: Theme.disp; font-size: 150px; font-weight: 800; font-italic: true; }
             Image { x: 32px; y: 34px; width: 56px; height: 56px; source: @image-url("../../app/ui/assets/nether-logo.svg"); }
-            Text { x: 100px; y: 40px; text: "NETHER"; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 800; font-italic: true; letter-spacing: 1px; }
-            Text { x: 100px; y: 64px; text: "CLIENT " + Setup.version; color: Theme.red2; font-family: Theme.disp; font-size: 15px; font-weight: 700; letter-spacing: 1px; }
+            Text { x: 100px; y: 34px; height: 32px; text: "Nether"; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; vertical-alignment: center; }
+            Text { x: 100px; y: 62px; height: 24px; text: "Client " + Setup.version; color: Theme.mut; font-family: Theme.ui; font-size: 13px; vertical-alignment: center; }
             property <[string]> steps: Setup.mode == 1 ? ["CONFIRM", "REMOVE", "DONE"] : ["WELCOME", "OPTIONS", "INSTALL", "DONE"];
             property <int> at: Setup.mode == 1 ? (Setup.step == 0 ? 0 : (Setup.step == 2 ? 1 : 2)) : Math.min(Setup.step, 3);
             for s[i] in self.steps: Rectangle {
-                x: 32px; y: 150px + i * 44px; width: 236px; height: 36px;
-                Text { x: 0px; y: 0px; height: parent.height; text: "0" + (i + 1); color: i <= at ? Theme.red2 : Theme.mut; font-family: Theme.mono; font-size: 12px; vertical-alignment: center; }
-                Text { x: 34px; y: 0px; height: parent.height; text: s; color: i == at ? Theme.tx : (i < at ? Theme.dim : Theme.mut); font-family: Theme.disp; font-size: 17px; font-weight: 700; letter-spacing: 1px; vertical-alignment: center; }
-                if i == at: Slash { x: 34px; y: parent.height - 3px; width: 56px; height: 3px; skew: 3px; color: Theme.red2; }
+                x: 20px; y: 150px + i * 42px; width: 260px; height: 38px; border-radius: 6px;
+                background: i == at ? Theme.red.with-alpha(0.16) : transparent;
+                Rectangle { x: 0px; y: 9px; width: 3px; height: parent.height - 18px; border-radius: 2px; background: Theme.red2; visible: i == at; }
+                Text { x: 16px; height: parent.height; text: s; color: i == at ? Theme.tx : (i < at ? Theme.dim : Theme.mut); font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; }
+                if i < at: Icon { x: parent.width - 28px; y: 13px; d: Ico.check; tint: Theme.dim; }
             }
             Text { x: 32px; y: parent.height - 46px; width: 236px; text: "No telemetry · no ads · no admin needed"; color: Theme.mut; font-family: Theme.ui; font-size: 12px; }
         }
@@ -118,70 +113,65 @@ export component SetupWindow inherits Window {
 
         // install: welcome
         if Setup.mode == 0 && Setup.step == 0: Rectangle {
-            Slash { x: cx; y: 92px; width: 56px; height: 7px; skew: 5px; color: Theme.red2; }
-            Heading { x: cx; y: 106px; text: Setup.installed-version == "" ? "INSTALL" : "UPDATE"; font-size: 72px; }
-            Heading { x: cx; y: 180px; text: "NETHER CLIENT"; font-size: 44px; color: Theme.red2; }
+            Heading { x: cx; y: 100px; text: Setup.installed-version == "" ? "INSTALL" : "UPDATE"; font-size: 64px; }
+            Heading { x: cx; y: 176px; text: "NETHER CLIENT"; font-size: 32px; color: Theme.red2; }
             Text { x: cx; y: 250px; width: cw; wrap: word-wrap; color: Theme.dim; font-family: Theme.ui; font-size: 15px;
                 text: Setup.installed-version == ""
                     ? "A fast Minecraft launcher with a built-in client. Installs for your Windows account only, in about ten seconds."
                     : "Nether Client " + Setup.installed-version + " is installed. This replaces it with " + Setup.version + ". Your instances, worlds and settings stay as they are."; }
-            PlayButton { x: cx; y: parent.height - 108px; width: 230px; height: 56px; label: Setup.installed-version == "" ? "GET STARTED" : "UPDATE"; text-size: 22px; clicked => { Setup.step = 1; } }
+            PlayButton { x: cx; y: parent.height - 108px; width: 260px; height: 56px; label: Setup.installed-version == "" ? "GET STARTED" : "UPDATE"; text-size: 24px; clicked => { Setup.step = 1; } }
         }
 
         // install: options
         if Setup.mode == 0 && Setup.step == 1: Rectangle {
-            Eyebrow { x: cx; y: 56px; text: "STEP 02"; color: Theme.mut; }
-            Text { x: cx; y: 74px; text: "OPTIONS"; color: Theme.tx; font-family: Theme.disp; font-size: 40px; font-weight: 800; font-italic: true; }
-            Text { x: cx; y: 136px; text: "INSTALL FOLDER"; color: Theme.mut; font-family: Theme.disp; font-size: 12px; font-weight: 700; letter-spacing: 0.9px; }
-            Rectangle { x: cx; y: 156px; width: cw - 110px; height: 38px; background: Theme.s1; border-width: 1px; border-color: Theme.ln2;
+            Heading { x: cx; y: 56px; text: "OPTIONS"; font-size: 32px; }
+            Text { x: cx; y: 136px; text: "INSTALL FOLDER"; color: Theme.mut; font-family: Theme.ui; font-size: 12px; font-weight: 700; letter-spacing: 0.9px; }
+            Rectangle { x: cx; y: 156px; width: cw - 150px; height: 38px; background: Theme.s1; border-radius: 6px; border-width: 1px; border-color: Theme.ln2;
                 Text { x: 12px; width: parent.width - 24px; height: parent.height; text: Setup.location; color: Theme.tx; font-family: Theme.mono; font-size: 12px; vertical-alignment: center; overflow: elide; } }
-            Btn { x: cx + cw - 100px; y: 157px; width: 100px; text: "BROWSE"; enabled: Setup.installed-version == ""; clicked => { Setup.browse(); } }
+            Btn { x: cx + cw - self.width; y: 156px; text: "BROWSE"; enabled: Setup.installed-version == ""; clicked => { Setup.browse(); } }
             Opt { x: cx; y: 212px; width: cw; title: "Desktop shortcut"; sub: "Nether Client on your desktop."; on <=> Setup.desktop; }
             Opt { x: cx; y: 270px; width: cw; title: "Start menu"; sub: "Find it from Start and Windows search."; on <=> Setup.startmenu; }
             Opt { x: cx; y: 328px; width: cw; title: "Start with Windows"; sub: "Opens in the background when you sign in. You can change it in Settings."; on <=> Setup.autostart; }
             Btn { x: cx; y: parent.height - 92px; text: "BACK"; clicked => { Setup.step = 0; } }
-            PlayButton { x: cx + cw - 220px; y: parent.height - 100px; width: 220px; height: 56px; label: "INSTALL"; text-size: 22px; clicked => { Setup.start(); } }
+            PlayButton { x: cx + cw - 220px; y: parent.height - 100px; width: 220px; height: 56px; label: "INSTALL"; text-size: 24px; clicked => { Setup.start(); } }
         }
 
         // working (install or uninstall)
         if Setup.step == 2: Rectangle {
-            Eyebrow { x: cx; y: 56px; text: Setup.mode == 1 ? "REMOVING" : "INSTALLING"; color: Theme.mut; }
-            Text { x: cx; y: 74px; text: Setup.mode == 1 ? "UNINSTALLING" : "INSTALLING"; color: Theme.tx; font-family: Theme.disp; font-size: 40px; font-weight: 800; font-italic: true; }
-            Text { x: cx; y: 200px; text: Math.round(Setup.progress * 100) + "%"; color: Theme.tx; font-family: Theme.disp; font-size: 64px; font-weight: 800; font-italic: true; }
+            Heading { x: cx; y: 56px; text: Setup.mode == 1 ? "UNINSTALLING" : "INSTALLING"; font-size: 32px; }
+            Text { x: cx; y: 190px; text: Math.round(Setup.progress * 100) + "%"; color: Theme.tx; font-family: Theme.disp; font-size: 64px; font-weight: 700; }
             Bar { x: cx; y: 290px; width: cw; f: Setup.progress; }
             Text { x: cx; y: 308px; width: cw; text: Setup.status; color: Theme.dim; font-family: Theme.ui; font-size: 13px; overflow: elide; }
         }
 
         // done
         if Setup.step == 3: Rectangle {
-            Slash { x: cx; y: 92px; width: 56px; height: 7px; skew: 5px; color: Theme.red2; }
-            Heading { x: cx; y: 106px; text: Setup.mode == 1 ? "REMOVED" : "READY"; font-size: 72px; }
+            Heading { x: cx; y: 100px; text: Setup.mode == 1 ? "REMOVED" : "READY"; font-size: 64px; }
             Text { x: cx; y: 196px; width: cw; wrap: word-wrap; color: Theme.dim; font-family: Theme.ui; font-size: 15px;
                 text: Setup.mode == 1
                     ? (Setup.wipe-data ? "Nether Client and its data were removed." : "Nether Client was removed. Your instances and worlds are still in " + Setup.data-dir + ".")
                     : "Nether Client " + Setup.version + " is installed. It keeps itself up to date: new versions install when you close the launcher."; }
             if Setup.mode == 0: Opt { x: cx; y: 290px; width: cw; title: "Open Nether Client now"; sub: "Sign in with your Microsoft account to play."; on <=> Setup.launch; }
-            PlayButton { x: cx + cw - 200px; y: parent.height - 100px; width: 200px; height: 56px; label: "FINISH"; arrow: false; text-size: 22px; clicked => { Setup.finish(); } }
+            PlayButton { x: cx + cw - 200px; y: parent.height - 100px; width: 200px; height: 56px; label: "FINISH"; arrow: false; text-size: 24px; clicked => { Setup.finish(); } }
         }
 
         // failed
         if Setup.step == 4: Rectangle {
             Eyebrow { x: cx; y: 56px; text: "SOMETHING WENT WRONG"; color: Theme.redtx; }
-            Text { x: cx; y: 74px; text: Setup.mode == 1 ? "NOT REMOVED" : "NOT INSTALLED"; color: Theme.tx; font-family: Theme.disp; font-size: 40px; font-weight: 800; font-italic: true; }
+            Heading { x: cx; y: 76px; text: Setup.mode == 1 ? "NOT REMOVED" : "NOT INSTALLED"; font-size: 32px; }
             Text { x: cx; y: 140px; width: cw; wrap: word-wrap; text: Setup.error; color: Theme.redtx; font-family: Theme.ui; font-size: 14px; }
             Btn { x: cx; y: parent.height - 92px; text: "CLOSE"; clicked => { Setup.close(); } }
-            PlayButton { x: cx + cw - 200px; y: parent.height - 100px; width: 200px; height: 56px; label: "TRY AGAIN"; arrow: false; text-size: 22px; clicked => { Setup.retry(); } }
+            PlayButton { x: cx + cw - 200px; y: parent.height - 100px; width: 200px; height: 56px; label: "TRY AGAIN"; arrow: false; text-size: 24px; clicked => { Setup.retry(); } }
         }
 
         // uninstall: confirm
         if Setup.mode == 1 && Setup.step == 0: Rectangle {
-            Slash { x: cx; y: 92px; width: 56px; height: 7px; skew: 5px; color: Theme.red2; }
-            Heading { x: cx; y: 106px; text: "UNINSTALL"; font-size: 72px; }
+            Heading { x: cx; y: 100px; text: "UNINSTALL"; font-size: 64px; }
             Text { x: cx; y: 196px; width: cw; wrap: word-wrap; color: Theme.dim; font-family: Theme.ui; font-size: 15px;
                 text: "Removes Nether Client " + Setup.installed-version + ", its shortcuts and its Start menu entry from this PC."; }
             Opt { x: cx; y: 262px; width: cw; title: "Also delete my data"; sub: "Instances, worlds, screenshots and settings. This can't be undone."; on <=> Setup.wipe-data; }
             Btn { x: cx; y: parent.height - 92px; text: "CANCEL"; clicked => { Setup.close(); } }
-            Btn { x: cx + cw - 160px; y: parent.height - 92px; width: 160px; height: 44px; text: "UNINSTALL"; solid: true; danger: true; clicked => { Setup.start(); } }
+            Btn { x: cx + cw - self.width; y: parent.height - 92px; height: 44px; text: "UNINSTALL"; solid: true; danger: true; clicked => { Setup.start(); } }
         }
     }
     // hairline frame so the borderless window doesn't melt into dark wallpapers
