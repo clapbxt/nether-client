@@ -57,9 +57,9 @@ component SettingRow inherits Rectangle {
         {c: #8A93A1, h: "#8A93A1"}, {c: #3DDC84, h: "#3DDC84"}, {c: #4DA3FF, h: "#4DA3FF"}, {c: #FFB020, h: "#FFB020"}, {c: #A855F7, h: "#A855F7"}];
     property <bool> in-palette: root.s.str == "#EAEEF3" || root.s.str == "#E10600" || root.s.str == "#FF3B2F" || root.s.str == "#FFFFFF" || root.s.str == "#8A93A1" || root.s.str == "#3DDC84" || root.s.str == "#4DA3FF" || root.s.str == "#FFB020" || root.s.str == "#A855F7";
     height: 50px;
-    if root.s.t != 6: Text { x: 0px; y: 0px; width: 220px; height: root.s.hint == "" ? root.height : 31px; text: root.s.label; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; vertical-alignment: center; overflow: elide; }
+    if root.s.t != 6: Text { x: 0px; y: 0px; width: 220px; height: root.s.hint == "" ? root.height : 31px; text: root.s.label; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; overflow: elide; }
     if root.s.t != 6 && root.s.hint != "": Text { x: 0px; y: 29px; width: 330px; height: 16px; text: root.s.hint; color: Theme.mut; font-family: Theme.ui; font-size: 11px * Theme.ts; overflow: elide; }
-    if root.s.t == 6: Text { x: 0px; y: 16px; width: parent.width; height: 28px; text: root.s.label.to-uppercase(); color: Theme.dim; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 1.4px; vertical-alignment: center; }
+    if root.s.t == 6: Text { x: 0px; y: 16px; width: parent.width; height: 28px; text: root.s.label.to-uppercase(); color: Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; }
     if root.s.t == 5: Field { x: parent.width - 240px; y: 5px; width: 240px; height: 40px; text-size: 13px; text: root.s.str; edited => { ClientState.set-str(root.mi, root.s.key, self.text); } }
     Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; visible: root.s.t != 6; }
     if root.s.t == 0: Toggle { x: parent.width - 42px; y: 14px; on: root.s.on; enabled: !root.locked; toggled(v) => { ClientState.set-bool(root.mi, root.s.key, v); } }
@@ -79,7 +79,7 @@ component SettingRow inherits Rectangle {
     if root.s.t == 2: HorizontalLayout {
         x: parent.width - self.preferred-width; y: 13px; height: 24px; spacing: 6px; alignment: end;
         for p in root.palette: Rectangle {
-            width: 24px; height: 24px; background: p.c;
+            width: 24px; height: 24px; border-radius: 12px; background: p.c;
             border-width: root.s.str == p.h ? 2px : 1px; border-color: root.s.str == p.h ? Theme.red2 : #ffffff22;
             if root.s.str == p.h: Rectangle { x: 7px; y: 7px; width: 10px; height: 10px; background: p.c == #FFFFFF || p.c == #EAEEF3 ? Theme.ink : white; }
             TouchArea { mouse-cursor: pointer; clicked => { if !root.locked { ClientState.set-str(root.mi, root.s.key, p.h); } } }
@@ -96,8 +96,8 @@ component SettingRow inherits Rectangle {
     if root.s.t == 4: Rectangle {
         x: parent.width - 330px; width: 330px;
         Text { x: 0px; width: 210px; height: parent.height; text: root.s.unset ? "Not bound · set it in Minecraft's Key Binds" : "Rebind in Minecraft's Key Binds"; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; horizontal-alignment: right; }
-        Rectangle { x: parent.width - kt.preferred-width - 24px; y: 12px; width: kt.preferred-width + 24px; height: 26px; background: root.s.unset ? Theme.s3 : Theme.ice;
-            kt := Text { text: root.s.unset ? "UNBOUND" : root.s.str; color: root.s.unset ? Theme.dim : Theme.ink; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; } }
+        Rectangle { x: parent.width - kt.preferred-width - 24px; y: 12px; width: kt.preferred-width + 24px; height: 26px; border-radius: 4px; background: Theme.s3;
+            kt := Text { text: root.s.unset ? "UNBOUND" : root.s.str; color: root.s.unset ? Theme.mut : Theme.tx; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; } }
     }
 }
 
@@ -108,37 +108,51 @@ export component ClientEditor inherits Rectangle {
     property <int> cat: 0;
     property <int> pane: 0;
     property <bool> locked: root.scope >= 0 && ClientState.use-global;
-    property <length> lw: 520px;
+    property <length> sw: 180px;
+    property <length> lw: 470px;
     pure function snap(f: float) -> float { return Math.abs(f - 0.5) < 0.02 ? 0.5 : (f < 0.015 ? 0 : (f > 0.985 ? 1 : f)); }
 
-    // ---------- modules ----------
+    // ---------- sidebar (River): categories ----------
     Rectangle {
-        x: 0px; y: 0px; width: root.lw; height: parent.height;
-        SectionHead { x: 0px; y: 0px; width: parent.width; idx: "01"; title: "MODULES"; note: root.scope >= 0 && ClientState.use-global ? "follows global" : ""; }
-        Seg { x: 0px; y: 32px; items: ClientState.cats; item-w: (root.lw - 6px) / Math.max(1, ClientState.cats.length); current <=> root.cat; }
+        x: 0px; y: 0px; width: root.sw; height: parent.height;
+        Text { x: 12px; y: 0px; height: 24px; text: "MODULES"; color: Theme.mut; font-family: Theme.ui; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 1.2px; vertical-alignment: center; }
+        for c[i] in ClientState.cats: Rectangle {
+            x: 0px; y: 28px + i * 40px; width: parent.width; height: 36px; border-radius: 6px;
+            background: root.cat == i ? Theme.red.with-alpha(0.16) : (cat-ta.has-hover ? Theme.hov : transparent);
+            animate background { duration: Theme.fast; }
+            Rectangle { x: 0px; y: 8px; width: 3px; height: parent.height - 16px; border-radius: 2px; background: Theme.red2; opacity: root.cat == i ? 1 : 0; animate opacity { duration: Theme.mid; } }
+            Text { x: 16px; text: c; color: root.cat == i ? Theme.tx : Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; }
+            cat-ta := TouchArea { mouse-cursor: pointer; clicked => { root.cat = i; } }
+        }
+        Text { x: 12px; y: 40px + ClientState.cats.length * 40px; width: parent.width - 16px; wrap: word-wrap; text: root.scope >= 0 && ClientState.use-global ? "Following your global setup." : ""; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
+    }
+
+    // ---------- module list (Console rows) ----------
+    Rectangle {
+        x: root.sw + 16px; y: 0px; width: root.lw; height: parent.height;
+        Rectangle { x: -8px; width: 1px; background: Theme.ln; }
         Flickable {
-            x: 0px; y: 80px; width: parent.width; height: parent.height - 80px;
-            content-height: Math.ceil(ClientState.modules.length / 2) * 78px;
+            x: 0px; y: 0px; width: parent.width; height: parent.height;
+            content-height: (root.cat == 0 ? ClientState.modules.length : ClientState.modules.length) * 46px;
             for m[i] in ClientState.modules: Rectangle {
                 property <bool> shown: root.cat == 0 || m.cat == ClientState.cats[root.cat];
                 property <int> slot: root.cat == 0 ? i : m.ci;
                 visible: self.shown;
-                x: mod(self.slot, 2) * (parent.width / 2 + 3px); y: floor(self.slot / 2) * 78px;
-                width: parent.width / 2 - 3px; height: 72px;
-                background: ClientState.sel == i ? Theme.s3 : (ct.has-hover ? Theme.s2 : Theme.s1);
+                x: 0px; y: self.slot * 46px;
+                width: parent.width - 8px; height: 44px; border-radius: 6px;
+                background: ClientState.sel == i ? Theme.s2 : (ct.has-hover ? Theme.hov : transparent);
                 opacity: root.locked ? 0.5 : 1;
                 animate background { duration: Theme.fast; }
-                Rectangle { x: 0px; width: 3px; background: ClientState.sel == i ? Theme.red2 : (m.on ? Theme.ice : Theme.s3); animate background { duration: Theme.mid; } }
+                Rectangle { x: 0px; y: 10px; width: 3px; height: parent.height - 20px; border-radius: 2px; background: Theme.red2; opacity: ClientState.sel == i ? 1 : 0; animate opacity { duration: Theme.fast; } }
                 ct := TouchArea { mouse-cursor: pointer; clicked => { ClientState.sel = i; root.pane = 0; } }
-                // module glyph tile, as in the in-game menu (item texture only as fallback)
-                Rectangle { x: 14px; y: 14px; width: 44px; height: 44px; background: m.on ? Theme.red.with-alpha(0.149) : Theme.s2; border-width: 1px; border-color: m.on ? Theme.red.with-alpha(0.502) : Theme.ln;
-                    animate background, border-color { duration: Theme.mid; }
-                    if m.has-icon: Image { x: 8px; y: 8px; width: 28px; height: 28px; source: m.icon; colorize: m.on ? Theme.red2 : Theme.dim; image-rendering: m.pixel-icon ? ImageRendering.pixelated : ImageRendering.smooth; }
-                    if !m.has-icon: Text { text: m.name; color: Theme.dim; font-family: Theme.ui; font-size: 18px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; } }
-                Text { x: 70px; y: 11px; width: parent.width - 134px; text: m.name; color: m.on ? Theme.tx : Theme.dim; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; overflow: elide; }
-                Text { x: 70px; y: 32px; width: parent.width - 134px; text: m.desc; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
-                Text { x: 70px; y: 51px; text: m.cat; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; }
-                Toggle { x: parent.width - 56px; y: 25px; on: m.on; enabled: !root.locked;
+                // module glyph in a 28 px box
+                Rectangle { border-radius: 4px; x: 12px; y: 8px; width: 28px; height: 28px; background: m.on ? Theme.red.with-alpha(0.149) : Theme.hov;
+                    animate background { duration: Theme.mid; }
+                    if m.has-icon: Image { x: 4px; y: 4px; width: 20px; height: 20px; source: m.icon; colorize: m.on ? Theme.red2 : Theme.dim; image-rendering: m.pixel-icon ? ImageRendering.pixelated : ImageRendering.smooth; }
+                    if !m.has-icon: Text { text: m.name; color: Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; } }
+                nm := Text { x: 52px; width: Math.min(self.preferred-width, 180px); height: parent.height; text: m.name; color: m.on ? Theme.tx : Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; overflow: elide; }
+                Text { x: nm.x + nm.width + 10px; width: parent.width - self.x - 64px; height: parent.height; text: m.desc; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; overflow: elide; }
+                Toggle { x: parent.width - 46px; y: 12px; on: m.on; enabled: !root.locked;
                     toggled(v) => { if !root.locked { ClientState.modules[i].on = v; ClientState.sel = i; ClientState.save(); } } }
             }
         }
@@ -146,10 +160,10 @@ export component ClientEditor inherits Rectangle {
 
     // ---------- settings / HUD layout ----------
     col := Rectangle {
-        x: root.lw + 32px; y: 0px; width: parent.width - root.lw - 32px; height: parent.height;
+        x: root.sw + root.lw + 40px; y: 0px; width: parent.width - root.sw - root.lw - 40px; height: parent.height;
         property <ClientMod> s: ClientState.sel >= 0 ? ClientState.modules[ClientState.sel] : { name: "" };
-        SectionHead { x: 0px; y: 0px; width: parent.width; idx: "02"; title: root.pane == 0 ? "SETTINGS" : "HUD LAYOUT"; note: root.pane == 1 ? "drag to place · snaps to edges and centre" : ""; }
-        Seg { x: parent.width - self.width; y: -8px; items: ["SETTINGS", "HUD LAYOUT"]; item-w: 120px; current <=> root.pane; }
+        Seg { x: 0px; y: 0px; items: ["SETTINGS", "HUD LAYOUT"]; item-w: 130px; current <=> root.pane; }
+        Text { x: parent.width - self.width; y: 0px; height: 34px; text: root.pane == 1 ? "drag to place · snaps to edges and centre" : ""; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; }
 
         if root.pane == 0 && ClientState.sel < 0: Rectangle {
             y: 40px; height: 220px;
@@ -233,14 +247,14 @@ export component ClientEditor inherits Rectangle {
 }
 
 export component ClientScreen inherits Rectangle {
-    Heading { x: 53px; y: 22px; text: "CLIENT"; }
+    Heading { x: 56px; y: 28px; text: "CLIENT"; font-size: 32px; }
     Text { x: 56px; y: 88px; text: "Modules and HUD that run inside the game. This is your global setup; instances can override it."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; }
     // title screen + menu key (rebind in Minecraft: Options > Controls > Key Binds > Nether Client)
     Rectangle {
         x: 1384px - 640px; y: 30px; width: 640px; height: 64px;
         Eyebrow { x: 0px; y: 0px; text: "IN-GAME MENU KEY"; }
-        Rectangle { x: 0px; y: 22px; height: 30px; width: kt.preferred-width + 24px; background: Theme.ice;
-            kt := Text { text: ClientState.menu-key; color: Theme.ink; font-family: Theme.mono; font-size: 12px * Theme.ts; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; } }
+        Rectangle { x: 0px; y: 22px; height: 30px; width: kt.preferred-width + 24px; border-radius: 4px; background: Theme.s3;
+            kt := Text { text: ClientState.menu-key; color: Theme.tx; font-family: Theme.mono; font-size: 12px * Theme.ts; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; } }
         Text { x: 150px; y: 18px; width: 490px; text: "Rebind the key in Minecraft under Options › Controls › Key Binds › Nether Client."; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; }
     }
     ClientEditor { x: 56px; y: 132px; width: 1328px; height: parent.height - 132px - 16px; scope: -1; }

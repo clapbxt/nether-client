@@ -5,8 +5,8 @@ import { ClientState, Backend } from "structs.slint";
 
 // Diagonal hatch plate: the texture behind imagery, empty slots and focal frames.
 export component Hatch inherits Rectangle {
-    clip: true;
-    Image { x: 0px; y: 0px; width: parent.width; height: parent.height; source: @image-url("assets/hatch.svg"); horizontal-tiling: repeat; vertical-tiling: repeat; horizontal-alignment: left; vertical-alignment: top; image-fit: preserve; }
+    // v6: a flat plate behind imagery and empty slots (the diagonal texture is gone)
+    background: Theme.s2;
 }
 
 // Parallelogram: the one signature shape (Play, tab marker, tags).
@@ -21,16 +21,9 @@ export component Slash inherits Path {
 
 // Corner brackets around a focal frame.
 export component Ticks inherits Rectangle {
+    // v6: no corner brackets; kept so old call sites compile
     in property <color> tint: Theme.ln2;
     in property <length> len: 10px;
-    Rectangle { x: 0px; y: 0px; width: root.len; height: 1px; background: root.tint; }
-    Rectangle { x: 0px; y: 0px; width: 1px; height: root.len; background: root.tint; }
-    Rectangle { x: parent.width - root.len; y: 0px; width: root.len; height: 1px; background: root.tint; }
-    Rectangle { x: parent.width - 1px; y: 0px; width: 1px; height: root.len; background: root.tint; }
-    Rectangle { x: 0px; y: parent.height - 1px; width: root.len; height: 1px; background: root.tint; }
-    Rectangle { x: 0px; y: parent.height - root.len; width: 1px; height: root.len; background: root.tint; }
-    Rectangle { x: parent.width - root.len; y: parent.height - 1px; width: root.len; height: 1px; background: root.tint; }
-    Rectangle { x: parent.width - 1px; y: parent.height - root.len; width: 1px; height: root.len; background: root.tint; }
 }
 
 // Flat panel with a hairline frame.
@@ -72,9 +65,9 @@ export component SectionHead inherits Rectangle {
     in property <string> title;
     in property <string> note;
     height: 20px;
-    n := Text { x: 0px; height: parent.height; text: root.idx; color: Theme.red2; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; vertical-alignment: center; }
-    t := Text { x: root.idx == "" ? 0px : n.preferred-width + 10px; height: parent.height; text: root.title; color: Theme.tx; font-family: Theme.ui; font-size: 16px * Theme.ts; font-weight: 600; letter-spacing: 0.8px; vertical-alignment: center; }
-    nt := Text { x: parent.width - self.preferred-width; height: parent.height; text: root.note; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; vertical-alignment: center; }
+    // (idx is ignored since v6: sections are named, not numbered)
+    t := Text { x: 0px; height: parent.height; text: root.title; color: Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; }
+    nt := Text { x: parent.width - self.preferred-width; height: parent.height; text: root.note; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; }
     Rectangle { x: t.x + t.preferred-width + 12px; y: 10px; width: parent.width - self.x - (root.note == "" ? 0px : nt.preferred-width + 12px); height: 1px; background: Theme.ln; }
 }
 
@@ -82,7 +75,7 @@ export component SectionHead inherits Rectangle {
 export component Stat inherits Rectangle {
     in property <string> k;
     in property <string> v;
-    in property <length> size: 22px;
+    in property <length> size: 24px;
     in property <bool> rule: true;
     height: 48px;
     if root.rule: Rectangle { x: 0px; y: 4px; width: 1px; height: parent.height - 8px; background: Theme.ln; }
@@ -95,6 +88,7 @@ export component Stat inherits Rectangle {
 export component Slot inherits Rectangle {
     in property <string> label;
     background: Theme.s1;
+    border-radius: 6px;
     border-width: 1px;
     border-color: Theme.ln;
     Hatch { x: 1px; y: 1px; width: parent.width - 2px; height: parent.height - 2px; }
@@ -107,6 +101,7 @@ export component ModIcon inherits Rectangle {
     width: 38px;
     height: 38px;
     background: Theme.s2;
+    border-radius: 6px;
     clip: true;
     // quiet placeholder until the real icon streams in
     if !root.has: Hatch { width: parent.width; height: parent.height; }
@@ -156,6 +151,8 @@ export component VerTag inherits Rectangle {
     property <length> bw: root.mc == "" ? 0px : b.preferred-width + 16px;
     width: root.aw + root.bw;
     height: 22px;
+    border-radius: 4px;
+    clip: true;
     background: Theme.s2;
     Rectangle { x: root.aw; width: root.bw; background: root.bad ? Theme.red.with-alpha(0.188) : Theme.s3; }
     a := Text { x: 8px; height: parent.height; text: root.ver; color: Theme.tx; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 500; vertical-alignment: center; }
@@ -194,7 +191,7 @@ export component Btn inherits Rectangle {
     property <color> fg: root.solid ? (root.danger ? white : Theme.ink) : (root.danger ? Theme.redtx : Theme.tx);
     property <length> cw: t.preferred-width + (root.icon == "" ? 0px : 22px);
     if root.icon != "": Icon { x: (parent.width - root.cw) / 2; y: (parent.height - 12px) / 2 + (ta.pressed ? 1px : 0px); d: root.icon; tint: root.fg; }
-    t := Text { x: (parent.width - root.cw) / 2 + (root.icon == "" ? 0px : 22px); y: ta.pressed ? 1px : 0px; width: self.preferred-width; height: parent.height; text: root.text; color: root.fg; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 0.7px; vertical-alignment: center; }
+    t := Text { x: (parent.width - root.cw) / 2 + (root.icon == "" ? 0px : 22px); y: ta.pressed ? 1px : 0px; width: self.preferred-width; height: parent.height; text: root.text; color: root.fg; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; }
     ta := TouchArea { mouse-cursor: root.enabled ? pointer : default; clicked => { if root.enabled { root.clicked(); } } }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false; enabled: root.enabled;
         key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
@@ -257,7 +254,7 @@ export component IconBtn inherits Rectangle {
     in property <string> tip;
     if root.tip != "" && (ta.has-hover || fs.has-focus): Rectangle {
         x: -tl.preferred-width - 26px; y: (root.height - 24px) / 2; width: tl.preferred-width + 18px; height: 24px;
-        background: Theme.s3; border-width: 1px; border-color: Theme.ln2;
+        background: Theme.s3; border-radius: 4px; border-width: 1px; border-color: Theme.ln2;
         tl := Text { text: root.tip; color: Theme.tx; font-family: Theme.ui; font-size: 12px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }
     }
 }
@@ -294,14 +291,14 @@ export component Seg inherits Rectangle {
     border-color: Theme.ln;
     Rectangle {
         x: 3px + root.current * root.item-w; y: 3px; width: root.item-w; height: parent.height - 6px;
-        background: Theme.ice;
+        background: Theme.s3; border-radius: 4px;
         animate x { duration: Theme.slow; easing: ease-out-quint; }
     }
     for it[i] in root.items: Rectangle {
         x: 3px + i * root.item-w; width: root.item-w; height: parent.height;
         Text {
-            text: it; color: root.current == i ? Theme.ink : (st.has-hover ? Theme.tx : Theme.dim);
-            font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 0.7px;
+            text: it; color: root.current == i ? Theme.tx : (st.has-hover ? Theme.tx : Theme.dim);
+            font-family: Theme.disp; font-size: 16px; font-weight: 700;
             horizontal-alignment: center; vertical-alignment: center;
             animate color { duration: Theme.mid; }
         }
@@ -323,13 +320,13 @@ export component Toggle inherits Rectangle {
     in-out property <bool> on;
     in property <bool> enabled: true;
     callback toggled(bool);
-    width: 42px; height: 22px;
+    width: 34px; height: 20px; border-radius: 10px;
     background: root.on ? Theme.red : Theme.s3;
     border-width: 1px;
-    border-color: root.on ? Theme.red2 : (ta.has-hover ? #ffffff55 : Theme.ln2);
+    border-color: root.on ? Theme.red : (ta.has-hover ? #ffffff55 : Theme.ln2);
     animate background, border-color { duration: Theme.mid; }
     Rectangle {
-        x: root.on ? 23px : 3px; y: 3px; width: 16px; height: 16px; background: root.on ? white : Theme.dim;
+        x: root.on ? 16px : 2px; y: 2px; width: 14px; height: 14px; border-radius: 7px; background: root.on ? white : Theme.dim;
         animate x { duration: Theme.mid; easing: ease-out-quint; }
         animate background { duration: Theme.mid; }
     }
@@ -368,7 +365,7 @@ export component Dropdown inherits Rectangle {
     pop := PopupWindow {
         x: 0px; y: root.height + 4px; width: root.width; height: Math.min(root.items.length, 8) * 36px + 8px;
         Rectangle {
-            background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s2; border-radius: 6px; border-width: 1px; border-color: Theme.ln2;
             Flickable {
                 y: 4px; height: parent.height - 8px; content-height: root.items.length * 36px;
                 for it[i] in root.items: Rectangle {
@@ -399,15 +396,15 @@ export component Slider inherits Rectangle {
     property <int> n: root.max - root.min;
     property <length> step: (root.width - 10px) / root.n;
     out property <bool> active: ta.has-hover || ta.pressed;
-    Rectangle { x: 5px; y: 9px; width: parent.width - 10px; height: 4px; background: Theme.s3; }
-    Rectangle { x: 5px; y: 9px; width: (root.value - root.min) * root.step; height: 4px; background: root.active ? Theme.red2 : Theme.ice; animate background { duration: Theme.fast; } }
+    Rectangle { x: 5px; y: 9px; width: parent.width - 10px; height: 4px; border-radius: 2px; background: Theme.s3; }
+    Rectangle { x: 5px; y: 9px; width: (root.value - root.min) * root.step; height: 4px; border-radius: 2px; background: root.active ? Theme.red2 : Theme.red; animate background { duration: Theme.fast; } }
     for i in (root.n <= 40 ? root.n + 1 : 0): Rectangle {
         x: 5px + i * root.step; y: 18px; width: 1px; height: mod(i + root.min, root.major) == 0 ? 7px : 4px;
         background: i + root.min <= root.value ? Theme.dim : Theme.ln2;
     }
     Rectangle {
-        x: (root.value - root.min) * root.step; y: 2px; width: 10px; height: 18px;
-        background: ta.pressed ? Theme.red2 : Theme.ice;
+        x: (root.value - root.min) * root.step - 1px; y: 4px; width: 14px; height: 14px; border-radius: 7px;
+        background: ta.pressed ? Theme.red2 : Theme.tx;
         animate background { duration: Theme.fast; }
     }
     ta := TouchArea {
@@ -473,7 +470,7 @@ export component UTabs inherits Rectangle {
         x: i * root.item-w; width: root.item-w; height: parent.height;
         Text {
             x: 0px; width: parent.width - 28px;
-            text: it; font-family: Theme.disp; font-size: 18px; font-weight: 600; letter-spacing: 0.8px;
+            text: it; font-family: Theme.disp; font-size: 16px; font-weight: 700;
             color: root.current == i ? Theme.tx : (t.has-hover ? Theme.dim : Theme.mut);
             vertical-alignment: center;
             animate color { duration: Theme.mid; }
@@ -487,8 +484,8 @@ export component UTabs inherits Rectangle {
             return reject;
         } }
     if fs.has-focus: Rectangle { x: root.current * root.item-w - 6px; y: 2px; width: root.item-w - 16px; height: parent.height - 4px; border-width: 2px; border-color: Theme.ice; }
-    Slash {
-        x: root.current * root.item-w - 2px; y: parent.height - 3px; width: root.item-w - 26px; height: 3px; skew: 3px; color: Theme.red2;
+    Rectangle {
+        x: root.current * root.item-w; y: parent.height - 2px; width: root.item-w - 28px; height: 2px; background: Theme.red2;
         animate x { duration: Theme.slow; easing: ease-out-quint; }
     }
 }
@@ -517,7 +514,7 @@ export component WinButtons inherits Rectangle {
         if i == 1 && !Backend.win-maxed: Rectangle { x: 17px; y: 22px; width: 11px; height: 11px; border-width: 1px; border-color: wb.has-hover ? Theme.tx : Theme.dim; }
         if i == 1 && Backend.win-maxed: Rectangle {
             Rectangle { x: 19px; y: 20px; width: 9px; height: 9px; border-width: 1px; border-color: wb.has-hover ? Theme.tx : Theme.dim; }
-            Rectangle { x: 17px; y: 23px; width: 9px; height: 9px; background: wb.has-hover ? (Theme.s2) : Theme.s1; border-width: 1px; border-color: wb.has-hover ? Theme.tx : Theme.dim; }
+            Rectangle { border-radius: 8px; x: 17px; y: 23px; width: 9px; height: 9px; background: wb.has-hover ? (Theme.s2) : Theme.s1; border-width: 1px; border-color: wb.has-hover ? Theme.tx : Theme.dim; }
         }
         if i == 2: Icon { x: 17px; y: 22px; d: Ico.close; tint: wb.has-hover ? white : Theme.dim; }
         wb := TouchArea { clicked => { if i == 0 { Backend.win-min(); } else if i == 1 { Backend.win-max(); } else { Backend.win-close(); } } }
@@ -583,7 +580,7 @@ export component Page inherits Rectangle {
 // Pulsing square for live states (steady when motion is reduced).
 export component Pulse inherits Rectangle {
     in property <color> tint: Theme.red2;
-    width: 8px; height: 8px;
+    width: 8px; height: 8px; border-radius: 4px;
     background: root.tint;
     opacity: Backend.calm ? 1 : 0.45 + 0.55 * Math.abs(sin(Backend.tick / 1.6s * 180deg));
 }
@@ -605,7 +602,7 @@ export component SetRow inherits Rectangle {
     // text starts here (room for a leading image)
     in property <length> indent: 0px;
     height: 64px;
-    Text { x: root.indent; y: 12px; text: root.title; color: root.dimmed ? Theme.mut : Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; }
+    Text { x: root.indent; y: 12px; text: root.title; color: root.dimmed ? Theme.mut : Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; }
     Text { x: root.indent; y: 35px; width: parent.width - root.reserve - root.indent; text: root.sub; color: root.dimmed ? Theme.mut : Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; overflow: elide; }
     Rectangle { x: 0px; y: parent.height - 1px; height: 1px; background: Theme.ln; }
     @children

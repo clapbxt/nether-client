@@ -14,7 +14,12 @@ pub struct Handlers {
     pub maxed: fn(bool),
     /// Files dropped onto the window.
     pub dropped: fn(Vec<std::path::PathBuf>),
+    /// The window became the active window again (animations that paused while it was in the background resume).
+    pub activated: fn(),
 }
+static ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+/// Whether the main window is the active window (false while the user is in the game or another app).
+pub fn is_active() -> bool { ACTIVE.load(std::sync::atomic::Ordering::Relaxed) }
 static DRAGGING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static HANDLERS: std::sync::OnceLock<Handlers> = std::sync::OnceLock::new();
 
@@ -93,6 +98,12 @@ unsafe extern "system" fn chrome_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPAR
             if DRAGGING.swap(false, std::sync::atomic::Ordering::Relaxed) { PostMessageW(hwnd, WM_LBUTTONUP, 0, lp); }
             PostMessageW(hwnd, WM_MOUSEMOVE, 0, lp);
             DefSubclassProc(hwnd, msg, wp, lp as LPARAM)
+        }
+        WM_ACTIVATE => {
+            let on = (wp & 0xffff) != 0; // WA_INACTIVE = 0
+            ACTIVE.store(on, std::sync::atomic::Ordering::Relaxed);
+            if on { if let Some(h) = HANDLERS.get() { let f = h.activated; let _ = slint::invoke_from_event_loop(move || f()); } }
+            DefSubclassProc(hwnd, msg, wp, lp)
         }
         WM_DROPFILES => {
             let files = dropped_files(wp as HDROP);

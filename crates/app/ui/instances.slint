@@ -19,7 +19,7 @@ component IconPicker inherits Rectangle {
         width: root.tile; height: root.tile;
         property <bool> on: a.key == root.current || (root.current == "" && a.key == "grass_block_side");
         background: self.on ? Theme.red.with-alpha(0.188) : (t.has-hover ? Theme.s3 : Theme.s2);
-        border-width: self.on ? 2px : 0px; border-color: Theme.red2;
+        border-width: self.on ? 2px : 0px; border-color: Theme.red2; border-radius: 8px;
         animate background { duration: Theme.fast; }
         Image { x: 4px; y: 4px; width: parent.width - 8px; height: parent.height - 8px; source: a.img; image-rendering: pixelated; }
         t := TouchArea { mouse-cursor: pointer; clicked => { root.current = a.key; root.picked(a.key); } }
@@ -74,13 +74,13 @@ component DownloadSplit inherits Rectangle {
         x: 178px; width: parent.width - 178px;
         background: !root.ready ? transparent : (dt.pressed ? Theme.press : (dt.has-hover ? Theme.red2 : Theme.s3));
         animate background { duration: Theme.fast; }
-        Text { y: dt.pressed ? 1px : 0px; height: parent.height; text: root.done ? "INSTALLED" : (root.busy ? "\{Math.floor(root.prog * 100)}%" : "DOWNLOAD"); color: (root.ready && dt.has-hover) || root.busy ? white : (root.ready ? Theme.tx : Theme.mut); font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 700; letter-spacing: 0.7px; horizontal-alignment: center; vertical-alignment: center; }
+        Text { y: dt.pressed ? 1px : 0px; height: parent.height; text: root.done ? "INSTALLED" : (root.busy ? "\{Math.floor(root.prog * 100)}%" : "DOWNLOAD"); color: (root.ready && dt.has-hover) || root.busy ? white : (root.ready ? Theme.tx : Theme.mut); font-family: Theme.disp; font-size: 16px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
         dt := TouchArea { mouse-cursor: root.ready ? pointer : default; clicked => { if root.ready { root.download(); } } }
     }
     pop := PopupWindow {
         x: 0px; y: root.height + 4px; width: root.width; height: Math.min(root.labels.length, 8) * 32px + 8px;
         Rectangle {
-            background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
             Flickable {
                 y: 4px; height: parent.height - 8px; content-height: root.labels.length * 32px;
                 for l[i] in root.labels: Rectangle {
@@ -158,8 +158,8 @@ export component InstancesScreen inherits Rectangle {
 
     // ---------- instance list + preview ----------
     if root.sel < 0: Page {
-        hd := Heading { x: 53px; y: 28px; text: "INSTANCES"; font-size: 32px; }
-        Text { x: hd.x + hd.preferred-width + 6px; y: 58px; text: Backend.instances.length < 10 ? "0\{Backend.instances.length}" : "\{Backend.instances.length}"; color: Theme.red2; font-family: Theme.mono; font-size: 13px * Theme.ts; font-weight: 700; }
+        hd := Heading { x: 56px; y: 28px; text: "INSTANCES"; font-size: 32px; }
+        Text { x: hd.x + hd.preferred-width + 6px; y: 58px; text: Backend.instances.length < 10 ? "0\{Backend.instances.length}" : "\{Backend.instances.length}"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; }
         Btn { x: 836px - 160px - 10px - 104px; y: 40px; width: 104px; height: 34px; text: "IMPORT"; icon: Ico.download; clicked => { Backend.import-instance(); } }
         Seg { x: 836px - self.width - 172px - 114px; y: 40px; items: ["ALL", "MODDED", "VANILLA"]; item-w: 76px; current <=> Backend.inst-filter; changed(i) => { Backend.refilter(); } }
         // search (name, version, loader) + sort
@@ -172,8 +172,7 @@ export component InstancesScreen inherits Rectangle {
         // column heads
         Rectangle {
             x: 56px; y: 130px; width: 780px; height: 28px;
-            ColHead { x: 18px; height: parent.height; text: "#"; }
-            ColHead { x: 104px; height: parent.height; text: "INSTANCE"; }
+            ColHead { x: 66px; height: parent.height; text: "INSTANCE"; }
             ColHead { x: 396px; height: parent.height; text: "VERSION"; }
             ColHead { x: 482px; height: parent.height; text: "LOADER"; }
             ColHead { x: 600px; height: parent.height; text: "LAST PLAYED"; }
@@ -191,7 +190,8 @@ export component InstancesScreen inherits Rectangle {
                 property <length> my;
                 property <bool> on: !card.head && root.pick == card.oi;
                 height: card.head ? 46px : 56px;
-                background: card.head ? transparent : (cta.has-hover ? Theme.s2 : (self.on ? Theme.s1 : transparent));
+                border-radius: 6px;
+                background: card.head ? transparent : (cta.has-hover ? Theme.hov : (self.on ? Theme.s2 : transparent));
                 animate background { duration: Theme.fast; }
                 // group header: name, count, fold
                 if card.head: Rectangle {
@@ -203,7 +203,7 @@ export component InstancesScreen inherits Rectangle {
                 }
                 Rectangle {
                     visible: !card.head;
-                Rectangle { x: 0px; width: 3px; background: Theme.red2; opacity: card.on ? 1 : 0; animate opacity { duration: Theme.fast; } }
+                Rectangle { x: 0px; y: 12px; width: 3px; height: parent.height - 24px; border-radius: 2px; background: Theme.red2; opacity: card.on ? 1 : 0; animate opacity { duration: Theme.fast; } }
                 Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; }
                 // left click opens the instance, right click shows actions; hover drives the preview
                 cta := TouchArea {
@@ -216,10 +216,9 @@ export component InstancesScreen inherits Rectangle {
                         }
                     }
                 }
-                Text { x: 18px; width: 26px; text: row.num < 10 ? "0\{row.num}" : "\{row.num}"; color: card.on ? Theme.tx : Theme.mut; font-family: Theme.mono; font-size: 12px * Theme.ts; font-weight: 700; vertical-alignment: center; }
-                Rectangle { x: 54px; y: 10px; width: 36px; height: 36px; background: Theme.s2;
+                Rectangle { x: 18px; y: 10px; width: 36px; height: 36px; background: Theme.s3; border-radius: 6px;
                     Image { x: 4px; y: 4px; width: 28px; height: 28px; source: card.inst.icon-img; image-rendering: pixelated; } }
-                Text { x: 104px; width: 280px; text: card.inst.title; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; letter-spacing: 0.4px; vertical-alignment: center; overflow: elide; }
+                Text { x: 66px; width: 320px; text: card.inst.title; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; vertical-alignment: center; overflow: elide; }
                 Text { x: 396px; width: 80px; text: card.inst.ver; color: Theme.dim; font-family: Theme.mono; font-size: 12px * Theme.ts; vertical-alignment: center; }
                 Text { x: 482px; width: 112px; text: card.inst.loader; color: card.inst.loader == "Vanilla" ? Theme.mut : Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
                 if !card.inst.running && !card.inst.starting && !card.inst.crashed: Text { x: 600px; width: 110px; text: card.inst.last; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
@@ -233,7 +232,7 @@ export component InstancesScreen inherits Rectangle {
                     x: card.mx; y: card.my; width: 212px; height: 8 * 36px + 8px;
                     close-policy: close-on-click-outside;
                     Rectangle {
-                        background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
+                        background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
                         // order on screen; a = the action number for root.act
                         for it[j] in [{t: "Play", d: Ico.play, a: 0}, {t: "Edit instance", d: Ico.edit, a: 1}, {t: "Rename", d: Ico.edit, a: 6}, {t: "Move to group", d: Ico.folder, a: 7}, {t: "Open folder", d: Ico.folder, a: 2}, {t: "Duplicate", d: Ico.copy, a: 3}, {t: "Export as .mrpack", d: Ico.export, a: 4}, {t: "Delete", d: Ico.trash, a: 5}]: Rectangle {
                             y: 4px + j * 36px; height: 36px; width: parent.width;
@@ -266,7 +265,7 @@ export component InstancesScreen inherits Rectangle {
             Rectangle { x: 0px; width: 1px; background: Theme.ln; }
             Cover { x: 1px; y: 0px; width: parent.width - 1px; height: 340px; inst: root.pk; dim: 0.9; }
             Rectangle { x: 1px; y: 0px; width: parent.width - 1px; height: 340px; background: @linear-gradient(180deg, #0D0D1100 35%, Theme.s1 100%); }
-            Rectangle { x: 32px; y: 236px; width: 44px; height: 44px; background: #060608d0;
+            Rectangle { x: 32px; y: 236px; width: 44px; height: 44px; background: #060608d0; border-radius: 8px;
                 Image { x: 5px; y: 5px; width: 34px; height: 34px; source: root.pk.icon-img; image-rendering: pixelated; } }
             Heading { x: 30px; y: 284px; width: parent.width - 60px; text: root.pk.title; font-size: root.pk.title.character-count > 18 ? 40px : 54px; overflow: elide; }
             Rectangle {
@@ -277,9 +276,9 @@ export component InstancesScreen inherits Rectangle {
                 Stat { x: 344px; width: 90px; k: "PLAYED"; v: "\{root.pk.hours} h"; }
                 Stat { x: 434px; width: 74px; k: "MODS"; v: "\{root.pk.mods}"; }
             }
-            PlayButton { x: 32px; y: 452px; width: 280px; height: 66px; skew: 16px; text-size: 36px;
+            PlayButton { x: 32px; y: 452px; width: 280px; height: 64px; text-size: 32px;
                 label: root.pk.stopping ? "STOPPING" : (root.pk.running ? "STOP" : (root.pk.starting ? "STARTING" : "PLAY")); arrow: !root.pk.running && !root.pk.starting; enabled: !root.pk.starting && !root.pk.stopping; clicked => { if root.pk.running { Backend.stop(root.pk.name); } else { Backend.play(root.pk.name); } } }
-            Btn { x: 336px; y: 452px; width: 204px; height: 66px; text: "EDIT INSTANCE"; solid: true; icon: Ico.edit; clicked => { root.open(root.pick); } }
+            Btn { x: 328px; y: 452px; width: 212px; height: 64px; text: "EDIT INSTANCE"; icon: Ico.edit; clicked => { root.open(root.pick); } }
             SectionHead { x: 32px; y: 566px; width: parent.width - 64px; title: "MANAGE"; }
             Btn { x: 32px; y: 600px; text: "FOLDER"; icon: Ico.folder; clicked => { root.act(root.pick, 2); } }
             Btn { x: 146px; y: 600px; text: "DUPLICATE"; icon: Ico.copy; clicked => { root.act(root.pick, 3); } }
@@ -304,7 +303,7 @@ export component InstancesScreen inherits Rectangle {
         Eyebrow { x: 144px; y: 54px; text: Backend.instances[root.sel].ver + "  ·  " + Backend.instances[root.sel].kind; color: Theme.dim; font-size: 15px * Theme.ts; }
         ht := Heading { x: 141px; y: 68px; width: Math.min(self.preferred-width, 880px); text: Backend.instances[root.sel].title; font-size: 64px; overflow: elide; }
         IconBtn { x: ht.x + ht.width + 14px; y: 92px; size: 30px; d: Ico.edit; tip: "Rename"; clicked => { root.act(root.sel, 6); } }
-        PlayButton { x: 1384px - 250px; y: 62px; width: 250px; height: 64px; skew: 16px; text-size: 34px;
+        PlayButton { x: 1384px - 250px; y: 62px; width: 250px; height: 64px; text-size: 32px;
             label: Backend.instances[root.sel].stopping ? "STOPPING" : (Backend.instances[root.sel].running ? "STOP" : (Backend.instances[root.sel].starting ? "STARTING" : "PLAY"));
             arrow: !Backend.instances[root.sel].running && !Backend.instances[root.sel].starting;
             enabled: !Backend.instances[root.sel].starting && !Backend.instances[root.sel].stopping;
@@ -319,10 +318,10 @@ export component InstancesScreen inherits Rectangle {
                 // spec strip
                 Rectangle {
                     x: 56px; y: 24px; width: 880px; height: 48px;
-                    Stat { x: 0px; width: 220px; rule: false; size: 26px; k: "PLAYTIME"; v: "\{Backend.instances[root.sel].hours} h"; }
-                    Stat { x: 220px; width: 220px; size: 26px; k: "LAST PLAYED"; v: Backend.instances[root.sel].last; }
-                    Stat { x: 440px; width: 220px; size: 26px; k: "MODS"; v: "\{Backend.instances[root.sel].mods}"; }
-                    Stat { x: 660px; width: 220px; size: 26px; k: "MEMORY"; v: "\{Backend.instances[root.sel].ram} GB"; }
+                    Stat { x: 0px; width: 220px; rule: false; size: 24px; k: "PLAYTIME"; v: "\{Backend.instances[root.sel].hours} h"; }
+                    Stat { x: 220px; width: 220px; size: 24px; k: "LAST PLAYED"; v: Backend.instances[root.sel].last; }
+                    Stat { x: 440px; width: 220px; size: 24px; k: "MODS"; v: "\{Backend.instances[root.sel].mods}"; }
+                    Stat { x: 660px; width: 220px; size: 24px; k: "MEMORY"; v: "\{Backend.instances[root.sel].ram} GB"; }
                 }
 
                 SectionHead { x: 56px; y: 108px; width: 880px; idx: "01"; title: "PERFORMANCE"; }
@@ -416,7 +415,7 @@ export component InstancesScreen inherits Rectangle {
                     Btn { x: parent.width - self.width; y: 14px; text: Backend.instances[root.sel].group == "" ? "ADD TO GROUP" : "CHANGE GROUP"; icon: Ico.folder; clicked => { root.act(root.sel, 7); } } }
                 Rectangle {
                     x: 56px; y: ocp.y + ocp.height + 148px; width: 880px; height: 140px;
-                    background: Theme.s1; border-width: 1px; border-color: notes.has-focus ? Theme.red2 : (nta.has-hover ? #ffffff55 : Theme.ln2);
+                    background: Theme.s1; border-width: 1px; border-color: notes.has-focus ? Theme.red2 : (nta.has-hover ? #ffffff55 : Theme.ln2); border-radius: 8px;
                     animate border-color { duration: Theme.mid; }
                     property <int> s: root.sel;
                     changed s => { notes.text = Backend.instances[root.sel].notes; }
@@ -620,7 +619,7 @@ export component InstancesScreen inherits Rectangle {
             Field { x: 488px; y: 196px; width: 240px; height: 34px; text-size: 13px; search: true; placeholder: "Filter lines"; text <=> Backend.log-filter; edited => { Backend.load-log(Backend.log-kind); } }
             Rectangle {
                 x: 740px; y: 196px; width: 150px; height: 34px;
-                background: Backend.log-issues ? Theme.red.with-alpha(0.188) : (ita.has-hover ? Theme.s2 : Theme.s1); border-width: 1px; border-color: Backend.log-issues ? Theme.red2 : Theme.ln2;
+                background: Backend.log-issues ? Theme.red.with-alpha(0.188) : (ita.has-hover ? Theme.s2 : Theme.s1); border-width: 1px; border-color: Backend.log-issues ? Theme.red2 : Theme.ln2; border-radius: 8px;
                 Text { text: "ISSUES ONLY"; color: Backend.log-issues ? Theme.redtx : Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.8px; horizontal-alignment: center; vertical-alignment: center; }
                 ita := TouchArea { mouse-cursor: pointer; clicked => { Backend.log-issues = !Backend.log-issues; Backend.load-log(Backend.log-kind); } }
             }
@@ -673,9 +672,8 @@ export component InstancesScreen inherits Rectangle {
         dismiss => { root.renaming = false; }
         Rectangle {
             x: (parent.width - 500px) / 2; y: 230px; width: 500px; height: 220px;
-            background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
             TouchArea { }
-            Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.ice; }
             Eyebrow { x: 28px; y: 28px; text: "RENAME INSTANCE"; }
             Text { x: 28px; y: 50px; width: parent.width - 56px; text: "Its folder moves with it: worlds, mods and settings stay."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; }
             rf := Field { x: 28px; y: 84px; width: parent.width - 56px; height: 44px; text-size: 16px; text <=> root.ren-name; placeholder: "Instance name";
@@ -693,9 +691,8 @@ export component InstancesScreen inherits Rectangle {
         gd := Rectangle {
             property <int> ng: Backend.groups.length;
             x: (parent.width - 520px) / 2; y: 210px; width: 520px; height: 230px + (self.ng > 0 ? 62px : 0px);
-            background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
             TouchArea { }
-            Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.ice; }
             Eyebrow { x: 28px; y: 28px; text: "MOVE TO GROUP"; }
             Text { x: 28px; y: 50px; width: parent.width - 56px; text: Backend.instances[Math.max(0, root.grp-idx)].name + " is listed under this group on the Instances page."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; overflow: elide; }
             Field { x: 28px; y: 84px; width: parent.width - 56px; height: 44px; text-size: 16px; text <=> root.grp-name; placeholder: "Group name, e.g. PvP or Modpacks";
@@ -707,7 +704,7 @@ export component InstancesScreen inherits Rectangle {
                 for g in Backend.groups: Rectangle {
                     width: gt.preferred-width + 24px;
                     background: gta.has-hover || root.grp-name == g ? Theme.s3 : Theme.s2;
-                    border-width: 1px; border-color: root.grp-name == g ? Theme.red2 : Theme.ln;
+                    border-width: 1px; border-color: root.grp-name == g ? Theme.red2 : Theme.ln; border-radius: 8px;
                     gt := Text { text: g; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }
                     gta := TouchArea { mouse-cursor: pointer; clicked => { root.grp-name = g; } }
                 }
@@ -724,9 +721,8 @@ export component InstancesScreen inherits Rectangle {
         dismiss => { root.confirm-del = false; }
         Rectangle {
             x: (parent.width - 500px) / 2; y: 230px; width: 500px; height: 232px;
-            background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
             TouchArea { }
-            Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.red; }
             Eyebrow { x: 28px; y: 28px; text: "DELETE INSTANCE"; color: Theme.redtx; }
             Text { x: 28px; y: 48px; width: parent.width - 56px; text: Backend.instances[root.del-idx].title; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800;  overflow: elide; }
             Text { x: 28px; y: 98px; width: parent.width - 56px; text: "Its worlds, mods and settings go to the Recycle Bin. Restore them from there if you change your mind."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
@@ -761,7 +757,7 @@ export component InstancesScreen inherits Rectangle {
                 if dlg.step == 4 { Wizard.load-rps(dlg.ver); }
             }
             x: (parent.width - 1040px) / 2; y: 30px; width: 1040px; height: 728px;
-            background: Theme.s1; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s1; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
             init => { Backend.cover-for(dlg.ver); Wizard.pick-pack(""); Wizard.load-rps(""); Wizard.mode = 0; }
             TouchArea { }
             Slash { x: 32px; y: 34px; width: 30px; height: 7px; skew: 5px; color: Theme.red2; }
@@ -794,9 +790,8 @@ export component InstancesScreen inherits Rectangle {
                     x: mod(i, 2) * (parent.width / 2 + 6px); y: floor(i / 2) * 150px;
                     width: parent.width / 2 - 6px; height: 138px;
                     background: dlg.loader == i ? Theme.red.with-alpha(0.094) : (lt.has-hover ? Theme.s2 : Theme.s1);
-                    border-width: 1px; border-color: dlg.loader == i ? Theme.red2 : Theme.ln;
+                    border-width: 1px; border-color: dlg.loader == i ? Theme.red2 : Theme.ln; border-radius: 8px;
                     animate background, border-color { duration: Theme.fast; }
-                    Hatch { width: parent.width; height: parent.height; opacity: dlg.loader == i ? 0.6 : 0.25; }
                     Text { x: 24px; y: 22px; text: l.t; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800;  }
                     if i == 1: Chip { x: parent.width - self.width - 20px; y: 24px; text: "RECOMMENDED"; hot: true; }
                     Text { x: 24px; y: 72px; width: parent.width - 48px; text: l.d; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
@@ -814,7 +809,7 @@ export component InstancesScreen inherits Rectangle {
                     for v[i] in dlg.vers: Rectangle {
                         x: mod(i, 6) * (parent.width / 6); y: floor(i / 6) * 52px; width: parent.width / 6 - 8px; height: 44px;
                         background: dlg.vi == i ? Theme.ice : (vt.has-hover ? Theme.s2 : Theme.s1);
-                        border-width: 1px; border-color: dlg.vi == i ? Theme.ice : Theme.ln;
+                        border-width: 1px; border-color: dlg.vi == i ? Theme.ice : Theme.ln; border-radius: 8px;
                         Text { text: v; color: dlg.vi == i ? Theme.ink : Theme.tx; font-family: Theme.mono; font-size: 14px * Theme.ts; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
                         if i == 0: Rectangle { x: parent.width - 8px; y: 0px; width: 8px; height: 8px; background: Theme.red2; }
                         vt := TouchArea { mouse-cursor: pointer; clicked => { dlg.vi = i; } double-clicked => { dlg.vi = i; dlg.go(2); } }
@@ -831,7 +826,7 @@ export component InstancesScreen inherits Rectangle {
                     Rectangle {
                         y: 0px; height: 66px;
                         background: Wizard.pack == "" ? Theme.red.with-alpha(0.094) : (n0.has-hover ? Theme.s2 : Theme.s1);
-                        border-width: 1px; border-color: Wizard.pack == "" ? Theme.red2 : Theme.ln;
+                        border-width: 1px; border-color: Wizard.pack == "" ? Theme.red2 : Theme.ln; border-radius: 8px;
                         Text { x: 22px; y: 12px; text: "No pack"; color: Theme.tx; font-family: Theme.ui; font-size: 16px * Theme.ts; font-weight: 600; }
                         Text { x: 22px; y: 36px; text: "Start empty and add mods yourself."; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
                         n0 := TouchArea { mouse-cursor: pointer; clicked => { Wizard.pick-pack(""); } }
@@ -839,8 +834,8 @@ export component InstancesScreen inherits Rectangle {
                     for p[i] in Wizard.packs: Rectangle {
                         y: (i + 1) * 74px; height: 66px;
                         background: Wizard.pack == p.id ? Theme.red.with-alpha(0.094) : (pt.has-hover ? Theme.s2 : Theme.s1);
-                        border-width: 1px; border-color: Wizard.pack == p.id ? Theme.red2 : Theme.ln;
-                        Rectangle { x: 14px; y: 13px; width: 40px; height: 40px; background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
+                        border-width: 1px; border-color: Wizard.pack == p.id ? Theme.red2 : Theme.ln; border-radius: 8px;
+                        Rectangle { border-radius: 8px; x: 14px; y: 13px; width: 40px; height: 40px; background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
                             Image { x: 6px; y: 6px; width: 28px; height: 28px; source: @image-url("assets/nether-icon.png"); image-fit: contain; } }
                         Text { x: 70px; y: 12px; width: parent.width - 300px; text: p.name; color: Theme.tx; font-family: Theme.ui; font-size: 16px * Theme.ts; font-weight: 600; overflow: elide; }
                         Text { x: 70px; y: 36px; width: parent.width - 300px; text: p.sub; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
@@ -862,7 +857,7 @@ export component InstancesScreen inherits Rectangle {
                     visible: i < 2 || Wizard.pack-has-client;
                     x: i * (parent.width / 3 + 4px); y: 76px; width: parent.width / 3 - 8px; height: 118px;
                     background: Wizard.mode == i ? Theme.red.with-alpha(0.094) : (ot.has-hover ? Theme.s2 : Theme.s1);
-                    border-width: 1px; border-color: Wizard.mode == i ? Theme.red2 : Theme.ln;
+                    border-width: 1px; border-color: Wizard.mode == i ? Theme.red2 : Theme.ln; border-radius: 8px;
                     Text { x: 18px; y: 16px; text: o.t; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 800;  }
                     Text { x: 18px; y: 50px; width: parent.width - 36px; text: o.d; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
                     ot := TouchArea { mouse-cursor: pointer; clicked => { Wizard.mode = i; } }
@@ -879,7 +874,7 @@ export component InstancesScreen inherits Rectangle {
                     for r[i] in Wizard.rps: Rectangle {
                         x: mod(i, 2) * (parent.width / 2 + 4px); y: floor(i / 2) * 66px; width: parent.width / 2 - 4px; height: 58px;
                         background: r.on ? Theme.red.with-alpha(0.094) : (rt.has-hover ? Theme.s2 : Theme.s1);
-                        border-width: 1px; border-color: r.on ? Theme.red2 : Theme.ln;
+                        border-width: 1px; border-color: r.on ? Theme.red2 : Theme.ln; border-radius: 8px;
                         ModIcon { x: 10px; y: 10px; src: r.icon; has: r.has-icon; }
                         Text { x: 60px; y: 9px; width: parent.width - 130px; text: r.name; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; overflow: elide; }
                         Text { x: 60px; y: 31px; width: parent.width - 130px; text: r.sub; color: Theme.mut; font-family: Theme.ui; font-size: 11px * Theme.ts; overflow: elide; }

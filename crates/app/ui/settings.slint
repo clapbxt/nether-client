@@ -43,7 +43,7 @@ component Uploads inherits Rectangle {
     Rectangle {
         x: mod(root.items.length, root.cols) * (root.tile + 8px); y: floor(root.items.length / root.cols) * (root.tile + 8px);
         width: root.tile; height: root.tile;
-        background: at.has-hover ? Theme.s2 : transparent; border-width: 1px; border-color: at.has-hover ? Theme.red2 : Theme.ln2;
+        background: at.has-hover ? Theme.s2 : transparent; border-width: 1px; border-color: at.has-hover ? Theme.red2 : Theme.ln2; border-radius: 8px;
         animate background, border-color { duration: Theme.mid; }
         Icon { x: (parent.width - 12px) / 2; y: (parent.height - 12px) / 2; d: Ico.plus; tint: at.has-hover ? Theme.tx : Theme.dim; }
         at := TouchArea { mouse-cursor: pointer; clicked => { root.add(); } }
@@ -59,16 +59,16 @@ component Jump inherits Rectangle {
     in property <string> label;
     in property <bool> active;
     callback clicked();
-    height: 40px;
-    background: ta.has-hover ? Theme.s2 : transparent;
+    height: 38px;
+    border-radius: 6px;
+    background: root.active ? Theme.red.with-alpha(0.16) : (ta.has-hover ? Theme.hov : transparent);
     animate background { duration: Theme.fast; }
-    Rectangle { x: 0px; width: 3px; background: Theme.red2; opacity: root.active ? 1 : 0; animate opacity { duration: Theme.mid; } }
-    Text { x: 16px; text: root.idx; color: root.active ? Theme.red2 : Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; vertical-alignment: center; }
-    Text { x: 44px; text: root.label; color: root.active ? Theme.tx : Theme.dim; font-family: Theme.ui; font-size: 17px; font-weight: 600; letter-spacing: 0.8px; vertical-alignment: center; }
+    Rectangle { x: 0px; y: 8px; width: 3px; height: parent.height - 16px; border-radius: 2px; background: Theme.red2; opacity: root.active ? 1 : 0; animate opacity { duration: Theme.mid; } }
+    Text { x: 16px; text: root.label; color: root.active ? Theme.tx : Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; }
     ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
         key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
-    if fs.has-focus: Rectangle { border-width: 2px; border-color: Theme.ice; }
+    if fs.has-focus: Rectangle { border-radius: 6px; border-width: 2px; border-color: Theme.ice; }
 }
 
 // A saved Microsoft account: head, name, what it is used for; switch / remove on the right.
@@ -122,7 +122,7 @@ export component SettingsScreen inherits Rectangle {
         {k: "In game", url: "lrclib.net for Lyrics (off by default), sessionserver.mojang.com for your head on the title screen · media helper: local only"},
     ];
 
-    Heading { x: 53px; y: 22px; text: "SETTINGS"; }
+    Heading { x: 56px; y: 28px; text: "SETTINGS"; font-size: 32px; }
 
     // section index
     // L2: the command palette opens a section (Backend.settings-goto)
@@ -132,7 +132,7 @@ export component SettingsScreen inherits Rectangle {
     changed goto => { root.jump(); }
 
     for s[i] in ["GAME", "ACCOUNTS", "JAVA", "LAUNCHER", "PERSONALIZATION", "STORAGE & ABOUT", "PRIVACY"]: Jump {
-        x: 56px; y: 124px + i * 40px; width: 210px; idx: "0\{i + 1}"; label: s; active: root.at == i;
+        x: 48px; y: 100px + i * 40px; width: 220px; idx: "0\{i + 1}"; label: s; active: root.at == i;
         clicked => { fl.content-y = -Math.max(0px, Math.min(root.tops[i], fl.content-height - fl.height)); }
     }
 
@@ -188,7 +188,7 @@ export component SettingsScreen inherits Rectangle {
         SetRow { x: 0px; y: root.y5 + 24px; width: root.cw; reserve: 230px; title: "Accent colour"; sub: root.accent-names[Backend.lp-accent] + " · PLAY, selection marks and live states";
             for c[i] in root.accents: Rectangle {
                 x: parent.width - 5 * 36px + 6px + i * 36px; y: 18px; width: 28px; height: 28px; background: c;
-                border-width: Backend.lp-accent == i ? 2px : 0px; border-color: Theme.ice;
+                border-width: Backend.lp-accent == i ? 2px : 0px; border-color: Theme.ice; border-radius: 8px;
                 Rectangle { x: 6px; y: 6px; width: 16px; height: 16px; background: transparent; border-width: Backend.lp-accent == i ? 2px : 0px; border-color: Theme.bg; }
                 sw := TouchArea { mouse-cursor: pointer; clicked => { Backend.lp-accent = i; Backend.save-launcher(); } }
                 sf := FocusScope { width: 0px; height: 0px; focus-on-click: false;

@@ -41,7 +41,7 @@ component AddrRow inherits Rectangle {
 // Status square for a server: red online, ice while starting/stopping, grey off.
 component Dot inherits Rectangle {
     in property <int> status;
-    width: 10px; height: 10px;
+    width: 10px; height: 10px; border-radius: 5px;
     background: root.status == 2 ? Theme.red : (root.status == 1 || root.status == 3) ? Theme.ice : root.status == 4 ? Theme.red2 : Theme.mut;
 }
 
@@ -54,9 +54,8 @@ component Choice inherits Rectangle {
     callback clicked();
     callback double-clicked();
     background: root.on ? Theme.red.with-alpha(0.094) : (ct.has-hover ? Theme.s2 : Theme.s1);
-    border-width: 1px; border-color: root.on ? Theme.red2 : Theme.ln;
+    border-width: 1px; border-color: root.on ? Theme.red2 : Theme.ln; border-radius: 8px;
     animate background, border-color { duration: Theme.fast; }
-    Hatch { width: parent.width; height: parent.height; opacity: root.on ? 0.6 : 0.25; }
     Text { x: 24px; y: 22px; width: parent.width - 48px; text: root.title; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800;  overflow: elide; }
     if root.chip != "": Chip { x: parent.width - self.width - 20px; y: 24px; text: root.chip; hot: true; }
     Text { x: 24px; y: 70px; width: parent.width - 48px; text: root.text; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
@@ -77,24 +76,23 @@ export component HostScreen inherits Rectangle {
     changed tab => { if root.tab == 2 && HostState.hits.length == 0 && HostState.kind != "vanilla" { HostState.addon-search(""); } }
     init => { HostState.opened(); }
 
-    Heading { x: 53px; y: 22px; text: "HOST"; }
+    Heading { x: 56px; y: 28px; text: "HOST"; font-size: 32px; }
     Text { x: 56px; y: 92px; text: "Run servers on this PC and invite friends anywhere with an address or link. Several can run at once."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; }
 
     // ---------- no servers: the walkthrough at a glance ----------
     if !root.has-srv: Rectangle {
-        x: 56px; y: 132px; width: 1328px; height: 420px; background: Theme.s1; clip: true;
+        x: 56px; y: 132px; width: 1328px; height: 420px; background: Theme.s1; border-radius: 8px; border-width: 1px; border-color: Theme.ln; clip: true;
         Hatch { width: parent.width; height: parent.height; }
         Ticks { width: parent.width; height: parent.height; }
-        Heading { x: 40px; y: 52px; text: "NO SERVERS YET"; font-size: 64px; color: Theme.dim; }
+        Heading { x: 40px; y: 52px; text: "NO SERVERS YET"; font-size: 48px; color: Theme.tx; }
         Text { x: 44px; y: 150px; text: "A server lives on its own, apart from your instances. Setting one up takes about a minute."; color: Theme.dim; font-family: Theme.ui; font-size: 15px * Theme.ts; }
         for s[i] in [{t: "TYPE", d: "Vanilla, Fabric for mods, or Paper for plugins"},
                      {t: "VERSION", d: "Any Minecraft release the type supports"},
                      {t: "WORLD", d: "A fresh world, or a copy of one from an instance"},
                      {t: "PLAYERS", d: "Whitelist, account checks and the router port"}]: Rectangle {
             x: 44px + i * 310px; y: 200px; width: 290px; height: 100px;
-            Rectangle { y: 0px; height: 2px; background: i == 0 ? Theme.red2 : Theme.ln2; }
-            Text { x: 0px; y: 22px; text: "0\{i + 1}"; color: i == 0 ? Theme.red2 : Theme.mut; font-family: Theme.mono; font-size: 12px * Theme.ts; font-weight: 700; }
-            Text { x: 32px; y: 16px; text: s.t; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 800;  }
+            Rectangle { y: 0px; height: 1px; background: Theme.ln2; }
+            Text { x: 0px; y: 14px; text: s.t; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; }
             Text { x: 0px; y: 54px; width: parent.width - 16px; text: s.d; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
         }
         Btn { x: 44px; y: 336px; height: 44px; text: "SET UP A SERVER"; solid: true; icon: Ico.plus; clicked => { HostState.new-server(); } }
@@ -105,7 +103,7 @@ export component HostScreen inherits Rectangle {
         pick := Rectangle {
             x: 196px; y: 34px; width: 330px; height: 48px;
             background: pt.has-hover ? Theme.s2 : Theme.s1;
-            border-width: 1px; border-color: pt.has-hover ? #ffffff66 : Theme.ln2;
+            border-width: 1px; border-color: pt.has-hover ? #ffffff66 : Theme.ln2; border-radius: 8px;
             animate background, border-color { duration: Theme.fast; }
             property <bool> ok: HostState.idx >= 0 && HostState.idx < HostState.servers.length;
             Dot { x: 18px; y: 19px; status: pick.ok ? HostState.servers[HostState.idx].status : 0; }
@@ -116,7 +114,7 @@ export component HostScreen inherits Rectangle {
             pop := PopupWindow {
                 x: 0px; y: parent.height + 4px; width: 420px; height: Math.min(HostState.servers.length, 8) * 48px + 34px + 52px;
                 Rectangle {
-                    background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
+                    background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
                     Eyebrow { x: 16px; y: 10px; text: "SERVERS"; }
                     Flickable {
                         y: 34px; height: parent.height - 34px - 52px; content-height: HostState.servers.length * 48px;
@@ -128,7 +126,7 @@ export component HostScreen inherits Rectangle {
                             Text { x: 44px; y: 7px; width: 220px; text: it.name; color: HostState.idx == i || t2.has-hover ? Theme.tx : Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; overflow: elide; }
                             Text { x: 44px; y: 27px; width: 220px; text: it.meta; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; overflow: elide; }
                             Text { x: parent.width - 136px; width: 120px; text: it.status == 2 ? "ONLINE · \{it.players}" : it.status == 1 ? "STARTING" : it.status == 3 ? "STOPPING" : it.status == 4 ? "CRASHED" : "OFFLINE";
-                                color: it.status == 2 ? Theme.tx : Theme.mut; font-family: Theme.disp; font-size: 12px * Theme.ts; font-weight: 700; letter-spacing: 0.7px; horizontal-alignment: right; vertical-alignment: center; }
+                                color: it.status == 2 ? Theme.tx : Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 700; horizontal-alignment: right; vertical-alignment: center; }
                             t2 := TouchArea { mouse-cursor: pointer; clicked => { HostState.select(i); pop.close(); } }
                         }
                     }
@@ -194,7 +192,7 @@ export component HostScreen inherits Rectangle {
             Text { x: 28px; y: 24px; text: "INVITE FRIENDS"; color: #4b505a; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; }
             if tk.has: Rectangle {
                 x: parent.width - 28px - cc.preferred-width; y: 20px; width: cc.preferred-width; height: 24px;
-                cc := Text { text: "COPY ADDRESS"; color: ccta.has-hover ? Theme.red : #4b505a; font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 700; letter-spacing: 0.7px; vertical-alignment: center; animate color { duration: Theme.fast; } }
+                cc := Text { text: "COPY ADDRESS"; color: ccta.has-hover ? Theme.red : #4b505a; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; animate color { duration: Theme.fast; } }
                 ccta := TouchArea { mouse-cursor: pointer; clicked => { Backend.copy-text(HostState.addr); Backend.toast("Address copied"); } }
             }
             if tk.has: Text { x: 28px; y: 50px; width: parent.width - 56px; height: 60px; text: HostState.addr; color: Theme.ink; font-family: Theme.mono; font-size: HostState.addr.character-count > 17 ? 22px : 34px; font-weight: 700; vertical-alignment: center; overflow: elide; }
@@ -301,7 +299,7 @@ export component HostScreen inherits Rectangle {
                 text: root.live ? "The server is starting up." : (HostState.phase == 2 ? "Set the server up, then start it to see its log here." : "Start the server to see its log and send commands."); }
             if !con.follow: Rectangle {
                 x: parent.width - self.width - 14px; y: parent.height - 42px - self.height - 12px; width: jl.preferred-width + 40px; height: 28px;
-                background: jt.has-hover ? Theme.ice : Theme.s3; border-width: 1px; border-color: Theme.ln2;
+                background: jt.has-hover ? Theme.ice : Theme.s3; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
                 animate background { duration: Theme.fast; }
                 Icon { x: 12px; y: 8px; d: Ico.down; tint: jt.has-hover ? Theme.ink : Theme.tx; }
                 jl := Text { x: 30px; height: parent.height; text: "LATEST"; color: jt.has-hover ? Theme.ink : Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.7px; vertical-alignment: center; }
@@ -484,9 +482,8 @@ export component HostScreen inherits Rectangle {
         dismiss => { HostState.eula-open = false; }
         Rectangle {
             x: (parent.width - 560px) / 2; y: 200px; width: 560px; height: 290px;
-            background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
             TouchArea { }
-            Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.ice; }
             Eyebrow { x: 28px; y: 28px; text: "BEFORE THE FIRST START"; }
             Text { x: 28px; y: 48px; text: "MINECRAFT EULA"; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800;  }
             Text { x: 28px; y: 98px; width: parent.width - 56px; text: "Running a Minecraft server means agreeing to Mojang's End User License Agreement. Please read it. The server only starts after you agree."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
@@ -502,9 +499,8 @@ export component HostScreen inherits Rectangle {
         dismiss => { root.confirm-del = false; }
         Rectangle {
             x: (parent.width - 500px) / 2; y: 230px; width: 500px; height: 232px;
-            background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
             TouchArea { }
-            Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.red; }
             Eyebrow { x: 28px; y: 28px; text: "DELETE SERVER"; color: Theme.redtx; }
             Text { x: 28px; y: 48px; width: parent.width - 56px; text: HostState.inst-name; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800;  overflow: elide; }
             Text { x: 28px; y: 98px; width: parent.width - 56px; text: "Its world, backups, plugins and settings are removed from this PC. This can't be undone."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
@@ -536,7 +532,7 @@ export component HostScreen inherits Rectangle {
             property <string> kind-name: wz.kind == 0 ? "Vanilla" : wz.kind == 1 ? "Fabric" : "Paper";
             property <bool> can-create: wz.agree && HostState.wiz-name != "" && wz.ver != "";
             x: (parent.width - 1040px) / 2; y: 30px; width: 1040px; height: 728px;
-            background: Theme.s1; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s1; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
             TouchArea { }
             Slash { x: 32px; y: 34px; width: 30px; height: 7px; skew: 5px; color: Theme.red2; }
             Heading { x: 30px; y: 44px; text: "NEW SERVER"; font-size: 48px; }
@@ -579,7 +575,7 @@ export component HostScreen inherits Rectangle {
                     for v[i] in wz.vers: Rectangle {
                         x: mod(i, 6) * (parent.width / 6); y: floor(i / 6) * 52px; width: parent.width / 6 - 8px; height: 44px;
                         background: wz.vi == i ? Theme.ice : (vt.has-hover ? Theme.s2 : Theme.s1);
-                        border-width: 1px; border-color: wz.vi == i ? Theme.ice : Theme.ln;
+                        border-width: 1px; border-color: wz.vi == i ? Theme.ice : Theme.ln; border-radius: 8px;
                         Text { text: v; color: wz.vi == i ? Theme.ink : Theme.tx; font-family: Theme.mono; font-size: 14px * Theme.ts; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
                         if i == 0: Rectangle { x: parent.width - 8px; y: 0px; width: 8px; height: 8px; background: Theme.red2; }
                         vt := TouchArea { mouse-cursor: pointer; clicked => { wz.vi = i; } double-clicked => { wz.vi = i; wz.step = 2; } }
@@ -599,7 +595,7 @@ export component HostScreen inherits Rectangle {
                     for s[i] in HostState.saves: Rectangle {
                         x: mod(i, 3) * (parent.width / 3); y: floor(i / 3) * 66px; width: parent.width / 3 - 8px; height: 58px;
                         background: wz.world == i ? Theme.red.with-alpha(0.094) : (st2.has-hover ? Theme.s2 : Theme.s1);
-                        border-width: 1px; border-color: wz.world == i ? Theme.red2 : Theme.ln;
+                        border-width: 1px; border-color: wz.world == i ? Theme.red2 : Theme.ln; border-radius: 8px;
                         Text { x: 16px; y: 10px; width: parent.width - 32px; text: s.name; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; overflow: elide; }
                         Text { x: 16px; y: 31px; width: parent.width - 32px; text: s.sub; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; overflow: elide; }
                         st2 := TouchArea { mouse-cursor: pointer; clicked => { wz.world = i; } double-clicked => { wz.world = i; wz.step = 3; } }
@@ -650,7 +646,7 @@ export component HostScreen inherits Rectangle {
                 // the user's own agreement to the EULA (required to create)
                 Rectangle {
                     x: 0px; y: 250px; width: parent.width; height: 120px; background: Theme.s1;
-                    border-width: 1px; border-color: wz.agree ? Theme.ln2 : Theme.ln;
+                    border-width: 1px; border-color: wz.agree ? Theme.ln2 : Theme.ln; border-radius: 8px;
                     Rectangle { x: 0px; y: 0px; width: 3px; height: 100%; background: Theme.ice; }
                     Eyebrow { x: 24px; y: 18px; text: "MINECRAFT EULA"; }
                     Text { x: 24px; y: 40px; width: parent.width - 140px; text: "Running a Minecraft server means agreeing to Mojang's End User License Agreement. Please read it first."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }

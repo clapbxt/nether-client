@@ -334,6 +334,8 @@ thread_local! {
     /// Frame timer for the preview: runs only while something changes (a new skin, a drag) or the model spins, so an idle launcher draws nothing (Design: idle = zero redraws).
     static TIMER: slint::Timer = slint::Timer::default();
     static UI: RefCell<Option<slint::Weak<AppWindow>>> = const { RefCell::new(None) };
+    static DEPTH: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
+    static DIMS: std::cell::Cell<(u32, u32)> = const { std::cell::Cell::new((0, 0)) };
     static LAST: RefCell<std::time::Instant> = RefCell::new(std::time::Instant::now());
 }
 
@@ -344,7 +346,7 @@ pub fn wake() {
     TIMER.with(|t| {
         if t.running() { return; }
         LAST.with(|l| *l.borrow_mut() = std::time::Instant::now());
-        t.start(slint::TimerMode::Repeated, std::time::Duration::from_millis(33), || {
+        t.start(slint::TimerMode::Repeated, std::time::Duration::from_millis(40), || {
             let dt = LAST.with(|l| { let mut l = l.borrow_mut(); let d = l.elapsed().as_secs_f32().min(0.1); *l = std::time::Instant::now(); d });
             let ui = UI.with(|u| u.borrow().as_ref().and_then(|w| w.upgrade()));
             let keep = ui.map(|ui| tick(&ui, dt)).unwrap_or(false);
@@ -362,7 +364,7 @@ fn mark_dirty() {
 fn tick(ui: &AppWindow, dt: f32) -> bool {
     // leaving the Wardrobe ends a library preview
     if ui.get_tab() != 5 && PREVIEW.with(|p| *p.borrow()) { preview_account(ui); }
-    if !matches!(ui.get_tab(), 0 | 5) || !ui.window().is_visible() || ui.window().is_minimized() { return false; }
+    if !matches!(ui.get_tab(), 0 | 5) || !ui.window().is_visible() || ui.window().is_minimized() || !crate::winchrome::is_active() { return false; } // background windows draw nothing; WM_ACTIVATE wakes the timer again
     let b = ui.global::<Backend>();
     // auto spin always (while the tab shows), never with reduced motion
     let spin = b.get_skin_spin() && !b.get_skin_held() && !b.get_calm();
@@ -372,10 +374,15 @@ fn tick(ui: &AppWindow, dt: f32) -> bool {
         let mut l = l.borrow_mut();
         let Some(look) = l.as_mut() else { return };
         let dirty = DIRTY.with(|d| std::mem::replace(&mut *d.borrow_mut(), false));
-        if !spin && !dirty && look.slim == slim { return; }
+        // pixels actually shown: the tallest preview (Wardrobe, 490 stage px) at the window's stage scale
+        let win = ui.window().size();
+        let fh = ((490.0 * (win.width as f32 / 1440.0).min(win.height as f32 / 900.0)).round() as u32).clamp(360, H);
+        let dims = (fh * W / H, fh);
+        let resized = DIMS.with(|d| d.replace(dims)) != dims;
+        if !spin && !dirty && !resized && look.slim == slim { return; }
         look.slim = slim;
         let yaw = YAW.with(|y| *y.borrow());
-        b.set_skin_frame(Image::from_rgba8(render(look, yaw)));
+        b.set_skin_frame(Image::from_rgba8(render_at(look, yaw, dims.0, dims.1)));
     });
     spin || b.get_skin_held()
 }
@@ -439,14 +446,20 @@ fn model(look: &Look) -> Vec<Quad> {
 }
 
 /// Render the player at `yaw` (radians) into a W x H transparent buffer.
-pub fn render(look: &Look, yaw: f32) -> SharedPixelBuffer<Rgba8Pixel> {
-    let mut buf = SharedPixelBuffer::<Rgba8Pixel>::new(W, H);
-    let (w, h) = (W as usize, H as usize);
-    let mut depth = vec![0f32; w * h];
+pub fn render(look: &Look, yaw: f32) -> SharedPixelBuffer<Rgba8Pixel> { render_at(look, yaw, W, H) }
+
+/// Same frame at another size (keep the 600:780 ratio); the live preview renders only as many pixels as it shows.
+pub fn render_at(look: &Look, yaw: f32, fw: u32, fh: u32) -> SharedPixelBuffer<Rgba8Pixel> {
+    let mut buf = SharedPixelBuffer::<Rgba8Pixel>::new(fw, fh);
+    let (w, h) = (fw as usize, fh as usize);
+    // the depth buffer is reused between frames (a fresh 2 MB zeroed Vec per frame at 30 fps is pure churn)
+    let mut depth = DEPTH.with(|d| std::mem::take(&mut *d.borrow_mut()));
+    depth.clear();
+    depth.resize(w * h, 0.0);
     let px = buf.make_mut_slice();
     let dist = 90.0f32;
-    let k = H as f32 * 0.86 / 34.0;
-    let (cx, cy) = (W as f32 / 2.0, H as f32 / 2.0);
+    let k = fh as f32 * 0.86 / 34.0;
+    let (cx, cy) = (fw as f32 / 2.0, fh as f32 / 2.0);
     let light = { let l = [-0.45f32, 0.6, 0.75]; let n = (l[0] * l[0] + l[1] * l[1] + l[2] * l[2]).sqrt(); [l[0] / n, l[1] / n, l[2] / n] };
 
     for quad in model(look) {
@@ -499,6 +512,7 @@ pub fn render(look: &Look, yaw: f32) -> SharedPixelBuffer<Rgba8Pixel> {
             }
         }
     }
+    DEPTH.with(|d| *d.borrow_mut() = depth);
     buf
 }
 

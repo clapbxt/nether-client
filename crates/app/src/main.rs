@@ -1538,6 +1538,7 @@ java.lang.OutOfMemoryError: Java heap space
     winchrome::set_handlers(winchrome::Handlers {
         maxed: |m| with_app(|ui, _| if ui.global::<Backend>().get_win_maxed() != m { ui.global::<Backend>().set_win_maxed(m) }),
         dropped: |files| with_app(|ui, sh| drop::dropped(ui, sh, files)),
+        activated: skin::wake,
     });
     // keep running while hidden in the tray; quit explicitly
     ui.show()?;

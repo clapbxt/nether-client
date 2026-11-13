@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use nether_core::art;
 use nether_core::download::client;
-use slint::{ComponentHandle, Image, Model, ModelRc, VecModel};
+use slint::{ComponentHandle, Image, Model, ModelRc, Rgba8Pixel, SharedPixelBuffer, VecModel};
 
 use crate::{ui_do, AppWindow, Art, Backend, Shared};
 
@@ -15,6 +15,8 @@ pub const DEFAULT_ICON: &str = "grass_block_side";
 
 thread_local! {
     static IMAGES: RefCell<HashMap<PathBuf, Image>> = RefCell::new(HashMap::new());
+    // picker thumbnails (256 px): the full panoramas are only decoded for instances that use them
+    static THUMBS: RefCell<HashMap<PathBuf, Image>> = RefCell::new(HashMap::new());
     // built-in choices (block textures, version panoramas); uploads are appended when published
     static BASE_ICONS: RefCell<Vec<Art>> = const { RefCell::new(Vec::new()) };
     static BASE_COVERS: RefCell<Vec<Art>> = const { RefCell::new(Vec::new()) };
@@ -39,7 +41,7 @@ fn customs(sh: &Shared, kind: i32) -> Vec<Art> {
     files.sort();
     files.iter().filter_map(|p| {
         let f = p.file_name()?.to_str()?.to_string();
-        img(p).map(|i| Art { key: format!("custom:{f}").into(), label: "YOURS".into(), img: i })
+        thumb(p).map(|i| Art { key: format!("custom:{f}").into(), label: "YOURS".into(), img: i })
     }).collect()
 }
 
@@ -85,6 +87,26 @@ pub fn remove(ui: &AppWindow, sh: &Arc<Shared>, kind: i32, key: &str) {
     refresh(ui, sh);
 }
 
+/// Decode an image file to at most `max` px on its longest side (call off the UI thread).
+fn decode(p: &Path, max: u32) -> Option<SharedPixelBuffer<Rgba8Pixel>> {
+    let im = image::open(p).ok()?;
+    let im = if im.width().max(im.height()) > max { im.thumbnail(max, max) } else { im };
+    let rgba = im.to_rgba8();
+    Some(SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(rgba.as_raw(), rgba.width(), rgba.height()))
+}
+
+/// Small picker thumbnail of an image file (cached; uploads are small, so this decodes inline).
+fn thumb(p: &Path) -> Option<Image> {
+    THUMBS.with(|m| {
+        if let Some(i) = m.borrow().get(p) { return Some(i.clone()); }
+        let i = Image::from_rgba8(decode(p, 256)?);
+        m.borrow_mut().insert(p.to_path_buf(), i.clone());
+        Some(i)
+    })
+}
+
+fn cached(p: &Path) -> Option<Image> { IMAGES.with(|m| m.borrow().get(p).cloned()) }
+
 /// Load (once) an image file on the UI thread.
 pub(crate) fn img(p: &Path) -> Option<Image> {
     IMAGES.with(|m| {
@@ -101,18 +123,36 @@ fn pano_path(sh: &Shared, version: &str) -> PathBuf { sh.paths.root.join("cache"
 pub fn refresh(ui: &AppWindow, sh: &Arc<Shared>) {
     let m = ui.global::<Backend>().get_instances();
     let mut missing = vec![];
+    let mut undecoded: Vec<PathBuf> = vec![];
     for n in 0..m.row_count() {
         let Some(mut i) = m.row_data(n) else { continue };
         let icon = if i.icon.is_empty() { DEFAULT_ICON.to_string() } else { i.icon.to_string() };
         let cover = if i.cover.is_empty() { i.ver.to_string() } else { i.cover.to_string() };
         let icon_img = icon_path(sh, &icon).or_else(|| art::block_icon_path(&sh.paths, DEFAULT_ICON)).and_then(|p| img(&p));
         let p = cover_path(sh, &cover);
-        let cover_img = if p.exists() { img(&p) } else if cover.starts_with("custom:") { img(&pano_path(sh, &i.ver)) } else { missing.push(cover.clone()); None };
+        // covers decode off the UI thread (a miss is filled in by the follow-up refresh below)
+        let cp = if p.exists() { Some(p) } else if cover.starts_with("custom:") { Some(pano_path(sh, &i.ver)) } else { None };
+        if cp.is_none() { missing.push(cover.clone()); }
+        let cover_img = cp.and_then(|cp| { let c = cached(&cp); if c.is_none() && cp.exists() { undecoded.push(cp); } c });
         let changed = icon_img.is_some() != (i.icon_img.size().width > 0) || cover_img.is_some() != i.has_cover;
         if let Some(x) = icon_img { i.icon_img = x; }
         i.has_cover = cover_img.is_some();
         if let Some(x) = cover_img { i.cover_img = x; }
         if changed { m.set_row_data(n, i); }
+    }
+    undecoded.sort();
+    undecoded.dedup();
+    if !undecoded.is_empty() {
+        let weak = ui.as_weak();
+        let sh2 = sh.clone();
+        std::thread::spawn(move || {
+            let done: Vec<(PathBuf, SharedPixelBuffer<Rgba8Pixel>)> = undecoded.into_iter().filter_map(|p| decode(&p, 1600).map(|b| (p, b))).collect();
+            if done.is_empty() { return; }
+            ui_do(&weak, move |ui| {
+                IMAGES.with(|m| { let mut m = m.borrow_mut(); for (p, b) in done { m.insert(p, Image::from_rgba8(b)); } });
+                refresh(ui, &sh2);
+            });
+        });
     }
     missing.sort();
     missing.dedup();
@@ -146,14 +186,16 @@ pub fn init(weak: slint::Weak<AppWindow>, sh: Arc<Shared>) {
         if !versions.contains(&latest) { versions.push(latest); }
         // identical panoramas (e.g. minor updates) are offered once
         let mut seen = std::collections::HashSet::new();
-        let found: Vec<(String, PathBuf)> = versions.into_iter().filter_map(|v| {
+        let found: Vec<(String, SharedPixelBuffer<Rgba8Pixel>)> = versions.into_iter().filter_map(|v| {
             let p = art::panorama(&c, &sh.paths, &v).ok()?;
             let bytes = std::fs::read(&p).ok()?;
-            seen.insert(bytes.len()).then_some((v, p))
+            if !seen.insert(bytes.len()) { return None; }
+            let b = decode(&p, 256)?;
+            Some((v, b))
         }).collect();
         ui_do(&w2, move |ui| {
             let mut list = vec![Art { key: "".into(), label: "THIS VERSION".into(), img: Image::default() }];
-            list.extend(found.iter().filter_map(|(v, p)| img(p).map(|i| Art { key: v.as_str().into(), label: v.as_str().into(), img: i })));
+            list.extend(found.into_iter().map(|(v, b)| Art { key: v.as_str().into(), label: v.as_str().into(), img: Image::from_rgba8(b) }));
             BASE_COVERS.with(|v| *v.borrow_mut() = list);
             push_choices(ui, &sh);
         });

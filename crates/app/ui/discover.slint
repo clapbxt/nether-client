@@ -14,13 +14,13 @@ export component DiscoverScreen inherits Rectangle {
     property <bool> typing;
     init => { Backend.load-packs(); }
 
-    Heading { x: 53px; y: 22px; text: "INSTALL PACKS"; }
+    Heading { x: 56px; y: 28px; text: "INSTALL PACKS"; font-size: 32px; }
     Text {
-        x: 56px; y: 88px;
+        x: 56px; y: 80px;
         text: root.src == 2 ? "Small bundles picked by us. Mods download from Modrinth for the version you choose." : "Modpacks. Installing one creates a ready-to-play instance.";
         color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts;
     }
-    Seg { x: 1384px - self.width; y: 40px; items: ["MODRINTH", "NETHER"]; item-w: 124px; current: Backend.pack-src == 2 ? 1 : 0;
+    Seg { x: 1384px - self.width; y: 32px; items: ["MODRINTH", "NETHER"]; item-w: 124px; current: Backend.pack-src == 2 ? 1 : 0;
         changed(i) => { Backend.pack-src = i == 1 ? 2 : 0; Backend.load-packs(); } }
 
     // search + sort (Modrinth)
@@ -76,30 +76,29 @@ export component DiscoverScreen inherits Rectangle {
         Flickable {
             y: 29px; height: parent.height - 29px; content-height: Backend.pack-rows.length * 68px + 16px; interactive: !Backend.detail-open;
             for r[i] in Backend.pack-rows: Rectangle {
-                y: i * 68px; height: 68px; width: parent.width;
-                background: ta.has-hover ? Theme.s1 : transparent;
+                y: i * 68px; height: 64px; width: parent.width; border-radius: 6px;
+                background: ta.has-hover ? Theme.hov : transparent;
                 animate background { duration: Theme.fast; }
                 ta := TouchArea { mouse-cursor: pointer; clicked => { Backend.open-pack(i); } }
-                Rectangle { x: 0px; width: 3px; background: Theme.red2; opacity: ta.has-hover ? 1 : 0; animate opacity { duration: Theme.fast; } }
-                if root.src != 2: ModIcon { x: 16px; y: 14px; width: 40px; height: 40px; src: r.icon; has: r.has-icon; }
+                Rectangle { x: 0px; y: 14px; width: 3px; height: parent.height - 28px; border-radius: 2px; background: Theme.red2; opacity: ta.has-hover ? 1 : 0; animate opacity { duration: Theme.fast; } }
+                if root.src != 2: ModIcon { x: 16px; y: 12px; width: 40px; height: 40px; src: r.icon; has: r.has-icon; }
                 if root.src == 2: Rectangle {
-                    x: 16px; y: 14px; width: 40px; height: 40px; background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
+                    x: 16px; y: 12px; width: 40px; height: 40px; border-radius: 6px; background: Theme.s2;
                     Image { x: 6px; y: 6px; width: 28px; height: 28px; source: @image-url("assets/nether-icon.png"); image-fit: contain; }
                 }
-                Text { x: 70px; y: 12px; width: 760px; text: r.name; color: Theme.tx; font-family: r.cjk ? Theme.cjk : Theme.ui; font-size: 16px * Theme.ts; font-weight: 600; overflow: elide; }
-                Text { x: 70px; y: 37px; width: 760px; text: r.sub; color: Theme.mut; font-family: r.cjk ? Theme.cjk : Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
+                Text { x: 70px; y: 10px; width: 760px; height: 24px; text: r.name; color: Theme.tx; font-family: r.cjk ? Theme.cjk : Theme.disp; font-size: r.cjk ? 16px * Theme.ts : 16px; font-weight: 700; vertical-alignment: center; overflow: elide; }
+                Text { x: 70px; y: 36px; width: 760px; text: r.sub; color: Theme.mut; font-family: r.cjk ? Theme.cjk : Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
                 Text { x: 860px; width: 110px; text: root.src == 2 ? r.meta : r.mc; color: Theme.dim; font-family: Theme.mono; font-size: 12px * Theme.ts; vertical-alignment: center; }
                 Text { x: 980px; width: 120px; text: r.ver; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
                 if root.src == 0: Text { x: 1110px; width: 90px; text: r.meta; color: Theme.tx; font-family: Theme.mono; font-size: 12px * Theme.ts; vertical-alignment: center; }
                 // view chevron
                 Rectangle {
-                    x: parent.width - 120px; y: 17px; width: 104px; height: 34px;
-                    background: ta.has-hover ? Theme.red : transparent; border-width: 1px; border-color: ta.has-hover ? Theme.red : Theme.ln2;
+                    x: parent.width - 120px; y: 15px; width: 104px; height: 34px;
+                    background: ta.has-hover ? Theme.red : transparent; border-width: 1px; border-color: ta.has-hover ? Theme.red : Theme.ln2; border-radius: 6px;
                     animate background, border-color { duration: Theme.fast; }
-                    Text { text: "VIEW"; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; horizontal-alignment: center; vertical-alignment: center; }
+                    Text { text: "VIEW"; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
                 }
-                Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; }
-            }
+                }
         }
     }
 
