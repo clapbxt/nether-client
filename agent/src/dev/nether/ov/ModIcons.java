@@ -15,23 +15,23 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Nether's own module icons: `design/module-icons/<id>.svg` (24-unit box), bundled in the agent jar as `icons/<id>.svg`.
- * Only the subset those files use is read (path M/L/H/V/C/A/Z, rect, circle, line, polyline, polygon; fill or stroke).
- * Strokes become outlines once, so the icon is two filled shapes: the ice layer and the red accent layer (#E10600),
- * which {@link Gfx#mask} rasterises per pixel size and draws tinted, crisp at every GUI scale.
+ * Nether's own line icons: `design/module-icons/<id>.svg` (20-unit grid, 1.6 stroke, round caps and joins, one colour),
+ * bundled in the agent jar as `icons/<id>.svg` and shared with the launcher. Only the subset those files use is read
+ * (path M/L/H/V/C/A/Z, rect, circle, line, polyline, polygon; fill or stroke). Strokes become outlines once, so an icon
+ * is one filled shape that {@link Gfx#mask} rasterises per pixel size and draws tinted, crisp at every GUI scale.
  */
 final class ModIcons {
     private ModIcons() {}
 
-    private static final Shape[] NONE = new Shape[0];
-    private static final Map<String, Shape[]> cache = new HashMap<>();
+    private static final Shape NONE = new Path2D.Float();
+    private static final Map<String, Shape> cache = new HashMap<>();
     private static final Pattern EL = Pattern.compile("<(path|rect|circle|line|polyline|polygon)\\b([^>]*)/>"),
         ATTR = Pattern.compile("([a-z0-9-]+)=\"([^\"]*)\""),
         TOK = Pattern.compile("[MmLlHhVvCcAaZz]|-?(?:\\d*\\.\\d+|\\d+\\.?)(?:[eE][-+]?\\d+)?");
 
-    /** {base, accent} shapes of a module's icon, or null when the module has none (callers fall back to item icons). */
-    static Shape[] get(String id) {
-        Shape[] s = cache.get(id);
+    /** The icon's shape, or null when there is none. */
+    static Shape get(String id) {
+        Shape s = cache.get(id);
         if (s == null) {
             try { s = load(id); } catch (Throwable t) { System.out.println("[nether-agent] icon " + id + ": " + t); s = null; }
             cache.put(id, s == null ? NONE : s);
@@ -39,20 +39,19 @@ final class ModIcons {
         return s == NONE ? null : s;
     }
 
-    /** Draws the icon in a size x size box; false when there is none. */
-    static boolean draw(String id, float x, float y, float size, int base, int accent) {
-        Shape[] s = get(id);
+    /** Draws the icon in a size x size box in one colour; false when there is none. */
+    static boolean draw(String id, float x, float y, float size, int color) {
+        Shape s = get(id);
         if (s == null) return false;
-        if (s[0] != null) Gfx.mask("mi:" + id, s[0], 24, x, y, size, base);
-        if (s[1] != null) Gfx.mask("ma:" + id, s[1], 24, x, y, size, accent);
+        Gfx.mask("mi:" + id, s, 20, x, y, size, color);
         return true;
     }
 
-    private static Shape[] load(String id) {
+    private static Shape load(String id) {
         if (!id.matches("[a-z0-9_]+")) return null;
         byte[] b = dev.nether.agent.Hook.file.apply("icons/" + id + ".svg");
         if (b == null) return null;
-        Area base = new Area(), acc = new Area();
+        Area base = new Area();
         Matcher m = EL.matcher(new String(b, StandardCharsets.UTF_8));
         boolean any = false;
         while (m.find()) {
@@ -64,18 +63,16 @@ final class ModIcons {
             String stroke = a.get("stroke"), fill = a.getOrDefault("fill", "#000");
             boolean stroked = stroke != null && !stroke.equals("none");
             if (stroked) {
-                int cap = "square".equals(a.get("stroke-linecap")) ? BasicStroke.CAP_SQUARE : BasicStroke.CAP_BUTT;
-                int join = "bevel".equals(a.get("stroke-linejoin")) ? BasicStroke.JOIN_BEVEL : BasicStroke.JOIN_MITER;
+                int cap = "round".equals(a.get("stroke-linecap")) ? BasicStroke.CAP_ROUND : "square".equals(a.get("stroke-linecap")) ? BasicStroke.CAP_SQUARE : BasicStroke.CAP_BUTT;
+                int join = "round".equals(a.get("stroke-linejoin")) ? BasicStroke.JOIN_ROUND : "bevel".equals(a.get("stroke-linejoin")) ? BasicStroke.JOIN_BEVEL : BasicStroke.JOIN_MITER;
                 sh = new BasicStroke(Float.parseFloat(a.getOrDefault("stroke-width", "1")), cap, join, 4).createStrokedShape(sh);
             } else if (fill.equals("none")) continue;
-            (isRed(stroked ? stroke : fill) ? acc : base).add(new Area(sh));
+            base.add(new Area(sh));
             any = true;
         }
         if (!any) return null;
-        return new Shape[] {base.isEmpty() ? null : base, acc.isEmpty() ? null : acc};
+        return base;
     }
-
-    private static boolean isRed(String c) { return c.equalsIgnoreCase("#E10600"); }
 
     private static float f(Map<String, String> a, String k) { return Float.parseFloat(a.getOrDefault(k, "0")); }
 

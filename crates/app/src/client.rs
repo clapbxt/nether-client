@@ -15,7 +15,7 @@ use crate::{AppWindow, Backend, ClientMod, ClientState, SetVal, Shared};
 struct SSet { t: i32, key: String, label: String, min: f64, max: f64, step: f64, def: Value, #[serde(default)] opts: Vec<String>, #[serde(default)] hint: String }
 
 #[derive(Deserialize, Clone)]
-struct SMod { id: String, name: String, cat: String, desc: String, hud: bool, on: bool, x: f64, y: f64, settings: Vec<SSet>, #[serde(default)] icon: String }
+struct SMod { id: String, name: String, cat: String, desc: String, hud: bool, on: bool, x: f64, y: f64, settings: Vec<SSet> }
 
 #[derive(Deserialize)]
 struct Schema { modules: Vec<SMod> }
@@ -23,13 +23,12 @@ struct Schema { modules: Vec<SMod> }
 /// Nether's own module glyph (`design/module-icons/<id>.svg`, ice + red, also bundled in the agent jar).
 fn mod_icon(id: &str) -> Option<slint::Image> {
     macro_rules! svgs { ($($i:literal),*) => { match id { $($i => include_bytes!(concat!("../../../design/module-icons/", $i, ".svg")).as_slice(),)* _ => return None } } }
-    let b = svgs!("fps", "cps", "coords", "clock", "session", "memory", "keys", "crosshair", "zoom",
-        "fullbright", "armor", "potions", "ping", "packs", "server", "worldtime", "speed", "compass", "waypoints");
+    let b = svgs!("fps", "cps", "keys", "coords", "clock", "session", "memory", "crosshair", "zoom", "fullbright", "armor", "potions", "ping", "server", "packs", "compass", "worldtime", "speed", "waypoints", "media", "lyrics", "reach", "combo", "items", "stopwatch", "camera", "streamer");
     slint::Image::load_from_svg_data(b).ok()
 }
 
-/// Item icon names of every module (for art::item_icons; fallback for ids without a glyph).
-pub fn icon_names() -> Vec<String> { schema().iter().map(|m| m.icon.clone()).filter(|i| !i.is_empty()).collect() }
+/// Module icons are our own line set only now (no item-texture fallback).
+pub fn icon_names() -> Vec<String> { vec![] }
 
 fn schema() -> &'static [SMod] {
     static S: std::sync::OnceLock<Vec<SMod>> = std::sync::OnceLock::new();
@@ -62,6 +61,18 @@ fn uses_global(v: &Value) -> bool { v.get("use_global").and_then(|b| b.as_bool()
 pub fn instance_file(sh: &Shared, name: &str) -> Option<PathBuf> {
     let p = file(sh, Some(name));
     (!uses_global(&read_json(&p))).then_some(p)
+}
+
+/// The look the in-game menu follows (theme name + accent pair), written to the global client.json.
+pub fn set_look(sh: &Shared, theme: &str, accent: (String, String)) {
+    let p = file(sh, None);
+    let mut root = read_json(&p);
+    if !root["modules"].is_object() { root["modules"] = json!({}); }
+    if !root["modules"]["client"].is_object() { root["modules"]["client"] = json!({}); }
+    let c = &mut root["modules"]["client"];
+    if c["theme"] == theme && c["accent"] == accent.0 && c["accent2"] == accent.1 { return; }
+    c["theme"] = theme.into(); c["accent"] = accent.0.into(); c["accent2"] = accent.1.into();
+    write_json(&p, &root);
 }
 
 /// Old instance configs carried `inject` / `groups` (client on/off, module groups): every instance now gets the whole client, so drop them.
@@ -122,7 +133,7 @@ fn rows(own: Option<&Value>, global: &Value) -> Vec<ClientMod> {
         }).collect();
         let ci = mods[..n].iter().filter(|e| e.cat == m.cat).count() as i32;
         let own = mod_icon(&m.id);
-        let item = if own.is_some() { None } else { nether_core::art::item_icon_path(&nether_core::paths::Paths::new(), &m.icon).and_then(|p| crate::artui::img(&p)) };
+        let item: Option<slint::Image> = None;
         let pixel = item.is_some();
         let icon = own.or(item);
         let variant = if m.id == "armor" { get("layout").and_then(|v| v.as_str()).unwrap_or("List").to_string() } else { String::new() };

@@ -23,6 +23,8 @@ pub struct LauncherPrefs {
     pub calm: bool,
     /// accent colour (settings::ACCENTS index, 0 = racing red)
     pub accent: i32,
+    /// theme (settings::THEME_NAMES index, 0 = OLED)
+    pub theme: i32,
     /// reading-text size: 0 default, 1 large, 2 larger
     pub text: i32,
     /// Nether capes in game (the agent looks up the players it sees at the cape service; off = no lookups)
@@ -34,7 +36,7 @@ pub struct LauncherPrefs {
 }
 
 impl Default for LauncherPrefs {
-    fn default() -> Self { LauncherPrefs { gpu: true, autostart: false, on_launch: 1, on_close: 0, calm: false, accent: 0, text: 0, capes: true, discord: false, auto_update: true } }
+    fn default() -> Self { LauncherPrefs { gpu: true, autostart: false, on_launch: 1, on_close: 0, calm: false, accent: 0, theme: 0, text: 0, capes: true, discord: false, auto_update: true } }
 }
 
 pub fn load(paths: &Paths) -> LauncherPrefs {

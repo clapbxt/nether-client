@@ -64,7 +64,7 @@ component Jump inherits Rectangle {
     animate background { duration: Theme.fast; }
     Rectangle { x: 0px; width: 3px; background: Theme.red2; opacity: root.active ? 1 : 0; animate opacity { duration: Theme.mid; } }
     Text { x: 16px; text: root.idx; color: root.active ? Theme.red2 : Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; vertical-alignment: center; }
-    Text { x: 44px; text: root.label; color: root.active ? Theme.tx : Theme.dim; font-family: Theme.disp; font-size: 17px; font-weight: 600; letter-spacing: 0.8px; vertical-alignment: center; }
+    Text { x: 44px; text: root.label; color: root.active ? Theme.tx : Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 600; letter-spacing: 0.8px; vertical-alignment: center; }
     ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
         key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
@@ -96,8 +96,8 @@ export component SettingsScreen inherits Rectangle {
     property <length> y3: root.y2 + 40px + root.nacc * 64px + 68px;
     property <length> y4: root.y3 + 40px + Backend.javas.length * 64px + 40px;
     property <length> y5: root.y4 + 40px + 6 * 64px + 40px;
-    property <length> y6: root.y5 + 40px + 2 * 64px + 150px + ic.height + wp.height + 40px;
-    property <length> py: root.y5 + 152px;
+    property <length> y6: root.y5 + 40px + 3 * 64px + 150px + ic.height + wp.height + 40px;
+    property <length> py: root.y5 + 216px;
     property <length> sy: root.y6 + 24px + Backend.folders.length * 64px;
     // L2: privacy (what the launcher and client connect to)
     property <length> y7: root.sy + 5 * 64px + 40px;
@@ -195,6 +195,9 @@ export component SettingsScreen inherits Rectangle {
                     key-pressed(e) => { if e.text == " " || e.text == Key.Return { Backend.lp-accent = i; Backend.save-launcher(); return accept; } return reject; } }
                 if sf.has-focus || sw.has-hover: Rectangle { x: -4px; y: -4px; width: parent.width + 8px; height: parent.height + 8px; border-width: 1px; border-color: sf.has-focus ? Theme.ice : Theme.ln2; }
             }
+        }
+        SetRow { x: 0px; y: root.y5 + 152px; width: root.cw; reserve: 440px; title: "Theme"; sub: "Also the in-game menu's look. Ice is light.";
+            Seg { x: parent.width - self.width; y: 15px; items: ["OLED", "OBSIDIAN", "SLATE", "ICE"]; item-w: 104px; current: Backend.lp-theme; changed(i) => { Backend.lp-theme = i; Backend.save-launcher(); } }
         }
         SetRow { x: 0px; y: root.y5 + 88px; width: root.cw; reserve: 340px; title: "Text size"; sub: "Bigger reading text. Titles keep their size.";
             Seg { x: parent.width - self.width; y: 15px; items: ["DEFAULT", "LARGE", "LARGER"]; item-w: 104px; current: Backend.lp-text; changed(i) => { Backend.lp-text = i; Backend.save-launcher(); } }

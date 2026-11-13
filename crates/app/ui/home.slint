@@ -17,7 +17,7 @@ component TowerRow inherits Rectangle {
     Text { x: 18px; width: 26px; text: root.pos < 10 ? "0\{root.pos}" : "\{root.pos}"; color: root.active ? Theme.tx : Theme.mut; font-family: Theme.mono; font-size: 12px * Theme.ts; font-weight: 700; vertical-alignment: center; }
     Rectangle { x: 54px; y: 9px; width: 34px; height: 34px; background: Theme.s2;
         Image { x: 4px; y: 4px; width: 26px; height: 26px; source: root.inst.icon-img; image-rendering: pixelated; } }
-    Text { x: 104px; width: 300px; text: root.inst.title; color: Theme.tx; font-family: Theme.disp; font-size: 21px; font-weight: 700; letter-spacing: 0.4px; vertical-alignment: center; overflow: elide; }
+    Text { x: 104px; width: 300px; text: root.inst.title; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; letter-spacing: 0.4px; vertical-alignment: center; overflow: elide; }
     Text { x: 420px; width: 90px; text: root.inst.ver; color: Theme.dim; font-family: Theme.mono; font-size: 12px * Theme.ts; vertical-alignment: center; }
     Text { x: 510px; width: 130px; text: root.inst.loader; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
     if !root.inst.running: Text { x: 640px; width: 120px; text: root.inst.last; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
@@ -153,7 +153,7 @@ export component HomeScreen inherits Rectangle {
             Ticks { width: parent.width; height: parent.height; }
             // nameplate
             Slash { x: 12px; y: 14px; width: nm.preferred-width + 34px; height: 30px; skew: 8px; color: Theme.ice; }
-            nm := Text { x: 28px; y: 14px; height: 30px; text: Backend.acct-state == 2 ? Backend.acct-name : "Player"; color: Theme.ink; font-family: Theme.disp; font-size: 20px; font-weight: 700; font-italic: true; vertical-alignment: center; }
+            nm := Text { x: 28px; y: 14px; height: 30px; text: Backend.acct-state == 2 ? Backend.acct-name : "Player"; color: Theme.ink; font-family: Theme.disp; font-size: 16px; font-weight: 700;  vertical-alignment: center; }
         }
         Text { x: 32px; y: 396px; height: 36px; text: "Skin"; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; vertical-alignment: center; }
         Dropdown { x: 120px; y: 396px; width: parent.width - 152px; height: 36px; items: SkinLib.names; current <=> SkinLib.home-idx;

@@ -18,7 +18,7 @@ component HRow inherits Rectangle {
 component Empty inherits Rectangle {
     in property <string> title;
     in property <string> text;
-    Text { y: parent.height / 2 - 22px; width: parent.width; text: root.title; color: Theme.dim; font-family: Theme.disp; font-size: 16px * Theme.ts; font-weight: 700; letter-spacing: 0.8px; horizontal-alignment: center; }
+    Text { y: parent.height / 2 - 22px; width: parent.width; text: root.title; color: Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.8px; horizontal-alignment: center; }
     Text { x: 24px; y: parent.height / 2 + 2px; width: parent.width - 48px; text: root.text; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; horizontal-alignment: center; wrap: word-wrap; }
 }
 
@@ -57,7 +57,7 @@ component Choice inherits Rectangle {
     border-width: 1px; border-color: root.on ? Theme.red2 : Theme.ln;
     animate background, border-color { duration: Theme.fast; }
     Hatch { width: parent.width; height: parent.height; opacity: root.on ? 0.6 : 0.25; }
-    Text { x: 24px; y: 22px; width: parent.width - 48px; text: root.title; color: Theme.tx; font-family: Theme.disp; font-size: 30px; font-weight: 800; font-italic: true; overflow: elide; }
+    Text { x: 24px; y: 22px; width: parent.width - 48px; text: root.title; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800;  overflow: elide; }
     if root.chip != "": Chip { x: parent.width - self.width - 20px; y: 24px; text: root.chip; hot: true; }
     Text { x: 24px; y: 70px; width: parent.width - 48px; text: root.text; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
     ct := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } double-clicked => { root.double-clicked(); } }
@@ -94,7 +94,7 @@ export component HostScreen inherits Rectangle {
             x: 44px + i * 310px; y: 200px; width: 290px; height: 100px;
             Rectangle { y: 0px; height: 2px; background: i == 0 ? Theme.red2 : Theme.ln2; }
             Text { x: 0px; y: 22px; text: "0\{i + 1}"; color: i == 0 ? Theme.red2 : Theme.mut; font-family: Theme.mono; font-size: 12px * Theme.ts; font-weight: 700; }
-            Text { x: 32px; y: 16px; text: s.t; color: Theme.tx; font-family: Theme.disp; font-size: 22px; font-weight: 800; font-italic: true; }
+            Text { x: 32px; y: 16px; text: s.t; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 800;  }
             Text { x: 0px; y: 54px; width: parent.width - 16px; text: s.d; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
         }
         Btn { x: 44px; y: 336px; height: 44px; text: "SET UP A SERVER"; solid: true; icon: Ico.plus; clicked => { HostState.new-server(); } }
@@ -136,7 +136,7 @@ export component HostScreen inherits Rectangle {
                         y: parent.height - 52px; height: 52px; background: nt.has-hover ? Theme.s3 : transparent;
                         Rectangle { y: 0px; height: 1px; background: Theme.ln; }
                         Icon { x: 17px; y: 20px; d: Ico.plus; tint: nt.has-hover ? Theme.red2 : Theme.dim; }
-                        Text { x: 44px; height: parent.height; text: "NEW SERVER"; color: Theme.tx; font-family: Theme.disp; font-size: 14px * Theme.ts; font-weight: 700; letter-spacing: 0.8px; vertical-alignment: center; }
+                        Text { x: 44px; height: parent.height; text: "NEW SERVER"; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.8px; vertical-alignment: center; }
                         nt := TouchArea { mouse-cursor: pointer; clicked => { pop.close(); HostState.new-server(); } }
                     }
                 }
@@ -191,14 +191,14 @@ export component HostScreen inherits Rectangle {
             x: 948px; y: 132px; width: 436px; height: 240px; clip: true;
             background: Theme.ice;
             property <bool> has: HostState.addr != "" && root.live;
-            Text { x: 28px; y: 24px; text: "INVITE FRIENDS"; color: #4b505a; font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 700; letter-spacing: 0.9px; }
+            Text { x: 28px; y: 24px; text: "INVITE FRIENDS"; color: #4b505a; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.9px; }
             if tk.has: Rectangle {
                 x: parent.width - 28px - cc.preferred-width; y: 20px; width: cc.preferred-width; height: 24px;
                 cc := Text { text: "COPY ADDRESS"; color: ccta.has-hover ? Theme.red : #4b505a; font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 700; letter-spacing: 0.7px; vertical-alignment: center; animate color { duration: Theme.fast; } }
                 ccta := TouchArea { mouse-cursor: pointer; clicked => { Backend.copy-text(HostState.addr); Backend.toast("Address copied"); } }
             }
             if tk.has: Text { x: 28px; y: 50px; width: parent.width - 56px; height: 60px; text: HostState.addr; color: Theme.ink; font-family: Theme.mono; font-size: HostState.addr.character-count > 17 ? 22px : 34px; font-weight: 700; vertical-alignment: center; overflow: elide; }
-            if !tk.has: Text { x: 28px; y: 50px; width: parent.width - 56px; height: 60px; text: "Not running"; color: #8a919c; font-family: Theme.disp; font-size: 40px; font-weight: 800; font-italic: true; vertical-alignment: center; }
+            if !tk.has: Text { x: 28px; y: 50px; width: parent.width - 56px; height: 60px; text: "Not running"; color: #8a919c; font-family: Theme.disp; font-size: 32px; font-weight: 800;  vertical-alignment: center; }
             Rectangle { x: 28px; y: 118px; width: parent.width - 56px; height: 1px; background: Theme.ink; }
             Rectangle { x: 28px; y: 166px; width: parent.width - 56px; height: 1px; background: Theme.ink; }
             Text { x: 28px; y: 118px; width: parent.width - 56px - 96px; height: 48px; text: "Minecraft › Multiplayer › Add Server › paste"; color: tk.has ? Theme.ink : #8a919c; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
@@ -206,7 +206,7 @@ export component HostScreen inherits Rectangle {
                 x: parent.width - 28px - 84px; y: 125px; width: 84px; height: 34px;
                 background: cp.pressed ? #2a2a33 : (cp.has-hover ? Theme.red : Theme.ink);
                 animate background { duration: Theme.fast; }
-                Text { y: cp.pressed ? 1px : 0px; height: parent.height; text: "COPY"; color: white; font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 700; letter-spacing: 0.7px; horizontal-alignment: center; vertical-alignment: center; }
+                Text { y: cp.pressed ? 1px : 0px; height: parent.height; text: "COPY"; color: white; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.7px; horizontal-alignment: center; vertical-alignment: center; }
                 cp := TouchArea { mouse-cursor: pointer; clicked => { Backend.copy-text(HostState.addr); Backend.toast("Address copied"); } }
             }
             Text {
@@ -304,13 +304,13 @@ export component HostScreen inherits Rectangle {
                 background: jt.has-hover ? Theme.ice : Theme.s3; border-width: 1px; border-color: Theme.ln2;
                 animate background { duration: Theme.fast; }
                 Icon { x: 12px; y: 8px; d: Ico.down; tint: jt.has-hover ? Theme.ink : Theme.tx; }
-                jl := Text { x: 30px; height: parent.height; text: "LATEST"; color: jt.has-hover ? Theme.ink : Theme.tx; font-family: Theme.disp; font-size: 13px * Theme.ts; font-weight: 700; letter-spacing: 0.7px; vertical-alignment: center; }
+                jl := Text { x: 30px; height: parent.height; text: "LATEST"; color: jt.has-hover ? Theme.ink : Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.7px; vertical-alignment: center; }
                 jt := TouchArea { mouse-cursor: pointer; clicked => { con.follow = true; fl.content-y = Math.min(0px, fl.height - fl.content-height); } }
             }
             Rectangle { x: 0px; y: parent.height - 42px; height: 1px; background: inp.has-focus ? Theme.red2 : Theme.ln; animate background { duration: Theme.mid; } }
             Text { x: 18px; y: parent.height - 41px; height: 41px; text: ">"; color: root.live ? Theme.redtx : Theme.mut; font-family: Theme.mono; font-size: 13px * Theme.ts; font-weight: 700; vertical-alignment: center; }
             if inp.text == "": Text { x: 38px; y: parent.height - 41px; height: 41px; text: root.live ? "Type a command, like say hello or time set day" : "Commands can be sent while the server runs"; color: Theme.mut; font-family: Theme.mono; font-size: 12px * Theme.ts; vertical-alignment: center; }
-            Text { x: parent.width - 18px - self.preferred-width; y: parent.height - 41px; height: 41px; text: "ENTER SEND · ↑↓ HISTORY"; color: Theme.mut; font-family: Theme.disp; font-size: 12px * Theme.ts; font-weight: 600; letter-spacing: 0.7px; vertical-alignment: center; visible: root.live; }
+            Text { x: parent.width - 18px - self.preferred-width; y: parent.height - 41px; height: 41px; text: "ENTER SEND · ↑↓ HISTORY"; color: Theme.mut; font-family: Theme.disp; font-size: 16px; font-weight: 600; letter-spacing: 0.7px; vertical-alignment: center; visible: root.live; }
             FocusScope {
                 x: 38px; y: parent.height - 41px; width: parent.width - 220px; height: 41px;
                 capture-key-pressed(e) => {
@@ -354,7 +354,7 @@ export component HostScreen inherits Rectangle {
             // whitelist / operators editor
             Seg { x: 532px; y: -7px; items: ["WHITELIST", "OPERATORS"]; item-w: 120px; current <=> root.list; }
             if root.list == 0: Toggle { x: 860px - 42px; y: 0px; on <=> HostState.wl-on; toggled => { HostState.save-settings(); } }
-            if root.list == 0: Text { x: 760px; y: 0px; width: 50px; height: 22px; text: HostState.wl-on ? "ON" : "OFF"; color: HostState.wl-on ? Theme.tx : Theme.mut; font-family: Theme.disp; font-size: 13px * Theme.ts; font-weight: 700; letter-spacing: 0.8px; horizontal-alignment: right; vertical-alignment: center; }
+            if root.list == 0: Text { x: 760px; y: 0px; width: 50px; height: 22px; text: HostState.wl-on ? "ON" : "OFF"; color: HostState.wl-on ? Theme.tx : Theme.mut; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.8px; horizontal-alignment: right; vertical-alignment: center; }
             nf := Field { x: 532px; y: 40px; width: 328px - 86px; placeholder: "Minecraft name"; accepted => { if self.text != "" { HostState.list-add(root.list, self.text); self.text = ""; } } }
             Btn { x: 860px - 76px; y: 40px; width: 76px; height: 40px; text: "ADD"; icon: Ico.plus; enabled: nf.text != ""; clicked => { HostState.list-add(root.list, nf.text); nf.text = ""; } }
             Flickable {
@@ -488,7 +488,7 @@ export component HostScreen inherits Rectangle {
             TouchArea { }
             Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.ice; }
             Eyebrow { x: 28px; y: 28px; text: "BEFORE THE FIRST START"; }
-            Text { x: 28px; y: 48px; text: "MINECRAFT EULA"; color: Theme.tx; font-family: Theme.disp; font-size: 34px; font-weight: 800; font-italic: true; }
+            Text { x: 28px; y: 48px; text: "MINECRAFT EULA"; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800;  }
             Text { x: 28px; y: 98px; width: parent.width - 56px; text: "Running a Minecraft server means agreeing to Mojang's End User License Agreement. Please read it. The server only starts after you agree."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
             LinkBtn { x: 28px; y: 156px; text: "READ THE EULA"; clicked => { Backend.open-url("https://aka.ms/MinecraftEULA"); } }
             Text { x: 28px; y: 186px; text: "aka.ms/MinecraftEULA"; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; }
@@ -506,7 +506,7 @@ export component HostScreen inherits Rectangle {
             TouchArea { }
             Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.red; }
             Eyebrow { x: 28px; y: 28px; text: "DELETE SERVER"; color: Theme.redtx; }
-            Text { x: 28px; y: 48px; width: parent.width - 56px; text: HostState.inst-name; color: Theme.tx; font-family: Theme.disp; font-size: 34px; font-weight: 800; font-italic: true; overflow: elide; }
+            Text { x: 28px; y: 48px; width: parent.width - 56px; text: HostState.inst-name; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800;  overflow: elide; }
             Text { x: 28px; y: 98px; width: parent.width - 56px; text: "Its world, backups, plugins and settings are removed from this PC. This can't be undone."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
             Btn { x: parent.width - 28px - self.width - db.width - 10px; y: parent.height - 64px; text: "KEEP IT"; clicked => { root.confirm-del = false; } }
             db := Btn { x: parent.width - 28px - self.width; y: parent.height - 64px; text: "DELETE FOREVER"; danger: true; solid: true; icon: Ico.trash;
@@ -549,7 +549,7 @@ export component HostScreen inherits Rectangle {
                     background: wz.step == i ? Theme.s3 : transparent;
                     Rectangle { y: parent.height - 2px; height: 2px; background: i < wz.step ? Theme.ice : (wz.step == i ? Theme.red2 : Theme.ln2); }
                     Text { x: 10px; height: parent.height; text: "0\{i + 1}"; color: wz.step == i ? Theme.red2 : Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; vertical-alignment: center; }
-                    Text { x: 34px; height: parent.height; text: s; color: wz.step == i ? Theme.tx : (i < wz.step ? Theme.dim : Theme.mut); font-family: Theme.disp; font-size: 13px * Theme.ts; font-weight: 700; letter-spacing: 0.8px; vertical-alignment: center; }
+                    Text { x: 34px; height: parent.height; text: s; color: wz.step == i ? Theme.tx : (i < wz.step ? Theme.dim : Theme.mut); font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.8px; vertical-alignment: center; }
                     TouchArea { mouse-cursor: i < wz.step ? pointer : default; clicked => { if i < wz.step { wz.step = i; } } }
                 }
             }
@@ -637,12 +637,12 @@ export component HostScreen inherits Rectangle {
                     x: 506px; y: 0px; width: parent.width - 506px; height: 214px; background: Theme.s1; clip: true;
                     Hatch { width: parent.width; height: parent.height; }
                     Ticks { width: parent.width; height: parent.height; }
-                    Text { x: 24px; y: 20px; width: parent.width - 48px; text: HostState.wiz-name == "" ? "MY SERVER" : HostState.wiz-name.to-uppercase(); color: Theme.tx; font-family: Theme.disp; font-size: 30px; font-weight: 800; font-italic: true; overflow: elide; }
+                    Text { x: 24px; y: 20px; width: parent.width - 48px; text: HostState.wiz-name == "" ? "MY SERVER" : HostState.wiz-name.to-uppercase(); color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800;  overflow: elide; }
                     for r[i] in [{k: "TYPE", v: wz.kind-name}, {k: "VERSION", v: wz.ver},
                                  {k: "WORLD", v: wz.world < 0 ? "Fresh world" : HostState.saves[wz.world].name + " (copy)"},
                                  {k: "JOIN", v: (wz.wl ? "Whitelist" : "Anyone with the address") + (wz.online ? "" : " · offline mode") + (wz.upnp ? " · UPnP" : "")}]: Rectangle {
                         x: 24px; y: 70px + i * 32px; width: parent.width - 48px; height: 32px;
-                        Text { x: 0px; width: 90px; height: parent.height; text: r.k; color: Theme.mut; font-family: Theme.disp; font-size: 12px * Theme.ts; font-weight: 700; letter-spacing: 0.8px; vertical-alignment: center; }
+                        Text { x: 0px; width: 90px; height: parent.height; text: r.k; color: Theme.mut; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.8px; vertical-alignment: center; }
                         Text { x: 90px; width: parent.width - 90px; height: parent.height; text: r.v; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; vertical-alignment: center; overflow: elide; }
                     }
                 }
@@ -655,7 +655,7 @@ export component HostScreen inherits Rectangle {
                     Eyebrow { x: 24px; y: 18px; text: "MINECRAFT EULA"; }
                     Text { x: 24px; y: 40px; width: parent.width - 140px; text: "Running a Minecraft server means agreeing to Mojang's End User License Agreement. Please read it first."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
                     LinkBtn { x: 24px; y: 82px; text: "READ THE EULA"; clicked => { Backend.open-url("https://aka.ms/MinecraftEULA"); } }
-                    Text { x: parent.width - 200px; y: 0px; width: 130px; height: parent.height; text: wz.agree ? "I AGREE" : "I AGREE?"; color: wz.agree ? Theme.tx : Theme.mut; font-family: Theme.disp; font-size: 14px * Theme.ts; font-weight: 700; letter-spacing: 0.8px; horizontal-alignment: right; vertical-alignment: center; }
+                    Text { x: parent.width - 200px; y: 0px; width: 130px; height: parent.height; text: wz.agree ? "I AGREE" : "I AGREE?"; color: wz.agree ? Theme.tx : Theme.mut; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.8px; horizontal-alignment: right; vertical-alignment: center; }
                     Toggle { x: parent.width - 66px; y: (parent.height - 22px) / 2; on <=> wz.agree; }
                 }
                 Text { x: 0px; y: 392px; width: parent.width; text: "CREATE SERVER downloads the " + wz.kind-name + " " + wz.ver + " server" + (wz.world >= 0 ? " and copies the world" : "") + ". You start it from the Host page."; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; }

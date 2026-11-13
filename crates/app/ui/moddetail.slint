@@ -14,7 +14,7 @@ component Section inherits VerticalLayout {
 }
 
 component Sub inherits Text {
-    font-family: Theme.disp; font-size: 12px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; color: Theme.mut;
+    font-family: Theme.disp; font-size: 16px; font-weight: 600; letter-spacing: 0.9px; color: Theme.mut;
 }
 
 component KV inherits Rectangle {
@@ -110,7 +110,7 @@ export component ModDetail inherits Rectangle {
 
         // ---------- header ----------
         ModIcon { x: 32px; y: 32px; width: 92px; height: 92px; src: root.d.icon; has: root.d.has-icon; }
-        Text { x: 146px; y: 22px; width: 600px; text: root.d.title; color: Theme.tx; font-family: Theme.disp; font-size: 42px; font-weight: 800; font-italic: true; overflow: elide; }
+        Text { x: 146px; y: 22px; width: 600px; text: root.d.title; color: Theme.tx; font-family: Theme.disp; font-size: 48px; font-weight: 800;  overflow: elide; }
         if root.ready: Text { x: 148px; y: 74px; width: 600px; text: root.d.summary; color: Theme.dim; font-family: root.d.cjk ? Theme.cjk : Theme.ui; font-size: 14px * Theme.ts; overflow: elide; }
         if !root.ready: Skel { x: 148px; y: 78px; width: 420px; height: 12px; }
         if root.ready && root.d.downloads != "": HorizontalLayout {
@@ -170,7 +170,7 @@ export component ModDetail inherits Rectangle {
             background: un.pressed ? Theme.red.with-alpha(0.267) : (un.has-hover ? Theme.red.with-alpha(0.149) : #ffffff08);
             border-width: 1px; border-color: un.has-hover ? Theme.red2 : Theme.red2.with-alpha(0.400);
             animate background, border-color { duration: Theme.mid; }
-            Text { text: "UNINSTALL"; color: Theme.redtx; font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 0.7px; horizontal-alignment: center; vertical-alignment: center; }
+            Text { text: "UNINSTALL"; color: Theme.redtx; font-family: Theme.disp; font-size: 16px; font-weight: 600; letter-spacing: 0.7px; horizontal-alignment: center; vertical-alignment: center; }
             un := TouchArea { mouse-cursor: pointer; clicked => { Backend.uninstall-detail(); } }
         }
         // secondary: open on Modrinth
@@ -181,7 +181,7 @@ export component ModDetail inherits Rectangle {
             border-width: 1px; border-color: mr.has-hover ? #ffffff55 : #ffffff2e;
             animate background, border-color { duration: Theme.mid; }
             HorizontalLayout { alignment: center; spacing: 8px;
-                Text { text: "MODRINTH"; color: Theme.tx; font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 0.7px; vertical-alignment: center; }
+                Text { text: "MODRINTH"; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 600; letter-spacing: 0.7px; vertical-alignment: center; }
                 Icon { y: 18px; d: Ico.ext; tint: mr.has-hover ? Theme.tx : Theme.dim; }
             }
             mr := TouchArea { mouse-cursor: pointer; clicked => { Backend.open-url(root.d.page-url); } }
@@ -201,7 +201,7 @@ export component ModDetail inherits Rectangle {
                 x: 36px; y: 9px;
                 text: root.d.loading ? (Backend.detail-pack ? "READING PACK" : "CHECKING YOUR INSTANCE") : Backend.detail-pack ? (root.d.compat-ok == 2 ? "NOTHING TO DOWNLOAD" : "BUILDS A NEW INSTANCE") : (root.d.installed ? "INSTALLED" : (root.d.compat-ok == 1 ? "COMPATIBLE BUILD FOUND" : (root.d.compat-ok == 2 ? "NO BUILD FOR YOUR VERSION" : "UNKNOWN FILE")));
                 color: root.d.compat-ok == 2 && !root.d.loading ? Theme.redtx : Theme.tx;
-                font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 700; letter-spacing: 0.8px;
+                font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.8px;
             }
             Text { x: 36px; y: 31px; width: 560px; text: root.d.compat-text; color: Theme.dim; font-family: Theme.mono; font-size: 11px * Theme.ts; overflow: elide; }
             // version picker: every build for this game version (newest first); INSTALL uses the picked one

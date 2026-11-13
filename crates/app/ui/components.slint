@@ -49,7 +49,7 @@ export component Glass inherits Rectangle {
 // Section / field label: condensed caps, never wide-tracked.
 export component Eyebrow inherits Text {
     font-family: Theme.disp;
-    font-size: 13px * Theme.ts;
+    font-size: 16px;
     font-weight: 600;
     letter-spacing: 0.9px;
     color: Theme.mut;
@@ -58,9 +58,9 @@ export component Eyebrow inherits Text {
 // Screen and instance titles.
 export component Heading inherits Text {
     font-family: Theme.disp;
-    font-size: 56px;
+    font-size: 48px;
     font-weight: 800;
-    font-italic: true;
+    
     color: Theme.tx;
 }
 
@@ -71,7 +71,7 @@ export component SectionHead inherits Rectangle {
     in property <string> note;
     height: 20px;
     n := Text { x: 0px; height: parent.height; text: root.idx; color: Theme.red2; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; vertical-alignment: center; }
-    t := Text { x: root.idx == "" ? 0px : n.preferred-width + 10px; height: parent.height; text: root.title; color: Theme.tx; font-family: Theme.disp; font-size: 16px * Theme.ts; font-weight: 700; letter-spacing: 0.8px; vertical-alignment: center; }
+    t := Text { x: root.idx == "" ? 0px : n.preferred-width + 10px; height: parent.height; text: root.title; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.8px; vertical-alignment: center; }
     nt := Text { x: parent.width - self.preferred-width; height: parent.height; text: root.note; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; vertical-alignment: center; }
     Rectangle { x: t.x + t.preferred-width + 12px; y: 10px; width: parent.width - self.x - (root.note == "" ? 0px : nt.preferred-width + 12px); height: 1px; background: Theme.ln; }
 }
@@ -96,7 +96,7 @@ export component Slot inherits Rectangle {
     border-width: 1px;
     border-color: Theme.ln;
     Hatch { x: 1px; y: 1px; width: parent.width - 2px; height: parent.height - 2px; }
-    Text { text: root.label; color: Theme.mut; font-family: Theme.disp; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; horizontal-alignment: center; vertical-alignment: center; }
+    Text { text: root.label; color: Theme.mut; font-family: Theme.disp; font-size: 16px; font-weight: 600; letter-spacing: 0.9px; horizontal-alignment: center; vertical-alignment: center; }
 }
 
 export component ModIcon inherits Rectangle {
@@ -190,7 +190,7 @@ export component Btn inherits Rectangle {
     property <color> fg: root.solid ? (root.danger ? white : Theme.ink) : (root.danger ? Theme.redtx : Theme.tx);
     property <length> cw: t.preferred-width + (root.icon == "" ? 0px : 22px);
     if root.icon != "": Icon { x: (parent.width - root.cw) / 2; y: (parent.height - 12px) / 2 + (ta.pressed ? 1px : 0px); d: root.icon; tint: root.fg; }
-    t := Text { x: (parent.width - root.cw) / 2 + (root.icon == "" ? 0px : 22px); y: ta.pressed ? 1px : 0px; width: self.preferred-width; height: parent.height; text: root.text; color: root.fg; font-family: Theme.disp; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 0.7px; vertical-alignment: center; }
+    t := Text { x: (parent.width - root.cw) / 2 + (root.icon == "" ? 0px : 22px); y: ta.pressed ? 1px : 0px; width: self.preferred-width; height: parent.height; text: root.text; color: root.fg; font-family: Theme.disp; font-size: 16px; font-weight: 600; letter-spacing: 0.7px; vertical-alignment: center; }
     ta := TouchArea { mouse-cursor: root.enabled ? pointer : default; clicked => { if root.enabled { root.clicked(); } } }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false; enabled: root.enabled;
         key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
@@ -225,7 +225,7 @@ export component PlayButton inherits Rectangle {
         x: root.off; y: root.off; width: parent.width; height: parent.height;
         HorizontalLayout {
             alignment: center; spacing: root.text-size * 0.45;
-            Text { text: root.label; color: root.enabled ? white : Theme.mut; font-family: Theme.disp; font-size: root.text-size; font-weight: 800; font-italic: true; letter-spacing: 1px; vertical-alignment: center; }
+            Text { text: root.label; color: root.enabled ? white : Theme.mut; font-family: Theme.disp; font-size: root.text-size; font-weight: 800;  letter-spacing: 1px; vertical-alignment: center; }
             if root.arrow: VerticalLayout { alignment: center;
                 Path { width: root.text-size * 0.5; height: root.text-size * 0.58; commands: "M 0 0 L 10 6 L 0 12 Z"; fill: root.enabled ? white : Theme.mut; stroke-width: 0px; }
             }

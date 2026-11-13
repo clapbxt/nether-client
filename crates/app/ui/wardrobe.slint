@@ -17,7 +17,7 @@ component CapeCard inherits Rectangle {
         x: 0px; y: 0px; width: parent.width; height: 130px; background: Theme.bg; clip: true;
         Hatch { width: parent.width; height: parent.height; }
         if !root.none: Image { y: 12px; height: parent.height - 24px; width: parent.width; source: root.cape.img; image-fit: contain; image-rendering: pixelated; }
-        if root.none: Text { text: "NONE"; color: Theme.mut; font-family: Theme.disp; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; horizontal-alignment: center; vertical-alignment: center; }
+        if root.none: Text { text: "NONE"; color: Theme.mut; font-family: Theme.disp; font-size: 16px; font-weight: 600; letter-spacing: 0.9px; horizontal-alignment: center; vertical-alignment: center; }
     }
     Text { x: 14px; y: 146px; width: parent.width - 100px; text: root.cape.name; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; overflow: elide; }
     if root.worn: Chip { x: parent.width - self.width - 12px; y: 146px; text: "In use"; hot: true; }
@@ -52,7 +52,7 @@ export component WardrobeScreen inherits Rectangle {
         Slash { x: 14px; y: 16px; width: Math.min(nm.preferred-width, 250px) + 36px; height: 32px; skew: 8px; color: Theme.ice; }
         nm := Text { x: 31px; y: 16px; width: Math.min(self.preferred-width, 250px); height: 32px; overflow: elide;
             text: root.picked ? SkinLib.skins[root.sel].name : (root.signed ? Backend.acct-name : "Player");
-            color: Theme.ink; font-family: Theme.disp; font-size: 22px; font-weight: 700; font-italic: true; vertical-alignment: center; }
+            color: Theme.ink; font-family: Theme.disp; font-size: 24px; font-weight: 700;  vertical-alignment: center; }
         if root.picked: Chip { x: parent.width - self.width - 14px; y: 21px; text: "Preview"; }
         // signed out: wearing needs the account
         if root.picked && !root.signed: Rectangle {
@@ -97,7 +97,7 @@ export component WardrobeScreen inherits Rectangle {
                 Rectangle { x: 0px; y: 0px; width: parent.width; height: 168px; clip: true; background: Theme.bg;
                     Hatch { width: parent.width; height: parent.height; }
                     if s.has-img: Image { x: 0px; y: 10px; width: parent.width; height: parent.height - 16px; source: s.img; image-fit: contain; }
-                    if !s.has-img: Text { text: "RENDERING"; color: Theme.mut; font-family: Theme.disp; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; horizontal-alignment: center; vertical-alignment: center; }
+                    if !s.has-img: Text { text: "RENDERING"; color: Theme.mut; font-family: Theme.disp; font-size: 16px; font-weight: 600; letter-spacing: 0.9px; horizontal-alignment: center; vertical-alignment: center; }
                     Chip { x: 10px; y: 10px; text: s.slim ? "SLIM" : "CLASSIC"; }
                     if SkinLib.worn-id == s.id: Chip { x: parent.width - self.width - 10px; y: 10px; text: "Wearing"; hot: true; }
                 }
@@ -157,7 +157,7 @@ export component WardrobeScreen inherits Rectangle {
             TouchArea { }
             Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.red; }
             Eyebrow { x: 28px; y: 28px; text: "DELETE SKIN"; color: Theme.redtx; }
-            Text { x: 28px; y: 48px; width: parent.width - 56px; text: SkinLib.skins[root.del-idx].name; color: Theme.tx; font-family: Theme.disp; font-size: 34px; font-weight: 800; font-italic: true; overflow: elide; }
+            Text { x: 28px; y: 48px; width: parent.width - 56px; text: SkinLib.skins[root.del-idx].name; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800;  overflow: elide; }
             Text { x: 28px; y: 98px; width: parent.width - 56px; text: "It is removed from your library on this PC. The skin your account is wearing does not change."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
             kb := Btn { x: parent.width - 28px - self.width - db.width - 10px; y: parent.height - 64px; text: "KEEP IT"; clicked => { root.del-idx = -1; } }
             db := Btn { x: parent.width - 28px - self.width; y: parent.height - 64px; text: "DELETE"; danger: true; solid: true; icon: Ico.trash;

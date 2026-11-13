@@ -984,6 +984,7 @@ fn main() -> Result<(), slint::PlatformError> {
         backend.set_calm(p.calm);
         ui.global::<Theme>().set_calm(p.calm);
         backend.set_lp_accent(p.accent);
+        backend.set_lp_theme(p.theme);
         backend.set_lp_text(p.text);
         backend.set_lp_capes(p.capes);
         backend.set_lp_discord(p.discord);
@@ -991,6 +992,8 @@ fn main() -> Result<(), slint::PlatformError> {
         backend.set_discord_ready(discord::app_id(&shared.paths).is_some());
         discord::enable(&shared.paths, p.discord);
         settings::apply_look(&ui, p.accent, p.text);
+        settings::apply_theme(&ui, p.theme);
+        client::set_look(&shared, settings::THEME_NAMES[p.theme.clamp(0, 3) as usize], settings::accent_hex(p.accent));
     }
     {
         let (weak, sh) = (ui.as_weak(), shared.clone());
@@ -998,8 +1001,10 @@ fn main() -> Result<(), slint::PlatformError> {
             let Some(ui) = weak.upgrade() else { return };
             let b = ui.global::<Backend>();
             let old = prefs::load(&sh.paths);
-            let p = prefs::LauncherPrefs { gpu: b.get_lp_gpu(), autostart: b.get_lp_autostart(), on_launch: b.get_lp_on_launch(), on_close: b.get_lp_on_close(), calm: b.get_calm(), accent: b.get_lp_accent(), text: b.get_lp_text(), capes: b.get_lp_capes(), discord: b.get_lp_discord(), auto_update: b.get_lp_auto_update() };
+            let p = prefs::LauncherPrefs { gpu: b.get_lp_gpu(), autostart: b.get_lp_autostart(), on_launch: b.get_lp_on_launch(), on_close: b.get_lp_on_close(), calm: b.get_calm(), accent: b.get_lp_accent(), theme: b.get_lp_theme(), text: b.get_lp_text(), capes: b.get_lp_capes(), discord: b.get_lp_discord(), auto_update: b.get_lp_auto_update() };
             settings::apply_look(&ui, p.accent, p.text);
+            settings::apply_theme(&ui, p.theme);
+            client::set_look(&sh, settings::THEME_NAMES[p.theme.clamp(0, 3) as usize], settings::accent_hex(p.accent));
             discord::enable(&sh.paths, p.discord);
             ui.global::<Theme>().set_calm(p.calm);
             if p.autostart != old.autostart {

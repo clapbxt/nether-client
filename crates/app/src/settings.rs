@@ -14,12 +14,38 @@ const MAJORS: [(u32, &str); 4] = [(8, "Minecraft 1.16.5 and older"), (17, "Minec
 
 /// Accent palettes: base, bright, deep, text on dark, pressed, PLAY plate (same order as the Settings swatches).
 const ACCENTS: [[u32; 6]; 5] = [
-    [0xE10600, 0xFF3B2F, 0x8F0400, 0xFF7A70, 0xC40500, 0x4A0200], // racing red
+    [0xE5372D, 0xFF6157, 0x9E1F18, 0xFF8A82, 0xC42A21, 0x4A1210], // racing red
     [0xE8590C, 0xFF7A2E, 0x8F3604, 0xFFA06B, 0xC74A08, 0x4A1C02], // ember
     [0x22A845, 0x3DDC6A, 0x146B2B, 0x7BE89A, 0x1B8A39, 0x0B3816], // acid
     [0x1F6FEB, 0x4C8DFF, 0x123F86, 0x8AB4FF, 0x1A5DC7, 0x0A2148], // cobalt
     [0x8B3DFF, 0xA66BFF, 0x4F1F99, 0xC4A1FF, 0x7330D9, 0x26104A], // violet
 ];
+/// Themes: bg, s1, s2, s3, hairline, hairline2, text, dim, mut, ink (text on primary fills), primary fill, glass, glass hairline, hover (ARGB).
+const THEMES: [[u32; 14]; 4] = [
+    [0xFF000000, 0xFF0B0B0D, 0xFF141418, 0xFF1D1D23, 0x14FFFFFF, 0x29FFFFFF, 0xFFF1F2F5, 0xFFA3A8B3, 0xFF6B707B, 0xFF09090C, 0xFFF1F2F5, 0xA80B0B0D, 0x1AFFFFFF, 0x0FFFFFFF], // OLED
+    [0xFF14151A, 0xFF1B1D23, 0xFF23262E, 0xFF2D313B, 0x12FFFFFF, 0x24FFFFFF, 0xFFE9ECF1, 0xFFA0A7B4, 0xFF6D7584, 0xFF0E0F13, 0xFFE9ECF1, 0xA81B1D23, 0x1AFFFFFF, 0x0FFFFFFF], // Obsidian
+    [0xFF1A2130, 0xFF202839, 0xFF283245, 0xFF334057, 0x14BED2FF, 0x29BED2FF, 0xFFE6ECF7, 0xFF9EABC2, 0xFF6C7A93, 0xFF121823, 0xFFE6ECF7, 0xA8202839, 0x1ABED2FF, 0x10BED2FF], // Slate
+    [0xFFEEF1F5, 0xFFFFFFFF, 0xFFF4F6F9, 0xFFE4E8EE, 0x17141E32, 0x2E141E32, 0xFF171A21, 0xFF545C6B, 0xFF8790A0, 0xFFF1F2F5, 0xFF171A21, 0xB8FFFFFF, 0x24141E32, 0x0F141E32], // Ice (light)
+];
+pub const THEME_NAMES: [&str; 4] = ["OLED", "Obsidian", "Slate", "Ice"];
+
+fn argb(c: u32) -> Color { Color::from_argb_u8((c >> 24) as u8, (c >> 16) as u8, (c >> 8) as u8, c as u8) }
+
+/// Push the theme surfaces into the Theme global.
+pub fn apply_theme(ui: &AppWindow, theme: i32) {
+    let c = THEMES[theme.clamp(0, THEMES.len() as i32 - 1) as usize];
+    let t = ui.global::<Theme>();
+    t.set_bg(argb(c[0])); t.set_s1(argb(c[1])); t.set_s2(argb(c[2])); t.set_s3(argb(c[3])); t.set_ln(argb(c[4])); t.set_ln2(argb(c[5]));
+    t.set_tx(argb(c[6])); t.set_dim(argb(c[7])); t.set_mut(argb(c[8])); t.set_ink(argb(c[9])); t.set_ice(argb(c[10]));
+    t.set_glass(argb(c[11])); t.set_glass_ln(argb(c[12])); t.set_hov(argb(c[13]));
+}
+
+/// Accent pair (base, bright) as "#RRGGBB" for the in-game menu.
+pub fn accent_hex(accent: i32) -> (String, String) {
+    let a = ACCENTS[accent.clamp(0, ACCENTS.len() as i32 - 1) as usize];
+    (format!("#{:06X}", a[0]), format!("#{:06X}", a[1]))
+}
+
 const TEXT_SCALES: [f32; 3] = [1.0, 1.1, 1.2];
 
 fn rgb(c: u32) -> Color { Color::from_rgb_u8((c >> 16) as u8, (c >> 8) as u8, c as u8) }
