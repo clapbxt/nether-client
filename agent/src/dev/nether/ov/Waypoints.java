@@ -95,7 +95,7 @@ final class Waypoints extends Module {
 
     void addHere() {
         if (Game.reducedDebug()) { // the server hides coordinates: a waypoint list would show them
-            toast = "COORDINATES ARE HIDDEN ON THIS SERVER";
+            toast = "Coordinates are hidden on this server";
             toastAt = System.currentTimeMillis();
             return;
         }
@@ -113,7 +113,7 @@ final class Waypoints extends Module {
         w.put("on", true);
         l.add(w);
         changed();
-        toast = "WAYPOINT ADDED  -  " + name.toUpperCase(Locale.ROOT);
+        toast = "Waypoint added: " + name;
         toastAt = System.currentTimeMillis();
     }
 
@@ -159,12 +159,11 @@ final class Waypoints extends Module {
             else {
                 Gfx.s = Gfx.base;
                 float a = Config.calm() ? 1 : Math.min(1, Math.min(age / 120f, (1800 - age) / 300f));
-                float tw = Gfx.width(Gfx.SEMI, 11, toast, 1.2f) + 28, tx = fbW / Gfx.s / 2 - tw / 2, ty = 54;
+                float tw = Gfx.width(Gfx.UI, 12, toast) + 32, tx = fbW / Gfx.s / 2 - tw / 2, ty = 54;
                 float a0 = Gfx.alpha;
                 Gfx.alpha = a0 * a;
-                Gfx.rect(tx, ty, tw, 26, 0, Gfx.a(Gfx.BG, 0.9f));
-                Gfx.rect(tx, ty, 3, 26, 0, Gfx.RED);
-                Gfx.textC(Gfx.SEMI, 11, tx + tw / 2 + 1, ty + 13, Gfx.ICE, toast, 1.2f);
+                Toast.glass(tx, ty, tw, 28);
+                Gfx.textC(Gfx.UI, 12, tx + tw / 2, ty + 14, Gfx.ICE, toast, 0);
                 Gfx.alpha = a0;
             }
         }
@@ -178,7 +177,7 @@ final class Waypoints extends Module {
         int c = col(w);
         String name = str(w, "name", "Waypoint");
         String ds = dist ? (d >= 1000 ? String.format(Locale.ROOT, "%.1fk", d / 1000) : String.valueOf(Math.round(d))) + " m" : null;
-        float nw = Gfx.width(Gfx.SEMI, 11, name, 0.4f), dw = ds == null ? 0 : Gfx.width(Gfx.MONO, 10, ds) + 10;
+        float nw = Gfx.width(Gfx.SEMI, 11, name), dw = ds == null ? 0 : Gfx.width(Gfx.MONO, 10, ds) + 10;
         float pw = nw + dw + 22, ph = 20, px = x - pw / 2, py = y - 10 - ph;
         // plates never cover each other: move up past any plate already drawn this frame
         for (boolean moved = true; moved; ) {
@@ -191,13 +190,13 @@ final class Waypoints extends Module {
         if (placed < boxes.length) { float[] r = boxes[placed++]; r[0] = px; r[1] = py; r[2] = pw; r[3] = ph; }
         float a0 = Gfx.alpha;
         if (off) Gfx.alpha = a0 * 0.8f;
-        // the point itself: square with a dark outline, a short stem up to the plate
-        Gfx.rect(x - 4, y - 4, 8, 8, 0, Gfx.a(Gfx.BLACK, 0.7f));
-        Gfx.rect(x - 3, y - 3, 6, 6, 0, c);
+        // the point itself: dot with a dark outline, a short stem up to the plate
+        Gfx.rect(x - 4, y - 4, 8, 8, 4, Gfx.a(Gfx.BLACK, 0.7f));
+        Gfx.rect(x - 3, y - 3, 6, 6, 3, c);
         Gfx.rect(x - 0.5f, py + ph, 1, y - 4 - (py + ph), 0, Gfx.a(c, 0.7f));
-        Gfx.rect(px, py, pw, ph, 0, Gfx.a(Gfx.BG, 0.78f));
-        Gfx.rect(px, py, 3, ph, 0, c);
-        Gfx.text(Gfx.SEMI, 11, px + 11, py + ph / 2, Gfx.ICE, name, true, 0.4f);
+        Gfx.rect(px, py, pw, ph, 6, Gfx.a(Gfx.BG, 0.78f));
+        Gfx.rect(px + 1, py + 5, 3, ph - 10, 1.5f, c);
+        Gfx.text(Gfx.SEMI, 11, px + 11, py + ph / 2, Gfx.ICE, name, true, 0);
         if (ds != null) Gfx.text(Gfx.MONO, 10, px + 11 + nw + 10, py + ph / 2, Gfx.DIM, ds, true, 0);
         Gfx.alpha = a0;
     }

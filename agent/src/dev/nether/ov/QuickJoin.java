@@ -101,14 +101,12 @@ final class QuickJoin {
         int n = Math.min(l.size(), (int) ((bottom - topLimit - hh - 6) / rh));
         if (n <= 0) return;
         float h = hh + n * rh + 6, y = bottom - h, line = MenuBack.lw();
-        Gfx.rect(x, y, w, h, 0, Gfx.a(Gfx.BG, 0.82f));
-        Gfx.ring(x, y, w, h, 0, 0.5f, Gfx.LN2);
-        Gfx.rect(x, y, 2, 12, 0, Gfx.RED2);
-        Gfx.text(Gfx.SEMI, 10.5f, x + 14, y + hh / 2, Gfx.DIM, "QUICK JOIN", false, 1.6f);
-        String all = "ALL SERVERS";
-        float aw = Gfx.width(Gfx.SEMI, 10, all, 1.2f);
+        MainMenu.glass(x, y, w, h);
+        Gfx.text(Gfx.SEMI, 10.5f, x + 14, y + hh / 2, Gfx.SUB, "QUICK JOIN");
+        String all = "All servers";
+        float aw = Gfx.width(Gfx.UI, 10.5f, all);
         boolean ah = MainMenu.over(x + w - aw - 22, y, aw + 22, hh);
-        Gfx.text(Gfx.SEMI, 10, x + w - aw - 14, y + hh / 2, ah ? Gfx.ICE : Gfx.SUB, all, false, 1.2f);
+        Gfx.text(Gfx.UI, 10.5f, x + w - aw - 14, y + hh / 2, ah ? Gfx.ICE : Gfx.DIM, all);
         if (MainMenu.hit(x + w - aw - 22, y, aw + 22, hh)) MainMenu.act(MainMenu.MULTI, screen);
         Gfx.rect(x + 12, y + hh, w - 24, line, 0, Gfx.LN);
         for (int i = 0; i < n; i++) {
@@ -117,34 +115,34 @@ final class QuickJoin {
             boolean hv = MainMenu.over(x + 4, ry, w - 8, rh);
             float t = MainMenu.an("qj" + i, hv);
             if (t > 0.01f) {
-                Gfx.rect(x + 4, ry, w - 8, rh, 0, Gfx.a(Gfx.ICE, 0.06f * t));
-                Gfx.rect(x + 4, ry, 2, rh, 0, Gfx.a(Gfx.RED2, t));
+                Gfx.rect(x + 4, ry, w - 8, rh, 4, Gfx.a(Gfx.ICE, 0.06f * t));
+                Gfx.rect(x + 4, ry + 6, 3, rh - 12, 1.5f, Gfx.a(Th.ac, t));
             }
             float ix = x + 14, iy = ry + (rh - 26) / 2;
             if (s.img != null && (s.tex == null || !Gfx.hasTexture(s.tex))) { s.tex = "menu.srv." + Integer.toHexString(s.ip.toLowerCase(Locale.ROOT).hashCode()); Gfx.texture(s.tex, s.img, true); }
-            if (s.tex != null && Gfx.hasTexture(s.tex)) Gfx.image(s.tex, ix, iy, 26, 26, 0xFFFFFFFF, 0);
+            if (s.tex != null && Gfx.hasTexture(s.tex)) Gfx.image(s.tex, ix, iy, 26, 26, 0xFFFFFFFF, 4);
             else {
-                Gfx.rect(ix, iy, 26, 26, 0, Gfx.CARD2);
+                Gfx.rect(ix, iy, 26, 26, 4, Gfx.S3);
                 Gfx.textC(Gfx.HEAD, 14, ix + 13, iy + 13, Gfx.DIM, s.name.isEmpty() ? "?" : s.name.substring(0, 1).toUpperCase(Locale.ROOT), 0);
             }
             // right column: signal bars over players, or JOIN on hover
             float rx = x + w - 14, tx = ix + 36;
             String pl = s.state == 2 && s.online >= 0 ? s.online + "/" + s.max : s.state == 3 ? "OFFLINE" : "";
-            float rw = Math.max(26, Gfx.width(Gfx.MONO, 9.5f, pl, 0.4f));
-            if (t > 0.5f) Gfx.text(Gfx.SEMI, 11, rx - Gfx.width(Gfx.SEMI, 11, "JOIN", 1.4f), ry + rh / 2, Gfx.RED2, "JOIN", false, 1.4f);
+            float rw = Math.max(26, Gfx.width(Gfx.MONO, 9.5f, pl));
+            if (t > 0.5f) Gfx.text(Gfx.SEMI, 11, rx - Gfx.width(Gfx.SEMI, 11, "JOIN"), ry + rh / 2, Th.ac2, "JOIN");
             else {
                 bars(rx - 21, ry + 9, s);
-                if (!pl.isEmpty()) Gfx.text(Gfx.MONO, 9.5f, rx - Gfx.width(Gfx.MONO, 9.5f, pl, 0.4f), ry + 28, s.state == 3 ? Gfx.MUT : Gfx.SUB, pl, false, 0.4f);
+                if (!pl.isEmpty()) Gfx.text(Gfx.MONO, 9.5f, rx - Gfx.width(Gfx.MONO, 9.5f, pl), ry + 28, s.state == 3 ? Gfx.MUT : Gfx.SUB, pl);
             }
             float maxW = rx - rw - 10 - tx;
-            String nm = MainMenu.fit(Gfx.SEMI, 12, s.name, 0.4f, maxW - (s.last ? 34 : 0));
-            float nw = Gfx.text(Gfx.SEMI, 12, tx, ry + 14, Gfx.mix(Gfx.ICE, 0xFFFFFFFF, t), nm, false, 0.4f);
-            if (s.last) {
-                Gfx.rect(tx + nw + 6, ry + 8, 26, 12, 0, Gfx.a(Gfx.RED, 0.22f));
-                Gfx.textC(Gfx.MONO, 7.5f, tx + nw + 19, ry + 14, Gfx.RED2, "LAST", 0.6f);
+            String nm = MainMenu.fit(Gfx.SEMI, 12, s.name, 0, maxW - (s.last ? 34 : 0));
+            float nw = Gfx.text(Gfx.SEMI, 12, tx, ry + 14, Gfx.mix(Gfx.ICE, 0xFFFFFFFF, t), nm);
+            if (s.last) { // v6 Chip (hot)
+                Gfx.rect(tx + nw + 6, ry + 8, 26, 12, 3, Gfx.a(Th.ac, 0.19f));
+                Gfx.textC(Gfx.MONO, 7.5f, tx + nw + 19, ry + 14, Th.ac2, "LAST", 0);
             }
             String sub = !MainMenu.MODULE.bool("ping") ? s.ip : s.state == 2 && s.motd != null && !s.motd.isEmpty() ? s.motd : s.state == 3 ? "Can't reach server" : s.state == 2 ? s.ip : "Pinging...";
-            Gfx.text(Gfx.UI, 10.5f, tx, ry + 28, Gfx.SUB, MainMenu.fit(Gfx.UI, 10.5f, sub, 0, maxW), false, 0);
+            Gfx.text(Gfx.UI, 10.5f, tx, ry + 28, Gfx.DIM, MainMenu.fit(Gfx.UI, 10.5f, sub, 0, maxW));
             if (MainMenu.hit(x + 4, ry, w - 8, rh)) connect(s, screen);
         }
     }
@@ -155,8 +153,8 @@ final class QuickJoin {
         int sweep = s.state == 1 || (s.state == 0 && MainMenu.MODULE.bool("ping")) ? (Config.calm() ? 2 : (int) (System.currentTimeMillis() / 140 % 5)) : -1;
         for (int i = 0; i < 5; i++) {
             float bh = 3 + i * 2;
-            int c = s.state == 3 ? Gfx.a(Gfx.RED2, 0.45f) : i < lit ? Gfx.ICE : i == sweep ? Gfx.a(Gfx.ICE, 0.55f) : Gfx.a(Gfx.ICE, 0.14f);
-            Gfx.rect(x + i * 4.5f, y + 11 - bh, 3, bh, 0, c);
+            int c = s.state == 3 ? Gfx.a(Th.ac2, 0.45f) : i < lit ? Gfx.ICE : i == sweep ? Gfx.a(Gfx.ICE, 0.55f) : Gfx.a(Gfx.ICE, 0.14f);
+            Gfx.rect(x + i * 4.5f, y + 11 - bh, 3, bh, 1, c);
         }
     }
 

@@ -37,17 +37,13 @@ Host a server for friends in one click. There's no telemetry, and updates instal
 - **A built-in client on every version, no mod needed.** 33 modules:
   - **HUD:** FPS with lows, frame graph, CPS, keystrokes, armor, potions, coordinates, compass, waypoints, vitals, item counter.
   - **PvP:** reach display and combo counter.
-  - **Comfort:** zoom, toggle sprint and sneak, precision mouse, camera comfort.
+  - **Comfort:** zoom.
   - **Media:** media player for Spotify or your browser, with synced lyrics.
   - All of it opens on Right Shift.
 - **A HUD you design.** Drag, snap, anchor, multi-select, undo. Every element has its own colours, outline and scale.
   - Profiles save whole layouts and share as a code.
 - **A Nether main menu** on the title and pause screens: layouts, backgrounds, and quick-join for your servers. One click switches back to vanilla.
-- **Safe by default.**
-  - Every module carries a badge: SAFE, COSMETIC or CHECK RULES.
-  - Server-safe mode switches the CHECK RULES ones off.
-  - Auto Safe Mode does that by itself on strict servers such as Hypixel.
-  - Streamer Mode hides coordinates, addresses and media.
+- **Safe by default.** No ESP, automation or anything that reads data the server didn't send you ([SAFETY.md](SAFETY.md)).
 - **Host for friends.** Vanilla, Fabric or Paper servers in a few clicks, several at once. Plugins and mods come from Modrinth.
   - The launcher opens the port by itself (UPnP), or gives you a free tunnel address when your router won't.
   - Friends join from any launcher: **Multiplayer → Add Server**, then paste the address.

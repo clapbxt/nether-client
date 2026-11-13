@@ -8,8 +8,8 @@ import java.util.Map;
 import javax.imageio.ImageIO;
 
 /**
- * Item icons without the game's renderer: the item's own texture is read as a resource from the game's class loader
- * (client jar / mod jars; resource packs are not consulted) and drawn by {@link Gfx#icon} as plain colour quads.
+ * Item icons without the game's renderer: the item's own texture is read through {@link Res} (enabled resource packs
+ * first, then the client jar / mod jars) and drawn by {@link Gfx#icon} as plain colour quads.
  * Items without a flat texture (blocks, heads) have no icon; callers fall back to text.
  */
 final class Icons {
@@ -18,10 +18,24 @@ final class Icons {
     private static final int[] NONE = new int[0];
     private static final int MAX = 32, LEATHER = 0xA06540;
     private static final Map<String, int[]> cache = new HashMap<>();
+    private static int gen = -1;
+
+    /** Drops every cached icon when the resource packs changed. */
+    private static void fresh() {
+        int g = Res.gen();
+        if (g != gen) { gen = g; cache.clear(); }
+    }
+
+    /** First of these item ids that has a texture (module icons: newer items first, older fallbacks after), or null. */
+    static int[] first(String... ids) {
+        for (String id : ids) { int[] px = get(id); if (px != null) return px; }
+        return null;
+    }
 
     /** n*n ARGB pixels (n <= 32) for an item id like "minecraft:diamond_helmet", or null. */
     static int[] get(String id) {
         if (id == null) return null;
+        fresh();
         int[] px = cache.get(id);
         if (px == null) {
             try { px = load(id); } catch (Throwable t) { px = null; }
@@ -34,6 +48,7 @@ final class Icons {
     /** Status effect icon (n*n ARGB) for a key from {@link Game#effects}: "mob_effect:<ns>:<path>" (1.20.2+) or "inv:<index>" (1.8.9 inventory sheet). */
     static int[] effect(String key) {
         if (key == null) return null;
+        fresh();
         int[] px = cache.get(key);
         if (px == null) {
             try { px = loadEffect(key); } catch (Throwable t) { px = null; }
@@ -59,9 +74,7 @@ final class Icons {
         return null;
     }
 
-    private static BufferedImage image(String path) throws Exception {
-        try (InputStream in = Game.loader().getResourceAsStream(path)) { return in == null ? null : decode(in); }
-    }
+    private static BufferedImage image(String path) { return Res.image(path); }
 
     /** PNG decode in memory (ImageIO.read(InputStream) would spool through a temp file in java.io.tmpdir). */
     static BufferedImage decode(InputStream in) throws java.io.IOException {
@@ -92,19 +105,37 @@ final class Icons {
             int[] ov = read(ns, path + "_overlay");
             if (ov != null && ov.length == px.length) for (int i = 0; i < px.length; i++) if ((ov[i] >>> 24) > 127) px[i] = ov[i];
         }
+        if (ns.equals("minecraft") && (path.equals("potion") || path.equals("splash_potion"))) { // bottle + liquid tinted like Instant Health
+            int[] liq = read(ns, "potion_overlay");
+            if (liq != null && liq.length == px.length)
+                for (int i = 0; i < px.length; i++) {
+                    int p = liq[i];
+                    if ((p >>> 24) < 128) continue;
+                    px[i] = 0xFF000000 | (((p >> 16 & 255) * 0xF8 / 255) << 16) | (((p >> 8 & 255) * 0x24 / 255) << 8) | ((p & 255) * 0x23 / 255);
+                }
+        }
         return px;
     }
 
+    /** 1.8.9 item texture names that differ from the 1.13+ ones (module icons and presets only). */
+    private static final Map<String, String> OLD = new HashMap<>();
+    static {
+        String[] p = {"potion", "items/potion_bottle_drinkable", "splash_potion", "items/potion_bottle_splash", "potion_overlay", "items/potion_overlay",
+            "music_disc_cat", "items/record_cat", "writable_book", "items/book_writable", "oak_sign", "items/sign", "map", "items/map_empty",
+            "clock_00", "items/clock", "compass_00", "items/compass", "golden_apple", "items/apple_golden", "torch", "blocks/torch_on"};
+        for (int i = 0; i < p.length; i += 2) OLD.put(p[i], p[i + 1]);
+    }
+
     private static int[] read(String ns, String path) throws Exception {
-        ClassLoader cl = Game.loader();
         BufferedImage img = null;
-        // 1.13+ item/<id> | 1.8.9 items/<id>, where gold armor textures are still gold_*; block items (held blocks) fall back to the block's own face
-        String[] files = {"item/" + path, "items/" + path, path.startsWith("golden_") ? "items/gold_" + path.substring(7) : null, "block/" + path, "blocks/" + path};
+        // 1.13+ item/<id> | 1.8.9 items/<id> (gold armor still gold_*, some 1.8.9 names differ); block items fall back to the block's face
+        String old = OLD.get(path);
+        String[] files = {"item/" + path, "items/" + path, path.startsWith("golden_") ? "items/gold_" + path.substring(7) : null,
+            old, "block/" + path, "blocks/" + path};
         for (String f : files) {
             if (f == null) continue;
-            try (InputStream in = cl.getResourceAsStream("assets/" + ns + "/textures/" + f + ".png")) {
-                if (in != null) { img = decode(in); break; }
-            }
+            img = Res.image("assets/" + ns + "/textures/" + f + ".png");
+            if (img != null) break;
         }
         if (img == null || img.getWidth() < 1 || img.getHeight() < img.getWidth()) return null;
         int w = img.getWidth(), n = Math.min(w, MAX); // animated textures are vertical strips: first frame only

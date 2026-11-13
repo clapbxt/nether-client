@@ -35,6 +35,7 @@ public final class Overlay {
         Plat.cur.install();
         Hook.target = Overlay::frame;
         Hook.name = Capes::name;
+        Hook.chat = Capes::chat;
     }
 
     private static void init() {

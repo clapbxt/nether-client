@@ -32,12 +32,12 @@ final class Gfx {
 
     // palette (ARGB), matches crates/app/ui/theme.slint
     /** SUB: small informative labels (between DIM and MUT, readable at 9 px on BG); MUT is for decoration only. */
-    static final int BG = 0xFF060608, CARD = 0xFF0D0D11, CARD2 = 0xFF15151B, S3 = 0xFF1F1F27, ICE = 0xFFE9EDF2, DIM = 0xFFA7AFBC, MUT = 0xFF707988, SUB = 0xFF8F98A6,
-        RED = 0xFFE5372D, RED2 = 0xFFFF6157, LN = 0x14FFFFFF, LN2 = 0x2BFFFFFF, BLACK = 0xFF000000;
+    static final int BG = 0xFF000000, CARD = 0xFF0B0B0D, CARD2 = 0xFF141418, S3 = 0xFF1D1D23, ICE = 0xFFF1F2F5, DIM = 0xFFA3A8B3, MUT = 0xFF6B707B, SUB = 0xFF8F95A1,
+        RED = 0xFFE5372D, RED2 = 0xFFFF6157, LN = 0x14FFFFFF, LN2 = 0x29FFFFFF, BLACK = 0xFF000000;
 
     /** s = pixels per logical unit now; base = HUD unit (half a GUI pixel); gui = the game's GUI scale in pixels */
     static float s = 1, base = 1, gui = 2, alpha = 1, dt = 0.016f;
-    /** Pit Wall: corners are square (radius ignored) unless a caller draws real circles (crosshair styles) with round = true. */
+    /** Corners are square (radius ignored) unless round is set: v6 menus, title screen and HUD draw with it on. */
     static boolean round;
     static int fbW, fbH;
     /** Smallest text size in pixels while set (menus: never below a legible size on small windows / GUI scale 1). */

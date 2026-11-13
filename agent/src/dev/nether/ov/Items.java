@@ -30,7 +30,7 @@ final class Items extends Module {
         for (String[] p : PRESETS) add(Setting.bool(p[0], p[1], p[0].equals("pearls") || p[0].equals("gapples")));
         add(Setting.bool("held", "Held item total", false).hint("Total of the item you are holding, across your whole inventory."));
         add(Setting.text("custom", "More item ids", "", 120).hint("Item ids separated by commas, e.g. snowball, minecraft:cobweb."));
-        add(Setting.choice("layout", "Layout", "Column", "Column", "Row"));
+        add(Setting.choice("layout", "Layout", "Column", "Column", "Row", "Vanilla").hint("Vanilla: the game's own hotbar slots and stack counts (resource packs apply)"));
         add(Setting.bool("icons", "Item icons", true).hint("Flat item textures; items without one show their name."));
         add(Setting.bool("hideZero", "Hide at zero", true).hint("Items you have none of are left out."));
         add(Setting.slider("low", "Low count at or below", 0, 64, 1, 0).hint("Counts this low turn red (0 = off)."));
@@ -110,9 +110,11 @@ final class Items extends Module {
     }
 
     private boolean horizontal() { return str("layout").equals("Row"); }
+    private boolean vanilla() { return str("layout").equals("Vanilla"); }
 
     @Override void measure() {
         List<Row> l = list();
+        if (vanilla()) { w = Vanilla.stripW(Math.max(1, l.size()), false); h = Vanilla.stripH(1, false); return; }
         float wsum = 0, wmax = 0;
         for (Row r : l) { float c = cell(r); wsum += c + 12; wmax = Math.max(wmax, c); }
         float pad = RowsModule.PX;
@@ -121,17 +123,34 @@ final class Items extends Module {
     }
 
     @Override void draw(float x, float y) {
-        panel(x, y, w, h);
         List<Row> l = list();
+        if (vanilla()) { drawVanilla(x, y, l); return; }
+        panel(x, y, w, h);
         float cx = x + RowsModule.PX + (bool("accent") && bool("bg") ? 1 : 0);
         int low = (int) num("low");
         for (int i = 0; i < l.size(); i++) {
             Row r = l.get(i);
             float cy = horizontal() ? y + h / 2 : y + RowsModule.PY + RH * (i + 0.5f), tx = cx;
             if (bool("icons") && r.px != null) { Gfx.icon(r.px, tx, cy - IC / 2, IC); tx += IC + 6; }
-            else { Gfx.text(Gfx.SEMI, 10, tx, cy, labelColor(), r.label, bool("shadow"), 0.6f); tx += Gfx.width(Gfx.SEMI, 10, r.label, 0.6f) + 8; }
+            else { Gfx.text(Gfx.SEMI, 10, tx, cy, labelColor(), r.label, bool("shadow"), 0); tx += Gfx.width(Gfx.SEMI, 10, r.label) + 8; }
             Gfx.text(Gfx.MONO, 13, tx, cy, low > 0 && r.n <= low ? Gfx.RED2 : color(), String.valueOf(r.n), bool("shadow"), 0);
             if (horizontal()) cx += cell(r) + 12;
+        }
+    }
+
+    /** The game's hotbar slots with each item and its total as the stack count (red at or below the low mark). */
+    private void drawVanilla(float x, float y, List<Row> l) {
+        if (Vanilla.slots()) Vanilla.strip(x, y, Math.max(1, l.size()), false);
+        else panel(x, y, w, h);
+        int low = (int) num("low");
+        for (int i = 0; i < l.size(); i++) {
+            Row r = l.get(i);
+            float ix = Vanilla.itemX(x, i, false), iy = Vanilla.itemY(y, i, false);
+            int[] px = r.px != null ? r.px : Icons.get(r.icon);
+            if (px != null) Gfx.icon(px, ix, iy, 32);
+            else Gfx.text(Gfx.SEMI, 8, ix + 16 - Gfx.width(Gfx.SEMI, 8, r.label.substring(0, Math.min(4, r.label.length())), 0.4f) / 2, iy + 12, labelColor(),
+                r.label.substring(0, Math.min(4, r.label.length())), true, 0.4f);
+            Vanilla.count(String.valueOf(r.n), ix, iy, low > 0 && r.n <= low ? 0xFFFF5555 : 0xFFFFFFFF);
         }
     }
 }

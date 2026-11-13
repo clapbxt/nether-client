@@ -111,6 +111,8 @@ final class MainMenu {
         if (s == null) { panelOpen = false; return; }
         boolean isTitle = cTitle.isInstance(s);
         Gfx.minPx = 9; // corner text and labels stay legible in small windows
+        boolean r0 = Gfx.round;
+        Gfx.round = true; // v6: rounded buttons, chips and glass
         try {
             if (isTitle) {
                 title = true;
@@ -128,6 +130,7 @@ final class MainMenu {
             }
         } finally {
             Gfx.minPx = 0;
+            Gfx.round = r0;
             Gfx.s = Gfx.base;
         }
     }
@@ -298,18 +301,18 @@ final class MainMenu {
             float s = 46 * sc;
             ghast(centred ? x - s / 2 : x + 2, y, s);
             if (centred) {
-                Gfx.textC(Gfx.HEAD, 34 * sc, x, y + 80 * sc, Gfx.ICE, "NETHER", 3f * sc);
-                Gfx.textC(Gfx.MONO, 9 * sc, x, y + 104 * sc, Gfx.RED2, "CLIENT", 6f * sc);
+                Gfx.textC(Gfx.HEAD, 34 * sc, x, y + 80 * sc, Gfx.ICE, "NETHER", 0);
+                Gfx.textC(Gfx.UI, 11 * sc, x, y + 104 * sc, Gfx.DIM, "CLIENT", 0);
             } else {
-                Gfx.text(Gfx.HEAD, 34 * sc, x, y + 80 * sc, Gfx.ICE, "NETHER", false, 3f * sc);
-                Gfx.text(Gfx.MONO, 9 * sc, x + 2, y + 104 * sc, Gfx.RED2, "CLIENT", false, 6f * sc);
+                Gfx.text(Gfx.HEAD, 34 * sc, x, y + 80 * sc, Gfx.ICE, "NETHER");
+                Gfx.text(Gfx.UI, 11 * sc, x + 2, y + 104 * sc, Gfx.DIM, "CLIENT");
             }
             sy = y + 122 * sc;
         }
         if (MODULE.bool("splash") && splash != null) {
-            String sp = fit(Gfx.SEMI, 11, "/ " + splash, 0.4f, 300);
-            if (centred) Gfx.textC(Gfx.SEMI, 11, x, sy + 6, Gfx.a(Gfx.RED2, 0.95f), sp, 0.4f);
-            else Gfx.text(Gfx.SEMI, 11, x + 2, sy + 6, Gfx.a(Gfx.RED2, 0.95f), sp, false, 0.4f);
+            String sp = fit(Gfx.UI, 11, splash, 0, 300);
+            if (centred) Gfx.textC(Gfx.UI, 11, x, sy + 6, Gfx.DIM, sp, 0);
+            else Gfx.text(Gfx.UI, 11, x + 2, sy + 6, Gfx.DIM, sp);
         }
     }
 
@@ -341,7 +344,7 @@ final class MainMenu {
     private static boolean rail(float W, float H, Object scr, float rise) {
         float RW = Math.min(330, Math.max(270, W * 0.3f));
         Gfx.rect(0, 0, RW, H, 0, Gfx.a(Gfx.BG, 0.84f));
-        Gfx.rect(RW - MenuBack.lw(), 0, MenuBack.lw(), H, 0, Gfx.LN2);
+        Gfx.rect(RW - MenuBack.lw(), 0, MenuBack.lw(), H, 0, Gfx.LN);
         boolean mods = cMods != null;
         float x = 34, bw = RW - 68, bh = 30, gap = 6;
         float y = 70 + rise;
@@ -368,7 +371,7 @@ final class MainMenu {
     private static void dock(float W, float H, Object scr, float rise) {
         float barH = 58, by = H - barH - 26;
         Gfx.rect(0, by, W, barH, 0, Gfx.a(Gfx.BG, 0.84f));
-        Gfx.rect(0, by, W, MenuBack.lw(), 0, Gfx.LN2);
+        Gfx.rect(0, by, W, MenuBack.lw(), 0, Gfx.LN);
         int[] ids = cMods != null ? new int[] {SINGLE, MULTI, MODS, OPTIONS, QUIT, NETHER} : new int[] {SINGLE, MULTI, OPTIONS, QUIT, NETHER};
         float gap = 8, bh = 34, bw = Math.min(156, (W - 48 - gap * (ids.length - 1)) / ids.length);
         float x = (W - (ids.length * bw + (ids.length - 1) * gap)) / 2;
@@ -381,44 +384,46 @@ final class MainMenu {
         if (W - 16 - cw > 48 + 280 * sc) QuickJoin.card(W - 16 - cw, by - 14, cw, 76, scr);
     }
 
-    /** One menu button in the chosen style; acts on click. left = label at the left edge (rail). */
+    /**
+     * One menu button in the chosen style (v6 flat, radius 6; NETHER CLIENT is the screen's one accent action, radius 8);
+     * acts on click. left = label at the left edge (rail).
+     */
     private static void button(int i, float x, float y, float w, float h, boolean left, Object screen) {
         String style = MODULE.str("buttons"), label = LABELS[i];
-        boolean accent = i == NETHER, hv = over(x, y, w, h);
-        float t = an(label, hv), l = MenuBack.lw();
+        boolean accent = i == NETHER, hv = over(x, y, w, h), down = hv && Input.btn[0];
+        float t = an(label, hv);
         String key = accent ? keyName() : null;
-        float fs = 12.5f, sp = 1.6f, tw = Gfx.width(Gfx.SEMI, fs, label, sp);
-        float kw = key != null ? Gfx.width(Gfx.MONO, 9, key, 0.6f) + 10 : 0;
-        if (tw > w - 22) { fs = Math.max(9.5f, fs * (w - 22) / tw); sp = 0.8f; tw = Gfx.width(Gfx.SEMI, fs, label, sp); }
+        float fs = 12.5f, tw = Gfx.width(Gfx.SEMI, fs, label);
+        float kw = key != null ? Gfx.width(Gfx.UI, 10, key) + 12 : 0;
+        if (tw > w - 22) { fs = Math.max(9.5f, fs * (w - 22) / tw); tw = Gfx.width(Gfx.SEMI, fs, label); }
         boolean showKey = key != null && w - tw - kw > 52;
         int txt;
-        switch (style) {
-            case "Outline":
-                Gfx.rect(x, y, w, h, 0, accent ? Gfx.a(Gfx.RED, 0.16f + 0.3f * t) : Gfx.a(Gfx.ICE, 0.02f + 0.06f * t));
-                Gfx.ring(x, y, w, h, 0, 0.5f, accent ? Gfx.a(Gfx.RED2, 0.7f + 0.3f * t) : Gfx.mix(Gfx.LN2, Gfx.a(Gfx.ICE, 0.6f), t));
-                txt = Gfx.mix(Gfx.DIM, Gfx.ICE, accent ? 1 : 0.55f + 0.45f * t);
-                break;
-            case "Minimal":
-                if (left) Gfx.rect(x, y + h * 0.3f, (accent ? 2 : 0) + 3 * t, h * 0.4f, 0, Gfx.a(Gfx.RED2, accent ? 1 : t));
-                else {
-                    float uw = (tw - sp) * (accent ? 0.35f + 0.65f * t : t);
-                    Gfx.rect(x + (w - uw) / 2, y + h - 5, uw, Math.max(l, 1.5f), 0, Gfx.RED2);
-                }
-                txt = accent ? Gfx.mix(Gfx.RED2, 0xFFFFFFFF, t * 0.6f) : Gfx.mix(Gfx.a(Gfx.ICE, 0.72f), 0xFFFFFFFF, t);
-                break;
-            default: // Pit Wall solid
-                Gfx.rect(x, y, w, h, 0, accent ? Gfx.mix(0xFF3A0300, Gfx.RED, t) : Gfx.mix(Gfx.a(Gfx.CARD, 0.92f), Gfx.CARD2, t));
-                Gfx.rect(x, y + h - l, w, l, 0, accent ? Gfx.a(Gfx.RED2, 0.6f + 0.4f * t) : Gfx.a(Gfx.ICE, 0.08f + 0.1f * t));
-                Gfx.rect(x, y, 2 + 2 * t, h, 0, Gfx.a(Gfx.RED2, accent ? 1 : t));
-                txt = Gfx.mix(Gfx.DIM, Gfx.ICE, accent ? 1 : 0.55f + 0.45f * t);
+        if (accent) {
+            Gfx.rect(x, y, w, h, 8, down ? Gfx.mix(Th.ac, Gfx.BLACK, 0.18f) : Gfx.mix(Th.ac, Th.ac2, t));
+            txt = 0xFFFFFFFF;
+        } else {
+            switch (style) {
+                case "Outline":
+                    Gfx.rect(x, y, w, h, 6, Gfx.a(Gfx.ICE, (down ? 0.02f : 0.06f) * t));
+                    Gfx.ring(x, y, w, h, 6, 1, Gfx.mix(Gfx.LN2, Gfx.a(Gfx.ICE, 0.4f), t));
+                    break;
+                case "Minimal":
+                    if (t > 0.01f) Gfx.rect(x, y, w, h, 6, Gfx.a(Gfx.ICE, 0.06f * t));
+                    if (left && t > 0.01f) Gfx.rect(x, y + 6, 3, h - 12, 1.5f, Gfx.a(Th.ac, t));
+                    break;
+                default: // flat glass
+                    Gfx.rect(x, y, w, h, 6, down ? Gfx.S3 : Gfx.mix(Gfx.a(Gfx.CARD, 0.8f), Gfx.CARD2, t));
+                    Gfx.ring(x, y, w, h, 6, 1, Gfx.mix(Gfx.LN, Gfx.LN2, t));
+            }
+            txt = Gfx.mix(Gfx.DIM, Gfx.ICE, 0.45f + 0.55f * t);
         }
-        float shift = style.equals("Minimal") && !left ? 0 : t * 2;
-        if (left) Gfx.text(Gfx.SEMI, fs, x + 14 + shift, y + h / 2, txt, label, false, sp);
-        else Gfx.textC(Gfx.SEMI, fs, x + w / 2 + shift - (showKey ? kw / 2 + 4 : 0), y + h / 2, txt, label, sp);
+        float dy = down ? 1 : 0;
+        if (left) Gfx.text(Gfx.SEMI, fs, x + 14, y + h / 2 + dy, txt, label);
+        else Gfx.textC(Gfx.SEMI, fs, x + w / 2 - (showKey ? kw / 2 + 4 : 0), y + h / 2 + dy, txt, label, 0);
         if (showKey) { // the key that opens the same menu in game
-            float kx = left ? x + w - kw - 10 : x + w / 2 + (tw - sp) / 2 - kw / 2 + 4 + shift;
-            Gfx.rect(kx, y + h / 2 - 7, kw, 14, 0, Gfx.a(Gfx.ICE, 0.12f + 0.06f * t));
-            Gfx.textC(Gfx.MONO, 9, kx + kw / 2, y + h / 2, Gfx.mix(Gfx.DIM, Gfx.ICE, t), key, 0.6f);
+            float kx = left ? x + w - kw - 10 : x + w / 2 + tw / 2 - kw / 2 + 4;
+            Gfx.rect(kx, y + h / 2 - 8 + dy, kw, 16, 4, Gfx.a(Gfx.BLACK, 0.22f));
+            Gfx.textC(Gfx.UI, 10, kx + kw / 2, y + h / 2 + dy, 0xFFFFFFFF, key, 0);
         }
         if (hit(x, y, w, h)) act(i, screen);
     }
@@ -437,8 +442,8 @@ final class MainMenu {
         String tm = String.format(Locale.ROOT, h24 ? "%02d:%02d" : "%d:%02d", hh, d.getMinute()) + (h24 ? "" : d.getHour() < 12 ? " AM" : " PM");
         String dt = d.getDayOfWeek().getDisplayName(java.time.format.TextStyle.SHORT, Locale.ENGLISH).toUpperCase(Locale.ROOT) + " " + d.getDayOfMonth() + " "
             + d.getMonth().getDisplayName(java.time.format.TextStyle.SHORT, Locale.ENGLISH).toUpperCase(Locale.ROOT);
-        Gfx.text(Gfx.HEAD, 24, x - Gfx.width(Gfx.HEAD, 24, tm, 1f), 26, Gfx.ICE, tm, false, 1f);
-        Gfx.text(Gfx.MONO, 9, x - Gfx.width(Gfx.MONO, 9, dt, 1.5f) + 1.5f, 46, Gfx.SUB, dt, false, 1.5f);
+        Gfx.text(Gfx.HEAD, 24, x - Gfx.width(Gfx.HEAD, 24, tm), 26, Gfx.ICE, tm);
+        Gfx.text(Gfx.UI, 10, x - Gfx.width(Gfx.UI, 10, dt), 46, Gfx.DIM, dt);
     }
 
     private static String version, loader;
@@ -451,12 +456,12 @@ final class MainMenu {
             String nv = System.getProperty("nether.version");
             version = "MINECRAFT " + (v != null ? v.toUpperCase(Locale.ROOT) : "") + " / " + loader + (nv != null ? " / NETHER " + nv : "");
         }
-        float lw = Gfx.text(Gfx.MONO, 9, 12, H - 12, Gfx.a(Gfx.ICE, 0.62f), version, false, 0.6f);
-        String c1 = "COPYRIGHT MOJANG AB. DO NOT DISTRIBUTE!", c2 = "NOT AFFILIATED WITH MOJANG OR MICROSOFT";
-        float w1 = Gfx.width(Gfx.MONO, 9, c1, 0.6f), w2 = Gfx.width(Gfx.MONO, 9, c2, 0.6f);
+        float lw = Gfx.text(Gfx.UI, 9, 12, H - 12, Gfx.a(Gfx.ICE, 0.6f), version);
+        String c1 = "Copyright Mojang AB. Do not distribute!", c2 = "Not affiliated with Mojang or Microsoft";
+        float w1 = Gfx.width(Gfx.UI, 9, c1), w2 = Gfx.width(Gfx.UI, 9, c2);
         if (lw + w1 + 40 > W) return;
-        Gfx.text(Gfx.MONO, 9, W - 10 - w1, H - 12, Gfx.a(Gfx.ICE, 0.8f), c1, false, 0.6f);
-        if (!dock) Gfx.text(Gfx.MONO, 9, W - 10 - w2, H - 12 - Math.max(14, 12.5f / Gfx.s), Gfx.a(Gfx.ICE, 0.62f), c2, false, 0.6f);
+        Gfx.text(Gfx.UI, 9, W - 12 - w1, H - 12, Gfx.a(Gfx.ICE, 0.75f), c1);
+        if (!dock) Gfx.text(Gfx.UI, 9, W - 12 - w2, H - 12 - Math.max(14, 12.5f / Gfx.s), Gfx.a(Gfx.ICE, 0.6f), c2);
     }
 
     private static String loaderName() {
@@ -537,19 +542,23 @@ final class MainMenu {
     private static float accountCard(float x, float y, float w) {
         if (accName == null) return 0;
         float h = 44;
-        Gfx.rect(x, y, w, h, 0, Gfx.a(Gfx.BG, 0.8f));
-        Gfx.ring(x, y, w, h, 0, 0.5f, Gfx.LN2);
-        if (Gfx.hasTexture("menu.head")) Gfx.image("menu.head", x + 8, y + 8, 28, 28, 0xFFFFFFFF, 0);
+        glass(x, y, w, h);
+        if (Gfx.hasTexture("menu.head")) Gfx.image("menu.head", x + 8, y + 8, 28, 28, 0xFFFFFFFF, 4);
         else {
-            Gfx.rect(x + 8, y + 8, 28, 28, 0, Gfx.CARD2);
-            Gfx.rect(x + 8, y + 34, 28, 2, 0, Gfx.RED2);
-            Gfx.textC(Gfx.HEAD, 16, x + 22, y + 21, Gfx.ICE, accName.substring(0, 1).toUpperCase(Locale.ROOT), 0);
+            Gfx.rect(x + 8, y + 8, 28, 28, 4, Gfx.S3);
+            Gfx.textC(Gfx.HEAD, 16, x + 22, y + 22, Gfx.ICE, accName.substring(0, 1).toUpperCase(Locale.ROOT), 0);
         }
-        Gfx.text(Gfx.SEMI, 13, x + 46, y + 16, Gfx.ICE, fit(Gfx.SEMI, 13, accName, 0.4f, w - 56), false, 0.4f);
+        Gfx.text(Gfx.SEMI, 13, x + 46, y + 16, Gfx.ICE, fit(Gfx.SEMI, 13, accName, 0, w - 56));
         int hr = LocalDateTime.now().getHour();
         String g = hr < 5 ? "Up late" : hr < 12 ? "Good morning" : hr < 18 ? "Good afternoon" : "Good evening";
-        Gfx.text(Gfx.UI, 10.5f, x + 46, y + 31, Gfx.SUB, g, false, 0);
+        Gfx.text(Gfx.UI, 10.5f, x + 46, y + 31, Gfx.DIM, g);
         return h;
+    }
+
+    /** v6 floating glass (Home): s1 at ~80% (no blur in game), 10% hairline, radius 10. */
+    static void glass(float x, float y, float w, float h) {
+        Gfx.rect(x, y, w, h, 10, Gfx.a(Gfx.CARD, 0.8f));
+        Gfx.ring(x, y, w, h, 10, 1, 0x1AFFFFFF);
     }
 
     // ---------------------------------------------------------------- top bar (our title screen) + pause chip
@@ -565,8 +574,8 @@ final class MainMenu {
     }
 
     private static float chipW(String label, String key, boolean mark) {
-        float kw = key != null ? Gfx.width(Gfx.MONO, 9, key, 0.6f) + 10 : 0;
-        return 12 + (mark ? 22 : 0) + Gfx.width(Gfx.SEMI, 11, label, 1.2f) + (key != null ? 8 + kw : 0) + 12;
+        float kw = key != null ? Gfx.width(Gfx.UI, 10, key) + 12 : 0;
+        return 12 + (mark ? 22 : 0) + Gfx.width(Gfx.SEMI, 11, label) + (key != null ? 8 + kw : 0) + 12;
     }
 
     /**
@@ -574,28 +583,27 @@ final class MainMenu {
      * the title and pause screens. Returns true when clicked.
      */
     private static boolean chip(String id, float x, float y, float h, String label, String key, boolean mark, boolean active) {
-        float kw = key != null ? Gfx.width(Gfx.MONO, 9, key, 0.6f) + 10 : 0;
+        float kw = key != null ? Gfx.width(Gfx.UI, 10, key) + 12 : 0;
         float w = chipW(label, key, mark) + (mark ? 0 : 18);
-        float t = an(id, over(x, y, w, h) || active), l = MenuBack.lw();
-        Gfx.rect(x, y, w, h, 0, Gfx.mix(Gfx.a(Gfx.BG, 0.86f), mark ? 0xFF3A0300 : Gfx.CARD2, t));
-        if (!mark) Gfx.ring(x, y, w, h, 0, 0.5f, Gfx.mix(Gfx.LN2, Gfx.a(Gfx.ICE, 0.35f), t));
-        Gfx.rect(x, y, 2 + t, h, 0, Gfx.a(Gfx.RED2, mark ? 1 : t));
-        if (mark) Gfx.rect(x, y + h - l, w, l, 0, Gfx.a(Gfx.RED2, 0.35f + 0.65f * t));
+        float t = an(id, over(x, y, w, h) || active);
+        Gfx.rect(x, y, w, h, 6, Gfx.mix(Gfx.a(Gfx.CARD, 0.86f), Gfx.CARD2, t));
+        Gfx.ring(x, y, w, h, 6, 1, Gfx.mix(Gfx.LN2, Gfx.a(Gfx.ICE, 0.4f), t));
         float tx = x + 12;
         if (mark) { ghast(tx, y + (h - 16.5f) / 2, 14); tx += 22; }
         else { // three sliders
+            int c = Gfx.mix(Gfx.DIM, Gfx.ICE, t);
             for (int i = 0; i < 3; i++) {
                 float ly = y + h / 2 - 5 + i * 5;
-                Gfx.rect(tx, ly, 12, Math.max(l, 1.2f), 0, Gfx.mix(Gfx.SUB, Gfx.ICE, t));
-                Gfx.rect(tx + (i == 1 ? 7 : 2), ly - 1.5f, 3, 3 + Math.max(l, 1.2f), 0, i == 1 ? Gfx.RED2 : Gfx.mix(Gfx.SUB, Gfx.ICE, t));
+                Gfx.rect(tx, ly - 0.6f, 12, 1.2f, 0.6f, c);
+                Gfx.rect(tx + (i == 1 ? 7 : 2), ly - 1.5f, 3, 3, 1.5f, c);
             }
             tx += 18;
         }
-        float tw = Gfx.text(Gfx.SEMI, 11, tx, y + h / 2, Gfx.mix(Gfx.DIM, Gfx.ICE, 0.65f + 0.35f * t), label, false, 1.2f);
+        float tw = Gfx.text(Gfx.SEMI, 11, tx, y + h / 2, Gfx.mix(Gfx.DIM, Gfx.ICE, 0.6f + 0.4f * t), label);
         if (key != null) {
-            float kx = tx + tw + 8 - 1.2f;
-            Gfx.rect(kx, y + 9, kw, h - 18, 0, Gfx.a(Gfx.ICE, 0.10f + 0.06f * t));
-            Gfx.textC(Gfx.MONO, 9, kx + kw / 2, y + h / 2, Gfx.mix(Gfx.SUB, Gfx.ICE, t), key, 0.6f);
+            float kx = tx + tw + 8;
+            Gfx.rect(kx, y + h / 2 - 8, kw, 16, 4, Gfx.S3);
+            Gfx.textC(Gfx.UI, 10, kx + kw / 2, y + h / 2, Gfx.mix(Gfx.DIM, Gfx.ICE, t), key, 0);
         }
         box(x, y, w, h);
         return hit(x, y, w, h);
@@ -614,10 +622,9 @@ final class MainMenu {
         inModal = true;
         float a0 = Gfx.alpha;
         Gfx.alpha = a0 * panelA;
-        Gfx.rect(x + 3, y + 5, w, h, 0, Gfx.a(Gfx.BLACK, 0.4f));
-        Gfx.rect(x, y, w, h, 0, Gfx.CARD);
-        Gfx.ring(x, y, w, h, 0, 0.5f, Gfx.LN2);
-        Gfx.rect(x, y, w, 2, 0, Gfx.RED);
+        Gfx.rect(x, y + 4, w, h, 10, Gfx.a(Gfx.BLACK, 0.4f));
+        Gfx.rect(x, y, w, h, 10, Gfx.a(Gfx.CARD, 0.96f));
+        Gfx.ring(x, y, w, h, 10, 1, Gfx.LN2);
         float cw = (w - 52) / 2, c1 = x + 16, c2 = x + 16 + cw + 20, yy = y + 18;
         // left: background, dim, show
         label("BACKGROUND", c1, yy);
@@ -649,19 +656,19 @@ final class MainMenu {
             label(n == 0 ? "NO IMAGES YET" : n + (n == 1 ? " IMAGE" : " IMAGES"), c2, yy + 162);
             if (cell("folder", "OPEN FOLDER", c2, yy + 174, (cw - 4) / 2, false)) MenuBack.openFolder();
             if (n > 1 && cell("nextimg", "NEXT IMAGE", c2 + (cw + 4) / 2, yy + 174, (cw - 4) / 2, false)) MenuBack.next();
-            if (n == 0) Gfx.text(Gfx.UI, 10.5f, c2, yy + 214, Gfx.SUB, "Add PNG or JPG files to client/backgrounds.", false, 0);
+            if (n == 0) Gfx.text(Gfx.UI, 10.5f, c2, yy + 214, Gfx.DIM, "Add PNG or JPG files to client/backgrounds.");
         }
         // footer
         float fy = y + h - 42;
         Gfx.rect(x + 16, fy - 8, w - 32, MenuBack.lw(), 0, Gfx.LN);
-        Gfx.text(Gfx.UI, 10.5f, c1, fy + 13, Gfx.SUB, "Blur, motion, slideshow and more in the full settings.", false, 0);
-        float bw = Gfx.width(Gfx.SEMI, 11, "ALL SETTINGS", 1.2f) + 28;
-        if (cell("all", "ALL SETTINGS", x + w - 16 - bw, fy, bw, false)) { panelOpen = false; Menu.openMainMenuSettings(); Input.setMenu(true); }
+        Gfx.text(Gfx.UI, 10.5f, c1, fy + 13, Gfx.DIM, "Blur, motion, slideshow and more in the full settings.");
+        float bw = Gfx.width(Gfx.SEMI, 11, "ALL SETTINGS") + 28;
+        if (btn("all", "ALL SETTINGS", x + w - 16 - bw, fy, bw)) { panelOpen = false; Menu.openMainMenuSettings(); Input.setMenu(true); }
         Gfx.alpha = a0;
         inModal = false;
     }
 
-    private static void label(String s, float x, float y) { Gfx.text(Gfx.MONO, 9, x, y, Gfx.SUB, s, false, 2f); }
+    private static void label(String s, float x, float y) { Gfx.text(Gfx.UI, 9, x, y, Gfx.SUB, s); }
 
     /** Grid of option cells for setting key (red = selected, like the menu's choice rows). */
     private static void choices(String key, String[] opts, float x, float y, float w, int cols) {
@@ -673,21 +680,32 @@ final class MainMenu {
         }
     }
 
+    /** Seg-style option cell: selected = s3 fill + hairline, hover = faint fill (v6 `Seg`). */
     private static boolean cell(String id, String label, float x, float y, float w, boolean sel) {
         float h = 24, t = an("c" + id, over(x, y, w, h)), s = an("s" + id, sel);
-        Gfx.rect(x, y, w, h, 0, Gfx.mix(Gfx.a(Gfx.ICE, 0.04f + 0.06f * t), Gfx.RED, s));
-        float sp = Gfx.width(Gfx.SEMI, 10, label, 1f) > w - 10 ? 0.3f : 1f;
-        Gfx.textC(Gfx.SEMI, 10, x + w / 2, y + h / 2, Gfx.mix(Gfx.mix(Gfx.DIM, Gfx.ICE, t), 0xFFFFFFFF, s), fit(Gfx.SEMI, 10, label, sp, w - 6), sp);
+        Gfx.rect(x, y, w, h, 4, Gfx.mix(Gfx.a(Gfx.ICE, 0.03f + 0.04f * t), Gfx.S3, s));
+        if (s > 0.02f) Gfx.ring(x, y, w, h, 4, 1, Gfx.a(Gfx.LN2, s));
+        Gfx.textC(Gfx.SEMI, 10, x + w / 2, y + h / 2, Gfx.mix(Gfx.DIM, Gfx.ICE, Math.max(t, s)), fit(Gfx.SEMI, 10, label, 0, w - 6), 0);
         return hit(x, y, w, h);
     }
 
+    /** v6 outline button (`Btn`): hairline, s2 on hover, radius 6. */
+    private static boolean btn(String id, String label, float x, float y, float w) {
+        float h = 26, t = an("b" + id, over(x, y, w, h));
+        Gfx.rect(x, y, w, h, 6, Gfx.a(Gfx.CARD2, t));
+        Gfx.ring(x, y, w, h, 6, 1, Gfx.mix(Gfx.LN2, Gfx.a(Gfx.ICE, 0.4f), t));
+        Gfx.textC(Gfx.SEMI, 11, x + w / 2, y + h / 2, Gfx.mix(Gfx.DIM, Gfx.ICE, 0.6f + 0.4f * t), label, 0);
+        return hit(x, y, w, h);
+    }
+
+    /** Label + v6 pill toggle (30 x 17, accent when on); the whole row is clickable. */
     private static boolean toggle(String id, String label, float x, float y, float w, boolean on) {
         float h = 24, t = an("c" + id, over(x, y, w, h)), s = an("s" + id, on);
-        Gfx.rect(x, y, w, h, 0, Gfx.a(Gfx.ICE, 0.03f + 0.05f * t));
-        float bx = x + 8, by = y + h / 2 - 5;
-        Gfx.rect(bx, by, 10, 10, 0, Gfx.mix(Gfx.a(Gfx.ICE, 0.08f), Gfx.RED, s));
-        Gfx.ring(bx, by, 10, 10, 0, 0.5f, Gfx.mix(Gfx.LN2, Gfx.RED2, s));
-        Gfx.text(Gfx.SEMI, 10, x + 26, y + h / 2, Gfx.mix(Gfx.DIM, Gfx.ICE, Math.max(t, s * 0.8f)), label, false, 1f);
+        Gfx.rect(x, y, w, h, 4, Gfx.a(Gfx.ICE, 0.03f + 0.04f * t));
+        Gfx.text(Gfx.SEMI, 10, x + 8, y + h / 2, Gfx.mix(Gfx.DIM, Gfx.ICE, Math.max(t, s * 0.8f)), fit(Gfx.SEMI, 10, label, 0, w - 50));
+        float px = x + w - 36, py = y + (h - 17) / 2;
+        Gfx.rect(px, py, 30, 17, 8.5f, Gfx.mix(Gfx.S3, Th.ac, s));
+        Gfx.rect(px + 3 + 13 * s, py + 3, 11, 11, 5.5f, Gfx.mix(Gfx.DIM, 0xFFFFFFFF, s));
         return hit(x, y, w, h);
     }
 
@@ -728,14 +746,15 @@ final class MainMenu {
 
     /**
      * The options screen: its (parent, options) constructor with the game's options object, found by type on the game instance
-     * (no field name to get wrong on any version or loader), else the named field.
+     * (no field name to get wrong on any version or loader), else the named field. 26.x adds a third (boolean inGame).
      */
     private static Object options(Object mc, Object parent, Class<?> cls) {
         if (cls == null) return null;
         try {
             for (Constructor<?> c : cls.getDeclaredConstructors()) {
                 Class<?>[] p = c.getParameterTypes();
-                if (p.length != 2 || !p[0].isInstance(parent)) continue;
+                boolean three = p.length == 3 && p[2] == boolean.class;
+                if (p.length != 2 && !three || !p[0].isInstance(parent)) continue;
                 for (Class<?> k = mc.getClass(); k != null && k != Object.class; k = k.getSuperclass()) {
                     for (Field f : k.getDeclaredFields()) {
                         if (!p[1].isAssignableFrom(f.getType()) || java.lang.reflect.Modifier.isStatic(f.getModifiers())) continue;
@@ -743,7 +762,7 @@ final class MainMenu {
                         Object o = f.get(mc);
                         if (o == null) continue;
                         c.setAccessible(true);
-                        return c.newInstance(parent, o);
+                        return three ? c.newInstance(parent, o, false) : c.newInstance(parent, o);
                     }
                 }
             }

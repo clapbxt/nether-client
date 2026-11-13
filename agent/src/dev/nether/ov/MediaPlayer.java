@@ -77,7 +77,7 @@ final class MediaPlayer extends Module {
         return 1;
     }
 
-    @Override boolean visible() { return pausedAlpha(shown()) > 0 && !Streamer.hides("media"); }
+    @Override boolean visible() { return pausedAlpha(shown()) > 0; }
 
     /** Media keys from the game's key callback (in play); true swallows the key. */
     boolean key(int key) {
@@ -110,13 +110,11 @@ final class MediaPlayer extends Module {
         Gfx.alpha = a0;
     }
 
-    private int accent() { return bool("albumAccent") && !Media.artShown.isEmpty() ? Media.artColor : Gfx.RED; }
+    private int accent() { return bool("albumAccent") && !Media.artShown.isEmpty() ? Media.artColor : Th.ac; }
 
     private void card(float x, float y, float w, float h) {
         if (!bool("bg")) return;
-        Gfx.rect(x, y, w, h, 5, Gfx.a(Gfx.BG, (float) num("bgAlpha")));
-        if (bool("border")) Gfx.ring(x, y, w, h, 5, 1, Gfx.a(color(), 0.55f));
-        if (bool("accent")) Gfx.rect(x, y + 4, 2, h - 8, 1, accent());
+        panel(x, y, w, h, accent());
     }
 
     private boolean controls() {
@@ -151,8 +149,8 @@ final class MediaPlayer extends Module {
         marquee(Gfx.SEMI, 11, cx, y + 13, right - cx, color(), t, 0.2f);
         if (!str("bar").equals("Hidden") && s.timeline()) {
             float f = (float) (s.position() / s.dur);
-            Gfx.rect(cx, y + h - 5, right - cx, 2, 0, Gfx.a(Gfx.ICE, 0.14f));
-            Gfx.rect(cx, y + h - 5, (right - cx) * f, 2, 0, accent());
+            Gfx.rect(cx, y + h - 5, right - cx, 2, 1, Gfx.a(Gfx.ICE, 0.14f));
+            Gfx.rect(cx, y + h - 5, (right - cx) * f, 2, 1, accent());
         }
     }
 
@@ -161,7 +159,7 @@ final class MediaPlayer extends Module {
         boolean ctl = controls();
         boolean hover = !Menu.hudEdit && hover(x, y, A, A);
         if (ctl && (hover || str("controls").equals("Always"))) {
-            Gfx.rect(x, y, A, A, 0, Gfx.a(Gfx.BG, 0.55f));
+            Gfx.rect(x, y, A, A, 4, Gfx.a(Gfx.BG, 0.55f));
             buttons(x + A / 2 - 27, y + A / 2, s);
         }
         if (!str("bar").equals("Hidden") && s.timeline()) {
@@ -174,11 +172,11 @@ final class MediaPlayer extends Module {
     // ---------------------------------------------------------------- parts
 
     private void art(float x, float y, float size) {
-        Gfx.rect(x, y, size, size, 0, Gfx.CARD2);
+        Gfx.rect(x, y, size, size, 4, Gfx.CARD2);
         boolean has = !Media.artShown.isEmpty() && Gfx.hasTexture(Media.ART) && shown() != SAMPLE;
         float k = has ? (Config.calm() ? 1 : Math.min(1, (System.currentTimeMillis() - Media.artAt) / 250f)) : 0;
         if (k < 1) Gfx.mask("media:note", NOTE, 24, x + size * 0.25f, y + size * 0.25f, size * 0.5f, Gfx.a(Gfx.MUT, 1 - k));
-        if (has) Gfx.image(Media.ART, x, y, size, size, Gfx.a(0xFFFFFFFF, k), 0);
+        if (has) Gfx.image(Media.ART, x, y, size, size, Gfx.a(0xFFFFFFFF, k), 4);
     }
 
     /** prev / play-pause / next, 18 units apart, vertically centred on cy. */
@@ -192,7 +190,7 @@ final class MediaPlayer extends Module {
         float r = 8;
         boolean live = on && shown() != SAMPLE && !Menu.hudEdit;
         boolean hv = live && Hits.box(id, cx - r, cy - r, r * 2, r * 2);
-        if (hv) Gfx.rect(cx - r, cy - r, r * 2, r * 2, 0, Gfx.a(Gfx.ICE, 0.14f));
+        if (hv) Gfx.rect(cx - r, cy - r, r * 2, r * 2, r, Gfx.a(Gfx.ICE, 0.14f));
         Gfx.mask("media:" + (icon == PAUSE ? "pause" : icon == PLAY ? "play" : icon == NEXT ? "next" : "prev"), icon, 24, cx - size / 2, cy - size / 2, size, on ? (hv ? Gfx.ICE : Gfx.a(color(), 0.9f)) : Gfx.a(Gfx.MUT, 0.6f));
         if (live && Hits.clicked(id) == 0) act.run();
     }
@@ -207,17 +205,17 @@ final class MediaPlayer extends Module {
     private void progress(float x, float y, float w, Media.State s, boolean times) {
         String bar = str("bar"), time = str("time");
         if (!s.timeline()) {
-            Gfx.text(Gfx.MONO, 9, x, y + 7, Gfx.a(labelColor(), 0.9f), s.playing ? "LIVE" : "PAUSED", bool("shadow"), 1f);
+            Gfx.text(Gfx.MONO, 9, x, y + 7, Gfx.a(labelColor(), 0.9f), s.playing ? "LIVE" : "PAUSED", bool("shadow"), 0);
             return;
         }
         double p = s.position();
         float f = (float) Math.max(0, Math.min(1, p / s.dur));
         if (!bar.equals("Hidden")) {
             float th = bar.equals("Thick") ? 4 : 2;
-            Gfx.rect(x, y, w, th, 0, Gfx.a(Gfx.ICE, 0.14f));
-            Gfx.rect(x, y, w * f, th, 0, accent());
+            Gfx.rect(x, y, w, th, th / 2, Gfx.a(Gfx.ICE, 0.14f));
+            Gfx.rect(x, y, w * f, th, th / 2, accent());
             boolean seek = s.canSeek && s != SAMPLE && controls() && !Menu.hudEdit;
-            if (seek && Hits.box("media.seek", x, y - 4, w, th + 8)) Gfx.rect(x + w * f - 1, y - 2, 3, th + 4, 0, Gfx.ICE);
+            if (seek && Hits.box("media.seek", x, y - 4, w, th + 8)) Gfx.rect(x + w * f - 4, y + th / 2 - 4, 8, 8, 4, Gfx.ICE);
             if (seek && Hits.clicked("media.seek") == 0) {
                 float mx = (float) (Input.mx * Gfx.fbW / Input.ww) / Gfx.s;
                 Media.seek(Math.max(0, Math.min(1, (mx - x) / w)) * s.dur);

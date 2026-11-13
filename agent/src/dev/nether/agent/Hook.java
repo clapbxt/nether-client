@@ -36,11 +36,6 @@ public final class Hook {
     /** Dev only (-Dnether.world=<save folder>): the world is opened by quick play (set by args, 1.20+; 1.8.9/1.12.2 load it from Game). */
     public static volatile boolean quickPlay;
 
-    /** The Nether crosshair module draws its own this frame: the game's HUD method skips the vanilla one (set by the overlay). */
-    public static volatile boolean crosshair;
-
-    public static boolean crosshair() { return crosshair; }
-
     /** (player, name component) -> name to show; set by the overlay (Nametag). */
     public static volatile java.util.function.BiFunction<Object, Object, Object> name;
 
@@ -54,6 +49,23 @@ public final class Hook {
         } catch (Throwable e) {
             name = null;
             System.out.println("[nether-agent] name hook disabled: " + e);
+            return comp;
+        }
+    }
+
+    /** component -> chat line to show; set by the overlay (the Nether badge before Nether players' names). */
+    public static volatile java.util.function.Function<Object, Object> chat;
+
+    /** Start of the chat HUD's add-message methods: the message about to be shown. */
+    public static Object chat(Object comp) {
+        java.util.function.Function<Object, Object> f = chat;
+        if (f == null || comp == null) return comp;
+        try {
+            Object r = f.apply(comp);
+            return r != null ? r : comp;
+        } catch (Throwable e) {
+            chat = null;
+            System.out.println("[nether-agent] chat hook disabled: " + e);
             return comp;
         }
     }

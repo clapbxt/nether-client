@@ -22,7 +22,7 @@ import java.util.zip.Inflater;
 
 /**
  * CLIENT tab: client options (Reduce motion) and profiles. A profile is a whole client setup (modules on/off, every
- * setting, the HUD layout, favourites, menu key, server-safe and reduce-motion) as plain JSON in client/profiles
+ * setting, the HUD layout, favourites, menu key and reduce-motion) as plain JSON in client/profiles
  * (Rule 5), or as a clipboard code ("NETHER1." + base64url of the deflated JSON) to share. Applying one first saves the
  * current setup as "Before (name)", so nothing is lost. Personal data (waypoints, quick-join servers) is never included.
  */
@@ -30,7 +30,7 @@ final class Profiles {
     private Profiles() {}
 
     private static final String CODE = "NETHER1.";
-    private static final String[] CLIENT_KEYS = {"calm", "safeMode"};
+    private static final String[] CLIENT_KEYS = {"calm"};
     static String nameBuf = "";
     /** {name, file, saved at, modules on} newest first */
     private static List<Object[]> list = new ArrayList<>();

@@ -22,7 +22,8 @@ import java.util.function.Supplier;
  * Nether capes + nametag icon for Nether players. No rendering code: 1.20.2+ wraps each PlayerInfo's skin supplier so
  * vanilla's own cape layer draws our texture (it replaces the vanilla cape); 1.8.9 sets NetworkPlayerInfo's cape location.
  * Player.decorateDisplayNameComponent (1.8.9: getDisplayName) is hooked (Agent) to prefix the icon glyph (U+E000: font
- * nether:icon, 1.8.9: unicode page e0; both from the launcher's built-in pack). Who: -Dnether.capeApi
+ * nether:icon, 1.8.9: unicode page e0; both from the launcher's built-in pack), and chat lines sent by a Nether player
+ * get it in front (Agent hooks the chat HUD's add-message methods). The badge is always shown. Who: -Dnether.capeApi
  * (GET /v1/players?u= -> {uuid: cape id or ""} for every Nether player), textures from
  * -Dnether.capeContent (/capes/(id).png), fetched off the render thread. -Dnether.capeDev=(id) puts that cape on
  * every player (testing without the API).
@@ -34,6 +35,8 @@ final class Capes {
 
     // Nether players: uuid (no dashes) -> cape id ("" = none; absent = not a Nether player); uuid -> last query time
     private static final Map<String, String> worn = new ConcurrentHashMap<>();
+    /** uuid -> profile name of players in the tab list (Nether players only), for the chat badge */
+    private static final Map<String, String> names = new ConcurrentHashMap<>();
     private static final Map<String, Long> asked = new ConcurrentHashMap<>();
     // cape id -> PNG bytes (worker) -> registered texture (render thread): ClientAsset (1.21.9+) or ResourceLocation
     private static final Map<String, byte[]> png = new ConcurrentHashMap<>();
@@ -96,8 +99,14 @@ final class Capes {
             if (!(all instanceof Collection)) return;
             long now = System.currentTimeMillis();
             for (Object pi : (Collection<?>) all) {
-                String uuid = uuid(Game.call(pi, legacy ? Game.l("a", "func_178845_a") : "method_2966"));
+                Object prof = Game.call(pi, legacy ? Game.l("a", "func_178845_a") : "method_2966");
+                String uuid = uuid(prof);
                 if (uuid == null) continue;
+                if (DEV != null || worn.containsKey(uuid)) {
+                    Object nm = Game.call(prof, "getName");
+                    if (nm == null) nm = Game.call(prof, "name"); // authlib 7: record
+                    if (nm instanceof String) names.put(uuid, (String) nm);
+                }
                 String own = DEV != null ? null : Wardrobe.ownNetherCape(uuid);
                 String id = DEV != null ? DEV : own != null ? own : worn.get(uuid);
                 if (API != null && DEV == null) {
@@ -271,18 +280,55 @@ final class Capes {
     /** Hook.name: the nametag of a Nether player gets our icon in front (client thread only, so servers never see it). */
     static Object name(Object player, Object comp) {
         // render thread only (the integrated server calls this too; game state is not thread safe), and cheap when nobody wears one
-        if (Thread.currentThread() != Overlay.renderThread || noIcon || (DEV == null && worn.isEmpty()) || !Config.bool("client", "nametagIcon", true)) return comp;
+        if (Thread.currentThread() != Overlay.renderThread || noIcon || (DEV == null && worn.isEmpty())) return comp;
         boolean legacy = Game.legacy();
         if (!(legacy || Game.fabric())) return comp;
         Object id = Game.call(player, legacy ? Game.l("aK", "func_110124_au") : "method_5667");
         if (!(id instanceof UUID)) return comp;
         if (DEV == null && !worn.containsKey(id.toString().replace("-", ""))) return comp;
+        return prefix(comp, legacy);
+    }
+
+    /** A Nether player (badge shown): uuid with or without dashes. */
+    static boolean nether(Object uuid) {
+        if (uuid == null) return false;
+        return DEV != null || worn.containsKey(uuid.toString().replace("-", ""));
+    }
+
+    /**
+     * Hook.chat: a chat line whose sender is a Nether player gets the badge in front, i.e. a Nether name appears before
+     * the end of the sender part ("<Name> hi", "[Rank] Name: hi", "Name » hi"); a name only mentioned later does not
+     * count. Render thread only, idempotent (the chat HUD's add methods call each other).
+     */
+    static Object chat(Object comp) {
+        if (Thread.currentThread() != Overlay.renderThread || noIcon || names.isEmpty()) return comp;
+        boolean legacy = Game.legacy();
+        if (!(legacy || Game.fabric())) return comp;
+        Object so = Game.call(comp, legacy ? Game.l("c", "func_150260_c") : "getString");
+        if (!(so instanceof String)) return comp;
+        String s = (String) so;
+        if (s.indexOf('\uE000') >= 0) return comp;
+        int end = s.length();
+        for (String sep : new String[] {">", ":", "\u00BB", "\u2192"}) { int i = s.indexOf(sep); if (i > 0 && i < end) end = i; }
+        if (end > 64) return comp;
+        String head = s.substring(0, end);
+        boolean hit = false;
+        for (String n : names.values()) {
+            int i = head.indexOf(n);
+            if (i >= 0 && (i == 0 || !Character.isLetterOrDigit(head.charAt(i - 1)) && head.charAt(i - 1) != '_')
+                && (i + n.length() == head.length() || !Character.isLetterOrDigit(head.charAt(i + n.length())) && head.charAt(i + n.length()) != '_')) { hit = true; break; }
+        }
+        return hit ? prefix(comp, legacy) : comp;
+    }
+
+    /** icon + " " + comp, or comp when the icon is not ready. */
+    private static Object prefix(Object comp, boolean legacy) {
         try {
             Object ic = icon(legacy);
             if (ic == null) return comp;
-            if (legacy) { // new ChatComponentText(" ").appendSibling(name)
+            if (legacy) {
                 Object out = Game.cls(Game.l("fa", "net.minecraft.util.ChatComponentText")).getConstructor(String.class).newInstance(ic);
-                Class<?> chat = Game.cls(Game.l("eu", "net.minecraft.util.IChatComponent")); // exact: a static a(Iterable) would fit too
+                Class<?> chat = Game.cls(Game.l("eu", "net.minecraft.util.IChatComponent"));
                 Object r = out.getClass().getMethod(Game.l("a", "func_150257_a"), chat).invoke(out, comp);
                 return chat.isInstance(r) ? r : comp;
             }
@@ -297,6 +343,23 @@ final class Capes {
             return comp;
         }
     }
+
+    /** The badge image (the pack's icon glyph, resource packs apply), size x size at x, y; false when there is none. */
+    static boolean badge(float x, float y, float size) {
+        int g = Res.gen();
+        if (g != badgeGen || (badgeOk && !Gfx.hasTexture("nether:badge"))) {
+            badgeGen = g;
+            java.awt.image.BufferedImage img = Res.image("assets/nether/textures/font/icon.png");
+            badgeOk = img != null;
+            if (badgeOk) Gfx.texture("nether:badge", img, false);
+        }
+        if (!badgeOk) return false;
+        Gfx.image("nether:badge", x, y, size, size, 0xFFFFFFFF, 0);
+        return true;
+    }
+
+    private static int badgeGen = -1;
+    private static boolean badgeOk;
 
     /**
      * U+E000 in font nether:icon, white so team colours don't tint it; null until that font is loaded. 1.8.9 (no font

@@ -11,8 +11,7 @@ final class Reach extends RowsModule {
         add(Setting.slider("good", "Green up to (blocks)", 2, 6, 0.1, 3.0).hint("Hits at or below this are green."));
         add(Setting.slider("ok", "Amber up to (blocks)", 2, 6, 0.1, 3.5).hint("Hits above the green limit and up to this are amber."));
         add(Setting.slider("hideAfter", "Hide after (s, 0 = keep)", 0, 30, 1, 5).hint("The value disappears this long after the attack."));
-        needs(1);
-        safe();
+        needs(1);
     }
 
     @Override void tick() {

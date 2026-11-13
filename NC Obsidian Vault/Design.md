@@ -35,4 +35,5 @@ Calm, dark, rounded: OLED by default, one accent, Nether Pixel type, thin line i
 - **Chrome:** no native title bar/border; min/max/close (46px, close red) at the top bar's right; only the top 56px strip drags the window (sign-in gate and crash page too); no double-click maximise.
 - **Install Packs:** Seg MODRINTH/CURSEFORGE/NETHER, search+sort, 68px rows (icon, MC, loader, downloads, VIEW) -> shared project page (strip says "BUILDS A NEW INSTANCE").
 - **Create wizard:** step rail (01 LOADER … 06 FINISH), big selectable cards/tiles, red border = picked; footer CREATE RAW INSTANCE link left, BACK/NEXT right.
-- **In-game title screen:** obsidian backdrop (solid top, fading over the panorama), flat ghast mark, NETHER wordmark, 230px flat buttons with red hover bar, NETHER CLIENT button red.
+- **In-game title screen (v6):** fixed OLED palette over the panorama (not the theme), flat ghast mark, NETHER wordmark, untracked Nether Pixel; buttons radius 6 glass/outline/minimal, NETHER CLIENT = accent fill radius 8 (the one accent action); account/quick join/customise = glass radius 10; options = Seg cells + pill toggles.
+- **HUD (v6):** drawn rounded (`Gfx.round`): boxes radius 6 + 3px accent bar (`Th.ac`), keys radius 6, toasts/hint = glass radius 8, sentence case; no letter spacing.

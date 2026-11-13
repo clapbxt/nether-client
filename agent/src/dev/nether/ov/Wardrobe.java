@@ -172,18 +172,17 @@ final class Wardrobe {
         } else Gfx.textC(Gfx.SEMI, 11, lx + pw / 2, top + ph / 2, Th.mut, "SKIN NOT SHARED YET", 1.2f);
         Gfx.text(Gfx.MONO, 9, lx + 12, top + 16, Th.mut, "DRAG TO SPIN", false, 1.4f);
 
-        // nametag icon switch
+        // the Nether badge (always on: shown before Nether players' names above their heads and in chat)
         float sy = top + ph + 12;
-        boolean on = Config.bool("client", "nametagIcon", true), hv = Menu.in(lx, sy, pw, 30);
-        float t = Menu.an("wdicon", hv), o = Menu.an("wdiconon", on);
-        Gfx.rect(lx, sy, pw, 30, 6, Gfx.a(Th.ov, 0.035f + 0.04f * t));
-        Gfx.ring(lx, sy, pw, 30, 6, 1, Gfx.mix(Gfx.mix(Th.ln, Th.ln2, t), Gfx.a(Th.ac, 0.7f), o));
-        Gfx.text(Gfx.SEMI, 10, lx + 13, sy + 15, Gfx.mix(Th.dim, Th.tx, Math.max(t, o)), "NAMETAG ICON", false, 1.2f);
-        float sx = lx + pw - 13 - 36, ssy = sy + 5;
-        Gfx.rect(sx, ssy, 36, 20, 10, Gfx.mix(Th.s3, Th.ac, o));
-        Gfx.rect(sx + 3 + 16 * o, ssy + 3, 14, 14, 7, Gfx.mix(Th.dim, 0xFFFFFFFF, o));
-        if (Menu.hit(lx, sy, pw, 30)) Config.set("client", "nametagIcon", !on);
-        if (hv) Menu.tip = "Shows the Nether icon next to other Nether players' names. Your own icon is controlled by the launcher.";
+        boolean hv = Menu.in(lx, sy, pw, 30);
+        Gfx.rect(lx, sy, pw, 30, 6, Gfx.a(Th.ov, 0.035f));
+        Gfx.ring(lx, sy, pw, 30, 6, 1, Th.ln);
+        float bx = lx + 12;
+        if (Capes.badge(bx, sy + 7, 16)) bx += 24;
+        Gfx.text(Gfx.SEMI, 10, bx, sy + 15, Th.tx, "NETHER BADGE", false, 1.2f);
+        String note = "NAMETAG + CHAT";
+        Gfx.text(Gfx.MONO, 9, lx + pw - 12 - Gfx.width(Gfx.MONO, 9, note, 0.8f), sy + 15, Th.mut, note, false, 0.8f);
+        if (hv) Menu.tip = "Every Nether player gets the badge before their name, above their head and in chat.";
 
         // ---- right: capes
         float gx = lx + pw + 32, gw = px + Menu.PW - 28 - gx, tw = (gw - 3 * 12) / 4, th = 150, gap = 12;

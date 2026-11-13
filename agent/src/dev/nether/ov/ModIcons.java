@@ -39,6 +39,27 @@ final class ModIcons {
         return s == NONE ? null : s;
     }
 
+    /** Modules whose meaning a game item shows well: module id -> item ids, newest first (1.8.9 / older fallbacks after). */
+    private static final Map<String, String[]> ITEMS = new HashMap<>();
+    static {
+        String[][] m = {{"combo", "minecraft:diamond_sword", "minecraft:iron_sword"}, {"potions", "minecraft:potion"},
+            {"armor", "minecraft:diamond_chestplate", "minecraft:iron_chestplate"}, {"items", "minecraft:ender_pearl"},
+            {"clock", "minecraft:clock_00"}, {"compass", "minecraft:compass_00"}, {"coords", "minecraft:map", "minecraft:filled_map"},
+            {"waypoints", "minecraft:recovery_compass_00", "minecraft:ender_eye"}, {"zoom", "minecraft:spyglass"},
+            {"fullbright", "minecraft:torch"}, {"speed", "minecraft:sugar"}, {"media", "minecraft:music_disc_cat"},
+            {"lyrics", "minecraft:writable_book"}, {"selftag", "minecraft:name_tag"}};
+        for (String[] r : m) ITEMS.put(r[0], java.util.Arrays.copyOfRange(r, 1, r.length));
+    }
+
+    /** The module's game-item icon in a size x size box (in the game's own colours, so resource packs show); false when none. */
+    static boolean drawItem(String id, float x, float y, float size) {
+        String[] ids = ITEMS.get(id);
+        int[] px = ids == null ? null : Icons.first(ids);
+        if (px == null) return false;
+        Gfx.icon(px, x, y, size);
+        return true;
+    }
+
     /** Draws the icon in a size x size box in one colour; false when there is none. */
     static boolean draw(String id, float x, float y, float size, int color) {
         Shape s = get(id);

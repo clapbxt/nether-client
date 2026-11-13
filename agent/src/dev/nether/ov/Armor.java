@@ -2,9 +2,9 @@ package dev.nether.ov;
 
 /**
  * Armor Status HUD: worn armor, optionally the held / off-hand item and the arrow supply while a bow or crossbow is in
- * hand. Layouts: List, Icons, Compact, and Vanilla (16 GUI px item icons with the game's own durability bar and stack
- * count, in the spirit of uku's Armor HUD / Aegis). Icons are the items' flat textures ({@link Icons}); enchantment
- * glint and trims are renderer work and are not shown.
+ * hand. Layouts: List, Icons, Compact, and Vanilla (the game's hotbar slots, font, durability bar and stack count, all
+ * from its textures so resource packs restyle them; {@link Vanilla}). Icons are the items' flat textures ({@link Icons});
+ * enchantment glint and trims are renderer work and are not shown.
  */
 final class Armor extends Module {
     /** label per entry kind: 0-3 armor head to feet, 4 main hand, 5 off hand, 6 arrows */
@@ -23,7 +23,7 @@ final class Armor extends Module {
 
     Armor() {
         super("armor", "Armor Status", "HUD", "Equipped armor with its remaining durability.", true, false, 0.73, 0.5);
-        add(Setting.choice("layout", "Layout", "List", "List", "Icons", "Compact", "Vanilla").hint("Vanilla: item icons with the game's own durability bar and stack count"));
+        add(Setting.choice("layout", "Layout", "List", "List", "Icons", "Compact", "Vanilla").hint("Vanilla: the game's own hotbar slots, durability bars and stack counts (resource packs apply)"));
         add(Setting.choice("value", "Durability as", "Percent", "Percent", "Durability", "Remaining", "Hidden"));
         add(Setting.bool("bar", "Durability bar", true));
         add(Setting.bool("names", "Item names", true));
@@ -103,9 +103,9 @@ final class Armor extends Module {
     // ---------------------------------------------------------------- layout
 
     private static final float T = 30, TG = 4;
-    /** Vanilla: item 16 GUI px (1 unit = half a GUI pixel), 2 GUI px apart, 6 units padding */
-    private static final float I = 32, G = 4, P = 6;
-    private float colW, textW;
+    /** Vanilla: item 16 GUI px (1 unit = half a GUI pixel) */
+    private static final float I = 32;
+    private float textW;
 
     @Override void measure() {
         int k = Math.max(1, n);
@@ -113,15 +113,13 @@ final class Armor extends Module {
         switch (str("layout")) {
             case "Vanilla":
                 textW = 0;
-                for (int i = 0; i < n; i++) if (!vals[i].isEmpty()) textW = Math.max(textW, Gfx.width(Gfx.SEMI, 13, vals[i]));
-                float off = bool("accent") && bool("bg") ? 2 : 0;
+                for (int i = 0; i < n; i++) if (!vals[i].isEmpty()) textW = Math.max(textW, vw(vals[i]));
                 if (vertical()) {
-                    w = P * 2 + off + I + (textW > 0 ? 6 + textW : 0);
-                    h = P * 2 + k * I + (k - 1) * G;
+                    w = Vanilla.stripW(k, true) + (textW > 0 ? 6 + textW : 0);
+                    h = Vanilla.stripH(k, true);
                 } else {
-                    colW = Math.max(I, textW);
-                    w = P * 2 + off + k * colW + (k - 1) * G;
-                    h = P * 2 + I + (textW > 0 ? 15 : 0);
+                    w = Math.max(Vanilla.stripW(k, false), textW > 40 ? Vanilla.stripW(k, false) - 40 + textW : 0);
+                    h = Vanilla.stripH(k, false) + (textW > 0 ? 22 : 0);
                 }
                 break;
             case "Icons":
@@ -150,9 +148,9 @@ final class Armor extends Module {
     }
 
     @Override void draw(float x, float y) {
-        panel(x, y, w, h);
         String lay = str("layout");
         if (lay.equals("Vanilla")) { drawVanilla(x, y); return; }
+        panel(x, y, w, h);
         if (lay.equals("Icons")) { drawTiles(x, y); return; }
         boolean bar = bool("bar"), names = bool("names") && lay.equals("List");
         float off = bool("accent") && bool("bg") ? 1 : 0, nameW = 96;
@@ -161,7 +159,7 @@ final class Armor extends Module {
             float cy = y + RowsModule.PY + RowsModule.RH * (i + 0.5f);
             int[] ic = bool("icons") ? Icons.get(p[3]) : null;
             if (ic != null) Gfx.icon(ic, x + RowsModule.PX + off + 1, cy - 7, 14);
-            else Gfx.text(Gfx.SEMI, 9, x + RowsModule.PX + off, cy, Gfx.DIM, TAG[kind[i]], false, 1f);
+            else Gfx.text(Gfx.SEMI, 9, x + RowsModule.PX + off, cy, Gfx.DIM, TAG[kind[i]], false, 0);
             if (names) txt(Gfx.UI, 12, x + RowsModule.PX + 32 + off, cy, color(), cut(p[0], nameW));
             if (max[i] <= 0) {
                 String c = count(i);
@@ -194,7 +192,7 @@ final class Armor extends Module {
             Gfx.rect(cx, ty, T, T, 3, Gfx.a(Gfx.ICE, 0.06f));
             int[] ic = bool("icons") ? Icons.get(p[3]) : null;
             if (ic != null) Gfx.icon(ic, cx + 5, ty + 3, 20);
-            else Gfx.text(Gfx.SEMI, 8, cx + T / 2 - Gfx.width(Gfx.SEMI, 8, TAG[kind[i]]) / 2, ty + 13, Gfx.DIM, TAG[kind[i]], false, 0.8f);
+            else Gfx.text(Gfx.SEMI, 8, cx + T / 2 - Gfx.width(Gfx.SEMI, 8, TAG[kind[i]]) / 2, ty + 13, Gfx.DIM, TAG[kind[i]], false, 0);
             if (bar && m > 0) {
                 Gfx.rect(cx + 4, ty + T - 6, T - 8, 3, 1, Gfx.a(0xFF000000, 0.7f));
                 Gfx.rect(cx + 4, ty + T - 6, Math.max(2, (T - 8) * f), 3, 1, col);
@@ -208,18 +206,25 @@ final class Armor extends Module {
         }
     }
 
-    /** Vanilla look: the item as in a hotbar slot, the game's durability bar under it, stack count in the corner. */
+    /** Width of a value in the game font (or ours when the pack has none). */
+    private static float vw(String v) { return Vanilla.font() ? Vanilla.width(v) : Gfx.width(Gfx.SEMI, 13, v); }
+
+    /** Vanilla look: the game's hotbar slots holding the items, its durability bars and stack counts; values under / beside. */
     private void drawVanilla(float x, float y) {
-        float px = x + P + (bool("accent") && bool("bg") ? 2 : 0), py = y + P;
         boolean vert = vertical(), shadow = bool("shadow");
+        int k = Math.max(1, n);
+        float sx = x + (vert ? 0 : (w - Vanilla.stripW(k, false)) / 2);
+        if (Vanilla.slots()) Vanilla.strip(sx, y, k, vert);
+        else panel(x, y, w, h);
         for (int i = 0; i < n; i++) {
-            float ix = vert ? px : px + i * (colW + G) + (colW - I) / 2, iy = vert ? py + i * (I + G) : py;
+            float ix = Vanilla.itemX(sx, i, vert), iy = Vanilla.itemY(y, i, vert);
             slot(i, ix, iy);
             String v = vals[i];
             if (v.isEmpty()) continue;
             int col = low(i) ? warnCol() : color();
-            if (vert) Gfx.text(Gfx.SEMI, 13, ix + I + 6, iy + I / 2, col, v, shadow, 0);
-            else Gfx.text(Gfx.SEMI, 13, ix + I / 2 - Gfx.width(Gfx.SEMI, 13, v) / 2, iy + I + 8, col, v, shadow, 0);
+            float tw = vw(v), tx = vert ? x + Vanilla.stripW(k, true) + 6 : ix + I / 2 - tw / 2, ty = vert ? iy + I / 2 - 8 : y + Vanilla.stripH(k, false) + 4;
+            if (Vanilla.font()) Vanilla.text(v, tx, ty, col, true);
+            else Gfx.text(Gfx.SEMI, 13, tx, ty + 8, col, v, shadow, 0);
         }
     }
 
@@ -227,15 +232,15 @@ final class Armor extends Module {
         String[] p = items[i];
         if (low(i)) { // gentle pulse behind the item (steady in calm mode)
             float t = Config.calm() ? 0.5f : 0.5f + 0.5f * (float) Math.sin(System.currentTimeMillis() / 260.0);
-            Gfx.rect(ix - 2, iy - 2, I + 4, I + 4, 0, Gfx.a(warnCol(), 0.16f + 0.16f * t));
+            Gfx.rect(ix - 2, iy - 2, I + 4, I + 4, 4, Gfx.a(warnCol(), 0.16f + 0.16f * t));
         }
         int[] ic = Icons.get(p[3]);
         if (ic != null) Gfx.icon(ic, ix, iy, I);
-        else Gfx.text(Gfx.SEMI, 9, ix + I / 2 - Gfx.width(Gfx.SEMI, 9, TAG[kind[i]], 0.8f) / 2, iy + I / 2, Gfx.DIM, TAG[kind[i]], false, 0.8f);
+        else Gfx.text(Gfx.SEMI, 9, ix + I / 2 - Gfx.width(Gfx.SEMI, 9, TAG[kind[i]]) / 2, iy + I / 2, Gfx.DIM, TAG[kind[i]], false, 0);
         int d = dmg[i], m = max[i];
         if (bool("bar") && m > 0 && d > 0) durabilityBar(ix, iy, d, m);
         String c = count(i);
-        if (!c.isEmpty()) Gfx.text(Gfx.SEMI, 15, ix + I + 2 - Gfx.width(Gfx.SEMI, 15, c), iy + I - 7, kind[i] == 6 && cnt[i] == 0 ? warnCol() : 0xFFFFFFFF, c, true, 0);
+        if (!c.isEmpty()) Vanilla.count(c, ix, iy, kind[i] == 6 && cnt[i] == 0 ? warnCol() : 0xFFFFFFFF);
     }
 
     /**

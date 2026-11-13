@@ -18,12 +18,16 @@ final class Toast {
         float s0 = Gfx.s, a0 = Gfx.alpha;
         Gfx.s = Gfx.base;
         Gfx.alpha = a0 * a;
-        String t = text.toUpperCase(java.util.Locale.ROOT);
-        float tw = Gfx.width(Gfx.SEMI, 11, t, 1.2f) + 30, tx = fbW / Gfx.s / 2 - tw / 2, ty = 54, th = 26;
-        Gfx.rect(tx, ty, tw, th, 0, Gfx.a(Gfx.BG, 0.92f));
-        Gfx.rect(tx, ty, 3, th, 0, Gfx.RED);
-        Gfx.textC(Gfx.SEMI, 11, tx + tw / 2 + 1, ty + th / 2, Gfx.ICE, t, 1.2f);
+        float tw = Gfx.width(Gfx.UI, 12, text) + 32, tx = fbW / Gfx.s / 2 - tw / 2, ty = 54, th = 28;
+        glass(tx, ty, tw, th);
+        Gfx.textC(Gfx.UI, 12, tx + tw / 2, ty + th / 2, Gfx.ICE, text, 0);
         Gfx.s = s0;
         Gfx.alpha = a0;
+    }
+
+    /** v6 floating glass: s1 at ~90% with a 10% hairline, radius 8 (toasts, hints, waypoint plates). */
+    static void glass(float x, float y, float w, float h) {
+        Gfx.rect(x, y, w, h, 8, Gfx.a(Gfx.CARD, 0.9f));
+        Gfx.ring(x, y, w, h, 8, 1, 0x1AFFFFFF);
     }
 }

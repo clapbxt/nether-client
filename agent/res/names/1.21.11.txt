@@ -158,3 +158,4 @@ net.minecraft.class_5498	ges
 net.minecraft.class_639	hjw	
 net.minecraft.class_642	hit	
 net.minecraft.class_6599	gwj	
+net.minecraft.class_338	gjf	

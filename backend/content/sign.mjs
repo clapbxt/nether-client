@@ -37,6 +37,16 @@ if (cmd === "keygen") {
   const key = createPrivateKey(readFileSync(keyFile));
   if (createPublicKey(key).export({ type: "spki", format: "der" }).subarray(-32).toString("hex") !== readFileSync(pubFile, "utf8").trim())
     throw new Error("private key does not match crates/core/res/content-ed25519.pub");
+  // refuse to sign broken content: every .json must parse, every cape needs a valid id and a small PNG
+  for (const p of files(here).filter((f) => f.endsWith(".json") && !SKIP.has(relative(here, f)))) {
+    try { JSON.parse(readFileSync(p, "utf8")); } catch (e) { throw new Error(`${relative(here, p)} is not valid JSON: ${e.message}`); }
+  }
+  for (const c of JSON.parse(readFileSync(join(here, "capes", "index.json"), "utf8"))) {
+    if (!/^[a-z0-9_-]{1,32}$/.test(c.id || "") || typeof c.name !== "string") throw new Error(`cape ${JSON.stringify(c)}: needs an "id" (a-z 0-9 _ -, max 32) and a "name"`);
+    const png = join(here, "capes", `${c.id}.png`);
+    if (!existsSync(png)) throw new Error(`cape "${c.id}": capes/${c.id}.png is missing`);
+    if (statSync(png).size > 64 * 1024) throw new Error(`cape "${c.id}": PNG is over 64 KB`);
+  }
   const map = {};
   for (const p of files(here).sort()) {
     const rel = relative(here, p).split(sep).join("/");

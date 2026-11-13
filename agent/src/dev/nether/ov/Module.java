@@ -55,8 +55,6 @@ abstract class Module {
     float w, h;
     /** 0 = no game access, 1 = needs readable game state, 2 = needs Fabric intermediary names */
     int needs;
-    /** disabled while the profile's server-safe mode is on */
-    boolean safeOff;
 
     Module(String id, String name, String cat, String desc, boolean hud, boolean defOn, double dx, double dy) {
         this.id = id; this.name = name; this.cat = cat; this.desc = desc; this.hud = hud; this.defOn = defOn; this.dx = dx; this.dy = dy;
@@ -74,27 +72,10 @@ abstract class Module {
         }
     }
 
-    /** Style settings shared by every HUD module ("apply style to all"). */
-    static final String[] STYLE = {"color", "bg", "bgAlpha", "shadow", "accent", "border", "chroma", "labelColor", "labels"};
-
-    /** Copy this module's look to every other HUD module. */
-    void styleToAll() {
-        for (Module o : Modules.all) {
-            if (o == this || !o.hud) continue;
-            for (String k : STYLE) {
-                Setting s = byKey.get(k);
-                if (s == null || !o.has(k)) continue;
-                Object v = s.t == Setting.BOOL ? (Object) bool(k) : s.t == Setting.SLIDER ? (Object) num(k) : (Object) str(k);
-                Config.set(o.id, k, v);
-            }
-        }
-    }
-
     Module add(Setting s) { settings.add(s); byKey.put(s.key, s); return this; }
     boolean has(String key) { return byKey.containsKey(key); }
     Setting setting(String key) { return byKey.get(key); }
     Module needs(int n) { needs = n; return this; }
-    Module safe() { safeOff = true; return this; }
 
     void drop(String key) { settings.removeIf(s -> s.key.equals(key)); byKey.remove(key); }
 
@@ -103,9 +84,9 @@ abstract class Module {
 
     /** needs: 0 none, 1 player state, 2 full game state (Fabric names), 3 player state + options (also 1.8.9), 4 = 2 or 1.8.9 */
     boolean available() { return needs == 0 || (needs == 1 || needs == 3 ? Game.supported() : needs == 4 ? Game.fabric() || Game.legacy() : Game.fabric()); }
-    boolean locked() { return !available() || (safeOff && Modules.safe()); }
+    boolean locked() { return !available(); }
     /** why the module is greyed out, or null */
-    String lockNote() { return !available() ? "NOT AVAILABLE ON THIS VERSION" : safeOff && Modules.safe() ? "OFF IN SERVER-SAFE MODE" : null; }
+    String lockNote() { return !available() ? "NOT AVAILABLE ON THIS VERSION" : null; }
     /** Starred in the menu: pinned on top of every tab and listed under FAVOURITES. */
     boolean fav() { return Config.bool(id, "fav", false); }
 
@@ -191,11 +172,14 @@ abstract class Module {
 
     // ---- drawing helpers for HUD modules
 
-    void panel(float x, float y, float w, float h) {
+    /** v6 HUD box: flat, radius 6, optional hairline outline and the 3 px accent bar of the menu's list rows. */
+    void panel(float x, float y, float w, float h) { panel(x, y, w, h, Th.ac); }
+
+    void panel(float x, float y, float w, float h, int accent) {
         if (!bool("bg")) return;
-        Gfx.rect(x, y, w, h, 5, Gfx.a(Gfx.BG, (float) num("bgAlpha")));
-        if (bool("border")) Gfx.ring(x, y, w, h, 5, 1, Gfx.a(color(), 0.55f));
-        if (bool("accent")) Gfx.rect(x, y + 4, 2, h - 8, 1, Gfx.RED);
+        Gfx.rect(x, y, w, h, 6, Gfx.a(Gfx.BG, (float) num("bgAlpha")));
+        if (bool("border")) Gfx.ring(x, y, w, h, 6, 1, Gfx.a(color(), 0.4f));
+        if (bool("accent")) Gfx.rect(x, y + 5, 3, h - 10, 1.5f, accent);
     }
 
     float txt(int font, float size, float x, float cy, int col, String s) {
@@ -224,7 +208,7 @@ abstract class RowsModule extends Module {
         float vw = 0;
         boolean labels = bool("labels");
         for (String[] r : rows) {
-            if (labels) lw = Math.max(lw, Gfx.width(Gfx.SEMI, 10, r[0], 1f));
+            if (labels) lw = Math.max(lw, Gfx.width(Gfx.SEMI, 10, r[0]));
             vw = Math.max(vw, Gfx.width(Gfx.MONO, 13, r[1].length() > 8 && r[1].charAt(0) == '#' && r[1].charAt(7) == '|' ? r[1].substring(8) : r[1]));
         }
         w = PX * 2 + (labels ? lw + 8 : 0) + vw;
@@ -237,7 +221,7 @@ abstract class RowsModule extends Module {
         boolean labels = bool("labels");
         for (int i = 0; i < rows.length; i++) {
             float cy = y + PY + RH * (i + 0.5f);
-            if (labels) Gfx.text(Gfx.SEMI, 10, x + PX + (bool("accent") && bool("bg") ? 1 : 0), cy, lc, rows[i][0], bool("shadow"), 1f);
+            if (labels) Gfx.text(Gfx.SEMI, 10, x + PX + (bool("accent") && bool("bg") ? 1 : 0), cy, lc, rows[i][0], bool("shadow"), 0);
             // a row may pick its own value colour ("#RRGGBB|value"), e.g. FPS or ping by speed
             String v = rows[i][1];
             int vc = col;

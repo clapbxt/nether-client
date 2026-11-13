@@ -668,15 +668,6 @@ final class Menu {
         for (int i = 0; i < tl.size(); i++) Gfx.text(Gfx.UI, 11, bx + 12, by + 14 + i * 16, Th.dim, tl.get(i));
     }
 
-    /** Profile-wide server-safe mode switch (Settings). */
-    private static void safeRow(float x, float y, float w) {
-        boolean on = Modules.safe();
-        Gfx.text(Gfx.UI, 13, x, y + 15, Th.tx, "Server-safe mode");
-        Gfx.text(Gfx.UI, 10, x, y + 31, Th.mut, "Turns off the modules that can be an advantage (zoom, fullbright, reach) for servers that forbid them.");
-        pill("safe", x + w - 30, y + 14, on);
-        if (hit(x + w - 40, y + 4, 40, 34) || hit(x, y, w - 50, 42)) Modules.setSafe(!on);
-    }
-
     private static List<Module> filtered() {
         List<Module> l = new ArrayList<>();
         String q = search.toLowerCase(Locale.ROOT);
@@ -757,7 +748,11 @@ final class Menu {
         float a0 = Gfx.alpha;
         if (lock) Gfx.alpha = a0 * 0.55f;
         Gfx.rect(x + 12, y + (ROW - 28) / 2, 28, 28, 4, Gfx.a(Th.ov, 0.06f));
-        if (!ModIcons.draw(m.id, x + 12 + 6.5f, y + ROW / 2f - 7.5f, 15, Gfx.mix(Th.dim, Th.ac2, on1)))
+        float a1 = Gfx.alpha;
+        Gfx.alpha = a1 * (0.55f + 0.45f * on1); // item icons keep their colours: off = faded
+        boolean item = ModIcons.drawItem(m.id, x + 18, y + ROW / 2f - 8, 16);
+        Gfx.alpha = a1;
+        if (!item && !ModIcons.draw(m.id, x + 12 + 6.5f, y + ROW / 2f - 7.5f, 15, Gfx.mix(Th.dim, Th.ac2, on1)))
             Gfx.textC(Gfx.HEAD, 12, x + 26, y + ROW / 2f, Th.dim, m.name.substring(0, 1), 0);
         // right side first: pill, key chip, star
         float rx = x + w - 14 - 30;
@@ -820,18 +815,15 @@ final class Menu {
             Gfx.rect(lx, yy, lw, 34, 4, Gfx.a(Th.ac, 0.12f));
             Gfx.rect(lx, yy, 3, 34, 1, Th.ac2);
             Gfx.text(Gfx.UI, 11, lx + 14, yy + 17, Th.tx, note);
-            if (m.available()) {
-                String why = "Turn server-safe off in Settings";
-                Gfx.text(Gfx.UI, 10, lx + lw - 12 - Gfx.width(Gfx.UI, 10, why), yy + 17, Th.dim, why);
-            }
             yy += 42;
         }
         Waypoints wp = m instanceof Waypoints ? (Waypoints) m : null;
         if (wp == null && editWp >= 0) commitEdit();
         yy = settingRows(m, lx, yy, lw);
         if (wp != null) { wpList(wp, lx, yy, lw); yy += wpHeight(wp); }
-        if (fbutton("reset" + m.id, "Reset to default", lx, yy + 6, 150, 28, false)) { ColorPicker.close(); m.reset(); }
-        if (m.hud && fbutton("styleall" + m.id, "Style to all HUD", lx + 158, yy + 6, 150, 28, false)) m.styleToAll();
+        String rl = "Reset to default";
+        float rw = Gfx.width(Gfx.SEMI, 11, rl, 1.2f) + 32;
+        if (fbutton("reset" + m.id, rl, lx, yy + 6, rw, 28, false)) { ColorPicker.close(); m.reset(); }
     }
 
     /** The setting rows of module m from y; returns the y after them. */
@@ -971,7 +963,7 @@ final class Menu {
         return y;
     }
 
-    // ---------------------------------------------------------------- settings tab (look, safety, main menu, keys, profiles)
+    // ---------------------------------------------------------------- settings tab (look, main menu, keys, profiles)
 
     private static final String[] ACC_NAMES = {"Red", "Ember", "Acid", "Cobalt", "Violet"};
     private static final String[][] ACC = {{"#E5372D", "#FF6157"}, {"#E8590C", "#FF7A2E"}, {"#22A845", "#3DDC6A"}, {"#1F6FEB", "#4C8DFF"}, {"#8B3DFF", "#A66BFF"}};
@@ -993,7 +985,7 @@ final class Menu {
         if (sub == 1) { float sp = PH; PH -= 40; Controls.draw(cpx, cpy + 40, wheel); PH = sp; return; }
         if (sub == 2) { float sp = PH; PH -= 40; Profiles.draw(cpx, cpy + 40, wheel); PH = sp; return; }
         float lx = mx + 20, lw = mw - 40, top = py + TOP + 48, viewH = py + ph - FOOT - top;
-        float contentH = 8 + 62 + 62 + 62 + 62 + 30 + (page != null && page.equals("menu") ? expH(MainMenu.MODULE) : 0) + ROW + 20;
+        float contentH = 8 + 62 + 62 + 62 + 30 + (page != null && page.equals("menu") ? expH(MainMenu.MODULE) : 0) + ROW + 20;
         float maxS = Math.max(0, contentH - viewH);
         scrollT = Math.max(0, Math.min(maxS, scrollT - wheel * 46));
         scroll = Config.calm() ? scrollT : scroll + (scrollT - scroll) * Math.min(1, Gfx.dt * 16);
@@ -1035,9 +1027,6 @@ final class Menu {
         Gfx.text(Gfx.UI, 10, lx, yy + 31, Th.mut, Config.launcherCalm() ? "Set by the launcher." : "Menu animations snap; nothing blinks.");
         pill("calm", lx + lw - 30, yy + 14, calm || Config.launcherCalm());
         if (!Config.launcherCalm() && (hit(lx + lw - 40, yy + 4, 40, 34))) Config.set("client", "calm", !calm);
-        Gfx.rect(lx, yy + 61, lw, 1, 0, Th.ln);
-        yy += 62;
-        safeRow(lx, yy, lw);
         Gfx.rect(lx, yy + 61, lw, 1, 0, Th.ln);
         yy += 62;
         Gfx.text(Gfx.UI, 10, lx, yy + 14, Th.mut, "MAIN MENU", false, 1.2f);

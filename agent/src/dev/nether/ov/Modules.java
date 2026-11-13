@@ -18,9 +18,8 @@ final class Modules {
     static final Waypoints WAYPOINTS = new Waypoints();
     static final MediaPlayer MEDIA = new MediaPlayer();
     static final Lyrics LYRICS = new Lyrics();
-    static final Streamer STREAMER = new Streamer();
     static final Stopwatch STOPWATCH = new Stopwatch();
-    static final CameraFx CAMERA = new CameraFx();
+    static final SelfTag SELFTAG = new SelfTag();
 
     static {
         all.add(new Fps());
@@ -37,7 +36,6 @@ final class Modules {
         all.add(new Potions());
         all.add(new Ping());
         all.add(new Address());
-        all.add(new Packs());
         all.add(new Compass());
         all.add(new WorldTime());
         all.add(new Speed());
@@ -49,15 +47,10 @@ final class Modules {
         all.add(new Combo());
         all.add(new Items());
         all.add(STOPWATCH);
-        all.add(CAMERA);
-        all.add(STREAMER);
+        all.add(SELFTAG);
         all.add(MainMenu.MODULE);
         Runtime.getRuntime().addShutdownHook(new Thread(Modules::exitHook));
     }
-
-    /** Profile-wide: switches off every module that could be an advantage (zoom, fullbright, reach). */
-    static boolean safe() { return Config.bool("client", "safeMode", false); }
-    static void setSafe(boolean on) { Config.set("client", "safeMode", on); }
 
     private static volatile boolean closedOnRender;
 
@@ -77,12 +70,10 @@ final class Modules {
     private static void restoreOptions() {
         ZOOM.restore();
         FULLBRIGHT.restore();
-        CAMERA.restore();
     }
 
     /** Overlay death: options back (the game must keep no value we set for it). */
     static void release() {
-        dev.nether.agent.Hook.crosshair = false;
         restoreOptions();
     }
 
@@ -284,8 +275,14 @@ final class Modules {
             chat = new float[] {(cb[0] + 12) * g, fbH - (cb[1] > 0 ? cb[1] + 44 : 16) * g, fbH - 16 * g};
         }
         float prev = Gfx.s;
-        dev.nether.agent.Hook.crosshair = false;
+        boolean r0 = Gfx.round;
+        Gfx.round = true; // v6: rounded panels, bars and chips over the world too
+        try { hud(fbW, fbH, chat); } finally { Gfx.round = r0; Gfx.s = prev; }
+    }
+
+    private static void hud(int fbW, int fbH, float[] chat) {
         for (Module m : all) m.tick();
+        CROSSHAIR.sync();
         place(fbW, fbH);
         for (Module m : all) {
             if (!m.placed || !m.visible()) continue;
@@ -296,16 +293,10 @@ final class Modules {
             m.draw(m.bx / k, m.by / k);
         }
         boolean world = Input.inWorld() && !Game.hudHidden();
-        if (WAYPOINTS.enabled() && world && !Streamer.hides("waypoints")) WAYPOINTS.drawMarkers(fbW, fbH);
-        if (LYRICS.enabled() && world && !Streamer.hides("lyrics")) LYRICS.drawWorld(fbW, fbH);
-        // vanilla hides its crosshair in third person; ours follows. While ours shows, the game's own crosshair method returns early (agent hook)
-        if (CROSSHAIR.enabled() && world && Game.firstPerson()) {
-            dev.nether.agent.Hook.crosshair = true;
-            Gfx.s = Gfx.base;
-            CROSSHAIR.drawAt(fbW / 2f / Gfx.s, fbH / 2f / Gfx.s);
-        }
+        if (WAYPOINTS.enabled() && world) WAYPOINTS.drawMarkers(fbW, fbH);
+        if (LYRICS.enabled() && world) LYRICS.drawWorld(fbW, fbH);
+        if (SELFTAG.enabled() && world) SELFTAG.drawWorld(fbW, fbH);
         if (world) { Toast.draw(fbW); menuHint(fbW); }
-        Gfx.s = prev;
     }
 
     // ---------------------------------------------------------------- first-run hint: where the menu is
@@ -329,18 +320,17 @@ final class Modules {
         float s0 = Gfx.s, a0 = Gfx.alpha;
         Gfx.s = Gfx.base;
         Gfx.alpha = a0 * a;
-        String key = Menu.keyName(Config.menuKey()), pre = "PRESS", post = "FOR THE NETHER CLIENT MENU";
-        float kw = Gfx.width(Gfx.SEMI, 11, key, 1f) + 16, w1 = Gfx.width(Gfx.SEMI, 11, pre, 1.2f), w2 = Gfx.width(Gfx.SEMI, 11, post, 1.2f);
-        float tw = 16 + w1 + 8 + kw + 8 + w2 + 14, tx = fbW / Gfx.s / 2 - tw / 2, ty = 84, th = 30;
-        Gfx.rect(tx, ty, tw, th, 0, Gfx.a(Gfx.BG, 0.92f));
-        Gfx.rect(tx, ty, 3, th, 0, Gfx.RED);
+        String key = Menu.keyName(Config.menuKey()), pre = "Press", post = "for the Nether Client menu";
+        float kw = Gfx.width(Gfx.UI, 11, key) + 16, w1 = Gfx.width(Gfx.UI, 12, pre), w2 = Gfx.width(Gfx.UI, 12, post);
+        float tw = 16 + w1 + 8 + kw + 8 + w2 + 16, tx = fbW / Gfx.s / 2 - tw / 2, ty = 84, th = 32;
+        Toast.glass(tx, ty, tw, th);
         float x = tx + 16, cy = ty + th / 2;
-        Gfx.text(Gfx.SEMI, 11, x, cy, Gfx.DIM, pre, false, 1.2f);
+        Gfx.text(Gfx.UI, 12, x, cy, Gfx.DIM, pre);
         x += w1 + 8;
-        Gfx.rect(x, cy - 10, kw, 20, 0, Gfx.a(Gfx.ICE, 0.94f));
-        Gfx.textC(Gfx.SEMI, 11, x + kw / 2, cy, Gfx.BG, key, 1f);
+        Gfx.rect(x, cy - 10, kw, 20, 4, Gfx.S3);
+        Gfx.textC(Gfx.UI, 11, x + kw / 2, cy, Gfx.ICE, key, 0);
         x += kw + 8;
-        Gfx.text(Gfx.SEMI, 11, x, cy, Gfx.ICE, post, false, 1.2f);
+        Gfx.text(Gfx.UI, 12, x, cy, Gfx.ICE, post);
         Gfx.s = s0;
         Gfx.alpha = a0;
     }
@@ -370,7 +360,7 @@ final class Modules {
         if (press && !Input.inWorld()) return false;
         Waypoints wp = WAYPOINTS;
         if (action == 1 && wp.enabled() && key == (int) wp.num("addKey")) { wp.addHere(); return true; }
-        if (action == 1 && (MEDIA.key(key) || LYRICS.key(key) || STOPWATCH.key(key) || STREAMER.key(key))) return true;
+        if (action == 1 && (MEDIA.key(key) || LYRICS.key(key) || STOPWATCH.key(key))) return true;
         return false;
     }
 
@@ -438,7 +428,6 @@ final class Modules {
             double[] p = Game.player();
             if (p == null) return new String[][] {{"POS", Game.unavailable() ? "not available" : "no world"}};
             if (Game.reducedDebug()) return new String[][] {{"POS", "hidden by server"}}; // F3 hides them here too
-            if (Streamer.hides("coords")) return new String[][] {{"POS", "hidden"}};
             String f = "%." + (int) num("decimals") + "f";
             String[] dir = {"SOUTH +Z", "WEST -X", "NORTH -Z", "EAST +X"};
             int d = (int) Math.floorMod((long) Math.floor((p[3] + 45) / 90), 4L);
@@ -558,12 +547,12 @@ final class Modules {
             float a = an[i];
             int idle = bool("bg") ? Gfx.a(Gfx.BG, (float) num("bgAlpha")) : 0;
             int fill = Gfx.mix(idle, Gfx.a(Gfx.ICE, 0.94f), a);
-            if ((fill >>> 24) > 0) Gfx.rect(x, y, kw, kh, 4, fill);
-            Gfx.ring(x, y, kw, kh, 4, 1, Gfx.mix(Gfx.a(Gfx.ICE, 0.22f), Gfx.a(Gfx.ICE, 0f), a));
+            if ((fill >>> 24) > 0) Gfx.rect(x, y, kw, kh, 6, fill);
+            Gfx.ring(x, y, kw, kh, 6, 1, Gfx.mix(Gfx.LN2, Gfx.a(Gfx.ICE, 0f), a));
             int tc = Gfx.mix(color(), Gfx.BG, a);
             float cy = y + kh / 2 - (sub != null ? 4.5f : 0);
             float ls = label.length() > 1 ? (label.length() > 5 && kw <= C ? 7 : 10) : 12;
-            Gfx.textC(Gfx.SEMI, ls, x + kw / 2, cy, tc, label, label.length() > 1 ? 0.8f : 0);
+            Gfx.textC(Gfx.SEMI, ls, x + kw / 2, cy, tc, label, 0);
             if (sub != null) Gfx.textC(Gfx.MONO, 9, x + kw / 2, y + kh / 2 + 7.5f, Gfx.mix(Gfx.DIM, Gfx.BG, a), sub, 0);
         }
 
@@ -605,7 +594,6 @@ final class Modules {
             add(Setting.bool("scroll", "Scroll to adjust", true));
             add(Setting.bool("sens", "Lower sensitivity while zoomed", true));
             needs(3);
-            safe();
         }
 
         boolean toggle() { return str("mode").equals("Toggle"); }
@@ -632,10 +620,10 @@ final class Modules {
 
         @Override void preview(float cx, float cy) {
             String kn = Menu.keyName((int) num("zoomKey"));
-            float kw = Math.max(40, Gfx.width(Gfx.SEMI, 15, kn, 1f) + 26);
+            float kw = Math.max(40, Gfx.width(Gfx.SEMI, 15, kn) + 26);
             Gfx.rect(cx - kw / 2, cy - 34, kw, 38, 8, Gfx.a(Gfx.ICE, 0.94f));
-            Gfx.textC(Gfx.SEMI, 15, cx, cy - 15, Gfx.BG, kn, 1f);
-            Gfx.textC(Gfx.MONO, 10, cx, cy + 24, Gfx.DIM, str("mode").toUpperCase(Locale.ROOT) + "  -  " + String.format(Locale.ROOT, "%.1fx", num("level")), 1.5f);
+            Gfx.textC(Gfx.SEMI, 15, cx, cy - 15, Gfx.BG, kn, 0);
+            Gfx.textC(Gfx.MONO, 10, cx, cy + 24, Gfx.DIM, str("mode").toUpperCase(Locale.ROOT) + "  -  " + String.format(Locale.ROOT, "%.1fx", num("level")), 0);
         }
     }
 
@@ -646,7 +634,6 @@ final class Modules {
             super("fullbright", "Fullbright", "Visual", "Maximum brightness everywhere. Your own brightness setting is restored when you pause or leave.", false, false, 0, 0);
             add(Setting.slider("level", "Brightness", 2, 15, 1, 12));
             needs(3);
-            safe();
         }
 
         @Override boolean available() { return super.available() && Game.optionsOk(); }
@@ -669,7 +656,7 @@ final class Modules {
                 float x = i == 0 ? cx - g / 2 - bw : cx + g / 2;
                 Gfx.rectG(x, cy - bh / 2, bw, bh, 8, i == 0 ? 0xFF050508 : 0xFFF4F7FB, i == 0 ? 0xFF111116 : 0xFFC9D1DB);
                 Gfx.ring(x, cy - bh / 2, bw, bh, 8, 1, Gfx.LN);
-                Gfx.textC(Gfx.SEMI, 10, x + bw / 2, cy, i == 0 ? Gfx.MUT : Gfx.BG, i == 0 ? "OFF" : "ON", 1.5f);
+                Gfx.textC(Gfx.SEMI, 10, x + bw / 2, cy, i == 0 ? Gfx.MUT : Gfx.BG, i == 0 ? "OFF" : "ON", 0);
             }
         }
     }
@@ -737,7 +724,7 @@ final class Modules {
 
         @Override void measure() {
             nameW = timeW = 0;
-            for (String[] r : list) { if (nameShown(r)) nameW = Math.max(nameW, Gfx.width(Gfx.SEMI, 11, r[0], 0.6f)); timeW = Math.max(timeW, Gfx.width(Gfx.MONO, 11, r[1])); }
+            for (String[] r : list) { if (nameShown(r)) nameW = Math.max(nameW, Gfx.width(Gfx.SEMI, 11, r[0])); timeW = Math.max(timeW, Gfx.width(Gfx.MONO, 11, r[1])); }
             w = RowsModule.PX * 2 + (bool("icons") ? IC + 7 : 0) + nameW + (nameW > 0 ? 14 : 0) + timeW + (bool("accent") && bool("bg") ? 2 : 0);
             h = RowsModule.PY * 2 + rh() * Math.max(1, list.length);
         }
@@ -752,14 +739,14 @@ final class Modules {
                 if (icons) {
                     int[] ic = Icons.effect(r[2]);
                     if (ic != null) Gfx.icon(ic, lx, cy - IC / 2, IC);
-                    else Gfx.rect(lx + 5, cy - 4, 8, 8, 0, Gfx.a(Gfx.DIM, 0.5f));
+                    else Gfx.rect(lx + 5, cy - 4, 8, 8, 2, Gfx.a(Gfx.DIM, 0.5f));
                     tx += IC + 7;
                 }
                 int t = Integer.parseInt(r[3]);
                 int low = (int) num("lowSecs") * 20;
                 int tc = t >= 0 && t < low ? Gfx.RED2 : Gfx.DIM;
                 if (blink && t >= 0 && t < low && (System.currentTimeMillis() / 400) % 2 == 0 && !Config.calm()) tc = Gfx.a(tc, 0.35f);
-                if (nameShown(r)) Gfx.text(Gfx.SEMI, 11, tx, cy, color(), r[0], bool("shadow"), 0.6f);
+                if (nameShown(r)) Gfx.text(Gfx.SEMI, 11, tx, cy, color(), r[0], bool("shadow"), 0);
                 Gfx.text(Gfx.MONO, 11, x + w - RowsModule.PX - Gfx.width(Gfx.MONO, 11, r[1]), cy, tc, r[1], bool("shadow"), 0);
             }
         }
@@ -784,72 +771,6 @@ final class Modules {
         @Override String[][] rows() { return new String[][] {{"PING", v}}; }
     }
 
-    /**
-     * Active resource packs, read from options.txt (the game writes it when packs change). The file is read on a worker
-     * thread and only when its mtime changed; the built-in Nether Client pack (icons, always on) is not listed.
-     */
-    static final class Packs extends RowsModule {
-        private String[][] r = {{"PACK", "-"}};
-        private static volatile java.util.List<String> found;
-        private static volatile long wanted;
-        private static Thread reader;
-
-        Packs() {
-            super("packs", "Pack Display", "HUD", "Shows which resource packs are on.", false, 0.012, 0.42);
-            add(Setting.slider("max", "Packs shown", 1, 5, 1, 2));
-        }
-
-        /** Worker: re-reads options.txt every 2 s while the module was live recently. */
-        private static void read() {
-            long seen = -1;
-            java.nio.file.Path f = java.nio.file.Paths.get("options.txt").toAbsolutePath();
-            while (true) {
-                try {
-                    Thread.sleep(2000);
-                    if (System.currentTimeMillis() - wanted > 10_000) continue;
-                    long t = java.nio.file.Files.exists(f) ? java.nio.file.Files.getLastModifiedTime(f).toMillis() : 0;
-                    if (t == seen) continue;
-                    seen = t;
-                    java.util.List<String> names = new java.util.ArrayList<>();
-                    for (String l : java.nio.file.Files.readAllLines(f, java.nio.charset.StandardCharsets.UTF_8)) {
-                        if (!l.startsWith("resourcePacks:")) continue;
-                        for (String p : l.substring(14).replaceAll("[\\[\\]\"]", "").split(",")) {
-                            String n = p.trim().replaceFirst("^file/", "").replaceAll("(?i)\\.zip$", "");
-                            if (!n.isEmpty() && !n.equals("vanilla") && !n.equals("fabric") && !n.startsWith("mod_resources") && !n.equals("programmer_art")
-                                && !n.equals("high_contrast") && !n.equalsIgnoreCase("Nether Client")) names.add(n);
-                        }
-                    }
-                    java.util.Collections.reverse(names); // options.txt lists the top pack last
-                    found = names;
-                } catch (InterruptedException e) {
-                    return;
-                } catch (Throwable ignored) { }
-            }
-        }
-
-        @Override void tick() {
-            if (!live()) return;
-            wanted = System.currentTimeMillis();
-            if (reader == null) {
-                reader = new Thread(Packs::read, "nether-packs");
-                reader.setDaemon(true);
-                reader.start();
-            }
-            java.util.List<String> names = found;
-            if (names == null || !due(250)) return;
-            int max = (int) num("max");
-            if (names.isEmpty()) { r = new String[][] {{"PACK", "Default"}}; return; }
-            String[][] out = new String[Math.min(max, names.size())][];
-            for (int i = 0; i < out.length; i++) {
-                String n = names.get(i);
-                out[i] = new String[] {i == 0 ? "PACK" : "", n.length() > 28 ? n.substring(0, 26) + ".." : n};
-            }
-            r = out;
-        }
-
-        @Override String[][] rows() { return r; }
-    }
-
     static final class Address extends RowsModule {
         private String v = "-";
 
@@ -861,7 +782,7 @@ final class Modules {
             v = sv == null ? "-" : sv.length() > 26 ? sv.substring(0, 25) + ".." : sv;
         }
 
-        @Override String[][] rows() { return new String[][] {{"IP", Streamer.hides("address") ? "hidden" : v}}; }
+        @Override String[][] rows() { return new String[][] {{"IP", v}}; }
     }
 
     static final class WorldTime extends RowsModule {
@@ -941,7 +862,7 @@ final class Modules {
 
         /** Waypoint ticks: one per waypoint of this world inside the strip, fading with distance (full within 100 blocks, gone at 1000). */
         private void waypointTicks(float x, float y, float cx, float ppd, float span) {
-            if (!bool("points") || !WAYPOINTS.enabled() || Streamer.hides("waypoints") || Game.reducedDebug()) return;
+            if (!bool("points") || !WAYPOINTS.enabled() || Game.reducedDebug()) return;
             List<java.util.Map<String, Object>> l = WAYPOINTS.list(false);
             if (l == null) return;
             for (java.util.Map<String, Object> w : l) {
@@ -975,91 +896,176 @@ final class Modules {
                 if (hh % 45 == 0) {
                     String s = DIRS[hh / 45];
                     boolean major = s.length() == 1;
-                    Gfx.textC(Gfx.SEMI, major ? 12 : 9, tx, y + 10, Gfx.a(major ? (hh == 0 ? Gfx.RED2 : col) : Gfx.DIM, fade), s, 0.8f);
+                    Gfx.textC(Gfx.SEMI, major ? 12 : 9, tx, y + 10, Gfx.a(major ? (hh == 0 ? Th.ac2 : col) : Gfx.DIM, fade), s, 0);
                 } else if (hh % 15 == 0) Gfx.rect(tx - 0.5f, ty - 4, 1, 4, 0, Gfx.a(Gfx.DIM, fade));
                 else Gfx.rect(tx - 0.5f, ty - 2, 1, 2, 0, Gfx.a(Gfx.MUT, fade));
             }
             waypointTicks(x, y, cx, ppd, span);
-            Gfx.rect(cx - 1, y + 5, 2, h - (hd ? 20 : 10), 1, Gfx.a(Gfx.RED, 0.9f));
-            if (hd) Gfx.textC(Gfx.MONO, 10, cx, y + h - 6, Gfx.DIM, String.valueOf(Math.round(bearing) % 360), 1f);
+            Gfx.rect(cx - 1, y + 5, 2, h - (hd ? 20 : 10), 1, Gfx.a(Th.ac, 0.9f));
+            if (hd) Gfx.textC(Gfx.MONO, 10, cx, y + h - 6, Gfx.DIM, String.valueOf(Math.round(bearing) % 360), 0);
         }
     }
 
+    /**
+     * Crosshair the way resource packs do it: the design is drawn into the built-in "Nether Client" pack (always the top
+     * pack) as the game's own crosshair texture (1.20.2+ gui/sprites/hud/crosshair, before that the crosshair cell of
+     * gui/icons copied from the packs below), then the game reloads its resources once our menu is closed. The game
+     * draws it itself, so it shows exactly where and when vanilla's would, with vanilla's invert blending (white reads
+     * on any background; colours would come out inverted, so there is no colour setting).
+     */
     static final class Crosshair extends Module {
         Crosshair() {
-            super("crosshair", "Crosshair", "Visual", "Custom crosshair that replaces the vanilla one, in first person.", false, false, 0, 0);
+            super("crosshair", "Crosshair", "Visual", "Your own crosshair shape, drawn by the game like a resource pack's.", false, false, 0, 0);
             add(Setting.choice("style", "Style", "Cross", "Cross", "Plus", "Dot", "Circle", "Square"));
-            add(Setting.color("color", "Color", "#EAEEF3"));
-            add(Setting.slider("size", "Size", 2, 14, 1, 5));
+            add(Setting.slider("size", "Size", 2, 12, 1, 5));
             add(Setting.slider("thickness", "Thickness", 0.5, 3, 0.5, 1));
-            add(Setting.slider("gap", "Gap", 0, 10, 1, 3));
-            add(Setting.bool("outline", "Outline", true));
+            add(Setting.slider("gap", "Gap", 0, 8, 1, 3));
             add(Setting.bool("dot", "Center dot", false));
-            add(Setting.bool("hit", "Color when aiming at an entity", false).hint("Changes color while the crosshair is on a player or mob (the target type only, nothing about it)."));
-            add(Setting.color("hitColor", "Target color", "#FF3B2F"));
         }
 
-        private long hitAt;
-        private boolean onTarget;
+        /** texels per GUI pixel of the texture we write (the game draws the crosshair 15 GUI px square) */
+        private static final int R = 4;
+        private static final String SPRITE = "assets/minecraft/textures/gui/sprites/hud/crosshair.png", ICONS = "assets/minecraft/textures/gui/icons.png";
+        private String seen;
+        private int seenGen = -1;
+        private boolean reload;
+        private long changedAt, checkedAt;
 
-        /** crosshair colour, switched while an entity is under it (the game's own hit result, read 20x a second) */
-        private int shade() {
-            if (!bool("hit") || Input.menuOpen) return color();
-            long now = System.currentTimeMillis();
-            if (now - hitAt > 50) { hitAt = now; onTarget = Data.hitType() == 2; }
-            return onTarget ? Config.color(id, "hitColor", Gfx.RED2) : color();
-        }
+        private static java.nio.file.Path pack() { return java.nio.file.Paths.get("resourcepacks", "Nether Client").toAbsolutePath(); }
+        private static boolean sprite() { return Game.loader().getResource(SPRITE) != null; }
 
-        @Override void preview(float cx, float cy) { float o = Gfx.s; Gfx.s = o * 1.8f; drawAt(cx * o / Gfx.s, cy * o / Gfx.s); Gfx.s = o; }
+        private String key() { return str("style") + num("size") + "/" + num("thickness") + "/" + num("gap") + bool("dot"); }
 
-        private void bar(float x, float y, float w, float h, int c, boolean outline) {
-            if (outline) Gfx.rect(x - 1, y - 1, w + 2, h + 2, 0, Gfx.a(Gfx.BLACK, 0.75f));
-            Gfx.rect(x, y, w, h, 0, c);
-        }
-
-        void drawAt(float cx, float cy) {
-            Gfx.round = true; // the dot and circle styles are real circles
-            try { drawShape(cx, cy); } finally { Gfx.round = false; }
-        }
-
-        private void drawShape(float cx, float cy) {
+        /** The design, white on clear, n texels square with the crosshair's centre in the middle (1 unit = half a GUI px). */
+        private java.awt.image.BufferedImage design(int n) {
+            java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(n, n, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            java.awt.Graphics2D g = img.createGraphics();
+            g.setColor(java.awt.Color.WHITE);
+            g.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_OFF);
             String st = str("style");
             float size = (float) num("size"), th = (float) num("thickness"), gap = (float) num("gap");
-            int c = shade();
-            boolean ol = bool("outline");
+            float reach = st.equals("Dot") ? Math.max(th * 2, size / 2) / 2 : st.equals("Plus") ? size + gap
+                : st.equals("Circle") || st.equals("Square") ? size + gap / 2 + th / 2 : gap + size;
+            float u = n / 30f * Math.min(1, 14.5f / Math.max(1, reach)); // texels per unit, shrunk so the design fits the 15 px cell
+            float c = n / 2f;
+            int t = Math.max(1, Math.round(th * u)), ci = Math.round(c);
             switch (st) {
                 case "Cross": case "Plus": {
-                    float g = st.equals("Plus") ? 0 : gap;
-                    float len = st.equals("Plus") ? size + gap : size;
-                    bar(cx - g - len, cy - th / 2, len, th, c, ol);
-                    bar(cx + g, cy - th / 2, len, th, c, ol);
-                    bar(cx - th / 2, cy - g - len, th, len, c, ol);
-                    bar(cx - th / 2, cy + g, th, len, c, ol);
+                    boolean plus = st.equals("Plus");
+                    int g0 = plus ? 0 : Math.round(gap * u), len = Math.max(1, Math.round((plus ? size + gap : size) * u));
+                    int a = Math.round(c - t / 2f);
+                    g.fillRect(ci - g0 - len, a, len, t);
+                    g.fillRect(ci + g0, a, len, t);
+                    g.fillRect(a, ci - g0 - len, t, len);
+                    g.fillRect(a, ci + g0, t, len);
+                    if (plus) g.fillRect(a, a, t, t);
                     break;
                 }
                 case "Dot": {
-                    float d = Math.max(th * 2, size / 2);
-                    if (ol) Gfx.rect(cx - d / 2 - 1, cy - d / 2 - 1, d + 2, d + 2, d / 2 + 1, Gfx.a(Gfx.BLACK, 0.75f));
-                    Gfx.rect(cx - d / 2, cy - d / 2, d, d, d / 2, c);
-                    break;
-                }
-                case "Circle": {
-                    float r = size + gap / 2;
-                    if (ol) Gfx.ring(cx - r - 1, cy - r - 1, 2 * r + 2, 2 * r + 2, r + 1, th + 2, Gfx.a(Gfx.BLACK, 0.75f));
-                    Gfx.ring(cx - r, cy - r, 2 * r, 2 * r, r, th, c);
+                    int d = Math.max(1, Math.round(Math.max(th * 2, size / 2) * u));
+                    g.fillOval(Math.round(c - d / 2f), Math.round(c - d / 2f), d, d);
                     break;
                 }
                 default: {
-                    float r = size + gap / 2;
-                    if (ol) Gfx.ring(cx - r - 1, cy - r - 1, 2 * r + 2, 2 * r + 2, 0, th + 2, Gfx.a(Gfx.BLACK, 0.75f));
-                    Gfx.ring(cx - r, cy - r, 2 * r, 2 * r, 0, th, c);
+                    float r = (size + gap / 2) * u;
+                    boolean circle = st.equals("Circle");
+                    int o0 = Math.round(c - r - t / 2f), os = Math.round(2 * r + t);
+                    java.awt.Shape outer = circle ? new java.awt.geom.Ellipse2D.Float(c - r - t / 2f, c - r - t / 2f, 2 * r + t, 2 * r + t) : new java.awt.Rectangle(o0, o0, os, os);
+                    java.awt.Shape inner = circle ? new java.awt.geom.Ellipse2D.Float(c - r + t / 2f, c - r + t / 2f, 2 * r - t, 2 * r - t) : new java.awt.Rectangle(o0 + t, o0 + t, os - 2 * t, os - 2 * t);
+                    java.awt.geom.Area ring = new java.awt.geom.Area(outer);
+                    ring.subtract(new java.awt.geom.Area(inner));
+                    g.fill(ring);
                 }
             }
             if (bool("dot") && !st.equals("Dot")) {
-                float d = Math.max(th, 1.5f);
-                if (ol) Gfx.rect(cx - d / 2 - 1, cy - d / 2 - 1, d + 2, d + 2, 0, Gfx.a(Gfx.BLACK, 0.75f));
-                Gfx.rect(cx - d / 2, cy - d / 2, d, d, 0, c);
+                int d = Math.max(1, Math.round(Math.max(th, 1) * u));
+                g.fillRect(Math.round(c - d / 2f), Math.round(c - d / 2f), d, d);
             }
+            g.dispose();
+            return img;
+        }
+
+        /** 1.20.2+: the sprite itself. Before: icons copied from the packs below ours (upscaled), the crosshair cell replaced. */
+        private byte[] png() throws Exception {
+            java.awt.image.BufferedImage out;
+            if (sprite()) out = design(15 * R);
+            else {
+                java.awt.image.BufferedImage base = Res.image(ICONS, "Nether Client");
+                if (base == null || base.getWidth() < 256) return null;
+                int k = base.getWidth() / 256, s = Math.max(k, R) / k * k; // texels per GUI px in the file
+                out = new java.awt.image.BufferedImage(256 * s, base.getHeight() / k * s, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                java.awt.Graphics2D g = out.createGraphics();
+                g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+                g.drawImage(base, 0, 0, out.getWidth(), out.getHeight(), null);
+                g.setComposite(java.awt.AlphaComposite.Clear);
+                g.fillRect(0, 0, 15 * s, 15 * s);
+                g.setComposite(java.awt.AlphaComposite.SrcOver);
+                g.drawImage(design(15 * s), 0, 0, null);
+                g.dispose();
+            }
+            java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+            javax.imageio.stream.MemoryCacheImageOutputStream mo = new javax.imageio.stream.MemoryCacheImageOutputStream(b);
+            javax.imageio.ImageIO.write(out, "png", mo);
+            mo.close();
+            return b.toByteArray();
+        }
+
+        /** Keeps the pack file in step with the settings (checked 2x a second); a changed file asks the game to reload once our menu is closed. */
+        void sync() {
+            long now = System.currentTimeMillis();
+            if (reload && !Input.menuOpen && now - changedAt > 400) { reload = false; reloadGame(); }
+            if (now - checkedAt < 500) return;
+            checkedAt = now;
+            boolean on = wantedOn() && available();
+            String key = on ? key() : "off";
+            boolean legacy = !sprite();
+            int gen = legacy ? Res.gen() : 0; // before 1.20.2 our icons copy follows the packs under it
+            if (key.equals(seen) && gen == seenGen) return;
+            seen = key;
+            seenGen = gen;
+            try {
+                if (!java.nio.file.Files.isDirectory(pack())) return; // the launcher creates the pack; without it there is nothing to override
+                java.nio.file.Path f = pack().resolve(legacy ? ICONS : SPRITE);
+                if (!on) {
+                    if (java.nio.file.Files.deleteIfExists(f)) { reload = true; changedAt = now; }
+                    return;
+                }
+                byte[] b = png();
+                if (b == null) return;
+                if (java.nio.file.Files.exists(f) && java.util.Arrays.equals(java.nio.file.Files.readAllBytes(f), b)) return;
+                java.nio.file.Files.createDirectories(f.getParent());
+                java.nio.file.Path tmp = f.resolveSibling(f.getFileName() + ".tmp");
+                java.nio.file.Files.write(tmp, b);
+                java.nio.file.Files.move(tmp, f, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                reload = true;
+                changedAt = now;
+            } catch (Throwable t) {
+                System.out.println("[nether-agent] crosshair texture: " + t);
+            }
+        }
+
+        /**
+         * The game's own resource reload, found by shape (no names): the public no-argument method of the game class that
+         * returns a future (1.14+ reloadResourcePacks / delayTextureReload, 1.8.9 scheduleResourcesRefresh; each reloads).
+         */
+        private static void reloadGame() {
+            Object mc = Game.mc();
+            if (mc == null) return;
+            for (java.lang.reflect.Method m : mc.getClass().getMethods()) {
+                if (m.getParameterCount() != 0 || java.lang.reflect.Modifier.isStatic(m.getModifiers()) || !java.util.concurrent.Future.class.isAssignableFrom(m.getReturnType())) continue;
+                try { m.invoke(mc); System.out.println("[nether-agent] crosshair: resources reloading"); }
+                catch (Throwable t) { System.out.println("[nether-agent] crosshair reload: " + t); }
+                return;
+            }
+        }
+
+        private String previewKey;
+
+        @Override void preview(float cx, float cy) {
+            String key = key();
+            if (!key.equals(previewKey) || !Gfx.hasTexture("xhair")) { previewKey = key; Gfx.texture("xhair", design(15 * R), false); }
+            float s = 30 * 1.8f;
+            Gfx.image("xhair", cx - s / 2, cy - s / 2, s, s, 0xFFFFFFFF, 0);
         }
     }
 }
