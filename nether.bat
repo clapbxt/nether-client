@@ -23,6 +23,7 @@ echo     %W%5%X%  Run tests
 echo   %G%BUILD%X%
 echo     %W%6%X%  Build everything       %G%agent + launcher + installer (release)%X%
 echo   %G%PUBLISH%X%
+echo     %W%S%X%  Content studio         %G%see, upload, remove and publish capes + cosmetics%X%
 echo     %W%7%X%  Publish content        %G%news, capes, packs: check, sign, deploy%X%
 echo     %W%8%X%  Commit and push        %G%to github.com/clapbxt/nether-client%X%
 echo     %W%9%X%  Make a release         %G%versioned installer, optional GitHub release%X%
@@ -42,6 +43,7 @@ if "%c%"=="6" set "go=build_all"
 if "%c%"=="7" set "go=content"
 if "%c%"=="8" set "go=push"
 if "%c%"=="9" set "go=release"
+if /i "%c%"=="s" set "go=studio"
 if /i "%c%"=="t" set "go=tools"
 if /i "%c%"=="q" exit /b 0
 if not defined go goto menu
@@ -116,6 +118,11 @@ if not "%rc%"=="0" exit /b %rc%
 echo.
 echo   Live. Launchers pick it up the next time they refresh.
 echo   %G%Commit the new manifest.json / manifest.sig too (option 8).%X%
+exit /b 0
+
+:studio
+echo   Opens the studio in your browser (127.0.0.1 only). Ctrl+C here stops it.
+node tools\studio\server.mjs
 exit /b 0
 
 :push

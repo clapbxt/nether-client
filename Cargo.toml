@@ -6,3 +6,14 @@ resolver = "2"
 opt-level = 3
 lto = "thin"
 
+# The installer's build.rs deflates the 54 MB launcher exe. Build scripts default to opt-level 0,
+# which made that step take ~10 minutes; optimising just the compression crates makes it seconds.
+[profile.release.package.miniz_oxide]
+opt-level = 3
+[profile.release.package.flate2]
+opt-level = 3
+[profile.release.package.adler2]
+opt-level = 3
+[profile.release.package.crc32fast]
+opt-level = 3
+

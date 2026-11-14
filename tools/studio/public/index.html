@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nether Content Studio</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot"></span>NETHER <b>CONTENT STUDIO</b></div>
+  <div class="pending" id="pending"></div>
+  <button id="publishBtn" class="solid">Publish…</button>
+</header>
+<main>
+  <aside>
+    <div class="tabs" id="tabs"></div>
+    <div class="list" id="list"></div>
+    <div class="bar">
+      <span id="selCount">0 selected</span>
+      <button id="removeBtn" class="danger" disabled>Remove</button>
+      <button id="uploadBtn" class="solid">Upload</button>
+    </div>
+  </aside>
+  <section class="stage">
+    <canvas id="view"></canvas>
+    <div class="hint">drag to turn · scroll to zoom</div>
+    <div class="empty" id="empty">Pick something on the left, or upload new content.</div>
+    <form class="meta" id="meta" hidden>
+      <div class="row"><label>Name<input id="mName" maxlength="48"></label><label>Id<input id="mId" disabled></label></div>
+      <div class="row"><label>Rarity<select id="mRarity"><option>common</option><option>uncommon</option><option>rare</option><option>epic</option><option>legendary</option></select></label>
+        <label>ms per frame<input id="mFrame" type="number" min="20" max="2000" placeholder="100"></label></div>
+      <label>Description<input id="mDesc" maxlength="120"></label>
+      <div class="row end"><button type="button" id="saveBtn">Save details</button></div>
+    </form>
+  </section>
+</main>
+
+<dialog id="uploadDlg">
+  <form method="dialog" id="uploadForm">
+    <h2>Upload</h2>
+    <div class="drop" id="drop">Drop files here or <label class="link">browse<input type="file" id="files" multiple accept=".png,.json,.bbmodel" hidden></label>
+      <div class="files" id="fileList"></div>
+      <p class="help" id="kindHelp"></p>
+    </div>
+    <div class="row">
+      <label>What is it<select id="uKind"><option value="hat">Hat</option><option value="headband">Headband</option><option value="shield">Shield</option><option value="aura">Aura</option><option value="cape">Cape</option></select></label>
+      <label>Rarity<select id="uRarity"><option>common</option><option>uncommon</option><option selected>rare</option><option>epic</option><option>legendary</option></select></label>
+    </div>
+    <div class="row"><label>Name<input id="uName" maxlength="48" required></label><label>Id<input id="uId" maxlength="32" pattern="[a-z0-9_\-]{1,32}" required></label></div>
+    <div class="row"><label>Description<input id="uDesc" maxlength="120"></label><label>ms per frame<input id="uFrame" type="number" min="20" max="2000" placeholder="auto"></label></div>
+    <label class="check"><input type="checkbox" id="uReplace"> Replace an existing item with this id</label>
+    <p class="err" id="uErr"></p>
+    <div class="row end"><button value="cancel" formnovalidate>Cancel</button><button id="uGo" class="solid" value="default">Upload</button></div>
+  </form>
+</dialog>
+
+<dialog id="removeDlg">
+  <form method="dialog">
+    <h2>Remove</h2>
+    <p id="removeText"></p>
+    <p class="help">Files are deleted from backend/content. Players stop seeing them after you publish.</p>
+    <div class="row end"><button value="cancel">Keep</button><button id="removeGo" class="danger" value="default">Remove</button></div>
+  </form>
+</dialog>
+
+<dialog id="publishDlg">
+  <form method="dialog" id="publishForm">
+    <h2>Publish</h2>
+    <p class="help">Signs backend/content with your content key and deploys it with the Worker (wrangler must be signed in). Launchers pick it up within 30 minutes.</p>
+    <div id="changes" class="changes"></div>
+    <label>Content key passphrase<input type="password" id="pass" autocomplete="off"></label>
+    <label class="check"><input type="checkbox" id="migrated"> The database migrations this Worker needs have been run (Migrations…)</label>
+    <label>Type PUBLISH to confirm (goes live for every player)<input id="confirmTxt" autocomplete="off"></label>
+    <div class="row end"><button value="cancel">Close</button><button id="migrateBtn" type="button" title="Run a database migration once, before deploying a Worker that needs it">Migrations…</button><button id="publishGo" class="solid" type="button">Sign and deploy</button></div>
+    <pre id="log" hidden></pre>
+  </form>
+</dialog>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>
