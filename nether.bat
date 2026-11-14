@@ -23,8 +23,8 @@ echo     %W%5%X%  Run tests
 echo   %G%BUILD%X%
 echo     %W%6%X%  Build everything       %G%agent + launcher + installer (release)%X%
 echo   %G%PUBLISH%X%
-echo     %W%S%X%  Content studio         %G%see, upload, remove and publish capes + cosmetics%X%
-echo     %W%7%X%  Publish content        %G%news, capes, packs: check, sign, deploy%X%
+echo     %W%S%X%  Content studio         %G%browser: see, upload, remove, publish capes + cosmetics%X%
+echo     %W%7%X%  Publish content        %G%sign + deploy everything in backend\content as it is%X%
 echo     %W%8%X%  Commit and push        %G%to github.com/clapbxt/nether-client%X%
 echo     %W%9%X%  Make a release         %G%versioned installer, optional GitHub release%X%
 echo   %G%OTHER%X%
@@ -32,7 +32,7 @@ echo     %W%T%X%  Check tools and sign-ins
 echo     %W%Q%X%  Quit
 echo.
 set "c="
-set /p "c=  Choose: "
+set /p "c=  Press 1-9, S, T or Q, then Enter: "
 set "go="
 if "%c%"=="1" set "go=run_debug"
 if "%c%"=="2" set "go=run_release"
@@ -107,6 +107,8 @@ rem ---------------------------------------------------------------- publish
 
 :content
 echo   Checks and signs backend\content, then deploys it with the cape API to Cloudflare.
+echo   %G%Asks for your content key passphrase. Run new migrations in backend\worker\migrations first.%X%
+echo   %G%To add or remove capes and cosmetics with previews, use S (Content studio) instead.%X%
 echo   %G%How to add news, capes and packs: backend\content\README.md%X%
 call :confirm "Publish content now?" || exit /b 0
 node backend\content\sign.mjs sign || exit /b 1
@@ -121,7 +123,15 @@ echo   %G%Commit the new manifest.json / manifest.sig too (option 8).%X%
 exit /b 0
 
 :studio
-echo   Opens the studio in your browser (127.0.0.1 only). Ctrl+C here stops it.
+echo   %W%Content studio%X%
+echo   %G%Your browser opens it. If not, open the link printed below (it holds the access key: don't share it).%X%
+echo     - Left: everything there is. Click one to see it on your skin (drag to turn, scroll to zoom).
+echo     - Upload: drop a Blockbench .bbmodel / Java .json + PNGs, a cape PNG, or an aura .json + .png.
+echo     - Tick items, then Remove. Edit name / rarity / description under the preview.
+echo     - Publish: content key passphrase, tick that migrations are run, type PUBLISH. Goes live for everyone.
+echo     - Blockbench templates: tools\cosmetics	emplates
+echo   %G%Keep this window open while you use it. Ctrl+C here stops it.%X%
+echo.
 node tools\studio\server.mjs
 exit /b 0
 
