@@ -144,7 +144,7 @@ pub fn prepare(c: &Client, paths: &Paths, mut v: VersionJson, mc: &str, kind: Ki
     // jars shipped inside the installer
     for i in 0..zip.len() {
         let mut f = zip.by_index(i)?;
-        let name = f.name().to_string();
+        let name = f.name()?.to_string();
         let Some(rel) = name.strip_prefix("maven/") else { continue };
         if f.is_dir() || rel.contains("..") { continue; }
         let mut buf = vec![];

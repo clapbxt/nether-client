@@ -95,7 +95,7 @@ fn extract_limited<R: Read + Seek>(zip: &mut zip::ZipArchive<R>, prefix: &str, d
     let (mut n, mut total) = (0, 0u64);
     for i in 0..zip.len() {
         let mut f = zip.by_index(i)?;
-        let name = f.name().replace('\\', "/");
+        let name = f.name()?.replace('\\', "/");
         let Some(rel) = name.strip_prefix(prefix) else { continue };
         if rel.is_empty() { continue; }
         let out = safe_join(dest, rel)?;

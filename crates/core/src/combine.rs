@@ -133,7 +133,7 @@ impl Pack {
             out
         } else {
             let z = zip::ZipArchive::new(std::fs::File::open(path)?)?;
-            z.file_names().filter(|n| !n.ends_with('/')).map(|n| n.to_string()).collect()
+            z.file_names().filter_map(|n| n.ok()).filter(|n| !n.ends_with('/')).map(|n| n.to_string()).collect()
         };
         let mut files = vec![Vec::new(); CATEGORIES.len()];
         for n in &names { if let Some(c) = classify(n) { files[c].push(n.clone()); } }

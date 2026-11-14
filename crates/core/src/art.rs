@@ -82,7 +82,7 @@ fn remote_entries(c: &Client, url: &str, want: &dyn Fn(&str) -> bool) -> Result<
 
 fn local_entries(jar: &PathBuf, want: &dyn Fn(&str) -> bool) -> Result<HashMap<String, Vec<u8>>> {
     let mut z = zip::ZipArchive::new(std::fs::File::open(jar)?)?;
-    let names: Vec<String> = z.file_names().filter(|n| want(n)).map(String::from).collect();
+    let names: Vec<String> = z.file_names().filter_map(|n| n.ok()).filter(|n| want(n)).map(String::from).collect();
     let mut out = HashMap::new();
     for n in names {
         let mut v = vec![];

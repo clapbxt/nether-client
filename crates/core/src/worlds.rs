@@ -299,7 +299,7 @@ pub fn restore_backup(paths: &Paths, instance: &str, backup: &Path) -> Result<St
     let mut zip = zip::ZipArchive::new(fs::File::open(backup).with_context(|| format!("opening {}", backup.display()))?)?;
     let mut top: Option<String> = None;
     for i in 0..zip.len() {
-        let name = zip.by_index_raw(i)?.name().replace('\\', "/");
+        let name = zip.by_index_raw(i)?.name()?.replace('\\', "/");
         let first = name.split('/').next().unwrap_or_default().to_string();
         match &top { None => top = Some(first), Some(t) if *t != first => bail!("backup does not contain a single world folder"), _ => {} }
     }

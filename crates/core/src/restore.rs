@@ -143,7 +143,7 @@ fn extract(file: &Path, dest: &Path, progress: &dyn Fn(f32)) -> Result<()> {
     let (mut done, mut shown) = (0u64, -1i32);
     for i in 0..zip.len() {
         let mut f = zip.by_index(i)?;
-        let name = f.name().replace('\\', "/");
+        let name = f.name()?.replace('\\', "/");
         let Some(rel) = name.strip_prefix(ROOT) else { continue };
         if rel.is_empty() { continue; }
         let out = safe_join(dest, rel)?;

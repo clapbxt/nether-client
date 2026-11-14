@@ -13,7 +13,7 @@ enum Kind { Import, Mod, ResourcePack, Shader, Unknown }
 
 /// Entry names of a zip (empty when it isn't one).
 fn zip_names(p: &Path) -> Vec<String> {
-    std::fs::File::open(p).ok().and_then(|f| zip::ZipArchive::new(f).ok()).map(|z| z.file_names().map(str::to_string).collect()).unwrap_or_default()
+    std::fs::File::open(p).ok().and_then(|f| zip::ZipArchive::new(f).ok()).map(|z| z.file_names().filter_map(|n| n.ok().map(|n| n.to_string())).collect()).unwrap_or_default()
 }
 
 fn kind_of(p: &Path) -> Kind {

@@ -44,7 +44,7 @@ fn norm(n: &str) -> String { n.replace('\\', "/") }
 
 /// Shallowest zip entry named `file` (at the root or one folder deep) -> its folder prefix ("" or "dir/").
 fn find_in_zip<R: Read + Seek>(zip: &mut zip::ZipArchive<R>, file: &str) -> Option<String> {
-    let names: Vec<String> = (0..zip.len()).filter_map(|i| zip.by_index_raw(i).ok().map(|f| norm(f.name()))).collect();
+    let names: Vec<String> = (0..zip.len()).filter_map(|i| zip.by_index_raw(i).ok().and_then(|f| f.name().ok().map(|n| norm(&n)))).collect();
     if names.iter().any(|n| n == file) { return Some(String::new()); }
     names.iter().find(|n| n.matches('/').count() == 1 && n.ends_with(&format!("/{file}"))).map(|n| n[..n.len() - file.len()].to_string())
 }
@@ -135,7 +135,7 @@ pub fn import_prism(paths: &Paths, path: &Path, name: Option<&str>, progress: &P
                 if let Some(s) = src { copy_tree(&s, &dir, &["logs", "crash-reports"])?; }
             }
             Some(z) => {
-                let d = [".minecraft/", "minecraft/"].into_iter().find(|d| (0..z.len()).any(|i| z.by_index_raw(i).is_ok_and(|f| norm(f.name()).starts_with(&format!("{base}{d}")))));
+                let d = [".minecraft/", "minecraft/"].into_iter().find(|d| (0..z.len()).any(|i| z.by_index_raw(i).is_ok_and(|f| f.name().is_ok_and(|n| norm(&n).starts_with(&format!("{base}{d}"))))));
                 if let Some(d) = d { extract_prefix(z, &format!("{base}{d}"), &dir)?; }
             }
         }

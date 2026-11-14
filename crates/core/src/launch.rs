@@ -251,7 +251,7 @@ fn install_mode(c: &reqwest::blocking::Client, paths: &Paths, v: &VersionJson, p
         let mut zip = zip::ZipArchive::new(fs::File::open(&j.dest)?)?;
         for i in 0..zip.len() {
             let mut f = zip.by_index(i)?;
-            let name = f.name().to_string();
+            let name = f.name()?.to_string();
             if f.is_dir() || name.starts_with("META-INF") { continue; }
             let out = natives_dir.join(PathBuf::from(&name).file_name().ok_or_else(|| anyhow!("bad native entry"))?);
             // a DLL cut off mid-write (crash, full disk) has the wrong size: write it again
