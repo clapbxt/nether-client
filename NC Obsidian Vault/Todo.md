@@ -6,6 +6,7 @@
 - [x] Core: vanilla install+launch engine, MS device-code auth
 - [x] Instances finished: create dialog (name/version/Vanilla-Fabric/RAM), filter, open folder, duplicate, .mrpack export, delete (confirm), RAM slider + Java pick, playtime/last-played tracking, packs (resource packs/shaders) installed+browse via Modrinth
 - [x] Modrinth browse/install
+- [x] Resource pack combiner (Packs tab COMBINE) 2026-11-14 · [ ] per-item picks, legacy sky upgrade
 - [x] nether-agent spike: FPS overlay works on vanilla + Fabric 1.21.11; [x] Sodium/Iris ok; [x] input hook, real modules, 1.8.9 (Java 8/LWJGL2) (2026-11-10); [x] Forge/NeoForge (1.21.11 + Forge 1.8.9) · [ ] 26.3
 - [ ] Spike: 1.8.9 and 26.3 adapters
 - [x] Host + UPnP + nether:// link (2026-11-11): outside reachability check, free playit.gg tunnel fallback, address invite + HKCU URL scheme · [ ] cross-network join with a real friend, playit claim + API tunnel creation untested live
@@ -56,4 +57,5 @@
 - [x] 2026-11-14: lyrics in world = River port, own nametag via game (label hook), HUD boxes flush/hotbar snap · [ ] none seen live (agent builds); title-screen CUSTOMISE panel fixed (clicks inside it closed it)
 - [x] 2026-11-13 in-game v6: title screen (buttons, glass cards, Seg/pill customise panel) + every HUD element (rounded panels, accent bar, toasts) · [ ] not seen live; Ice theme does not reach the title screen by design
 - [x] 2026-11-14 lyrics pass: smoothed sync clock, synced-first lookup, karaoke panel + interlude dots, settings 20 -> 13 (migrated); seen live on Fabric 1.21.11 (fake track) · [x] in-world jitter fix + NetEase word timing (seen live) · [ ] real Spotify/browser session not checked; view bobbing not applied to in-world projection
+- [x] 2026-11-14 cosmetics: hats/headbands/auras/shields (15 starter items), agent render layer, launcher + in-game Wardrobe tabs, API + D1 migration · [x] seen live Fabric 1.21.11 · [ ] NEEDS USER: `node tools/cosmetics/gen.mjs` done -> `node backend/content/sign.mjs sign`, `wrangler d1 execute nether --remote --file migrations/0002_cosmetics.sql`, `wrangler deploy` · [ ] untested: 1.8.9 path, vanilla obf/NeoForge/26.x, 1.21.2-1.21.8, shield blocking pose not checked
 - [x] 2026-11-14 settings cleanup (from design/module-audit.md): mode-dependent settings hidden, HUD style folded last; cut FPS/Ping/Reach thresholds, CPS right switch, Keystrokes layout preset, Crosshair Plus, Media art size/scroll speed/source app, Armor warn colour, title vignette (old values migrated) · [x] pass 2: mouse-button binds, zoom (×1.25 scroll to 50×, per zoom), combo (living/500 ms/target), lyrics retry + empty-cache 1 day, death waypoint auto-clear, streamer mode · [ ] not checked in game; crosshair reload, toggle keys, menu colours open (see audit status)

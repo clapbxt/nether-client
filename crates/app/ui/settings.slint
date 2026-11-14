@@ -118,8 +118,9 @@ export component SettingsScreen inherits Rectangle {
         {k: "Nether content and capes", url: "the Nether service (signed news, packs and cape list; your cape, and lookups in game)"},
         {k: "Launcher updates", url: "api.github.com, github.com · checking for and downloading signed updates"},
         {k: "Hosting", url: "api.playit.gg, api.ipify.org, api.mcstatus.io, fill.papermc.io · only while you use the Host tab"},
-        {k: "Sharing logs", url: "api.mclo.gs · only when you press Share or Upload"},
-        {k: "In game", url: "lrclib.net for Lyrics (off by default), sessionserver.mojang.com for your head on the title screen · media helper: local only"},
+        {k: "Sharing logs", url: "api.mclo.gs · only when you confirm Share or press Upload (a public link)"},
+        {k: "In game", url: "sessionserver.mojang.com for your head, and your saved servers for their status (title screen) · media helper: local only"},
+        {k: "Lyrics (off by default)", url: "lrclib.net, and music.163.com for word timing · the song's title, artist, album and length"},
     ];
 
     Heading { x: 56px; y: 28px; text: "SETTINGS"; font-size: 32px; }
@@ -230,7 +231,7 @@ export component SettingsScreen inherits Rectangle {
         // ---------- 07 privacy (L2): every service the launcher and client talk to, and when ----------
         SectionHead { x: 0px; y: root.y7; width: root.cw; idx: "07"; title: "PRIVACY"; note: "no telemetry, no analytics"; }
         SyncRow { x: 0px; y: root.y7 + 24px; width: root.cw; title: "Nether capes in game";
-            sub: "Shows Nether capes. The client asks the cape service about the players it sees (their UUIDs only)."; on <=> Backend.lp-capes; toggled => { Backend.save-launcher(); } }
+            sub: "Shows Nether capes. Lookups use a short hash, never names or UUIDs. Off deletes your entry at the service."; on <=> Backend.lp-capes; toggled => { Backend.save-launcher(); } }
         if Backend.discord-ready: SyncRow { x: 0px; y: root.y7 + 88px; width: root.cw; title: "Discord status";
             sub: "Shows \"Minecraft <version>\" and your play time on Discord. Only the Discord app on this PC is told; never your server or world."; on <=> Backend.lp-discord; toggled => { Backend.save-launcher(); } }
         for h[i] in root.hosts: SetRow { x: 0px; y: root.y7 + 88px + root.dy + i * 64px; width: root.cw; reserve: 0px; title: h.k; sub: h.url; }

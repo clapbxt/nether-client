@@ -265,7 +265,8 @@ final class Media {
         artFor = path;
         Thread t = new Thread(() -> {
             try {
-                BufferedImage src = javax.imageio.ImageIO.read(new File(path));
+                BufferedImage src; // album art can come from web pages (media sessions): size-checked before decoding
+                try (java.io.InputStream in = new java.io.FileInputStream(path)) { src = Icons.decode(in, 4L << 20); }
                 if (src == null || !path.equals(artFor)) return; // unsupported format (e.g. WebP): no cover, no crash
                 int n = 128;
                 BufferedImage out = new BufferedImage(n, n, BufferedImage.TYPE_INT_ARGB);

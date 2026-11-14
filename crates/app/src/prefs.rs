@@ -44,8 +44,12 @@ pub fn load(paths: &Paths) -> LauncherPrefs {
 }
 
 pub fn save(paths: &Paths, p: &LauncherPrefs) -> anyhow::Result<()> {
+    let was_on = load(paths).capes;
     let v: Value = serde_json::to_value(p)?;
-    nether_core::store::update_config(paths, |o| { o.insert("launcher".into(), v); })
+    nether_core::store::update_config(paths, |o| { o.insert("launcher".into(), v); })?;
+    // turning Nether capes off deletes your entry at the cape service (now, or at the next sign-in)
+    if was_on && !p.capes { crate::skin::forget_nether(paths, true); }
+    Ok(())
 }
 
 /// Apply the GPU preference. Call once at startup, before the window is created: off selects Slint's software renderer.

@@ -1,5 +1,5 @@
-//! Nether's own backend (see `backend/README.md`): signed static content from a public GitHub repo (news, cape
-//! directory, Nether packs) and the cape API (Cloudflare Worker). URLs: env `NETHER_CONTENT_URL` / `NETHER_API_URL`,
+//! Nether's own backend (see `backend/README.md`): signed static content (news, cape directory, Nether packs) and the
+//! cape API, both served by one Cloudflare Worker. URLs: env `NETHER_CONTENT_URL` / `NETHER_API_URL`,
 //! then `config.json` `content_url` / `api_url`, then the defaults below. Empty = not set up yet: every call is a no-op.
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -107,6 +107,9 @@ fn manifest(c: Option<&Client>) -> Option<Manifest> {
 
 /// A content file's bytes, only if the signed manifest lists it and the bytes match (content-addressed disk cache).
 fn content_file(c: Option<&Client>, path: &str) -> Option<Vec<u8>> {
+    // dev builds only: unsigned content straight from a local folder (backend/content before signing)
+    #[cfg(feature = "dev")]
+    if let Ok(d) = std::env::var("NETHER_DEV_CONTENT_DIR") { return std::fs::read(std::path::Path::new(&d).join(path)).ok(); }
     let m = manifest(c)?;
     let e = m.files.get(path)?;
     let file = cache_dir().join(format!("{}.bin", e.sha256));
@@ -221,14 +224,109 @@ pub fn cape_sums_file(c: &Client) -> Option<std::path::PathBuf> {
     Some(f)
 }
 
+// ---------------- cosmetics ----------------
+
+/// A Nether cosmetic from `cosmetics/index.json`: a hat, headband, aura or shield (model + texture, see `cosmetics.rs`).
+#[derive(Clone, Debug, Deserialize)]
+pub struct Cosmetic {
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "type")]
+    pub kind: String,
+    #[serde(default)]
+    pub rarity: String,
+    #[serde(default)]
+    pub desc: String,
+    /// Animated textures: milliseconds per frame (20..=2000, default 100).
+    #[serde(default)]
+    pub frametime: Option<u32>,
+}
+
+/// Largest cosmetic model JSON accepted (bytes).
+pub const MAX_COSMETIC_MODEL: usize = 512 * 1024;
+
+impl Cosmetic {
+    pub fn kind(&self) -> Option<crate::cosmetics::Kind> { crate::cosmetics::Kind::parse(&self.kind) }
+    pub fn frame_ms(&self) -> u32 { self.frametime.unwrap_or(100).clamp(20, 2000) }
+    /// The verified model JSON and PNG (signed manifest, size-checked), or None.
+    pub fn files(&self, c: &Client) -> Option<(Vec<u8>, Vec<u8>)> {
+        if !valid_cape_id(&self.id) { return None; }
+        let js = content_file(Some(c), &format!("cosmetics/{}.json", self.id)).filter(|b| b.len() <= MAX_COSMETIC_MODEL)?;
+        let png = content_file(Some(c), &format!("cosmetics/{}.png", self.id)).filter(|b| b.len() <= MAX_CAPE_PNG && b.starts_with(&[0x89, b'P', b'N', b'G']))?;
+        Some((js, png))
+    }
+    /// Downloaded, verified and parsed, ready to draw.
+    pub fn load(&self, c: &Client) -> Option<crate::cosmetics::Loaded> {
+        let (js, png) = self.files(c)?;
+        crate::cosmetics::Loaded::from_bytes(&self.id, self.kind()?, &js, &png, self.frame_ms()).ok()
+    }
+}
+
+/// The cosmetics directory (invalid ids and unknown types dropped).
+pub fn cosmetics(c: &Client) -> Vec<Cosmetic> {
+    content::<Cosmetic>(c, "cosmetics/index.json").into_iter().filter(|x| valid_cape_id(&x.id) && x.kind().is_some()).collect()
+}
+
+/// Hand the agent the verified cosmetics (`<id> <type> <model sha256> <png sha256> <ms per frame>` per line); it only
+/// accepts files that match. None when there is no verified manifest (the agent then draws no cosmetics).
+pub fn cosmetic_sums_file(c: &Client) -> Option<std::path::PathBuf> {
+    let m = manifest(Some(c))?;
+    let mut out = String::new();
+    for x in cosmetics(c) {
+        let (Some(js), Some(png)) = (m.files.get(&format!("cosmetics/{}.json", x.id)), m.files.get(&format!("cosmetics/{}.png", x.id))) else { continue };
+        out.push_str(&format!("{} {} {} {} {}\n", x.id, x.kind, js.sha256, png.sha256, x.frame_ms()));
+    }
+    if out.is_empty() { return None; }
+    let f = cache_dir().join("cosmetic-sums.txt");
+    std::fs::create_dir_all(cache_dir()).ok()?;
+    crate::store::write_atomic(&f, out.as_bytes()).ok()?;
+    Some(f)
+}
+
+/// What a Nether player wears: cape and cosmetics by slot (hat, headband, aura, shield); "" = none.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Look { pub cape: String, pub slots: [String; 4] }
+
+/// Wear a cosmetic in its slot (None = take that slot off).
+pub fn set_cosmetic(c: &Client, s: &Session, kind: crate::cosmetics::Kind, id: Option<&str>) -> Result<()> {
+    let api = api_url();
+    let r = authed(c, s, |t| c.put(format!("{api}/v1/cosmetic")).bearer_auth(t).json(&serde_json::json!({ "slot": kind.as_str(), "id": id })))
+        .map_err(|e| if e.chain().any(|c| c.to_string().contains("404")) { anyhow!("the Nether cosmetics service isn't available yet") } else { e })?;
+    if !r.status().is_success() {
+        let msg = r.json::<serde_json::Value>().ok().and_then(|v| v["error"].as_str().map(str::to_string)).unwrap_or_else(|| "request failed".into());
+        bail!("{msg}");
+    }
+    Ok(())
+}
+
 // ---------------- cape API ----------------
 
+/// The key cape lookups use: sha256 hex of "nether-player:" + uuid (no dashes, lowercase). Same rule in the Worker
+/// and the agent's Capes.java.
+pub fn player_hash(uuid: &str) -> String {
+    hex::encode(Sha256::digest(format!("nether-player:{}", uuid.replace('-', "").to_lowercase()).as_bytes()))
+}
+
 /// Nether players among these UUIDs -> their Nether cape id ("" = none). UUIDs with or without dashes; at most 100.
+/// Asks by 4-hex-digit hash prefix and matches the returned hashes here, so the service never learns which players
+/// were asked about (k-anonymity).
 pub fn players(c: &Client, uuids: &[&str]) -> Result<HashMap<String, String>> {
+    Ok(looks(c, uuids)?.into_iter().map(|(u, l)| (u, l.cape)).collect())
+}
+
+/// Nether players among these UUIDs -> what they wear (cape + cosmetics), asked the same k-anonymous way as `players`.
+pub fn looks(c: &Client, uuids: &[&str]) -> Result<HashMap<String, Look>> {
     let api = api_url();
     if api.is_empty() || uuids.is_empty() { return Ok(Default::default()); }
-    let ids: Vec<String> = uuids.iter().take(100).map(|u| u.replace('-', "").to_lowercase()).collect();
-    Ok(c.get(format!("{api}/v1/players")).query(&[("u", ids.join(","))]).send()?.error_for_status()?.json()?)
+    let ids: Vec<(String, String)> = uuids.iter().take(100).map(|u| { let id = u.replace('-', "").to_lowercase(); let h = player_hash(&id); (id, h) }).collect();
+    let mut pre: Vec<&str> = ids.iter().map(|(_, h)| &h[..4]).collect();
+    pre.sort_unstable();
+    pre.dedup();
+    let found: HashMap<String, serde_json::Value> = c.get(format!("{api}/v1/players")).query(&[("v", "2"), ("p", &pre.join(","))]).send()?.error_for_status()?.json()?;
+    let s = |v: &serde_json::Value| v.as_str().filter(|x| x.is_empty() || valid_cape_id(x)).unwrap_or_default().to_string();
+    Ok(ids.into_iter().filter_map(|(id, h)| found.get(&h).map(|v| (id, if v.is_object() {
+        Look { cape: s(&v["c"]), slots: [s(&v["h"]), s(&v["b"]), s(&v["a"]), s(&v["s"])] }
+    } else { Look { cape: s(v), ..Default::default() } }))).collect())
 }
 
 // The API never sees the Minecraft access token. The launcher fetches its Mojang player certificate (the chat-signing
@@ -302,6 +400,16 @@ pub fn hello(c: &Client, s: &Session) -> Result<()> {
     Ok(())
 }
 
+/// Forget this player at the cape service (`DELETE /v1/me`: Nether player mark and cape). Used when Nether capes
+/// are turned off; the session token is dropped too.
+pub fn forget_me(c: &Client, s: &Session) -> Result<()> {
+    let api = api_url();
+    let r = authed(c, s, |t| c.delete(format!("{api}/v1/me")).bearer_auth(t));
+    *TOKEN.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    r?.error_for_status()?;
+    Ok(())
+}
+
 /// Wear a Nether cape (None = take it off).
 pub fn set_cape(c: &Client, s: &Session, cape: Option<&str>) -> Result<()> {
     let api = api_url();
@@ -362,6 +470,13 @@ mod tests {
             let b = std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../backend/content").join(p)).unwrap();
             assert_eq!(hex::encode(Sha256::digest(&b)), e.sha256, "{p}");
         }
+    }
+
+    #[test]
+    fn player_hash_matches_worker() {
+        // node -e "console.log(require('crypto').createHash('sha256').update('nether-player:8667ba71b85a4004af54457a9734eed7').digest('hex'))"
+        assert_eq!(player_hash("8667BA71-b85a-4004-af54-457a9734eed7"), player_hash("8667ba71b85a4004af54457a9734eed7"));
+        assert_eq!(player_hash("8667ba71b85a4004af54457a9734eed7"), "8341e7366a78d039099011b734048e2461f65a8b133b86453eaeaa342ba67845");
     }
 
     #[test]

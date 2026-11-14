@@ -276,11 +276,35 @@ fn ensure_agent(c: &Client, dir: &std::path::Path) -> Result<PathBuf> {
     { use std::io::Read; c.get(url).send()?.error_for_status()?.take(100 * 1024 * 1024).read_to_end(&mut bytes)?; }
     if !hex::encode(Sha256::digest(&bytes)).eq_ignore_ascii_case(want) { bail!("the playit.gg download is damaged (sha256 mismatch)"); }
     std::fs::create_dir_all(dir)?;
-    let tmp = exe.with_extension("part");
+    let tmp = dir.join("playit.new.exe");
     std::fs::write(&tmp, &bytes)?;
+    // the digest only proves the download matches GitHub's listing: the exe must also carry a valid Authenticode
+    // signature, from the same publisher as the first copy we accepted (pinned in `signer`)
+    let signer_file = dir.join("signer");
+    let checked = authenticode(&tmp).and_then(|subject| match std::fs::read_to_string(&signer_file).ok().filter(|s| !s.trim().is_empty()) {
+        Some(pinned) if pinned.trim() != subject => bail!("the new playit.gg agent is signed by \"{subject}\", not \"{}\" like before; not running it", pinned.trim()),
+        Some(_) => Ok(()),
+        None => { std::fs::write(&signer_file, &subject)?; Ok(()) }
+    });
+    if let Err(e) = checked { let _ = std::fs::remove_file(&tmp); return Err(e); }
     std::fs::rename(&tmp, &exe).context("replacing playit.exe (is it still running?)")?;
     std::fs::write(&tag_file, tag)?;
     Ok(exe)
+}
+
+/// Windows' Authenticode check of an exe (Get-AuthenticodeSignature): the signer's subject when the signature is valid.
+fn authenticode(path: &std::path::Path) -> Result<String> {
+    let lit = path.display().to_string().replace('\'', "''");
+    let script = format!("$s = Get-AuthenticodeSignature -LiteralPath '{lit}'; if ($s.Status -eq 'Valid') {{ $s.SignerCertificate.Subject }} else {{ 'INVALID ' + $s.Status }}");
+    let ps = std::env::var_os("SystemRoot").map(|r| PathBuf::from(r).join(r"System32\WindowsPowerShell\v1.0\powershell.exe")).filter(|p| p.is_file()).unwrap_or_else(|| PathBuf::from("powershell"));
+    let mut cmd = Command::new(ps);
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+    #[cfg(windows)]
+    { use std::os::windows::process::CommandExt; cmd.creation_flags(0x0800_0000); }
+    let out = cmd.output().context("checking the playit.gg agent's signature")?;
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if s.is_empty() || s.starts_with("INVALID ") { bail!("the playit.gg agent has no valid signature ({}); not running it", s.trim_start_matches("INVALID ")); }
+    Ok(s)
 }
 
 #[cfg(test)]

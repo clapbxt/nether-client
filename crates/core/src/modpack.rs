@@ -70,7 +70,7 @@ pub fn safe_join(root: &Path, rel: &str) -> Result<PathBuf> {
     let mut out = root.to_path_buf();
     for comp in Path::new(&rel).components() {
         match comp {
-            Component::Normal(p) => out.push(p),
+            Component::Normal(p) if p.to_str().is_some_and(crate::download::safe_file_name) => out.push(p),
             Component::CurDir => {}
             _ => bail!("unsafe path in pack: {rel}"),
         }
@@ -141,6 +141,9 @@ pub fn info(mrpack: &Path) -> Result<PackInfo> {
 
 /// Create the `InstanceData` for a freshly populated folder (pins the loader version, counts mods).
 pub(crate) fn new_instance(paths: &Paths, name: &str, mc: &str, loader: Loader, loader_version: &str) -> Result<InstanceData> {
+    // both come from the pack: they become folder names and URL parts later
+    if !crate::mojang::valid_version_id(mc) { bail!("the pack names an invalid Minecraft version"); }
+    if !loader_version.is_empty() && !crate::launch::valid_loader_version(loader_version) { bail!("the pack names an invalid loader version"); }
     let dir = paths.instance(name);
     if !loader_version.is_empty() && loader.flavor().is_some() { fs::write(dir.join(LOADER_PIN), loader_version)?; }
     let mods = crate::instances::mod_files(paths, name).len() as u32;
@@ -215,7 +218,7 @@ pub fn install_project(c: &Client, paths: &Paths, project: &str, version: Option
     progress("Finding modpack", 0.0);
     let p = crate::modrinth::pack_file(c, project, version)?;
     if !allowed_host(&p.url) { bail!("unexpected download host for {}", p.filename); }
-    if p.filename.is_empty() || p.filename.contains(['/', '\\', ':']) || p.filename.contains("..") { bail!("unsafe pack file name {}", p.filename); }
+    if !crate::download::safe_file_name(&p.filename) { bail!("unsafe pack file name {}", p.filename); }
     let dest = paths.root.join("cache").join("packs").join(&p.filename);
     fetch(c, &p.url, &dest, Check::Sha1(&p.sha1))?;
     let name = name.map(String::from).or(Some(p.title.clone()).filter(|t| !t.is_empty()));

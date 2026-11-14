@@ -114,15 +114,41 @@ fn fetch_px(sh: &Shared, url: &str, max: u32) -> Option<Px> {
     let bytes = match std::fs::read(&file) {
         Ok(b) => b,
         Err(_) => {
-            let b = client().get(url).send().ok()?.error_for_status().ok()?.bytes().ok()?.to_vec();
+            // project bodies are written by mod authors: public https hosts only, 8 MB at most
+            let b = nether_core::skins::get_public(url, 8 << 20).ok()?;
             let _ = std::fs::create_dir_all(&dir);
+            static TRIM: std::sync::Once = std::sync::Once::new();
+            TRIM.call_once(|| trim_cache(&dir, 200 << 20));
             let _ = std::fs::write(&file, &b);
             b
         }
     };
-    let img = image::load_from_memory(&bytes).ok()?;
+    let img = decode_limited(&bytes)?;
     let img = if img.width() > max || img.height() > max { img.thumbnail(max, max) } else { img }.to_rgba8();
     Some(Px(img.width(), img.height(), img.into_raw()))
+}
+
+/// Decode with limits: a small file that claims a huge picture is refused before it allocates.
+fn decode_limited(b: &[u8]) -> Option<image::DynamicImage> {
+    let mut r = image::ImageReader::new(std::io::Cursor::new(b)).with_guessed_format().ok()?;
+    let mut l = image::Limits::default();
+    l.max_image_width = Some(4096);
+    l.max_image_height = Some(4096);
+    l.max_alloc = Some(96 << 20);
+    r.limits(l);
+    r.decode().ok()
+}
+
+/// Keep the icon cache under `max` bytes (oldest files go first).
+fn trim_cache(dir: &std::path::Path, max: u64) {
+    let mut files: Vec<(std::time::SystemTime, u64, std::path::PathBuf)> = std::fs::read_dir(dir).into_iter().flatten().flatten()
+        .filter_map(|e| { let m = e.metadata().ok()?; m.is_file().then(|| (m.modified().unwrap_or(std::time::UNIX_EPOCH), m.len(), e.path())) }).collect();
+    let mut total: u64 = files.iter().map(|f| f.1).sum();
+    files.sort();
+    for (_, len, p) in files {
+        if total <= max * 3 / 4 { break; }
+        if std::fs::remove_file(&p).is_ok() { total -= len; }
+    }
 }
 
 fn to_image(p: &Px) -> Image {
@@ -618,20 +644,25 @@ pub(crate) fn to_block(b: &crate::md::Block) -> MdBlock {
 
 /// Fill in description images and the screenshot gallery for the open project (one thread per image).
 pub(crate) fn load_detail_images(weak: slint::Weak<AppWindow>, sh: Arc<Shared>, id: String, blocks: Vec<crate::md::Block>, gallery: Vec<String>) {
-    for (i, b) in blocks.into_iter().enumerate().filter(|(_, b)| b.kind == 5) {
+    // one worker for the description and one for the gallery: at most two downloads / decodes at a time
+    let images: Vec<(usize, String)> = blocks.into_iter().enumerate().filter(|(_, b)| b.kind == 5).map(|(i, b)| (i, b.img)).collect();
+    {
         let (weak, sh, id) = (weak.clone(), sh.clone(), id.clone());
         std::thread::spawn(move || {
-            let Some(px) = fetch_px(&sh, &b.img, 900) else { return };
-            ui_do(&weak, move |ui| {
-                let d = ui.global::<Backend>().get_detail();
-                if d.id != id { return; }
-                if let Some(mut row) = d.blocks.row_data(i) {
-                    row.ratio = px.1 as f32 / px.0.max(1) as f32;
-                    row.img = to_image(&px);
-                    row.has_img = true;
-                    d.blocks.set_row_data(i, row);
-                }
-            });
+            for (i, url) in images {
+                let Some(px) = fetch_px(&sh, &url, 900) else { continue };
+                let id = id.clone();
+                ui_do(&weak, move |ui| {
+                    let d = ui.global::<Backend>().get_detail();
+                    if d.id != id { return; }
+                    if let Some(mut row) = d.blocks.row_data(i) {
+                        row.ratio = px.1 as f32 / px.0.max(1) as f32;
+                        row.img = to_image(&px);
+                        row.has_img = true;
+                        d.blocks.set_row_data(i, row);
+                    }
+                });
+            }
         });
     }
     let (weak, sh) = (weak.clone(), sh.clone());

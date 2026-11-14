@@ -175,19 +175,47 @@ pub fn url_allowed(url: &str) -> bool {
     }
 }
 
-/// Import a skin from a direct image URL (https only, 512 KiB cap, redirects must stay on https).
-pub fn import_url(paths: &Paths, url: &str, name: Option<&str>) -> Result<Skin> {
-    if !url_allowed(url) { bail!("only public https image links can be imported"); }
-    let c = Client::builder()
-        .user_agent("NetherClient/0.1")
+/// Every address the URL's host resolves to is public (no LAN, loopback, link-local or CGNAT; also IPv6).
+fn resolves_public(u: &reqwest::Url) -> bool {
+    use std::net::{IpAddr, ToSocketAddrs};
+    let Some(host) = u.host_str() else { return false };
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    let Ok(addrs) = (host, u.port_or_known_default().unwrap_or(443)).to_socket_addrs() else { return false };
+    let addrs: Vec<_> = addrs.collect();
+    !addrs.is_empty() && addrs.iter().all(|a| match a.ip() {
+        IpAddr::V4(ip) => crate::net::is_public_ipv4(ip),
+        IpAddr::V6(ip) => {
+            let s = ip.segments();
+            !(ip.is_loopback() || ip.is_unspecified() || (s[0] & 0xfe00) == 0xfc00 || (s[0] & 0xffc0) == 0xfe80
+                || ip.to_ipv4_mapped().is_some_and(|v4| !crate::net::is_public_ipv4(v4)))
+        }
+    })
+}
+
+/// GET a public https resource for content from strangers (mod pages, skin links): https only, no local or private
+/// host (checked after DNS too, and on every redirect), at most `cap` bytes.
+pub fn get_public(url: &str, cap: u64) -> Result<Vec<u8>> {
+    let ok = |u: &reqwest::Url| url_allowed(u.as_str()) && resolves_public(u);
+    if !reqwest::Url::parse(url).is_ok_and(|u| ok(&u)) { bail!("only public https links are loaded"); }
+    static C: std::sync::OnceLock<Client> = std::sync::OnceLock::new();
+    let c = C.get_or_init(|| Client::builder()
+        .user_agent(concat!("NetherClient/", env!("CARGO_PKG_VERSION")))
+        .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(30))
-        .redirect(reqwest::redirect::Policy::custom(|a| {
-            if a.previous().len() < 5 && url_allowed(a.url().as_str()) { a.follow() } else { a.stop() }
+        .redirect(reqwest::redirect::Policy::custom(move |a| {
+            if a.previous().len() < 5 && url_allowed(a.url().as_str()) && resolves_public(a.url()) { a.follow() } else { a.stop() }
         }))
-        .build()?;
+        .build()
+        .expect("http client"));
     let r = c.get(url).send()?;
     if !r.status().is_success() { bail!("the link answered HTTP {}", r.status().as_u16()); }
-    let png = read_capped(r, MAX_URL)?;
+    read_capped(r, cap)
+}
+
+/// Import a skin from a direct image URL (public https only, 512 KiB cap, redirects checked too).
+pub fn import_url(paths: &Paths, url: &str, name: Option<&str>) -> Result<Skin> {
+    if !url_allowed(url) { bail!("only public https image links can be imported"); }
+    let png = get_public(url, MAX_URL)?;
     let guess = reqwest::Url::parse(url).ok().and_then(|u| u.path_segments().and_then(|mut s| s.next_back().map(String::from))).unwrap_or_default();
     let guess = guess.trim_end_matches(".png").to_string();
     add(paths, &png, name.unwrap_or(if guess.is_empty() { "Skin" } else { &guess }), None, format!("url:{url}"))

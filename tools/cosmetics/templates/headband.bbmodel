@@ -1,0 +1,199 @@
+{
+ "meta": {
+  "format_version": "4.10",
+  "model_format": "free",
+  "box_uv": false
+ },
+ "name": "nether_headband",
+ "resolution": {
+  "width": 64,
+  "height": 64
+ },
+ "elements": [
+  {
+   "name": "_ref_head",
+   "type": "cube",
+   "from": [
+    4,
+    0,
+    4
+   ],
+   "to": [
+    12,
+    8,
+    12
+   ],
+   "origin": [
+    8,
+    0,
+    8
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": 8,
+   "faces": {
+    "north": {
+     "uv": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "texture": null
+    },
+    "east": {
+     "uv": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "texture": null
+    },
+    "south": {
+     "uv": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "texture": null
+    },
+    "west": {
+     "uv": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "texture": null
+    },
+    "up": {
+     "uv": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "texture": null
+    },
+    "down": {
+     "uv": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "texture": null
+    }
+   },
+   "uuid": "846365e1-2cb9-4a75-9769-ebfc4816ed64"
+  },
+  {
+   "name": "_ref_hat_layer",
+   "type": "cube",
+   "from": [
+    3.5,
+    -0.5,
+    3.5
+   ],
+   "to": [
+    12.5,
+    8.5,
+    12.5
+   ],
+   "origin": [
+    8,
+    0,
+    8
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "color": 8,
+   "faces": {
+    "north": {
+     "uv": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "texture": null
+    },
+    "east": {
+     "uv": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "texture": null
+    },
+    "south": {
+     "uv": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "texture": null
+    },
+    "west": {
+     "uv": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "texture": null
+    },
+    "up": {
+     "uv": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "texture": null
+    },
+    "down": {
+     "uv": [
+      0,
+      0,
+      1,
+      1
+     ],
+     "texture": null
+    }
+   },
+   "uuid": "a77e8a11-c9d4-4f88-a03b-50019c2139ec"
+  }
+ ],
+ "outliner": [
+  {
+   "name": "headband",
+   "origin": [
+    8,
+    0,
+    8
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "uuid": "d91f5402-3e69-44e9-9877-4ecd09e99547",
+   "children": [
+    "846365e1-2cb9-4a75-9769-ebfc4816ed64",
+    "a77e8a11-c9d4-4f88-a03b-50019c2139ec"
+   ]
+  }
+ ],
+ "textures": []
+}

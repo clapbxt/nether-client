@@ -21,9 +21,17 @@ final class Wardrobe {
     private Wardrobe() {}
 
     private static final class Cape { String id, name, png, key; boolean account; BufferedImage img; }
+    /** a Nether cosmetic card (the launcher renders the picture) */
+    private static final class Cos { String id, name, type, rarity, key; BufferedImage img; }
+    private static final List<Cos> cosmetics = new ArrayList<>();
+    /** shown category: 0 capes, 1.. = Cosmetics.SLOTS + 1 */
+    private static int cat;
+    private static final String[] CATS = {"CAPES", "HATS", "HEADBANDS", "AURAS", "SHIELDS"};
 
     private static final List<Cape> nether = new ArrayList<>(), account = new ArrayList<>();
     private static String netherWorn = "", accountWorn = "", uuid = "";
+    /** worn cosmetics {hat, headband, aura, shield} from the launcher ("" = none) */
+    private static final String[] worn = {"", "", "", ""};
     private static boolean slim, loaded;
     private static BufferedImage skin;
     private static long mtime = -1, nextCheck, seq;
@@ -56,6 +64,9 @@ final class Wardrobe {
             slim = Boolean.TRUE.equals(st.get("slim"));
             netherWorn = str(st.get("netherWorn"));
             accountWorn = str(st.get("accountWorn"));
+            Map<?, ?> cw = st.get("cosmetics") instanceof Map ? (Map<?, ?>) st.get("cosmetics") : null;
+            for (int i = 0; i < 4; i++) worn[i] = cw == null ? "" : str(cw.get(Cosmetics.SLOTS[i]));
+            loadCosmetics(st.get("items"));
             skin = read(f.resolveSibling(str(st.get("skin"))));
             fill(st.get("nether"), nether, false);
             fill(st.get("account"), account, true);
@@ -78,8 +89,19 @@ final class Wardrobe {
         return netherWorn;
     }
 
+    /** Your worn cosmetics (dashless uuid) from the launcher's state, null = not this player / no state. */
+    static String[] ownLook(String uuidNoDash) {
+        reload();
+        if (!loaded || uuidNoDash == null || !uuidNoDash.equalsIgnoreCase(uuid.replace("-", ""))) return null;
+        String[] l = new String[4];
+        boolean any = false;
+        for (int i = 0; i < 4; i++) { l[i] = worn[i].isEmpty() ? null : worn[i]; any |= l[i] != null; }
+        return any ? l : null;
+    }
+
     private static BufferedImage read(Path p) {
-        try { return Files.isRegularFile(p) ? javax.imageio.ImageIO.read(p.toFile()) : null; } catch (Throwable t) { return null; }
+        if (!Files.isRegularFile(p)) return null;
+        try (java.io.InputStream in = Files.newInputStream(p)) { return Icons.decode(in); } catch (Throwable t) { return null; }
     }
 
     private static void fill(Object list, List<Cape> out, boolean acct) {
@@ -97,6 +119,54 @@ final class Wardrobe {
             c.key = "wd.cape." + (acct ? "a." : "n.") + c.id + "." + mtime;
             c.img = read(dir().resolve(png));
             if (c.img != null) out.add(c);
+        }
+    }
+
+    private static void loadCosmetics(Object list) {
+        cosmetics.clear();
+        if (!(list instanceof List)) return;
+        for (Object e : (List<?>) list) {
+            if (!(e instanceof Map)) continue;
+            Map<?, ?> m = (Map<?, ?>) e;
+            String png = str(m.get("png"));
+            if (png.isEmpty() || png.contains("/") || png.contains("\\") || png.contains("..")) continue; // plain file names in our folder only
+            Cos c = new Cos();
+            c.id = str(m.get("id"));
+            c.name = str(m.get("name"));
+            c.type = str(m.get("type"));
+            c.rarity = str(m.get("rarity"));
+            c.key = "wd.cos." + c.id + "." + mtime;
+            c.img = read(dir().resolve(png));
+            if (c.img != null) cosmetics.add(c);
+        }
+    }
+
+    /** Ask the launcher to wear (id) or take off ("") a cosmetic in a slot. */
+    private static void sendCosmetic(String slot, String id) {
+        try {
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("seq", (double) ++seq);
+            Map<String, Object> c = new LinkedHashMap<>();
+            c.put("slot", slot);
+            c.put("id", id);
+            r.put("cosmetic", c);
+            Path tmp = dir().resolve("request.tmp"), f = dir().resolve("request.json");
+            Files.write(tmp, Json.write(r).getBytes(StandardCharsets.UTF_8));
+            Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING);
+            pendingAt = System.currentTimeMillis();
+            for (int i = 0; i < 4; i++) if (Cosmetics.SLOTS[i].equals(slot)) worn[i] = id;
+        } catch (Throwable t) {
+            System.out.println("[nether-agent] wardrobe request failed: " + t);
+        }
+    }
+
+    private static int rarityColor(String r) {
+        switch (r) {
+            case "legendary": return 0xFFF2A33A;
+            case "epic": return 0xFFB27CFF;
+            case "rare": return 0xFF4F9BFF;
+            case "uncommon": return 0xFF5BD47A;
+            default: return 0xFFAEB4BD;
         }
     }
 
@@ -184,9 +254,22 @@ final class Wardrobe {
         Gfx.text(Gfx.MONO, 9, lx + pw - 12 - Gfx.width(Gfx.MONO, 9, note, 0.8f), sy + 15, Th.mut, note, false, 0.8f);
         if (hv) Menu.tip = "Every Nether player gets the badge before their name, above their head and in chat.";
 
-        // ---- right: capes
+        // ---- right: category tabs, then capes or cosmetic cards
         float gx = lx + pw + 32, gw = px + Menu.PW - 28 - gx, tw = (gw - 3 * 12) / 4, th = 150, gap = 12;
         hover = null;
+        float tx0 = gx;
+        for (int i = 0; i < CATS.length; i++) {
+            float w = Gfx.width(Gfx.SEMI, 10, CATS[i], 1.2f) + 24;
+            boolean on = cat == i, hv2 = Menu.in(tx0, top, w, 24);
+            float a = Menu.an("wdc" + i, on), hh = Menu.an("wdch" + i, hv2);
+            Gfx.rect(tx0, top, w, 24, 12, on ? Gfx.a(Th.ac, 0.2f + 0.05f * hh) : Gfx.a(Th.ov, 0.03f + 0.05f * hh));
+            if (on) Gfx.ring(tx0, top, w, 24, 12, 1, Gfx.a(Th.ac2, 0.6f));
+            Gfx.textC(Gfx.SEMI, 10, tx0 + w / 2, top + 12, Gfx.mix(Gfx.mix(Th.mut, Th.tx, hh), Th.ac2, a), CATS[i], 1.2f);
+            if (Menu.hit(tx0, top, w, 24) && cat != i) { cat = i; gridScrollT = gridScroll = 0; }
+            tx0 += w + 6;
+        }
+        top += 36;
+        if (cat > 0) { cosGrid(gx, gw, top, bottom, wheel); return; }
         int total = 1 + nether.size() + account.size();
         // rows: None + nether first, then a header, then account capes
         int nRow = (1 + nether.size() + 3) / 4, aRow = (account.size() + 3) / 4;
@@ -218,6 +301,63 @@ final class Wardrobe {
             Gfx.rect(px + Menu.PW - 12, top + (viewH - bh) * (gridScroll / maxS), 3, bh, 1.5f, Gfx.a(Th.ov, 0.16f));
         }
         if (total == 1 && account.isEmpty()) Gfx.text(Gfx.UI, 12, gx, top + 40 + th, Th.dim, "No capes yet. Nether capes load in the launcher.");
+    }
+
+    /** Cards of one cosmetic slot: None first, then every cosmetic of that type (picture rendered by the launcher). */
+    private static void cosGrid(float gx, float gw, float top, float bottom, float wheel) {
+        String slot = Cosmetics.SLOTS[cat - 1];
+        String wornId = worn[cat - 1];
+        List<Cos> list = new ArrayList<>();
+        for (Cos c : cosmetics) if (slot.equals(c.type)) list.add(c);
+        float gap = 12, tw = (gw - 3 * gap) / 4, th = tw * 1.3f + 34;
+        int rows = (list.size() + 1 + 3) / 4;
+        float viewH = bottom - top, contentH = rows * (th + gap);
+        float maxS = Math.max(0, contentH - viewH);
+        gridScrollT = Math.max(0, Math.min(maxS, gridScrollT - wheel * 46));
+        gridScroll = Config.calm() ? gridScrollT : gridScroll + (gridScrollT - gridScroll) * Math.min(1, Gfx.dt * 16);
+        Menu.beginClip(gx - 6, top, gw + 12, viewH);
+        for (int i = 0; i <= list.size(); i++) {
+            Cos c = i == 0 ? null : list.get(i - 1);
+            float x = gx + (i % 4) * (tw + gap), y = top - gridScroll + (i / 4) * (th + gap);
+            if (y > bottom || y + th < top) continue;
+            boolean eq = c == null ? wornId.isEmpty() : c.id.equals(wornId);
+            boolean hv = Menu.in(x, y, tw, th);
+            float t = Menu.an("wdk" + cat + "." + i, hv), o = Menu.an("wdke" + cat + "." + i, eq);
+            Gfx.rect(x, y, tw, th, 8, Gfx.mix(Th.s1, Th.s2, Math.max(t, o * 0.6f)));
+            Gfx.ring(x, y, tw, th, 8, 1, Gfx.mix(Gfx.mix(Th.ln, Th.ln2, t), Th.ac2, o));
+            float ih = th - 40;
+            if (c == null) {
+                Menu.drawX(x + tw / 2, y + ih / 2 + 4, 10, Th.mut);
+            } else {
+                if (!Gfx.hasTexture(c.key)) Gfx.texture(c.key, c.img, true);
+                float iw = Math.min(tw - 8, ih * c.img.getWidth() / (float) c.img.getHeight());
+                Gfx.image(c.key, x + (tw - iw) / 2, y + 4, iw, ih, 0xFFFFFFFF, 6);
+            }
+            String name = c == null ? "NONE" : Menu.fit(c.name, Gfx.SEMI, 11, tw - 16, 0.4f);
+            Gfx.text(Gfx.SEMI, 11, x + 9, y + th - 26, eq ? Th.tx : Gfx.mix(Th.dim, Th.tx, t), name, false, 0.4f);
+            if (c != null) {
+                int rc = rarityColor(c.rarity);
+                Gfx.rect(x + 9, y + th - 13, 5, 5, 1, rc);
+                Gfx.text(Gfx.UI, 10, x + 19, y + th - 10.5f, rc, c.rarity.isEmpty() ? "" : Character.toUpperCase(c.rarity.charAt(0)) + c.rarity.substring(1));
+            }
+            if (eq) {
+                Gfx.rect(x + tw - 24, y + 8, 16, 16, 8, Th.ac);
+                Gfx.rect(x + tw - 20.5f, y + 15, 3, 1.6f, 0.8f, 0xFFFFFFFF);
+                Gfx.rect(x + tw - 18.2f, y + 13.6f, 1.6f, 5, 0.8f, 0xFFFFFFFF);
+            } else if (hv) {
+                String w = c == null ? "TAKE OFF" : "WEAR";
+                float bw = Gfx.width(Gfx.MONO, 9, w, 1.4f) + 14;
+                Gfx.rect(x + tw - bw - 8, y + 8, bw, 16, 8, Gfx.a(Th.ac, 0.85f));
+                Gfx.textC(Gfx.MONO, 9, x + tw - bw / 2 - 8, y + 16, 0xFFFFFFFF, w, 1.4f);
+            }
+            if (Menu.hit(x, y, tw, th)) sendCosmetic(slot, c == null || eq ? "" : c.id);
+        }
+        Menu.endClip();
+        if (maxS > 0) {
+            float bh = Math.max(30, viewH * viewH / contentH);
+            Gfx.rect(gx + gw + 8, top + (viewH - bh) * (gridScroll / maxS), 3, bh, 1.5f, Gfx.a(Th.ov, 0.16f));
+        }
+        if (list.isEmpty()) Gfx.text(Gfx.UI, 12, gx, top + th + 30, Th.dim, "Nothing here yet. Nether cosmetics load in the launcher.");
     }
 
     private static BufferedImage hover;

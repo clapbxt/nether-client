@@ -80,6 +80,46 @@ public final class Hook {
     public static float fov(float v) { float d = fovDiv; return d > 1 ? v / d : v; }
     public static float hand(float v) { float s = handShow; return s < 1 ? v * Math.max(0, s) : v; }
 
+    /**
+     * (super class, game loader) -> a generated subclass of the game's render layer whose one abstract draw method
+     * passes (this, its arguments) to {@link #layer(Object, Object[])}. Set by the agent (it owns ASM); used by the
+     * overlay's Cosmetics to append a layer to the player renderers (no game class is patched).
+     */
+    public static volatile java.util.function.BiFunction<Class<?>, ClassLoader, Class<?>> layerClass;
+    /** (layer, draw arguments) -> draws the cosmetics; set by the overlay. */
+    public static volatile java.util.function.BiConsumer<Object, Object[]> layerDraw;
+    private static int layerErrors;
+
+    /** The generated render layer's draw method (render thread). */
+    public static void layer(Object self, Object[] args) {
+        java.util.function.BiConsumer<Object, Object[]> f = layerDraw;
+        if (f == null) return;
+        try {
+            f.accept(self, args);
+        } catch (Throwable e) {
+            if (layerErrors++ == 0) { System.out.println("[nether-agent] cosmetics layer error: " + e); e.printStackTrace(System.out); }
+            if (layerErrors >= 200) { layerDraw = null; System.out.println("[nether-agent] cosmetics layer disabled after repeated errors"); }
+        }
+    }
+
+    /** Draws a replacement for a held item (entity, stack, display context, pose stack, collector, light); true = drawn. */
+    public interface Item { boolean draw(Object entity, Object stack, Object ctx, Object pose, Object sink, int light); }
+    public static volatile Item item;
+    private static int itemErrors;
+
+    /** Start of ItemInHandRenderer.renderItem: true = the overlay drew a cosmetic instead (the game then skips the item). */
+    public static boolean item(Object entity, Object stack, Object ctx, Object pose, Object sink, int light) {
+        Item f = item;
+        if (f == null) return false;
+        try {
+            return f.draw(entity, stack, ctx, pose, sink, light);
+        } catch (Throwable e) {
+            if (itemErrors++ == 0) { System.out.println("[nether-agent] held cosmetic error: " + e); e.printStackTrace(System.out); }
+            if (itemErrors >= 200) item = null;
+            return false;
+        }
+    }
+
     /** component -> chat line to show; set by the overlay (the Nether badge before Nether players' names). */
     public static volatile java.util.function.Function<Object, Object> chat;
 

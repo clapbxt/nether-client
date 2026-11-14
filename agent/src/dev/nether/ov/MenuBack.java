@@ -270,7 +270,7 @@ final class MenuBack {
         String name = key.substring(c1 + 1, c2);
         float blur = Integer.parseInt(key.substring(c2 + 1)) / 10f;
         BufferedImage src;
-        try (InputStream in = new FileInputStream(new File(folder().toFile(), name))) { src = Icons.decode(in); }
+        try (InputStream in = new FileInputStream(new File(folder().toFile(), name))) { src = Icons.decode(in, 40L << 20); } // 8K wallpapers fit
         if (src == null) throw new IllegalArgumentException("unreadable image " + name);
         // longest side at most 2560 px (textures stay small); blur = shrink far, box-blur, let the GPU's linear filter upscale
         int max = blur > 0 ? Math.round(560 - 440 * blur) : 2560;

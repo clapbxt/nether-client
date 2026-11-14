@@ -1,0 +1,22 @@
+# Checks Cargo.lock against the RustSec advisory database (known-vulnerable or yanked crates).
+name: dependency audit
+on:
+  push:
+    paths: ["Cargo.lock", "**/Cargo.toml", ".github/workflows/audit.yml"]
+  pull_request:
+  schedule:
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cargo-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Audit Cargo.lock
+        run: cargo audit

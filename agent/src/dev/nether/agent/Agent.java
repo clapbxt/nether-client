@@ -57,6 +57,7 @@ public final class Agent {
             }
         }
         Hook.file = p -> { try { return read("/" + p); } catch (Throwable t) { return null; } };
+        Hook.layerClass = Agent::layerClass;
         nameTargets();
         inst.addTransformer(new LwjglTransformer());
         System.out.println("[nether-agent] loaded (java " + System.getProperty("java.version") + ")");
@@ -75,6 +76,9 @@ public final class Agent {
      */
     private static final Map<String, String[]> FLOAT_HOOKS = new HashMap<>();
 
+    /** Item-in-hand renderer class -> {method, descriptor}: renderItem starts with `if (Hook.item(...)) return;` (shield cosmetics in first person). */
+    private static final Map<String, String[]> ITEM_HOOKS = new HashMap<>();
+
     /** Chat HUD class -> chat component type: each of its add-message methods gets its message from Hook.chat first. */
     private static final Map<String, String> CHAT_HOOKS = new HashMap<>();
 
@@ -92,6 +96,8 @@ public final class Agent {
         FLOAT_HOOKS.put("net/minecraft/class_757", new String[] {"method_3196", "(Lnet/minecraft/class_4184;F", "fov"}); // Fabric getFov
         FLOAT_HOOKS.put("net/minecraft/client/renderer/GameRenderer", new String[] {"getFov", "(Lnet/minecraft/client/Camera;F", "fov"}); // Forge/NeoForge, 26.x
         FLOAT_HOOKS.put("net/minecraft/class_759", new String[] {"method_22976", "(F", "hand"}); // Fabric renderItem
+        ITEM_HOOKS.put("net/minecraft/class_759", new String[] {"method_3233", "(Lnet/minecraft/class_1309;Lnet/minecraft/class_1799;Lnet/minecraft/class_811;Lnet/minecraft/class_4587;"}); // Fabric renderItem
+        ITEM_HOOKS.put("net/minecraft/client/renderer/ItemInHandRenderer", new String[] {"renderItem", "(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/ItemDisplayContext;Lcom/mojang/blaze3d/vertex/PoseStack;"}); // Forge/NeoForge, 26.x
         FLOAT_HOOKS.put("net/minecraft/client/renderer/ItemInHandRenderer", new String[] {"renderHandsWithItems", "(F", "hand"}); // Forge/NeoForge, 26.x
         String[] a = String.valueOf(System.getProperty("sun.java.command")).split(" ");
         String v = null;
@@ -99,7 +105,7 @@ public final class Agent {
         if (v == null) return;
         if (v.equals("1.8.9")) NAME_HOOKS.put("wn", new String[] {"f_", "()Leu;"}); // vanilla 1.8.9 EntityPlayer.getDisplayName
         try { // obfuscated vanilla with a name table (rows: intermediary, obfuscated, descriptor)
-            String cls = null, m = null, d = null, chat = null, comp = null, lr = null, lm = null, ld = null;
+            String cls = null, m = null, d = null, chat = null, comp = null, lr = null, lm = null, ld = null, ir = null, im = null, id = null;
             for (String l : new String(read("/names/" + v + ".txt"), StandardCharsets.UTF_8).split("\\r?\\n")) {
                 String[] r = l.split("\t", -1);
                 if (r.length < 3) continue;
@@ -110,10 +116,13 @@ public final class Agent {
                 else if (r[0].equals("net.minecraft.class_2561")) comp = r[1];
                 else if (r[0].equals("net.minecraft.class_922")) lr = r[1];
                 else if (r[0].equals("method_4055")) { lm = r[1]; ld = r[2]; }
+                else if (r[0].equals("net.minecraft.class_759")) ir = r[1];
+                else if (r[0].equals("method_3233")) { im = r[1]; id = r[2]; }
             }
             if (chat != null && comp != null) CHAT_HOOKS.put(chat.replace('.', '/'), comp.replace('.', '/'));
             if (cls != null && m != null && !d.isEmpty()) NAME_HOOKS.put(cls.replace('.', '/'), new String[] {m, d});
             if (lr != null && lm != null && ld.length() > 1) LABEL_HOOKS.put(lr.replace('.', '/'), new String[] {lm, ld.substring(0, ld.indexOf(';') + 1)});
+            if (ir != null && im != null && id.length() > 1) ITEM_HOOKS.put(ir.replace('.', '/'), new String[] {im, id});
         } catch (Throwable t) { } // no table for this version
     }
 
@@ -202,6 +211,79 @@ public final class Agent {
         }
     }
 
+    private static int layers;
+
+    /**
+     * A subclass of the game's render layer (`sup`, abstract, one abstract method: RenderLayer.submit/render), defined in
+     * `loader`: its constructor passes the renderer to super, its draw method boxes its arguments and calls
+     * Hook.layer(this, args). Nothing of the game is patched; the overlay appends an instance to the player renderers.
+     */
+    private static synchronized Class<?> layerClass(Class<?> sup, ClassLoader loader) {
+        try {
+            java.lang.reflect.Method draw = null;
+            for (java.lang.reflect.Method m : sup.getDeclaredMethods())
+                if (java.lang.reflect.Modifier.isAbstract(m.getModifiers()) && m.getReturnType() == void.class && m.getParameterCount() >= 4) {
+                    if (draw != null) throw new IllegalStateException("two abstract draw methods on " + sup.getName());
+                    draw = m;
+                }
+            java.lang.reflect.Constructor<?> ctor = null;
+            for (java.lang.reflect.Constructor<?> c : sup.getDeclaredConstructors())
+                if (c.getParameterCount() == 1 && !java.lang.reflect.Modifier.isPrivate(c.getModifiers())) ctor = c;
+            if (draw == null || ctor == null) throw new IllegalStateException("no draw method / constructor on " + sup.getName());
+            String name = "dev/nether/gen/CosmeticLayer" + (layers++), superName = Type.getInternalName(sup);
+            ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+            cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC | Opcodes.ACC_SUPER, name, null, superName, null);
+            String cd = Type.getConstructorDescriptor(ctor);
+            MethodVisitor mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", cd, null, null);
+            mv.visitCode();
+            mv.visitVarInsn(Opcodes.ALOAD, 0);
+            mv.visitVarInsn(Opcodes.ALOAD, 1);
+            mv.visitMethodInsn(Opcodes.INVOKESPECIAL, superName, "<init>", cd, false);
+            mv.visitInsn(Opcodes.RETURN);
+            mv.visitMaxs(0, 0);
+            mv.visitEnd();
+            Type[] args = Type.getArgumentTypes(draw);
+            int acc = (draw.getModifiers() & (Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED)) != 0 ? draw.getModifiers() & (Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED) : Opcodes.ACC_PUBLIC;
+            mv = cw.visitMethod(acc, draw.getName(), Type.getMethodDescriptor(draw), null, null);
+            mv.visitCode();
+            mv.visitVarInsn(Opcodes.ALOAD, 0);
+            mv.visitIntInsn(Opcodes.BIPUSH, args.length);
+            mv.visitTypeInsn(Opcodes.ANEWARRAY, "java/lang/Object");
+            int slot = 1;
+            for (int i = 0; i < args.length; i++) {
+                mv.visitInsn(Opcodes.DUP);
+                mv.visitIntInsn(Opcodes.BIPUSH, i);
+                Type t = args[i];
+                mv.visitVarInsn(t.getOpcode(Opcodes.ILOAD), slot);
+                switch (t.getSort()) {
+                    case Type.INT: mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false); break;
+                    case Type.FLOAT: mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Float", "valueOf", "(F)Ljava/lang/Float;", false); break;
+                    case Type.DOUBLE: mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", false); break;
+                    case Type.LONG: mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;", false); break;
+                    case Type.BOOLEAN: mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", false); break;
+                    case Type.BYTE: case Type.SHORT: case Type.CHAR: mv.visitMethodInsn(Opcodes.INVOKESTATIC, "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", false); break;
+                    default: break;
+                }
+                mv.visitInsn(Opcodes.AASTORE);
+                slot += t.getSize();
+            }
+            mv.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "layer", "(Ljava/lang/Object;[Ljava/lang/Object;)V", false);
+            mv.visitInsn(Opcodes.RETURN);
+            mv.visitMaxs(0, 0);
+            mv.visitEnd();
+            cw.visitEnd();
+            byte[] b = cw.toByteArray();
+            Method dc = ClassLoader.class.getDeclaredMethod("defineClass", String.class, byte[].class, int.class, int.class);
+            dc.setAccessible(true);
+            Class<?> c = (Class<?>) dc.invoke(loader, name.replace('/', '.'), b, 0, b.length);
+            System.out.println("[nether-agent] cosmetics layer class " + c.getName() + " (" + sup.getName() + "." + draw.getName() + ")");
+            return c;
+        } catch (Throwable t) {
+            System.out.println("[nether-agent] cosmetics layer class failed: " + t);
+            return null;
+        }
+    }
+
     /** Adds `call` before every IRETURN: the returned int is replaced by the hook's result (hook takes and returns the same type). */
     private static MethodVisitor retFilter(MethodVisitor mv, final String hook, final String desc, final boolean withArg0) {
         return new MethodVisitor(Opcodes.ASM9, mv) {
@@ -225,7 +307,10 @@ public final class Agent {
             String[] lh = name == null ? null : LABEL_HOOKS.get(name);
             if (lh != null) return label(bytes, lh[0], lh[1]);
             String[] fh = name == null ? null : FLOAT_HOOKS.get(name);
+            String[] ih = name == null ? null : ITEM_HOOKS.get(name);
+            if (fh != null && ih != null) { byte[] b = floatReads(bytes, name, fh[0], fh[1], fh[2]); byte[] c = itemHook(b != null ? b : bytes, ih[0], ih[1]); return c != null ? c : b; }
             if (fh != null) return floatReads(bytes, name, fh[0], fh[1], fh[2]);
+            if (ih != null) return itemHook(bytes, ih[0], ih[1]);
             String ct = name == null ? null : CHAT_HOOKS.get(name);
             if (ct != null) return chat(bytes, ct);
             if (name == null || !name.startsWith("org/lwjgl/")) return null;
@@ -294,6 +379,48 @@ public final class Agent {
                 return cw.toByteArray();
             } catch (Throwable t) {
                 System.out.println("[nether-agent] nametag visibility hook failed: " + t);
+                return null;
+            }
+        }
+
+        /**
+         * ItemInHandRenderer.renderItem(entity, stack, context, poseStack, collector, light) starts with
+         * `if (Hook.item(...)) return;`: a held vanilla shield is drawn as the player's shield cosmetic in first person.
+         */
+        private static byte[] itemHook(byte[] bytes, final String method, final String descStart) {
+            try {
+                ClassReader cr = new ClassReader(bytes);
+                ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+                final boolean[] done = {false};
+                cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
+                    @Override
+                    public MethodVisitor visitMethod(int access, String mname, String desc, String sig, String[] ex) {
+                        MethodVisitor mv = super.visitMethod(access, mname, desc, sig, ex);
+                        if (!method.equals(mname) || !desc.startsWith(descStart) || !desc.endsWith("I)V") || (access & Opcodes.ACC_STATIC) != 0) return mv;
+                        Type[] a = Type.getArgumentTypes(desc);
+                        if (a.length != 6) return mv;
+                        done[0] = true;
+                        return new MethodVisitor(Opcodes.ASM9, mv) {
+                            @Override
+                            public void visitCode() {
+                                super.visitCode();
+                                for (int i = 1; i <= 5; i++) super.visitVarInsn(Opcodes.ALOAD, i);
+                                super.visitVarInsn(Opcodes.ILOAD, 6);
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "item", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;I)Z", false);
+                                dev.nether.shaded.asm.Label go = new dev.nether.shaded.asm.Label();
+                                super.visitJumpInsn(Opcodes.IFEQ, go);
+                                super.visitInsn(Opcodes.RETURN);
+                                super.visitLabel(go);
+                                super.visitFrame(Opcodes.F_SAME, 0, null, 0, null);
+                            }
+                        };
+                    }
+                }, 0);
+                if (!done[0]) return null;
+                System.out.println("[nether-agent] hooked held items (shield cosmetics)");
+                return cw.toByteArray();
+            } catch (Throwable t) {
+                System.out.println("[nether-agent] held item hook failed: " + t);
                 return null;
             }
         }

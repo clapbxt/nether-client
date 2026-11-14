@@ -1,0 +1,113 @@
+[
+ {
+  "id": "ember_crown",
+  "name": "Ember Crown",
+  "type": "hat",
+  "rarity": "legendary",
+  "desc": "Forged gold, smouldering rubies.",
+  "frametime": 140
+ },
+ {
+  "id": "top_hat",
+  "name": "Top Hat",
+  "type": "hat",
+  "rarity": "rare",
+  "desc": "Felt, silk band, gold buckle."
+ },
+ {
+  "id": "wizard_hat",
+  "name": "Starweaver",
+  "type": "hat",
+  "rarity": "epic",
+  "desc": "Twinkling stars, a tip with a mind of its own.",
+  "frametime": 220
+ },
+ {
+  "id": "propeller_cap",
+  "name": "Propeller Cap",
+  "type": "hat",
+  "rarity": "uncommon",
+  "desc": "Spins forever. Lift not included."
+ },
+ {
+  "id": "flame_band",
+  "name": "Inferno Band",
+  "type": "headband",
+  "rarity": "legendary",
+  "desc": "Living flame, wrapped around a charred band.",
+  "frametime": 90
+ },
+ {
+  "id": "neon_band",
+  "name": "Synthwave Band",
+  "type": "headband",
+  "rarity": "epic",
+  "desc": "A ribbon of light that never stops moving.",
+  "frametime": 110
+ },
+ {
+  "id": "ninja_band",
+  "name": "Shinobi Band",
+  "type": "headband",
+  "rarity": "rare",
+  "desc": "Steel plate, tails that catch the wind."
+ },
+ {
+  "id": "ember_aura",
+  "name": "Ember Aura",
+  "type": "aura",
+  "rarity": "legendary",
+  "desc": "Cinders rise and swirl around you."
+ },
+ {
+  "id": "enchant_aura",
+  "name": "Arcane Aura",
+  "type": "aura",
+  "rarity": "epic",
+  "desc": "Runes of power orbit you."
+ },
+ {
+  "id": "soul_aura",
+  "name": "Soul Aura",
+  "type": "aura",
+  "rarity": "epic",
+  "desc": "Cold blue soulfire, drifting upward."
+ },
+ {
+  "id": "frost_aura",
+  "name": "Frost Aura",
+  "type": "aura",
+  "rarity": "epic",
+  "desc": "Your own private snowfall."
+ },
+ {
+  "id": "obsidian_shield",
+  "name": "Voidglass",
+  "type": "shield",
+  "rarity": "legendary",
+  "desc": "Cut obsidian, veins that pulse with violet light.",
+  "frametime": 120
+ },
+ {
+  "id": "ember_shield",
+  "name": "Hearthguard",
+  "type": "shield",
+  "rarity": "legendary",
+  "desc": "Blackened steel around a burning Nether heart.",
+  "frametime": 130
+ },
+ {
+  "id": "frost_shield",
+  "name": "Winter's Ward",
+  "type": "shield",
+  "rarity": "epic",
+  "desc": "A snowflake of living ice."
+ },
+ {
+  "id": "knight_shield",
+  "name": "Crusader Shield",
+  "type": "shield",
+  "rarity": "rare",
+  "desc": "Quartered heater, iron rim, gold boss."
+ }
+]

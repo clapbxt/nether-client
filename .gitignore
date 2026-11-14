@@ -3,6 +3,7 @@ target/
 
 
 !backend/content/capes/*.png
+!backend/content/cosmetics/*.png
 !crates/core/res/nether-pack/*.png
 !design/screens/module-icons-*.png
 !docs/screens/*.png
@@ -21,5 +22,7 @@ dist/
 
 # Obsidian app state + plugin data (local tokens)
 NC Obsidian Vault/.obsidian/
+# personal / account details (Azure owner, contacts)
+NC Obsidian Vault/Private.md
 .worktrees/
 .overnight/

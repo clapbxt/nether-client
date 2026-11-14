@@ -400,6 +400,12 @@ pub fn share_log(ui: &AppWindow, sh: &Arc<Shared>, idx: i32) {
     let b = ui.global::<Backend>();
     let kind = if b.get_crash_open() { 2 } else { b.get_log_kind() };
     let Some(p) = log_path(sh, &i.name, kind).or_else(|| log_path(sh, &i.name, 0)) else { show_toast(ui, sh, "There's no log to share yet"); return };
+    // a public upload: ask first
+    let sh2 = sh.clone();
+    crate::toast_action(ui, sh, "Share this log on mclo.gs? Anyone with the link can read it. Your name, user folder, IP addresses and tokens are removed first.", false, "SHARE", move |ui| upload_log(ui, &sh2, p));
+}
+
+fn upload_log(ui: &AppWindow, sh: &Arc<Shared>, p: std::path::PathBuf) {
     crate::job(ui, "mclogs", "Uploading log to mclo.gs…", -1.0);
     let (weak, sh) = (ui.as_weak(), sh.clone());
     std::thread::spawn(move || {

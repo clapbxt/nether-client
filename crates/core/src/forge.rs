@@ -94,11 +94,29 @@ pub struct Pending {
     marker: PathBuf,
 }
 
+/// The maven's `<url>.sha1` for an artifact (the installer is executed, so it is hash-checked and re-checked later
+/// instead of trusted forever once on disk). None when the maven publishes none.
+fn maven_sha1(c: &Client, url: &str) -> Option<String> {
+    let mut s = String::new();
+    c.get(format!("{url}.sha1")).send().ok()?.error_for_status().ok()?.take(256).read_to_string(&mut s).ok()?;
+    let h = s.split_whitespace().next()?.to_ascii_lowercase();
+    (h.len() == 40 && h.bytes().all(|b| b.is_ascii_hexdigit())).then_some(h)
+}
+
+/// Download a loader installer, sha1-checked when the maven publishes one.
+fn fetch_installer(c: &Client, url: &str, dest: &Path) -> Result<()> {
+    match maven_sha1(c, url) {
+        Some(h) => fetch(c, url, dest, Check::Sha1(&h)),
+        None => fetch(c, url, dest, Check::None),
+    }
+}
+
 fn installer(c: &Client, paths: &Paths, kind: Kind, mc: &str, ver: &str) -> Result<PathBuf> {
+    if !crate::launch::valid_loader_version(ver) { bail!("unexpected loader version {ver}"); }
     match kind {
         Kind::NeoForge => {
             let dest = paths.libraries().join(format!("net/neoforged/neoforge/{ver}/neoforge-{ver}-installer.jar"));
-            fetch(c, &format!("{NEO_MAVEN}/{ver}/neoforge-{ver}-installer.jar"), &dest, Check::None)?;
+            fetch_installer(c, &format!("{NEO_MAVEN}/{ver}/neoforge-{ver}-installer.jar"), &dest)?;
             Ok(dest)
         }
         Kind::Forge => {
@@ -106,7 +124,7 @@ fn installer(c: &Client, paths: &Paths, kind: Kind, mc: &str, ver: &str) -> Resu
             let mut last = None;
             for full in [format!("{mc}-{ver}"), format!("{mc}-{ver}-{mc}")] {
                 let dest = paths.libraries().join(format!("net/minecraftforge/forge/{full}/forge-{full}-installer.jar"));
-                match fetch(c, &format!("{FORGE_MAVEN}/{full}/forge-{full}-installer.jar"), &dest, Check::None) {
+                match fetch_installer(c, &format!("{FORGE_MAVEN}/{full}/forge-{full}-installer.jar"), &dest) {
                     Ok(()) => return Ok(dest),
                     Err(e) => last = Some(e),
                 }

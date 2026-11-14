@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use reqwest::blocking::Client;
 use serde::Deserialize;
 use serde_json::Value;
@@ -212,7 +212,14 @@ pub fn manifest(c: &Client) -> Result<Manifest> {
 }
 
 /// Fetch (and cache) the version JSON for `id`.
+/// A Minecraft version id that is safe as a folder name (ids come from packs and imports too): no separators, `:`,
+/// `..` or control characters. Mojang's own ids include spaces ("1.14 Pre-Release 1"), so those stay allowed.
+pub fn valid_version_id(id: &str) -> bool {
+    id.len() <= 64 && crate::download::safe_file_name(id)
+}
+
 pub fn version_json(c: &Client, paths: &Paths, id: &str) -> Result<VersionJson> {
+    if !valid_version_id(id) { bail!("'{id}' is not a Minecraft version"); }
     let file = paths.versions().join(id).join(format!("{id}.json"));
     if file.exists() {
         if let Ok(v) = serde_json::from_slice::<VersionJson>(&std::fs::read(&file)?) { return Ok(v); }

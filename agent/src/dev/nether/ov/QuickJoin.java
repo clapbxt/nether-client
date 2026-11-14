@@ -285,7 +285,8 @@ final class QuickJoin {
     private static BufferedImage png(String b64) {
         try {
             int c = b64.indexOf(',');
-            return Icons.decode(new ByteArrayInputStream(Base64.getMimeDecoder().decode(c >= 0 ? b64.substring(c + 1) : b64)));
+            // server-controlled: favicons are 64x64, so anything over 128x128 is refused before decoding
+            return Icons.decode(new ByteArrayInputStream(Base64.getMimeDecoder().decode(c >= 0 ? b64.substring(c + 1) : b64)), 128L * 128);
         } catch (Throwable t) {
             return null;
         }

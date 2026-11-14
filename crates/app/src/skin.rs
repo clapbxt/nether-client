@@ -9,7 +9,9 @@ use nether_core::download::client;
 use serde_json::Value;
 use slint::{ComponentHandle, Image, Model, ModelRc, Rgba8Pixel, SharedPixelBuffer, VecModel};
 
-use crate::{show_toast, ui_do, AppWindow, Backend, Cape, Shared, SkinLib};
+use nether_core::cosmetics::{Kind, Loaded};
+
+use crate::{show_toast, ui_do, AppWindow, Backend, Cape, CosCard, Shared, SkinLib};
 
 /// Default skin (Steve) when signed out.
 const STEVE: &str = "https://textures.minecraft.net/texture/31f477eb1a7beee631c2ca64d06f8f68fa93a3386d04452ab27f43acdf1b60cb";
@@ -41,6 +43,12 @@ thread_local! {
     // the account's own skin, and whether a library skin is being previewed instead
     static ACCOUNT: RefCell<Option<(RgbaImage, bool)>> = const { RefCell::new(None) };
     static PREVIEW: RefCell<bool> = const { RefCell::new(false) };
+    // Nether cosmetics: loaded (model + texture), worn by slot, and the card hovered (previewed over the worn one)
+    static NCOS: RefCell<Vec<Rc<Loaded>>> = const { RefCell::new(Vec::new()) };
+    static COS_META: RefCell<Vec<nether_core::backend::Cosmetic>> = const { RefCell::new(Vec::new()) };
+    static COS_CARDS: RefCell<Vec<(String, RgbaImage)>> = const { RefCell::new(Vec::new()) };
+    static COS_WORN: RefCell<[String; 4]> = RefCell::new(Default::default());
+    static COS_HOVER: RefCell<Option<Rc<Loaded>>> = const { RefCell::new(None) };
 }
 
 // ---------------- loading ----------------
@@ -123,7 +131,28 @@ fn head(skin: &RgbaImage) -> Image {
     Image::from_rgba8(SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(big.as_raw(), 32, 32))
 }
 
+static SHARED: std::sync::OnceLock<Arc<Shared>> = std::sync::OnceLock::new();
+
+/// Delete the player's entry at the Nether cape service (Nether capes turned off). `mark` records the request so it
+/// is retried at the next sign-in when there is no session or no network now.
+pub fn forget_nether(paths: &nether_core::paths::Paths, mark: bool) {
+    let f = paths.root.join("nether-forget.pending");
+    if mark { let _ = std::fs::write(&f, b"1"); }
+    if !f.exists() { return; }
+    let Some(sh) = SHARED.get().cloned() else { return };
+    std::thread::spawn(move || {
+        if crate::prefs::load(&sh.paths).capes { let _ = std::fs::remove_file(&f); return; } // switched back on meanwhile
+        let Some(s) = sh.session.lock().ok().and_then(|s| s.clone()).filter(|s| s.user_type == "msa") else { return };
+        match nether_core::backend::forget_me(&client(), &s) {
+            Ok(()) => { let _ = std::fs::remove_file(&f); crate::applog::line("cape service: your Nether entry was deleted"); }
+            Err(e) => crate::applog::line(&format!("cape service: couldn't delete your Nether entry yet ({e:#}); trying again at the next sign-in")),
+        }
+    });
+}
+
 pub fn load(weak: slint::Weak<AppWindow>, sh: Arc<Shared>, skins: Vec<Value>, capes: Vec<Value>) {
+    let _ = SHARED.set(sh.clone());
+    forget_nether(&sh.paths, false);
     if !skins.is_empty() {
         let _ = std::fs::create_dir_all(sh.paths.root.join("cache"));
         let _ = std::fs::write(look_file(&sh), serde_json::to_vec(&serde_json::json!({"skins": skins, "capes": capes})).unwrap_or_default());
@@ -173,6 +202,8 @@ pub fn load(weak: slint::Weak<AppWindow>, sh: Arc<Shared>, skins: Vec<Value>, ca
             if added { ui.global::<SkinLib>().invoke_refresh(); }
             export(ui, &sh);
             load_ncapes(ui, &sh); // the in-game wardrobe needs the Nether cape list even if this window never opens the Wardrobe
+            if ui.global::<Backend>().get_cos_state() != 1 { ui.global::<Backend>().set_cos_state(0); } // cards show this account's skin
+            load_cosmetics(ui, &sh);
         });
     });
 }
@@ -281,6 +312,107 @@ pub fn wear_ncape(ui: &AppWindow, sh: &Arc<Shared>, id: &str) {
     });
 }
 
+// ---------------- Nether cosmetics ----------------
+
+const CARD_W: u32 = 300;
+const CARD_H: u32 = 390;
+
+/// A cosmetic card picture: the player wearing just that item, framed for its type.
+fn card(skin: &RgbaImage, slim: bool, it: &Loaded) -> RgbaImage {
+    use nether_core::preview::{render, Look as PLook, View};
+    let mut items: [Option<&Loaded>; 4] = [None; 4];
+    items[it.kind.slot()] = Some(it);
+    let view = match it.kind { Kind::Hat | Kind::Headband => View::head(0.42), Kind::Shield => View::arm(0.35), Kind::Aura => View::aura(0.4) };
+    render(&PLook { skin, slim, cape: None, items }, view, CARD_W, CARD_H, 1.7, 0)
+}
+
+fn rgba_image(img: &RgbaImage) -> Image { Image::from_rgba8(SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(img.as_raw(), img.width(), img.height())) }
+
+fn cos_card(m: &nether_core::backend::Cosmetic, img: &RgbaImage) -> CosCard {
+    let rarity = if m.rarity.is_empty() { "common".to_string() } else { m.rarity.clone() };
+    CosCard { id: m.id.as_str().into(), name: m.name.as_str().into(), kind: m.kind.as_str().into(), rarity: rarity.into(), desc: m.desc.as_str().into(), img: rgba_image(img) }
+}
+
+/// Load the cosmetics directory (verified models + textures), render the cards and read what the player wears.
+pub fn load_cosmetics(ui: &AppWindow, sh: &Arc<Shared>) {
+    let b = ui.global::<Backend>();
+    if matches!(b.get_cos_state(), 1 | 2) { return; }
+    b.set_cos_state(1);
+    let uuid = msa_uuid(sh);
+    let (skin, slim) = ACCOUNT.with(|a| a.borrow().clone()).unwrap_or_else(|| (RgbaImage::new(64, 64), false));
+    let (weak, sh) = (ui.as_weak(), sh.clone());
+    std::thread::spawn(move || {
+        let c = client();
+        let list: Vec<(nether_core::backend::Cosmetic, Loaded, RgbaImage)> = nether_core::backend::cosmetics(&c).into_iter()
+            .filter_map(|m| { let l = m.load(&c)?; let img = card(&skin, slim, &l); Some((m, l, img)) }).collect();
+        let worn = uuid.as_deref().and_then(|u| nether_core::backend::looks(&c, &[u]).ok()).and_then(|m| m.into_values().next()).map(|l| l.slots).unwrap_or_default();
+        ui_do(&weak, move |ui| {
+            let b = ui.global::<Backend>();
+            if list.is_empty() { b.set_cos_state(3); return; }
+            let mut by: [Vec<CosCard>; 4] = Default::default();
+            for (m, l, img) in &list { by[l.kind.slot()].push(cos_card(m, img)); }
+            let [h, hb, a, s] = by;
+            b.set_cos_hats(ModelRc::new(VecModel::from(h)));
+            b.set_cos_bands(ModelRc::new(VecModel::from(hb)));
+            b.set_cos_auras(ModelRc::new(VecModel::from(a)));
+            b.set_cos_shields(ModelRc::new(VecModel::from(s)));
+            COS_META.with(|v| *v.borrow_mut() = list.iter().map(|(m, _, _)| m.clone()).collect());
+            COS_CARDS.with(|v| *v.borrow_mut() = list.iter().map(|(m, _, img)| (m.id.clone(), img.clone())).collect());
+            NCOS.with(|v| *v.borrow_mut() = list.into_iter().map(|(_, l, _)| Rc::new(l)).collect());
+            set_cos_worn(ui, worn);
+            b.set_cos_state(2);
+            export(ui, &sh);
+        });
+    });
+}
+
+fn set_cos_worn(ui: &AppWindow, worn: [String; 4]) {
+    let v: Vec<slint::SharedString> = worn.iter().map(|s| s.as_str().into()).collect();
+    ui.global::<Backend>().set_cos_worn(ModelRc::new(VecModel::from(v)));
+    COS_WORN.with(|w| *w.borrow_mut() = worn);
+    mark_dirty();
+}
+
+/// Show a cosmetic on the preview while its card is hovered ("" = back to what is worn).
+pub fn hover_cosmetic(id: &str) {
+    let it = if id.is_empty() { None } else { NCOS.with(|v| v.borrow().iter().find(|l| l.id == id).cloned()) };
+    COS_HOVER.with(|h| *h.borrow_mut() = it);
+    mark_dirty();
+}
+
+/// Wear a cosmetic in slot `slot` (0 hat, 1 headband, 2 aura, 3 shield); the worn one (or "") takes the slot off.
+pub fn wear_cosmetic(ui: &AppWindow, sh: &Arc<Shared>, slot: i32, id: &str) {
+    let b = ui.global::<Backend>();
+    let Some(kind) = Kind::ALL.get(slot.max(0) as usize).copied() else { return };
+    if b.get_cos_busy() { return; }
+    let Some(session) = sh.session.lock().ok().and_then(|s| s.clone()).filter(|s| s.user_type == "msa") else {
+        show_toast(ui, sh, "Sign in with Microsoft to wear Nether cosmetics");
+        return;
+    };
+    let worn = COS_WORN.with(|w| w.borrow()[kind.slot()].clone());
+    let off = id.is_empty() || worn == id;
+    if off && worn.is_empty() { return; }
+    let name = COS_META.with(|v| v.borrow().iter().find(|m| m.id == if off { worn.as_str() } else { id }).map(|m| m.name.clone())).unwrap_or_default();
+    b.set_cos_busy(true);
+    let (weak, sh, id) = (ui.as_weak(), sh.clone(), id.to_string());
+    std::thread::spawn(move || {
+        let r = nether_core::backend::set_cosmetic(&client(), &session, kind, (!off).then_some(id.as_str()));
+        ui_do(&weak, move |ui| {
+            ui.global::<Backend>().set_cos_busy(false);
+            match r {
+                Ok(()) => {
+                    let mut w = COS_WORN.with(|w| w.borrow().clone());
+                    w[kind.slot()] = if off { String::new() } else { id };
+                    set_cos_worn(ui, w);
+                    export(ui, &sh);
+                    show_toast(ui, &sh, &if off { format!("{name} taken off") } else { format!("You're now wearing {name}") });
+                }
+                Err(e) => show_toast(ui, &sh, &format!("Couldn't change your look: {e:#}")),
+            }
+        });
+    });
+}
+
 // ---------------- in-game wardrobe bridge ----------------
 // The game's WARDROBE tab never gets a token: the launcher publishes the account's skin and capes to
 // `<root>/client/wardrobe/` (state.json + PNGs) and applies the requests the game writes there (request.json).
@@ -302,6 +434,20 @@ pub fn export(ui: &AppWindow, sh: &Shared) {
         let f = format!("n_{}.png", c.id);
         if img.save(dir.join(&f)).is_ok() { st["nether"].as_array_mut().unwrap().push(serde_json::json!({ "id": c.id.as_str(), "name": c.name.as_str(), "png": f })); wanted.push(f); }
     }
+    let worn = COS_WORN.with(|w| w.borrow().clone());
+    st["cosmetics"] = serde_json::json!({ "hat": worn[0], "headband": worn[1], "aura": worn[2], "shield": worn[3] });
+    st["items"] = serde_json::json!([]);
+    COS_META.with(|meta| COS_CARDS.with(|cards| {
+        for m in meta.borrow().iter() {
+            let Some((_, img)) = cards.borrow().iter().find(|(id, _)| *id == m.id).cloned() else { continue };
+            if !safe_id(&m.id) { continue; }
+            let f = format!("c_{}.png", m.id);
+            if img.save(dir.join(&f)).is_ok() {
+                st["items"].as_array_mut().unwrap().push(serde_json::json!({ "id": m.id, "name": m.name, "type": m.kind, "rarity": m.rarity, "png": f }));
+                wanted.push(f);
+            }
+        }
+    }));
     let active = account_cape_id(ui);
     st["accountWorn"] = active.into();
     for c in b.get_capes().iter().filter(|c| !c.id.is_empty()) {
@@ -313,7 +459,7 @@ pub fn export(ui: &AppWindow, sh: &Shared) {
     if let Ok(rd) = std::fs::read_dir(&dir) {
         for e in rd.flatten() {
             let n = e.file_name().to_string_lossy().to_string();
-            if (n.starts_with("n_") || n.starts_with("a_")) && n.ends_with(".png") && !wanted.contains(&n) { let _ = std::fs::remove_file(e.path()); }
+            if (n.starts_with("n_") || n.starts_with("a_") || n.starts_with("c_")) && n.ends_with(".png") && !wanted.contains(&n) { let _ = std::fs::remove_file(e.path()); }
         }
     }
     let _ = nether_core::store::write_atomic(&dir.join("state.json"), &serde_json::to_vec_pretty(&st).unwrap_or_default());
@@ -341,6 +487,12 @@ fn apply_request(ui: &AppWindow, sh: &Arc<Shared>, req: &Value) {
         let worn = b.get_ncape_worn().to_string();
         if n.is_empty() { if !worn.is_empty() { wear_ncape(ui, sh, &worn); } } // wearing the worn one takes it off
         else if worn != n && b.get_ncapes().iter().any(|c| c.id == n) { wear_ncape(ui, sh, n); }
+    }
+    if let (Some(slot), Some(id)) = (req["cosmetic"]["slot"].as_str(), req["cosmetic"]["id"].as_str()) {
+        if let Some(k) = Kind::parse(slot) {
+            let worn = COS_WORN.with(|w| w.borrow()[k.slot()].clone());
+            if id != worn { wear_cosmetic(ui, sh, k.slot() as i32, if id.is_empty() { &worn } else { id }); }
+        }
     }
     if let Some(a) = req["account"].as_str() {
         if let Some(i) = b.get_capes().iter().position(|c| c.id == a) { if b.get_cape_idx() != i as i32 { equip(ui, sh, i as i32); } }
@@ -395,8 +547,8 @@ fn tick(ui: &AppWindow, dt: f32) -> bool {
     let spin = b.get_skin_spin() && !b.get_skin_held() && !b.get_calm();
     if spin { YAW.with(|y| *y.borrow_mut() += dt * std::f32::consts::TAU / 14.0); }
     let slim = b.get_skin_slim();
-    // an animated cape keeps the preview drawing (first frame only with reduced motion)
-    let mut anim = false;
+    // an animated cape or cosmetic keeps the preview drawing (first frame only with reduced motion)
+    let mut anim = !b.get_calm() && shown_items().iter().flatten().any(|l| l.animated());
     LOOK.with(|l| {
         let mut l = l.borrow_mut();
         let Some(look) = l.as_mut() else { return };
@@ -411,7 +563,7 @@ fn tick(ui: &AppWindow, dt: f32) -> bool {
         let fh = ((490.0 * (win.width as f32 / 1440.0).min(win.height as f32 / 900.0)).round() as u32).clamp(360, H);
         let dims = (fh * W / H, fh);
         let resized = DIMS.with(|d| d.replace(dims)) != dims;
-        if !spin && !dirty && !resized && look.slim == slim { return; }
+        if !spin && !dirty && !resized && !anim && look.slim == slim { return; }
         look.slim = slim;
         let yaw = YAW.with(|y| *y.borrow());
         b.set_skin_frame(Image::from_rgba8(render_at(look, yaw, dims.0, dims.1)));
@@ -419,62 +571,19 @@ fn tick(ui: &AppWindow, dt: f32) -> bool {
     spin || anim || b.get_skin_held()
 }
 
-// ---------------- renderer ----------------
+// ---------------- renderer (nether_core::preview) ----------------
 
-type V3 = [f32; 3];
-
-struct Quad { p: [V3; 4], uv: [f32; 4], cape: bool, cut: bool }
-
-fn rot_x(p: V3, a: f32) -> V3 { let (s, c) = a.sin_cos(); [p[0], p[1] * c - p[2] * s, p[1] * s + p[2] * c] }
-fn rot_y(p: V3, a: f32) -> V3 { let (s, c) = a.sin_cos(); [p[0] * c + p[2] * s, p[1], -p[0] * s + p[2] * c] }
-fn rot_z(p: V3, a: f32) -> V3 { let (s, c) = a.sin_cos(); [p[0] * c - p[1] * s, p[0] * s + p[1] * c, p[2]] }
-
-/// A textured box: `min`/`size` in model pixels, `uv` = texture offset, `dims` = texture box size.
-#[allow(clippy::too_many_arguments)]
-fn cuboid(out: &mut Vec<Quad>, min: V3, size: V3, grow: f32, uv: (f32, f32), xf: &dyn Fn(V3) -> V3, cape: bool, cut: bool) {
-    let (w, h, d) = (size[0], size[1], size[2]);
-    let (x0, y0, z0) = (min[0] - grow, min[1] - grow, min[2] - grow);
-    let (x1, y1, z1) = (min[0] + w + grow, min[1] + h + grow, min[2] + d + grow);
-    let (u, v) = uv;
-    let faces: [([V3; 4], [f32; 4]); 6] = [
-        ([[x0, y1, z1], [x1, y1, z1], [x1, y0, z1], [x0, y0, z1]], [u + d, v + d, u + d + w, v + d + h]), // front
-        ([[x1, y1, z0], [x0, y1, z0], [x0, y0, z0], [x1, y0, z0]], [u + 2.0 * d + w, v + d, u + 2.0 * d + 2.0 * w, v + d + h]), // back
-        ([[x0, y1, z0], [x0, y1, z1], [x0, y0, z1], [x0, y0, z0]], [u, v + d, u + d, v + d + h]), // right side
-        ([[x1, y1, z1], [x1, y1, z0], [x1, y0, z0], [x1, y0, z1]], [u + d + w, v + d, u + 2.0 * d + w, v + d + h]), // left side
-        ([[x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]], [u + d, v, u + d + w, v + d]), // top
-        ([[x0, y0, z1], [x1, y0, z1], [x1, y0, z0], [x0, y0, z0]], [u + d + w, v, u + d + 2.0 * w, v + d]), // bottom
-    ];
-    for (p, t) in faces {
-        out.push(Quad { p: p.map(xf), uv: t, cape, cut });
-    }
-}
-
-fn model(look: &Look) -> Vec<Quad> {
-    let mut q = Vec::with_capacity(80);
-    let id = |p: V3| p;
-    let aw = if look.slim { 3.0 } else { 4.0 };
-    let arm = |pivot: V3, a: f32| move |p: V3| { let r = rot_z([p[0] - pivot[0], p[1] - pivot[1], p[2] - pivot[2]], a); [r[0] + pivot[0], r[1] + pivot[1], r[2] + pivot[2]] };
-    let ra = arm([-5.0, 22.0, 0.0], -0.06);
-    let la = arm([5.0, 22.0, 0.0], 0.06);
-    // base layer, then the outer layer (slightly inflated, alpha cut-out)
-    // (head, body, right arm, left arm, right leg, left leg) texture offsets per layer
-    let layers = [
-        (false, 0.0, 0.0, [(0.0, 0.0), (16.0, 16.0), (40.0, 16.0), (32.0, 48.0), (0.0, 16.0), (16.0, 48.0)]),
-        (true, 0.5, 0.25, [(32.0, 0.0), (16.0, 32.0), (40.0, 32.0), (48.0, 48.0), (0.0, 32.0), (0.0, 48.0)]),
-    ];
-    for (cut, gh, gb, uv) in layers {
-        cuboid(&mut q, [-4.0, 24.0, -4.0], [8.0, 8.0, 8.0], gh, uv[0], &id, false, cut);
-        cuboid(&mut q, [-4.0, 12.0, -2.0], [8.0, 12.0, 4.0], gb, uv[1], &id, false, cut);
-        cuboid(&mut q, [-4.0 - aw, 12.0, -2.0], [aw, 12.0, 4.0], gb, uv[2], &ra, false, cut);
-        cuboid(&mut q, [4.0, 12.0, -2.0], [aw, 12.0, 4.0], gb, uv[3], &la, false, cut);
-        cuboid(&mut q, [-4.0, 0.0, -2.0], [4.0, 12.0, 4.0], gb, uv[4], &id, false, cut);
-        cuboid(&mut q, [0.0, 0.0, -2.0], [4.0, 12.0, 4.0], gb, uv[5], &id, false, cut);
-    }
-    if look.cape.is_some() {
-        let xf = |p: V3| { let r = rot_x(rot_y(p, std::f32::consts::PI), 0.14); [r[0], r[1] + 24.0, r[2] - 2.9] };
-        cuboid(&mut q, [-5.0, -16.0, -0.5], [10.0, 16.0, 1.0], 0.0, (0.0, 0.0), &xf, true, true);
-    }
-    q
+/// The cosmetics on the preview: the worn ones, with a hovered card replacing its slot.
+fn shown_items() -> [Option<Rc<Loaded>>; 4] {
+    let worn = COS_WORN.with(|w| w.borrow().clone());
+    let hover = COS_HOVER.with(|h| h.borrow().clone());
+    NCOS.with(|v| {
+        let v = v.borrow();
+        std::array::from_fn(|i| {
+            if let Some(h) = hover.as_ref().filter(|h| h.kind.slot() == i) { return Some(h.clone()); }
+            v.iter().find(|l| !worn[i].is_empty() && l.id == worn[i] && l.kind.slot() == i).cloned()
+        })
+    })
 }
 
 /// Render the player at `yaw` (radians) into a W x H transparent buffer.
@@ -483,74 +592,16 @@ pub fn render(look: &Look, yaw: f32) -> SharedPixelBuffer<Rgba8Pixel> { render_a
 /// Same frame at another size (keep the 600:780 ratio); the live preview renders only as many pixels as it shows.
 pub fn render_at(look: &Look, yaw: f32, fw: u32, fh: u32) -> SharedPixelBuffer<Rgba8Pixel> {
     let mut buf = SharedPixelBuffer::<Rgba8Pixel>::new(fw, fh);
-    let (w, h) = (fw as usize, fh as usize);
     // the depth buffer is reused between frames (a fresh 2 MB zeroed Vec per frame at 30 fps is pure churn)
     let mut depth = DEPTH.with(|d| std::mem::take(&mut *d.borrow_mut()));
-    depth.clear();
-    depth.resize(w * h, 0.0);
-    let px = buf.make_mut_slice();
-    let dist = 90.0f32;
-    let k = fh as f32 * 0.86 / 34.0;
-    let (cx, cy) = (fw as f32 / 2.0, fh as f32 / 2.0);
-    let light = { let l = [-0.45f32, 0.6, 0.75]; let n = (l[0] * l[0] + l[1] * l[1] + l[2] * l[2]).sqrt(); [l[0] / n, l[1] / n, l[2] / n] };
-
-    for quad in model(look) {
-        let tex = if quad.cape { match &look.cape { Some(c) => &**c, None => continue } } else { &look.skin };
-        let scale = tex.width() as f32 / 64.0;
-        // camera space: centre the model, spin, tilt slightly down
-        let cam: Vec<V3> = quad.p.iter().map(|&p| rot_x(rot_y([p[0], p[1] - 16.5, p[2]], yaw), 0.12)).collect();
-        // lighting from the face normal (cross product of the edges points inward with our winding)
-        let (e1, e2) = (sub(cam[1], cam[0]), sub(cam[2], cam[1]));
-        let n = cross(e1, e2);
-        let nl = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt().max(1e-6);
-        let nd = -(n[0] * light[0] + n[1] * light[1] + n[2] * light[2]) / nl;
-        let shade = 0.5 + 0.5 * nd.max(0.0);
-        // project
-        let sp: Vec<(f32, f32, f32)> = cam.iter().map(|p| { let iw = 1.0 / (dist - p[2]); (cx + p[0] * dist * iw * k, cy - p[1] * dist * iw * k, iw) }).collect();
-        let [u0, v0, u1, v1] = quad.uv;
-        let uvs = [(u0, v0), (u1, v0), (u1, v1), (u0, v1)];
-        let (umin, umax) = ((u0 * scale).floor() as i32, (u1 * scale).ceil() as i32 - 1);
-        let (vmin, vmax) = ((v0 * scale).floor() as i32, (v1 * scale).ceil() as i32 - 1);
-        for tri in [[0usize, 1, 2], [0, 2, 3]] {
-            let (a, b, c) = (sp[tri[0]], sp[tri[1]], sp[tri[2]]);
-            let area = (b.0 - a.0) * (c.1 - a.1) - (c.0 - a.0) * (b.1 - a.1);
-            if area <= 0.0 { continue; } // facing away
-            let (ta, tb, tc) = (uvs[tri[0]], uvs[tri[1]], uvs[tri[2]]);
-            let x0 = a.0.min(b.0).min(c.0).floor().max(0.0) as usize;
-            let x1 = (a.0.max(b.0).max(c.0).ceil() as usize).min(w - 1);
-            let y0 = a.1.min(b.1).min(c.1).floor().max(0.0) as usize;
-            let y1 = (a.1.max(b.1).max(c.1).ceil() as usize).min(h - 1);
-            for y in y0..=y1 {
-                let fy = y as f32 + 0.5;
-                for x in x0..=x1 {
-                    let fx = x as f32 + 0.5;
-                    let wa = (b.0 - fx) * (c.1 - fy) - (c.0 - fx) * (b.1 - fy);
-                    let wb = (c.0 - fx) * (a.1 - fy) - (a.0 - fx) * (c.1 - fy);
-                    let wc = area - wa - wb;
-                    if wa < 0.0 || wb < 0.0 || wc < 0.0 { continue; }
-                    let (la, lb, lc) = (wa / area, wb / area, wc / area);
-                    let iw = la * a.2 + lb * b.2 + lc * c.2;
-                    let i = y * w + x;
-                    if iw <= depth[i] { continue; }
-                    let u = (la * ta.0 * a.2 + lb * tb.0 * b.2 + lc * tc.0 * c.2) / iw;
-                    let v = (la * ta.1 * a.2 + lb * tb.1 * b.2 + lc * tc.1 * c.2) / iw;
-                    let tx = ((u * scale) as i32).clamp(umin, umax).clamp(0, tex.width() as i32 - 1) as u32;
-                    let ty = ((v * scale) as i32).clamp(vmin, vmax).clamp(0, tex.height() as i32 - 1) as u32;
-                    let t = tex.get_pixel(tx, ty).0;
-                    if quad.cut && t[3] < 128 { continue; }
-                    depth[i] = iw;
-                    px[i] = Rgba8Pixel::new((t[0] as f32 * shade) as u8, (t[1] as f32 * shade) as u8, (t[2] as f32 * shade) as u8, 255);
-                }
-            }
-        }
-    }
+    let shown = shown_items();
+    let items: [Option<&Loaded>; 4] = std::array::from_fn(|i| shown[i].as_deref());
+    let t = START.with(|s| s.elapsed());
+    let plook = nether_core::preview::Look { skin: &look.skin, slim: look.slim, cape: look.cape.as_deref(), items };
+    nether_core::preview::render_into(buf.make_mut_bytes(), fw, fh, &mut depth, &plook, nether_core::preview::View::full(yaw), t.as_secs_f64(), t.as_millis() as u64);
     DEPTH.with(|d| *d.borrow_mut() = depth);
     buf
 }
-
-fn sub(a: V3, b: V3) -> V3 { [a[0] - b[0], a[1] - b[1], a[2] - b[2]] }
-fn cross(a: V3, b: V3) -> V3 { [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]] }
-
 
 /// Turn the model by a mouse drag of `dx` logical pixels.
 pub fn drag(dx: f32) {

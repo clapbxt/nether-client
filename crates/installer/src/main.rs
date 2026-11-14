@@ -60,6 +60,12 @@ fn reg_dword(key: &str, name: &str, value: u32) -> Result<()> { reg(&["add", key
 
 fn installed_dir() -> Option<PathBuf> { reg_get(UNINSTALL_KEY, "InstallLocation").map(PathBuf::from).filter(|d| d.join(APP_EXE).exists()) }
 fn installed_version() -> Option<String> { installed_dir().and(reg_get(UNINSTALL_KEY, "DisplayVersion")) }
+/// `a` is a higher version than `b` ("0.10.0" > "0.9.3"; numeric parts only).
+fn newer(a: &str, b: &str) -> bool {
+    let parts = |v: &str| v.trim().trim_start_matches(['v', 'V']).split(['-', '+', ' ']).next().unwrap_or("").split('.').map(|p| p.parse::<u32>().unwrap_or(0)).collect::<Vec<_>>();
+    let (a, b) = (parts(a), parts(b));
+    (0..a.len().max(b.len())).map(|i| a.get(i).unwrap_or(&0).cmp(b.get(i).unwrap_or(&0))).find(|o| o.is_ne()) == Some(std::cmp::Ordering::Greater)
+}
 fn default_dir() -> PathBuf { PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap_or_default()).join("Programs").join("Nether Client") }
 fn data_dir() -> PathBuf { PathBuf::from(std::env::var_os("APPDATA").unwrap_or_default()).join("NetherClient") }
 
@@ -322,6 +328,8 @@ fn main() -> Result<()> {
         let (pid, relaunch) = (a.pid, a.relaunch);
         let o = Opts { dir: dir.clone(), desktop: false, startmenu: false, autostart: false, fresh: false };
         run_job(&ui, move |p| {
+            // an update only ever moves forward (an old signed setup must not downgrade the launcher)
+            if let Some(cur) = installed_version().filter(|cur| !newer(VERSION, cur)) { bail!("This update ({VERSION}) is not newer than the installed Nether Client {cur}."); }
             if let Some(pid) = pid { wait_for_exit(pid, 60); }
             for _ in 0..50 { if !launcher_running() { break; } std::thread::sleep(std::time::Duration::from_millis(200)); }
             install(&o, p)

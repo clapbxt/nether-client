@@ -1,5 +1,5 @@
 import { Theme } from "theme.slint";
-import { Backend, SkinLib, Cape } from "structs.slint";
+import { Backend, SkinLib, Cape, CosCard } from "structs.slint";
 import { Eyebrow, Heading, Btn, Seg, Chip, IconBtn, Ico, Icon, SpinArea, GroundShadow, Hatch, Ticks, Slash, SectionHead, Field, PlayButton, LinkBtn, Scrim } from "components.slint";
 
 // one cape card (account or Nether): outside face on a hatch plate, name, "In use"
@@ -28,6 +28,104 @@ component CapeCard inherits Rectangle {
     ct := TouchArea { mouse-cursor: pointer; clicked => { if !root.busy { root.clicked(); } } }
 }
 
+// rarity colours (card label and square)
+global Rarity {
+    public pure function col(r: string) -> color {
+        if r == "legendary" { return #F2A33A; }
+        if r == "epic" { return #B27CFF; }
+        if r == "rare" { return #4F9BFF; }
+        if r == "uncommon" { return #5BD47A; }
+        return #AEB4BD;
+    }
+    public pure function label(r: string) -> string {
+        if r == "legendary" { return "Legendary"; }
+        if r == "epic" { return "Epic"; }
+        if r == "rare" { return "Rare"; }
+        if r == "uncommon" { return "Uncommon"; }
+        return "Common";
+    }
+}
+
+// one cosmetic card: the player wearing it, name, rarity, Equipped / Wear
+component CosView inherits Rectangle {
+    in property <CosCard> item;
+    in property <string> kind-label;
+    in property <bool> none;
+    in property <bool> worn;
+    in property <bool> busy;
+    callback clicked();
+    callback hovered(bool);
+    width: 220px; height: 276px;
+    border-radius: 8px;
+    background: ta.has-hover ? Theme.s2 : Theme.s1;
+    opacity: root.busy && !root.worn ? 0.6 : 1;
+    animate background { duration: Theme.fast; }
+    Rectangle {
+        x: 6px; y: 6px; width: parent.width - 12px; height: 196px; background: Theme.bg; border-radius: 6px; clip: true;
+        Hatch { width: parent.width; height: parent.height; }
+        if !root.none: Image {
+            y: ta.has-hover ? 0px : 4px; height: parent.height - 4px; width: parent.width; source: root.item.img; image-fit: contain;
+            animate y { duration: Theme.mid; easing: ease-out; }
+        }
+        if root.none: Rectangle {
+            Rectangle { x: (parent.width - 56px) / 2; y: (parent.height - 56px) / 2; width: 56px; height: 56px; border-radius: 28px; border-width: 1px; border-color: Theme.ln2;
+                Icon { x: 20px; y: 20px; d: Ico.close; tint: Theme.mut; } }
+        }
+        // state pill: equipped / wear / take off
+        if root.worn || ta.has-hover: Rectangle {
+            x: parent.width - self.width - 8px; y: 8px; height: 22px; width: pl.preferred-width + 18px; border-radius: 11px;
+            background: root.worn ? Theme.red : Theme.s3;
+            pl := Text { text: root.worn ? (root.none ? "NOTHING WORN" : "EQUIPPED") : (root.none ? "TAKE OFF" : "WEAR"); color: root.worn ? #ffffff : Theme.tx;
+                font-family: Theme.ui; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 0.6px; horizontal-alignment: center; vertical-alignment: center; }
+        }
+    }
+    Text { x: 14px; y: 210px; width: parent.width - 28px; height: 26px; text: root.none ? "None" : root.item.name; color: Theme.tx; font-family: Theme.disp; font-size: 15px; font-weight: 700; vertical-alignment: center; overflow: elide; }
+    if !root.none: Rectangle {
+        x: 14px; y: 240px; width: parent.width - 28px; height: 20px;
+        Rectangle { x: 0px; y: 6px; width: 8px; height: 8px; border-radius: 2px; background: Rarity.col(root.item.rarity); }
+        rl := Text { x: 14px; height: parent.height; text: Rarity.label(root.item.rarity); color: Rarity.col(root.item.rarity); font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 600; vertical-alignment: center; }
+        Text { x: rl.x + rl.preferred-width + 6px; height: parent.height; text: "·  " + root.kind-label; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; }
+    }
+    if root.none: Text { x: 14px; y: 240px; height: 20px; text: "Take this slot off"; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; }
+    Rectangle { border-radius: 8px; border-width: root.worn ? 2px : 1px; border-color: root.worn ? Theme.red2 : (ta.has-hover ? Theme.ln2 : Theme.ln); }
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { if !root.busy { root.clicked(); } }
+        changed has-hover => { root.hovered(self.has-hover); }
+    }
+}
+
+// a grid of one cosmetic slot: None first, then every card of that type
+component CosGrid inherits Flickable {
+    in property <[CosCard]> items;
+    in property <int> slot;
+    in property <string> title;
+    in property <string> kind-label;
+    property <string> worn: Backend.cos-worn[root.slot];
+    content-height: 36px + Math.ceil((root.items.length + 1) / 4) * 288px + 24px;
+    init => { Backend.load-cos(); }
+    SectionHead { x: 0px; y: 0px; width: 916px; title: root.title; note: root.slot == 3 ? "replaces the shield you hold · seen by every Nether player" : "seen by every Nether player · click again to take off"; }
+    if Backend.cos-state == 2: Rectangle {
+        y: 36px; height: parent.content-height - self.y;
+        CosView {
+            x: 0px; y: 0px; none: true; worn: root.worn == ""; busy: Backend.cos-busy; kind-label: root.kind-label;
+            clicked => { if root.worn != "" { Backend.wear-cos(root.slot, ""); } }
+        }
+        for c[i] in root.items: CosView {
+            x: mod(i + 1, 4) * 232px; y: floor((i + 1) / 4) * 288px;
+            item: c; worn: root.worn == c.id; busy: Backend.cos-busy; kind-label: root.kind-label;
+            clicked => { Backend.wear-cos(root.slot, c.id); }
+            hovered(on) => { Backend.hover-cos(on ? c.id : ""); }
+        }
+    }
+    if Backend.cos-state != 2: Rectangle {
+        y: 36px; width: 916px; height: 110px; background: Theme.s1; border-width: 1px; border-color: Theme.ln2;
+        Hatch { x: 1px; y: 1px; width: parent.width - 2px; height: parent.height - 2px; }
+        Text { x: 28px; width: parent.width - 56px; vertical-alignment: center; color: Theme.dim; font-family: Theme.ui; font-size: 15px * Theme.ts;
+            text: Backend.cos-state == 3 ? "The Nether cosmetics aren't reachable right now. Check your connection and open this page again." : "Loading Nether cosmetics…"; }
+    }
+}
+
 export component WardrobeScreen inherits Rectangle {
     in-out property <int> page: 0;
     // dialogs: tile being renamed / deleted (-1 = closed)
@@ -37,10 +135,27 @@ export component WardrobeScreen inherits Rectangle {
     property <int> sel: SkinLib.sel;
     property <bool> picked: root.page == 0 && root.sel >= 0 && root.sel < SkinLib.skins.length;
     property <bool> signed: Backend.acct-state == 2;
+    // the worn cosmetic of the page shown (preview footer)
+    property <[CosCard]> page-items: root.page == 2 ? Backend.cos-hats : root.page == 3 ? Backend.cos-bands : root.page == 4 ? Backend.cos-auras : Backend.cos-shields;
+    property <string> page-worn: root.page >= 2 ? Backend.cos-worn[root.page - 2] : "";
+    property <string> worn-name: root.page-worn == "" ? "Nothing worn" : root.find-name(root.page-items, root.page-worn);
+    pure function find-name(list: [CosCard], id: string) -> string {
+        // Slint has no lookup: the footer scans the (short) list
+        if list.length > 0 && list[0].id == id { return list[0].name; }
+        if list.length > 1 && list[1].id == id { return list[1].name; }
+        if list.length > 2 && list[2].id == id { return list[2].name; }
+        if list.length > 3 && list[3].id == id { return list[3].name; }
+        if list.length > 4 && list[4].id == id { return list[4].name; }
+        if list.length > 5 && list[5].id == id { return list[5].name; }
+        if list.length > 6 && list[6].id == id { return list[6].name; }
+        if list.length > 7 && list[7].id == id { return list[7].name; }
+        return "Worn";
+    }
     init => { SkinLib.refresh(); }
 
     Heading { x: 56px; y: 28px; text: "WARDROBE"; font-size: 32px; }
-    Seg { x: 1384px - self.width; y: 32px; items: ["SKINS", "CAPES"]; item-w: 110px; current <=> root.page; }
+    Seg { x: 1384px - self.width; y: 32px; items: ["SKINS", "CAPES", "HATS", "HEADBANDS", "AURAS", "SHIELDS"]; item-w: 92px; current <=> root.page;
+        changed(i) => { Backend.hover-cos(""); } }
 
     // preview plate
     Rectangle {
@@ -64,7 +179,7 @@ export component WardrobeScreen inherits Rectangle {
             Rectangle { y: 0px; height: 1px; background: Theme.ln; }
             Seg { x: 14px; y: 14px; items: ["CLASSIC", "SLIM"]; item-w: 84px; current: Backend.skin-slim ? 1 : 0;
                 changed(i) => { Backend.skin-slim = i == 1; if root.picked { SkinLib.set-slim(root.sel, i == 1); } } }
-            if !root.picked: Text { x: 200px; width: parent.width - 214px; horizontal-alignment: right; vertical-alignment: center; text: root.page == 0 ? (root.signed ? "Account skin" : "Default (Steve)") : Backend.capes[Backend.cape-idx].name; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; overflow: elide; }
+            if !root.picked: Text { x: 200px; width: parent.width - 214px; horizontal-alignment: right; vertical-alignment: center; text: root.page == 0 ? (root.signed ? "Account skin" : "Default (Steve)") : root.page == 1 ? Backend.capes[Backend.cape-idx].name : root.worn-name; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; overflow: elide; }
             if root.picked: PlayButton {
                 x: parent.width - 14px - 150px - 4px; y: 13px; width: 150px; height: 36px; text-size: 16px; arrow: false;
                 property <bool> worn: SkinLib.worn-id == SkinLib.skins[root.sel].id;
@@ -173,6 +288,12 @@ export component WardrobeScreen inherits Rectangle {
                 clicked => { SkinLib.delete(root.del-idx); root.del-idx = -1; } }
         }
     }
+
+    // cosmetics: hats, headbands, auras, shields (our directory; seen by Nether players)
+    if root.page == 2: CosGrid { x: 468px; y: 112px; width: 916px; height: parent.height - 112px; items: Backend.cos-hats; slot: 0; title: "HATS"; kind-label: "Hat"; }
+    if root.page == 3: CosGrid { x: 468px; y: 112px; width: 916px; height: parent.height - 112px; items: Backend.cos-bands; slot: 1; title: "HEADBANDS"; kind-label: "Headband"; }
+    if root.page == 4: CosGrid { x: 468px; y: 112px; width: 916px; height: parent.height - 112px; items: Backend.cos-auras; slot: 2; title: "AURAS"; kind-label: "Aura"; }
+    if root.page == 5: CosGrid { x: 468px; y: 112px; width: 916px; height: parent.height - 112px; items: Backend.cos-shields; slot: 3; title: "SHIELDS"; kind-label: "Shield"; }
 
     // capes: account capes (Minecraft) + Nether capes (our directory; seen by Nether players)
     if root.page == 1: Flickable {

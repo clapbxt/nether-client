@@ -25,22 +25,27 @@ your player UUID and nothing else.
 | Nether capes | the Nether cape service (Cloudflare) | Wearing a cape, and checking in at game start so others see your icon |
 | Updates | api.github.com, github.com | Checking for and downloading signed updates |
 | Hosting | api.playit.gg, api.ipify.org, api.mcstatus.io, fill.papermc.io | Only while you use the Host tab |
-| Sharing logs | api.mclo.gs | Only when you press Share or Upload (your user name, home folder and tokens are removed first) |
+| Sharing logs | api.mclo.gs | Only when you confirm Share or press Upload; anyone with the link can read it (your user name, home folder, IP addresses and tokens are removed first) |
 
 ## In game
 
-- **Nether capes.** The client asks the cape service which players in your tab list are Nether players, by
-  UUID only. It asks at most once per player every 10 minutes. You can turn this off with
-  **Settings → Privacy → Nether capes in game**.
-- **Lyrics** (off by default) send the song title, artist, album and length to lrclib.net. Lyrics are cached on your PC.
+- **Nether capes.** To find the Nether players in your tab list, the client sends the cape service only the first
+  4 characters of a hash of each player's UUID. The service answers with every Nether player under those prefixes
+  and the client picks the matches itself, so the service never learns whom you play with. It asks at most once per
+  player every 10 minutes. You can turn this off with **Settings → Privacy → Nether capes in game**.
+- **Lyrics** (off by default) send the song title, artist, album and length to lrclib.net, and the title and artist
+  to music.163.com (NetEase Cloud Music) for word-by-word timing. Lyrics are cached on your PC.
+- **Server status.** The title screen shows the status of the servers saved in your Multiplayer list, so the game
+  pings them (like the Multiplayer screen does) about once a minute while it is open. Turn **Live server status** off in the Main
+  Menu settings to stop it.
 - **The media player** reads your PC's media session through a small local helper. Nothing leaves your PC.
 
 ## What we store
 
-The cape service stores, per player who checked in: your UUID, the Nether cape you chose, and when you were last
-seen. Players unseen for 180 days are deleted automatically. To be removed sooner, open
-[an issue](https://github.com/clapbxt/nether-client/issues) and we'll delete your entry.
+The cape service stores, per player who checked in: your UUID, the Nether cape and cosmetics (hat, headband, aura,
+shield) you chose, and when you were last seen. Players unseen for 180 days are deleted automatically.
 
-Turning it off deletes all of it.
+Turning **Nether capes in game** off deletes your entry right away (if you are signed out or offline, at your next
+sign-in).
 
 Everything else (instances, worlds, settings, screenshots, logs) stays in `%APPDATA%\NetherClient` on your PC.

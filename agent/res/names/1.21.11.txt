@@ -1,3 +1,4 @@
+field_1329	a	Lftm;
 field_1350	i	D
 field_1351	h	D
 field_1352	g	D
@@ -32,10 +33,12 @@ field_1915	bE	Lgfn;
 field_19319	F	Z
 field_2021	ah	Lgjf;
 field_2064	n	Ljava/util/List;
+field_21444	d	I
 field_2259	h	Ljava/util/Map;
 field_24360	a	Lzf;
 field_2586	e	Lgkm;
 field_26665	b	Lges;
+field_26666	c	Lges;
 field_33816	t	Ljava/util/List;
 field_34801	u	Lgwi;
 field_3752	a	Ljava/lang/String;
@@ -44,13 +47,35 @@ field_37868	k	Ljava/lang/Object;
 field_4019	r	F
 field_44666	g	Lyh;
 field_45607	b	Ljava/util/function/Supplier;
+field_4687	f	Ljava/util/Map;
+field_4738	h	Ljava/util/List;
 field_5330	c	Ljava/util/Map;
+field_53325	I	D
+field_53326	J	D
+field_53327	K	D
+field_53333	Q	Z
+field_53446	at	F
+field_53467	aL	Lihm;
+field_53528	D	I
+field_53542	p	Z
+field_55226	S	Lihk;
+field_55305	g	Lihm;
+field_55307	j	Lihm;
+field_55309	ap	Ldlt;
+field_56967	g	Lhqk;
 field_5965	ba	F
 field_6031	aZ	F
+field_6182	a	Lchb;
+field_6183	b	Lchb;
 field_6235	bu	I
+field_63601	h	Ldlt;
+field_63602	k	Ldlt;
+field_8255	xH	Ldlp;
 method_10517	a	()Luu;
+method_10851	b	()Lyi;
 method_10852	b	(Lyh;)Lyw;
 method_10862	b	(Lzf;)Lyw;
+method_11022	b	()Ljava/lang/String;
 method_1422	b	(Lfyc$a;)V
 method_1426	e	()V
 method_1442	a	()Lfyc$b;
@@ -62,22 +87,36 @@ method_1531	af	()Lilr;
 method_1548	ac	()Lgfx;
 method_1555	aF	()Z
 method_1558	X	()Lhit;
+method_1561	ay	()Lhwo;
 method_1562	R	()Lhig;
 method_1576	aa	()Liqa;
 method_1592	u	()V
 method_1676	c	()Ljava/lang/String;
+method_17165	d	()Lgzm;
 method_1743	e	()Lgjf;
 method_17783	d	()Lftk$a;
 method_1812	a	(Lyh;)V
+method_18456	E	()Ljava/util/List;
 method_19418	p	()Lger;
 method_22683	aR	()Lfyk;
+method_22703	a	(Lfzm;)V
+method_22903	a	()V
+method_22909	b	()V
+method_23075	a	(ZLfzm$a;)V
 method_23317	dP	()D
 method_23318	dR	()D
 method_23321	dV	()D
+method_23500	a	(Lamo;)Lijs;
+method_23760	c	()Lfzm$a;
+method_23761	a	()Lorg/joml/Matrix4f;
+method_23767	g	()Lorg/joml/Quaternionf;
+method_23919	a	(FFFIFFIIFFF)V
 method_27693	f	(Ljava/lang/String;)Lyw;
 method_27704	a	(Lym;)Lzf;
 method_27728	bb	()Lfnt;
 method_27983	aq	()Lamt;
+method_2803	a	(Lidf;Lchb;Lfzm;)V
+method_2838	a	()Lhdg;
 method_2871	a	(Ljava/util/UUID;)Lhiq;
 method_2880	o	()Ljava/util/Collection;
 method_29177	a	()Lamo;
@@ -87,6 +126,8 @@ method_2966	a	()Lcom/mojang/authlib/GameProfile;
 method_31043	a	(Lges;)V
 method_31044	aV	()Lges;
 method_31548	gK	()Lddl;
+method_3233	a	(Lchl;Ldlt;Ldlr;Lfzm;Lhpo;I)V
+method_34425	a	(Lorg/joml/Matrix4fc;)V
 method_36139	a	(I)Lzf;
 method_36454	ec	()F
 method_36455	ee	()F
@@ -110,22 +151,29 @@ method_53536	b	()Z
 method_5438	a	(I)Ldlt;
 method_5439	b	()I
 method_5476	R_	()Lyh;
+method_5477	ap	()Lyh;
 method_5578	e	()I
 method_5584	d	()I
 method_5586	j	()Ljava/lang/String;
+method_5591	f	()Z
+method_5628	aA	()I
 method_5667	cY	()Ljava/util/UUID;
 method_6026	eW	()Ljava/util/Collection;
 method_6032	eZ	()F
-method_6063	fq	()F
 method_60655	a	(Ljava/lang/String;Ljava/lang/String;)Lamo;
-method_6067	fX	()F
 method_6118	a	(Lcgv;)Ldlt;
+method_65597	a	(Lihm;Ldlt;Ldlr;Lchl;)V
+method_65605	b	()V
+method_65606	e	()Z
+method_65610	i	()Lihm$b;
+method_67675	d	()Z
 method_7299	a	(Lyw;)Lyw;
 method_7331	o	()V
-method_7344	gW	()Ldhe;
+method_7334	gI	()Lcom/mojang/authlib/GameProfile;
+method_73477	a	(Lijs;)Lfzp;
+method_73483	a	(Lfzm;Lijs;Lhpo$a;)V
 method_74698	a	(Lamo;)Lgfh$a;
-method_7586	a	()I
-method_7589	d	()F
+method_76000	j	(Lamo;)Lijs;
 method_7909	h	()Ldlp;
 method_7919	o	()I
 method_7936	p	()I
@@ -137,10 +185,17 @@ method_8532	al	()J
 method_9249	a	(Lcom/mojang/brigadier/ParseResults;Ljava/lang/String;)V
 net.minecraft.class_1011	fyh	
 net.minecraft.class_1043	ilc	
+net.minecraft.class_10444	ihm	
+net.minecraft.class_11659	hpo	
+net.minecraft.class_11659$class_11660	hpo$a	
 net.minecraft.class_11719$class_11721	ym$c	
 net.minecraft.class_12079$class_10726	iu$b	
+net.minecraft.class_12249	ijt	
 net.minecraft.class_1304	cgv	
+net.minecraft.class_1306	chb	
 net.minecraft.class_1657	ddm	
+net.minecraft.class_1802	dlx	
+net.minecraft.class_1921	ijs	
 net.minecraft.class_2477	uu	
 net.minecraft.class_2561	yh	
 net.minecraft.class_2583	zf	
@@ -149,15 +204,18 @@ net.minecraft.class_304$class_11900	gfh$a
 net.minecraft.class_310	gfj	
 net.minecraft.class_338	gjf	
 net.minecraft.class_3675$class_307	fyc$b	
+net.minecraft.class_3887	ibj	
 net.minecraft.class_408	gqy	
 net.minecraft.class_412	grb	
 net.minecraft.class_429	gwb	
 net.minecraft.class_433	grx	
 net.minecraft.class_442	gsd	
+net.minecraft.class_4608	ilg	
 net.minecraft.class_500	gvp	
 net.minecraft.class_526	gyf	
 net.minecraft.class_5498	ges	
 net.minecraft.class_639	hjw	
 net.minecraft.class_642	hit	
 net.minecraft.class_6599	gwj	
+net.minecraft.class_759	hof	
 net.minecraft.class_922	hxs	

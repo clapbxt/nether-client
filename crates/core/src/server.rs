@@ -450,7 +450,7 @@ fn java_exe(p: PathBuf) -> PathBuf {
 /// `server.properties` exist for the user to review.
 /// A file name from a web API that is safe to join onto a folder: no separators, drive or `..`, ends in .jar.
 fn safe_jar_name(n: &str) -> Result<()> {
-    if n.is_empty() || n.len() > 128 || n.contains(['/', '\\', ':']) || n.contains("..") || !n.ends_with(".jar") { bail!("unexpected server file name {n:?}"); }
+    if n.len() > 128 || !crate::download::safe_file_name(n) || !n.ends_with(".jar") { bail!("unexpected server file name {n:?}"); }
     Ok(())
 }
 

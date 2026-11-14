@@ -24,7 +24,7 @@ import java.util.function.Supplier;
  * Player.decorateDisplayNameComponent (1.8.9: getDisplayName) is hooked (Agent) to prefix the icon glyph (U+E000: font
  * nether:icon, 1.8.9: unicode page e0; both from the launcher's built-in pack), and chat lines sent by a Nether player
  * get it in front (Agent hooks the chat HUD's add-message methods). The badge is always shown. Who: -Dnether.capeApi
- * (GET /v1/players?u= -> {uuid: cape id or ""} for every Nether player), textures from
+ * (GET /v1/players?p= hash prefixes -> {sha256: cape id or ""}, matched here), textures from
  * -Dnether.capeContent (/capes/(id).png), fetched off the render thread. -Dnether.capeDev=(id) puts that cape on
  * every player (testing without the API). Cape PNGs (same rule as core backend.rs / content sign.mjs): frames of 64:32
  * (cape + elytra) or 22:17 (cape only: drawn into the 64:32 layout over the game's own elytra texture), any whole scale
@@ -32,7 +32,7 @@ import java.util.function.Supplier;
  * supplier (1.8.9: the cape location, every frame) picks the current one.
  */
 final class Capes {
-    private static final String API = trim(System.getProperty("nether.capeApi")), CONTENT = trim(System.getProperty("nether.capeContent"));
+    static final String API = trim(System.getProperty("nether.capeApi")), CONTENT = trim(System.getProperty("nether.capeContent"));
     private static final String DEV = System.getProperty("nether.capeDev");
     private static final long REQUERY_MS = 10 * 60_000L;
 
@@ -200,7 +200,7 @@ final class Capes {
                 if (legacy) Game.call(Game.call(Game.fld(mc, Game.l("q", "field_71456_v")), Game.l("d", "func_146158_b")), Game.l("a", "func_146227_a"), Game.call(me, Game.l("f_", "func_145748_c_")));
                 else Game.call(Game.call(Game.fld(mc, "field_1705"), "method_1743"), "method_1812", Game.call(me, "method_5476"));
             }
-            if (!viewed && "1".equals(System.getProperty("nether.capeView"))) {
+            if (!viewed && ("1".equals(System.getProperty("nether.capeView")) || "2".equals(System.getProperty("nether.capeView")))) {
                 viewed = true;
                 if (legacy) {
                     Game.call(me, Game.l("cb", "func_71004_bE")); // respawn if the test world left you dead
@@ -210,7 +210,7 @@ final class Capes {
                 } else {
                     Game.call(me, "method_7331"); // respawn if the test world left you dead
                     Game.call(mc, "method_1507", (Object) null);
-                    Object back = Game.field(Game.cls("net.minecraft.class_5498"), "field_26665").get(null);
+                    Object back = Game.field(Game.cls("net.minecraft.class_5498"), "2".equals(System.getProperty("nether.capeView")) ? "field_26666" : "field_26665").get(null); // dev: 2 = front view
                     Game.call(Game.fld(mc, "field_1690"), "method_31043", back);
                 }
             }
@@ -226,7 +226,22 @@ final class Capes {
         return id instanceof UUID ? id.toString().replace("-", "") : null;
     }
 
-    /** Ask the API about newly seen players (one request per batch of up to 100). */
+    /** sha256 hex of "nether-player:" + uuid: the lookup key (same rule in core backend.rs and the Worker). */
+    static String hash(String uuid) {
+        try {
+            byte[] d = java.security.MessageDigest.getInstance("SHA-256").digest(("nether-player:" + uuid).getBytes(StandardCharsets.UTF_8));
+            StringBuilder b = new StringBuilder(64);
+            for (byte x : d) b.append(Character.forDigit((x >> 4) & 15, 16)).append(Character.forDigit(x & 15, 16));
+            return b.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /**
+     * Ask the API about newly seen players (one request per batch of up to 100), by 4-hex-digit hash prefix only: the
+     * API answers every Nether player under those prefixes and the match happens here, so it never learns whom we see.
+     */
     private static void flush() {
         final List<String> batch;
         synchronized (queue) {
@@ -242,11 +257,20 @@ final class Capes {
         }
         worker(() -> {
             try {
-                String body = new String(get(API + "/v1/players?u=" + String.join(",", batch), MAX_API), StandardCharsets.UTF_8);
+                Map<String, String> h = new HashMap<>();
+                java.util.TreeSet<String> pre = new java.util.TreeSet<>();
+                for (String u : batch) { String x = hash(u); h.put(u, x); pre.add(x.substring(0, 4)); }
+                // v=2: {hash: {c: cape, h: hat, b: headband, a: aura, s: shield}}; an older service answers {hash: cape}
+                String body = new String(get(API + "/v1/players?v=2&p=" + String.join(",", pre), MAX_API), StandardCharsets.UTF_8);
                 Object m = Json.parse(body);
                 for (String u : batch) {
-                    Object v = m instanceof Map ? ((Map<?, ?>) m).get(u) : null;
-                    if (v instanceof String) worn.put(u, (String) v); else worn.remove(u);
+                    Object v = m instanceof Map ? ((Map<?, ?>) m).get(h.get(u)) : null;
+                    if (v instanceof Map) {
+                        Map<?, ?> o = (Map<?, ?>) v;
+                        worn.put(u, o.get("c") instanceof String ? (String) o.get("c") : "");
+                        Cosmetics.setLook(u, o.get("h"), o.get("b"), o.get("a"), o.get("s"));
+                    } else if (v instanceof String) { worn.put(u, (String) v); Cosmetics.setLook(u, null, null, null, null); }
+                    else { worn.remove(u); Cosmetics.setLook(u, null, null, null, null); }
                 }
                 synchronized (queue) { failures = 0; }
             } catch (Throwable t) {
@@ -326,7 +350,7 @@ final class Capes {
     }
 
     /** ResourceLocation/Identifier (namespace, path): the 1.21+ factory, else the constructor. */
-    private static Object loc(String ns, String path) throws Exception {
+    static Object loc(String ns, String path) throws Exception {
         Class<?> c;
         try { c = Game.cls("net.minecraft.class_2960"); }
         catch (ClassNotFoundException e) { c = Class.forName("net.minecraft.resources.ResourceLocation", true, Game.loader()); } // Mojang names before 1.21.11
@@ -339,7 +363,7 @@ final class Capes {
 
     private static final Map<String, Constructor<?>> ctors = new HashMap<>();
     /** Constructor with n parameters; `prim2` = its second parameter is primitive (picks between overloads). */
-    private static Constructor<?> ctor(Class<?> c, int n, boolean prim2) {
+    static Constructor<?> ctor(Class<?> c, int n, boolean prim2) {
         String key = c.getName() + "/" + n;
         Constructor<?> k = ctors.get(key);
         if (k != null) return k;
@@ -544,14 +568,19 @@ final class Capes {
         }
     }
 
-    private static void worker(Runnable r) {
+    static void worker(Runnable r) {
         Thread t = new Thread(r, "nether-capes");
         t.setDaemon(true);
         t.start();
     }
 
     /** GET with a size cap; the connection is always released. */
-    private static byte[] get(String url, int max) throws Exception {
+    static byte[] get(String url, int max) throws Exception {
+        if (url.startsWith("file:")) { // dev: content from a local folder (hashes are still checked by the caller)
+            byte[] b = java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(new java.net.URI(url)));
+            if (b.length > max) throw new IllegalStateException("too large");
+            return b;
+        }
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         try {
             c.setConnectTimeout(8000);

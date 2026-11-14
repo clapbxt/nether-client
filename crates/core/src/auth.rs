@@ -456,11 +456,19 @@ pub fn is_real_login(s: &Session) -> bool {
     s.user_type == "msa" && !s.uuid.is_empty() && !s.name.is_empty() && s.access_token.len() > 1
 }
 
-/// Pure decision behind `launch_gate`.
-pub fn decide_gate(session: Option<&Session>, dev_offline_env: bool, dev_build: bool, owner: Option<&OwnerRecord>) -> LaunchGate {
+/// Offline play needs an online ownership check of the same account within this many seconds.
+pub const OFFLINE_GRACE: u64 = 30 * 86400;
+
+/// Pure decision behind `launch_gate`. Offline play: the cached session must be the account that was verified
+/// online as an owner, within `OFFLINE_GRACE` of `now`, and still have its sign-in in the credential store.
+pub fn decide_gate(session: Option<&Session>, dev_offline_env: bool, dev_build: bool, owner: Option<&OwnerRecord>, now: u64, has_refresh: bool) -> LaunchGate {
     if session.map(is_real_login).unwrap_or(false) { return LaunchGate::Allowed; }
     if dev_offline_env && dev_build { return LaunchGate::AllowedDevOffline; }
-    if owner.map(|o| o.owns_game).unwrap_or(false) { return LaunchGate::AllowedOfflineOwner; }
+    let same = |o: &OwnerRecord| session.is_some_and(|s| !s.uuid.is_empty() && s.uuid.replace('-', "").eq_ignore_ascii_case(&o.uuid.replace('-', "")));
+    if let Some(o) = owner.filter(|o| o.owns_game && same(o) && has_refresh) {
+        if now.saturating_sub(o.verified) <= OFFLINE_GRACE { return LaunchGate::AllowedOfflineOwner; }
+        return LaunchGate::Denied("Connect to the internet once so Microsoft can confirm you still own Minecraft (offline play works for 30 days after that).".into());
+    }
     LaunchGate::Denied("Sign in with the Microsoft account that owns Minecraft: Java Edition to play.".into())
 }
 
@@ -468,7 +476,8 @@ pub fn decide_gate(session: Option<&Session>, dev_offline_env: bool, dev_build: 
 /// `NETHER_DEV_OFFLINE` only counts in builds with the `dev` cargo feature (never shipped).
 pub fn launch_gate(paths: &Paths, session: Option<&Session>) -> LaunchGate {
     let dev = std::env::var_os("NETHER_DEV_OFFLINE").is_some();
-    decide_gate(session, dev, cfg!(feature = "dev"), cached_ownership(paths).as_ref())
+    let has_refresh = session.is_some_and(|s| secret_get(&format!("refresh:{}", s.uuid)).is_some());
+    decide_gate(session, dev, cfg!(feature = "dev"), cached_ownership(paths).as_ref(), now_secs(), has_refresh)
 }
 
 #[cfg(test)]
@@ -476,31 +485,37 @@ mod gate_tests {
     use super::*;
 
     fn real() -> Session { Session { name: "Steve".into(), uuid: "8667ba71b85a4004af54457a9734eed7".into(), access_token: "eyJ.tok".into(), user_type: "msa".into() } }
-    fn owner(owns: bool) -> OwnerRecord { OwnerRecord { owns_game: owns, name: "Steve".into(), uuid: "x".into(), verified: 1 } }
+    fn owner(owns: bool) -> OwnerRecord { OwnerRecord { owns_game: owns, name: "Steve".into(), uuid: "8667ba71b85a4004af54457a9734eed7".into(), verified: 1000 } }
+    fn cached() -> Session { Session { access_token: "0".into(), ..real() } }
 
     #[test]
     fn real_login_always_allowed() {
-        assert_eq!(decide_gate(Some(&real()), false, false, None), LaunchGate::Allowed);
+        assert_eq!(decide_gate(Some(&real()), false, false, None, 1000, false), LaunchGate::Allowed);
     }
 
     #[test]
     fn offline_session_is_not_a_login() {
         let off = Session::offline("Steve");
         assert!(!is_real_login(&off));
-        assert!(!decide_gate(Some(&off), false, false, None).allowed());
-        assert!(!decide_gate(None, false, true, None).allowed());
+        assert!(!decide_gate(Some(&off), false, false, None, 1000, true).allowed());
+        assert!(!decide_gate(None, false, true, None, 1000, true).allowed());
     }
 
     #[test]
     fn dev_switch_needs_dev_build() {
-        assert_eq!(decide_gate(None, true, true, None), LaunchGate::AllowedDevOffline);
-        assert!(!decide_gate(None, true, false, None).allowed());
+        assert_eq!(decide_gate(None, true, true, None, 1000, false), LaunchGate::AllowedDevOffline);
+        assert!(!decide_gate(None, true, false, None, 1000, false).allowed());
     }
 
     #[test]
     fn known_owner_may_play_offline() {
-        assert_eq!(decide_gate(None, false, false, Some(&owner(true))), LaunchGate::AllowedOfflineOwner);
-        assert!(!decide_gate(None, false, false, Some(&owner(false))).allowed());
+        assert_eq!(decide_gate(Some(&cached()), false, false, Some(&owner(true)), 1000 + OFFLINE_GRACE, true), LaunchGate::AllowedOfflineOwner);
+        assert!(!decide_gate(Some(&cached()), false, false, Some(&owner(false)), 1000, true).allowed());
+        assert!(!decide_gate(None, false, false, Some(&owner(true)), 1000, true).allowed(), "needs the cached account");
+        assert!(!decide_gate(Some(&cached()), false, false, Some(&owner(true)), 1000, false).allowed(), "needs its stored sign-in");
+        assert!(!decide_gate(Some(&cached()), false, false, Some(&owner(true)), 1001 + OFFLINE_GRACE, true).allowed(), "verified too long ago");
+        let other = Session { uuid: "0000ba71b85a4004af54457a9734eed7".into(), ..cached() };
+        assert!(!decide_gate(Some(&other), false, false, Some(&owner(true)), 1000, true).allowed(), "another account");
     }
 
     #[test]
@@ -514,7 +529,7 @@ mod gate_tests {
         assert!(r.owns_game && r.name == "Steve");
         let text = std::fs::read_to_string(p.root.join(ACCOUNT_FILE)).unwrap();
         assert!(!text.contains("token"));
-        assert!(launch_gate(&p, None).allowed());
+        assert!(!launch_gate(&p, None).allowed() || cfg!(feature = "dev"), "a record alone is not enough");
         clear_ownership(&p);
         assert!(cached_ownership(&p).is_none());
         let _ = std::fs::remove_dir_all(&p.root);

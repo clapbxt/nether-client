@@ -66,6 +66,11 @@ impl Loader {
 /// File in an instance folder that pins the Fabric/Quilt loader version (written by modpack import; absent = newest).
 pub const LOADER_PIN: &str = "nether-loader.txt";
 
+/// A loader version as loader metas write them ("0.16.9", "0.26.4-beta.5"); it ends up in meta URLs, so nothing else.
+pub fn valid_loader_version(v: &str) -> bool {
+    (1..=48).contains(&v.len()) && v.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'+' | b'_')) && !v.contains("..")
+}
+
 pub struct LaunchOpts {
     pub loader: Loader,
     pub version: String,
@@ -297,7 +302,7 @@ fn resolve(c: &reqwest::blocking::Client, paths: &Paths, loader: Loader, version
         Loader::Fabric | Loader::Quilt | Loader::LegacyFabric => {
             let flavor = loader.flavor().unwrap();
             progress(&format!("Preparing {}", flavor.name()), 0.01);
-            let pin = fs::read_to_string(game_dir.join(LOADER_PIN)).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+            let pin = fs::read_to_string(game_dir.join(LOADER_PIN)).ok().map(|s| s.trim().to_string()).filter(|s| valid_loader_version(s));
             (crate::fabric::apply_flavor(c, flavor, v, version, pin.as_deref())?.0, None)
         }
         Loader::Forge | Loader::NeoForge => {
@@ -417,6 +422,7 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
         // the agent only accepts cape PNGs whose sha256 is in the signed manifest (none verified = no capes)
         if !content.is_empty() {
             if let Some(f) = crate::backend::cape_sums_file(&c) { jvm.insert(0, format!("-Dnether.capeSums={}", f.display())); }
+            if let Some(f) = crate::backend::cosmetic_sums_file(&c) { jvm.insert(0, format!("-Dnether.cosSums={}", f.display())); }
         }
         // check in as a Nether player so others see the nametag icon (background, best effort; the API never gets the
         // Minecraft token, see backend::hello)
@@ -427,7 +433,8 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
         if let Some(i) = &opts.client_config { jvm.insert(0, format!("-Dnether.instanceConfig={}", i.display())); }
         jvm.insert(0, format!("-javaagent:{}", a.display()));
     }
-    if let Ok(s) = std::env::var("NETHER_SNAPSHOT") { jvm.insert(0, format!("-Dnether.snapshot={s}")); }
+    // dev only: the agent writes a frame to this path
+    if cfg!(feature = "dev") { if let Ok(s) = std::env::var("NETHER_SNAPSHOT") { jvm.insert(0, format!("-Dnether.snapshot={s}")); } }
 
     let log_dir = opts.game_dir.join("logs");
     fs::create_dir_all(&log_dir)?;

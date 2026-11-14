@@ -89,6 +89,7 @@ public final class Overlay {
             Th.tick();
             Keybind.tick();
             Capes.tick();
+            Cosmetics.tick();
             try { Game.devTick(); Game.devInput(); } catch (Throwable t) { System.out.println("[nether-agent] dev hooks: " + t); } // a bad dev property never kills the overlay
             if (Plat.cur.closing(window)) { Modules.shutdown(); Gfx.freeTextures(); } // game is quitting: it saves options right after this frame
 

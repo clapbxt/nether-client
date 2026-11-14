@@ -25,7 +25,7 @@ fn main() -> anyhow::Result<()> {
         }
     });
     let loader = args.get(4).map(|s| Loader::from_label(s)).unwrap_or(Loader::Vanilla);
-    let mut child = launch(&paths, &LaunchOpts { loader, version, game_dir: game_dir.clone(), session: Session::offline(&player), ram_mb: 2048, java_major: None, client_config: None, client: std::env::var("NETHER_NO_AGENT").is_err(), groups: None, extra_jvm: vec![], window: None, fullscreen: false, quick_play: std::env::var("NC_TEST_WORLD").ok().map(nether_core::launch::QuickPlay::World), cancel: None }, progress)?;
+    let mut child = launch(&paths, &LaunchOpts { loader, version, game_dir: game_dir.clone(), session: Session::offline(&player), ram_mb: 2048, java_major: None, client_config: None, client: std::env::var("NETHER_NO_AGENT").is_err(), groups: None, extra_jvm: vec![], window: std::env::var("NC_TEST_SIZE").ok().and_then(|s| { let (w, h) = s.split_once('x')?; Some((w.parse().ok()?, h.parse().ok()?)) }), fullscreen: false, quick_play: std::env::var("NC_TEST_WORLD").ok().map(nether_core::launch::QuickPlay::World), cancel: None }, progress)?;
 
     let end = Instant::now() + Duration::from_secs(secs);
     let mut exited = None;

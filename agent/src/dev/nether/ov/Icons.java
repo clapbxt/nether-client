@@ -76,9 +76,30 @@ final class Icons {
 
     private static BufferedImage image(String path) { return Res.image(path); }
 
-    /** PNG decode in memory (ImageIO.read(InputStream) would spool through a temp file in java.io.tmpdir). */
-    static BufferedImage decode(InputStream in) throws java.io.IOException {
-        return ImageIO.read(new javax.imageio.stream.MemoryCacheImageInputStream(in)); // ImageIO closes it (a second close would throw)
+    /** Largest picture {@link #decode(InputStream)} accepts: 16 Mpx (64 MB as ARGB). */
+    static final long MAX_PX = 16L << 20;
+
+    /** Image decode in memory (ImageIO.read(InputStream) would spool through a temp file in java.io.tmpdir); null if unreadable or over {@link #MAX_PX}. */
+    static BufferedImage decode(InputStream in) throws java.io.IOException { return decode(in, MAX_PX); }
+
+    /**
+     * Decode, but read the size from the header first: a small file that claims a huge picture (a decompression bomb
+     * from a server favicon, a resource pack, album art) is refused (null) before anything is allocated.
+     */
+    static BufferedImage decode(InputStream in, long maxPx) throws java.io.IOException {
+        try (javax.imageio.stream.ImageInputStream iis = new javax.imageio.stream.MemoryCacheImageInputStream(in)) {
+            java.util.Iterator<javax.imageio.ImageReader> it = ImageIO.getImageReaders(iis);
+            if (!it.hasNext()) return null;
+            javax.imageio.ImageReader r = it.next();
+            try {
+                r.setInput(iis, true, true);
+                long w = r.getWidth(0), h = r.getHeight(0);
+                if (w <= 0 || h <= 0 || w * h > maxPx) return null;
+                return r.read(0);
+            } finally {
+                r.dispose();
+            }
+        }
     }
 
     /** size*size square at (x, y), resampled to at most MAX pixels a side. */

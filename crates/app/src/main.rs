@@ -26,6 +26,7 @@ mod deeplink;
 mod wardrobe;
 mod packs;
 mod wizard;
+mod combine;
 mod instpage;
 mod settings;
 // L1: pre-launch check, safe updates / history
@@ -817,6 +818,15 @@ fn main() -> Result<(), slint::PlatformError> {
             if let Some(i) = found { start_launch(weak.clone(), sh.clone(), i.name.to_string(), i.ver.to_string(), i.ram, i.loader.to_string(), JAVAS[i.java.clamp(0, 4) as usize], i.shared, None, true); }
         });
     }
+    // ---- combine resource packs ----
+    {
+        let (weak, sh) = (ui.as_weak(), shared.clone());
+        ui.global::<Combiner>().on_start(move |i| if let Some(ui) = weak.upgrade() { combine::start(&ui, &sh, i) });
+        let weak = ui.as_weak();
+        ui.global::<Combiner>().on_pick(move |c, v| if let Some(ui) = weak.upgrade() { combine::pick(&ui, c, v) });
+        let (weak, sh) = (ui.as_weak(), shared.clone());
+        ui.global::<Combiner>().on_create(move || if let Some(ui) = weak.upgrade() { combine::create(&ui, &sh) });
+    }
     // ---- new-instance wizard ----
     {
         wizard::init(&ui, &shared);
@@ -900,6 +910,11 @@ fn main() -> Result<(), slint::PlatformError> {
         backend.on_load_ncapes(move || if let Some(ui) = weak.upgrade() { skin::load_ncapes(&ui, &sh) });
         let (weak, sh) = (ui.as_weak(), shared.clone());
         backend.on_wear_ncape(move |id| if let Some(ui) = weak.upgrade() { skin::wear_ncape(&ui, &sh, &id) });
+        let (weak, sh) = (ui.as_weak(), shared.clone());
+        backend.on_load_cos(move || if let Some(ui) = weak.upgrade() { skin::load_cosmetics(&ui, &sh) });
+        let (weak, sh) = (ui.as_weak(), shared.clone());
+        backend.on_wear_cos(move |slot, id| if let Some(ui) = weak.upgrade() { skin::wear_cosmetic(&ui, &sh, slot, &id) });
+        backend.on_hover_cos(|id| skin::hover_cosmetic(&id));
     }
 
     // ---- instances: versions for the create dialog, create/duplicate/delete/export, settings ----
@@ -1423,6 +1438,8 @@ fn main() -> Result<(), slint::PlatformError> {
         let gate: i32 = args.get(i + 6).and_then(|t| t.parse().ok()).unwrap_or(0);
         let det: i32 = args.get(i + 7).and_then(|t| t.parse().ok()).unwrap_or(-1);
         ui.global::<Backend>().set_gate_open(gate == 1);
+        // NC_SNAP_WPAGE=n: Wardrobe page (0 skins, 1 capes, 2 hats, 3 headbands, 4 auras, 5 shields)
+        if let Some(n) = std::env::var("NC_SNAP_WPAGE").ok().and_then(|n| n.parse::<i32>().ok()) { ui.set_ward_page(n); }
         // NC_SNAP_STATE: dev-only page states for captures (see host::snap, wardrobe::snap)
         if let Ok(st) = std::env::var("NC_SNAP_STATE") {
             host::snap(&ui, &st);

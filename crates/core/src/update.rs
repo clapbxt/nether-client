@@ -1,16 +1,20 @@
 //! Launcher auto-update: the newest release in the public releases repo, its setup downloaded (sha256 from GitHub) and
-//! checked against the Ed25519 release key embedded here (`tools/release-sign.mjs`). Only a verified setup is returned.
+//! checked against the Ed25519 release keys embedded here (`tools/release-sign.mjs`). The signature (`.vsig`) covers
+//! the version and the setup's sha256, so an older setup can never pass for a newer release. Only a verified setup is
+//! returned, and it is checked again right before it runs (`check`).
 use std::path::PathBuf;
 
 use anyhow::{anyhow, bail, Context, Result};
 use reqwest::blocking::Client;
+use sha2::{Digest, Sha256};
 
 use crate::download::{fetch, Check};
 use crate::paths::Paths;
 
 /// The public source repo; its GitHub releases carry the signed setups.
 pub const RELEASES_REPO: &str = "clapbxt/nether-client";
-const RELEASE_KEY_HEX: &str = include_str!("../res/release-ed25519.pub");
+/// One hex Ed25519 public key per line (main + offline backup); a signature from any of them is accepted.
+const RELEASE_KEYS: &str = include_str!("../res/release-ed25519.pub");
 
 #[derive(Clone, Debug)]
 pub struct Release {
@@ -19,7 +23,15 @@ pub struct Release {
     pub page: String,
     setup_url: String,
     setup_sha256: Option<String>,
-    sig_url: String,
+    vsig_url: String,
+}
+
+/// A downloaded, verified setup waiting to be run.
+#[derive(Clone, Debug)]
+pub struct Ready {
+    pub path: PathBuf,
+    version: String,
+    sig: String,
 }
 
 /// Numeric parts of a version tag ("v0.2.0-beta" -> [0, 2, 0]).
@@ -43,39 +55,51 @@ pub fn latest(c: &Client, current: &str) -> Result<Option<Release>> {
     let page = v["html_url"].as_str().unwrap_or_default().to_string();
     let assets = v["assets"].as_array().cloned().unwrap_or_default();
     let find = |suffix: &str| assets.iter().find(|a| a["name"].as_str().is_some_and(|n| n.starts_with("NetherClientSetup") && n.ends_with(suffix))).cloned();
-    let (Some(setup), Some(sig)) = (find(".exe"), find(".exe.sig")) else { bail!("release {version} has no signed setup") };
+    if !version.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-') { bail!("unexpected release tag {tag}"); }
+    let (Some(setup), Some(vsig)) = (find(".exe"), find(".exe.vsig")) else { bail!("release {version} has no version-signed setup") };
     let url = |a: &serde_json::Value| a["browser_download_url"].as_str().unwrap_or_default().to_string();
-    let (setup_url, sig_url) = (url(&setup), url(&sig));
+    let (setup_url, vsig_url) = (url(&setup), url(&vsig));
     let ok = |u: &str| u.starts_with(&format!("https://github.com/{RELEASES_REPO}/releases/download/"));
-    if !ok(&setup_url) || !ok(&sig_url) || !page.starts_with("https://github.com/") { bail!("unexpected release download address"); }
+    if !ok(&setup_url) || !ok(&vsig_url) || !page.starts_with("https://github.com/") { bail!("unexpected release download address"); }
     let setup_sha256 = setup["digest"].as_str().and_then(|d| d.strip_prefix("sha256:")).filter(|h| h.len() == 64).map(str::to_string);
-    Ok(Some(Release { version, page, setup_url, setup_sha256, sig_url }))
+    Ok(Some(Release { version, page, setup_url, setup_sha256, vsig_url }))
+}
+
+/// What a release signature covers: the version and the setup's sha256 (hex).
+fn signed_message(version: &str, sha256_hex: &str) -> String { format!("nether-update\n{version}\n{sha256_hex}\n") }
+
+fn keys() -> impl Iterator<Item = &'static str> {
+    RELEASE_KEYS.lines().map(str::trim).filter(|l| l.len() == 64 && l.bytes().all(|b| b.is_ascii_hexdigit()))
 }
 
 fn verify(key_hex: &str, data: &[u8], sig_hex: &str) -> Result<()> {
-    let hex = |s: &str| -> Result<Vec<u8>> {
-        let s = s.trim();
-        if s.len() % 2 != 0 { bail!("bad hex"); }
-        (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).map_err(|_| anyhow!("bad hex"))).collect()
-    };
-    let (key, sig) = (hex(key_hex)?, hex(sig_hex)?);
+    let key = hex::decode(key_hex.trim()).map_err(|_| anyhow!("bad key"))?;
+    let sig = hex::decode(sig_hex.trim()).map_err(|_| anyhow!("bad signature"))?;
     ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, key).verify(data, &sig).map_err(|_| anyhow!("the update's signature doesn't match: not installing it"))
 }
 
-/// Download the release's setup into `<data>/updates/` and verify it. Returns the verified setup path.
-pub fn download(c: &Client, paths: &Paths, rel: &Release) -> Result<PathBuf> {
+/// The setup at `r.path` still is the signed one for `r.version` (call right before running it).
+pub fn check(r: &Ready) -> Result<()> {
+    let data = std::fs::read(&r.path)?;
+    let msg = signed_message(&r.version, &hex::encode(Sha256::digest(&data)));
+    if keys().any(|k| verify(k, msg.as_bytes(), &r.sig).is_ok()) { Ok(()) } else { bail!("the update's signature doesn't match: not installing it") }
+}
+
+/// Download the release's setup into `<data>/updates/` and verify it.
+pub fn download(c: &Client, paths: &Paths, rel: &Release) -> Result<Ready> {
     let dir = paths.updates();
     std::fs::create_dir_all(&dir)?;
     // old downloads are useless once a newer one is here
     if let Ok(rd) = std::fs::read_dir(&dir) { for e in rd.flatten() { if !e.file_name().to_string_lossy().contains(&rel.version) { let _ = std::fs::remove_file(e.path()); } } }
     let dest = dir.join(format!("NetherClientSetup-{}.exe", rel.version.replace(|ch: char| !ch.is_ascii_alphanumeric() && ch != '.' && ch != '-', "")));
-    let check = rel.setup_sha256.as_deref().map(Check::Sha256).unwrap_or(Check::None);
-    fetch(c, &rel.setup_url, &dest, check).context("couldn't download the update")?;
-    let sig = c.get(&rel.sig_url).send()?.error_for_status()?.text()?;
+    let hash = rel.setup_sha256.as_deref().map(Check::Sha256).unwrap_or(Check::None);
+    fetch(c, &rel.setup_url, &dest, hash).context("couldn't download the update")?;
+    let mut sig = String::new();
+    { use std::io::Read; c.get(&rel.vsig_url).send()?.error_for_status()?.take(513).read_to_string(&mut sig)?; }
     if sig.len() > 512 { bail!("bad update signature file"); }
-    let data = std::fs::read(&dest)?;
-    if let Err(e) = verify(RELEASE_KEY_HEX, &data, &sig) { let _ = std::fs::remove_file(&dest); return Err(e); }
-    Ok(dest)
+    let ready = Ready { path: dest, version: rel.version.clone(), sig: sig.trim().to_string() };
+    if let Err(e) = check(&ready) { let _ = std::fs::remove_file(&ready.path); return Err(e); }
+    Ok(ready)
 }
 
 #[cfg(test)]
@@ -93,8 +117,8 @@ mod tests {
         std::env::set_var("NETHER_HOME", &tmp);
         let c = crate::download::client();
         let rel = latest(&c, &from).unwrap().expect("a newer release");
-        let path = download(&c, &Paths::new(), &rel).unwrap();
-        println!("{from} -> {} verified: {} ({} bytes)", rel.version, path.display(), std::fs::metadata(&path).unwrap().len());
+        let r = download(&c, &Paths::new(), &rel).unwrap();
+        println!("{from} -> {} verified: {} ({} bytes)", rel.version, r.path.display(), std::fs::metadata(&r.path).unwrap().len());
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
@@ -115,7 +139,18 @@ mod tests {
         let sig = hex(kp.sign(b"setup bytes").as_ref());
         assert!(verify(&key, b"setup bytes", &sig).is_ok());
         assert!(verify(&key, b"tampered bytes", &sig).is_err());
-        assert!(verify(RELEASE_KEY_HEX, b"setup bytes", &sig).is_err()); // other key
-        assert_eq!(RELEASE_KEY_HEX.trim().len(), 64);
+        assert!(keys().all(|k| verify(k, b"setup bytes", &sig).is_err())); // not an embedded key
+        assert!(keys().count() >= 1);
+    }
+
+    #[test]
+    fn version_is_signed_too() {
+        let pkcs8 = Ed25519KeyPair::generate_pkcs8(&ring::rand::SystemRandom::new()).unwrap();
+        let kp = Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).unwrap();
+        let key = hex::encode(kp.public_key().as_ref());
+        let sha = hex::encode(Sha256::digest(b"setup"));
+        let sig = hex::encode(kp.sign(signed_message("0.2.0", &sha).as_bytes()).as_ref());
+        assert!(verify(&key, signed_message("0.2.0", &sha).as_bytes(), &sig).is_ok());
+        assert!(verify(&key, signed_message("0.3.0", &sha).as_bytes(), &sig).is_err(), "an old setup relabelled as newer");
     }
 }

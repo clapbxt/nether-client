@@ -27,6 +27,16 @@ pub fn client() -> Client {
         .expect("http client")).clone()
 }
 
+/// A file name from a web API or an archive that is safe to join onto a folder on Windows: no separators, drive or
+/// stream (`:`), `..`, control characters, reserved device names (CON, NUL, COM1...) or trailing dot / space.
+pub fn safe_file_name(n: &str) -> bool {
+    let stem = n.split('.').next().unwrap_or("").trim_end().to_ascii_uppercase();
+    let reserved = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || ((stem.starts_with("COM") || stem.starts_with("LPT")) && stem.len() == 4 && stem.as_bytes()[3].is_ascii_digit());
+    !n.is_empty() && n.len() <= 255 && !reserved && !n.contains("..") && !n.ends_with(['.', ' '])
+        && !n.chars().any(|c| matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control())
+}
+
 /// Error text for work the user cancelled (`is_cancelled` recognises it).
 pub const CANCELLED: &str = "cancelled";
 
@@ -191,4 +201,15 @@ pub fn get_cached(c: &Client, url: &str, query: &[(&str, String)], ttl: Duration
 pub fn post_cached(c: &Client, url: &str, body: &serde_json::Value, ttl: Duration) -> Result<serde_json::Value> {
     let key = format!("{url}#{body}");
     cached_json(&key, ttl, || Ok(c.post(url).json(body).send()?.error_for_status()?.json()?))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn file_names() {
+        for ok in ["sodium-0.6.jar", "a b.zip", "Pack (1).mrpack"] { assert!(super::safe_file_name(ok), "{ok}"); }
+        for bad in ["", "..", "a/b.jar", r"a\b.jar", "C:x.dll", "x.jar:ads", "CON", "nul.txt", "com1.jar", "x.jar.", "x.jar ", "a\u{7}.jar", r"..\x"] {
+            assert!(!super::safe_file_name(bad), "{bad}");
+        }
+    }
 }

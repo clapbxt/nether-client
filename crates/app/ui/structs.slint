@@ -16,6 +16,9 @@ export struct VerOpt { id: string, label: string }
 export struct MdBlock { kind: int, text: styled-text, plain: string, img: image, ratio: float, has-img: bool }
 // an account cape (id "" = no cape); img = its outside face
 export struct Cape { id: string, name: string, img: image }
+
+// a Nether cosmetic card (hat, headband, aura, shield): picture rendered by the launcher (the player wearing it)
+export struct CosCard { id: string, name: string, kind: string, rarity: string, desc: string, img: image }
 // a saved Microsoft account (account panel); active = the one Play uses
 export struct Acct { uuid: string, name: string, active: bool }
 // Settings > Java: one major version, what the launcher will run for it (custom = picked by the user)
@@ -292,6 +295,18 @@ export global Backend {
     in-out property <bool> ncape-busy;
     callback load-ncapes();
     callback wear-ncape(string);
+    // Nether cosmetics by slot (0 hat, 1 headband, 2 aura, 3 shield): cards, worn ids, state as for capes
+    in-out property <[CosCard]> cos-hats;
+    in-out property <[CosCard]> cos-bands;
+    in-out property <[CosCard]> cos-auras;
+    in-out property <[CosCard]> cos-shields;
+    in-out property <[string]> cos-worn: ["", "", "", ""];
+    in-out property <int> cos-state: 0;
+    in-out property <bool> cos-busy;
+    callback load-cos();
+    callback wear-cos(int, string);
+    // a hovered card previews its cosmetic on the player ("" = the worn look)
+    callback hover-cos(string);
 
     // Microsoft account (0 signed out, 1 waiting on microsoft.com code, 2 signed in, 3 restoring)
     in-out property <int> acct-state: 0;
@@ -518,4 +533,23 @@ export global Wizard {
     callback pick-pack(string);
     callback load-rps(string);
     callback finish(string, string);
+}
+
+// Combine packs dialog (instance Packs tab). pick: 0 from base, 1 vanilla, 2+ = choices index (pack).
+export struct CombineCat { title: string, hint: string, pick: int, note: string }
+export global Combiner {
+    in-out property <bool> open;
+    in-out property <bool> loading;
+    in-out property <bool> busy;
+    in-out property <float> prog;
+    in-out property <string> name: "Combined Pack";
+    // base dropdown: "None (vanilla)" + packs; per-category dropdown: "From base", "Vanilla" + packs
+    in-out property <[string]> packs;
+    in-out property <[string]> choices;
+    in-out property <int> base;
+    in-out property <[CombineCat]> cats;
+    callback start(int);
+    // (category, value); category -1 = the base pack
+    callback pick(int, int);
+    callback create();
 }

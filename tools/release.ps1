@@ -1,13 +1,13 @@
 <#
 Builds, signs and (with -Publish) publishes a Nether Client release. Installed launchers pick it up by themselves:
-they download NetherClientSetup-<version>.exe, check its .sig against the key embedded in the launcher, and install it
+they download NetherClientSetup-<version>.exe, check its .vsig (version + sha256, Ed25519) against the keys embedded in the launcher, and install it
 when the user closes Nether.
 
   powershell -File tools\release.ps1 -Version 0.2.0                     build + sign into dist\ (nothing published)
   powershell -File tools\release.ps1 -Version 0.2.0 -Publish -Notes "…"  also commit + tag, and create the GitHub release
 
 Needs: Rust (MSVC), Node 18+, the release key (%USERPROFILE%\.nether-signing\release-ed25519.key, from
-`node tools\release-sign.mjs keygen`), and for -Publish the GitHub CLI signed in (`gh auth login`).
+`node tools\release-sign.mjs keygen`; its passphrase is asked when signing), and for -Publish the GitHub CLI signed in (`gh auth login`).
 Releases go to the public repo clapbxt/nether-client (see crates/core/src/update.rs).
 #>
 param(
@@ -62,10 +62,10 @@ if ($LASTEXITCODE -ne 0) { throw "setup build failed" }
 New-Item -ItemType Directory -Force dist | Out-Null
 $name = "NetherClientSetup-$Version.exe"
 Copy-Item target\release\NetherClientSetup.exe "dist\$name" -Force
-node tools\release-sign.mjs sign "dist\$name"
+node tools\release-sign.mjs sign "dist\$name" $Version
 if ($LASTEXITCODE -ne 0) { throw "signing failed" }
 $size = [math]::Round((Get-Item "dist\$name").Length / 1MB, 1)
-Write-Host "== built dist\$name ($size MB) + .sig"
+Write-Host "== built dist\$name ($size MB) + .vsig + .sig"
 
 if ($Publish) {
     git add $toml Cargo.lock
@@ -74,9 +74,9 @@ if ($Publish) {
     git push origin HEAD "v$Version" | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "git push failed (the release is committed and tagged locally)" }
     if ($Notes -eq "") { $Notes = "Nether Client $Version" }
-    & $gh release create "v$Version" "dist\$name" "dist\$name.sig" --repo $repo --title "Nether Client $Version" --notes $Notes
+    & $gh release create "v$Version" "dist\$name" "dist\$name.vsig" "dist\$name.sig" --repo $repo --title "Nether Client $Version" --notes $Notes
     if ($LASTEXITCODE -ne 0) { throw "GitHub release failed (the build is still in dist\)" }
     Write-Host "== published: https://github.com/$repo/releases/tag/v$Version"
 } else {
-    Write-Host "Not published. Run again with -Publish, or upload dist\$name and dist\$name.sig to a release in $repo."
+    Write-Host "Not published. Run again with -Publish, or upload dist\$name, dist\$name.vsig and dist\$name.sig to a release in $repo."
 }

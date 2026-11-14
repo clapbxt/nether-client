@@ -95,7 +95,7 @@ fn installed_copy() -> bool {
 }
 
 /// A downloaded, signature-checked setup waiting to install (when the launcher closes, or RESTART NOW).
-static READY: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+static READY: std::sync::Mutex<Option<nether_core::update::Ready>> = std::sync::Mutex::new(None);
 
 /// Check GitHub for a newer release. Installed copies with auto-update on download and verify it in the background;
 /// it then installs when the launcher closes. `manual` = from CHECK NOW (reports every result as a toast).
@@ -152,7 +152,10 @@ pub fn check_updates(ui: &AppWindow, sh: &Arc<Shared>, manual: bool) {
 
 /// Hand a ready update to Setup, which waits for this launcher to exit, installs it, and (relaunch) starts it again.
 pub fn apply_pending_update(relaunch: bool) -> bool {
-    let Some(setup) = READY.lock().unwrap_or_else(|e| e.into_inner()).take() else { return false };
+    let Some(ready) = READY.lock().unwrap_or_else(|e| e.into_inner()).take() else { return false };
+    // it waited in a user-writable folder: check the signature again right before running it
+    if let Err(e) = nether_core::update::check(&ready) { crate::applog::line(&format!("update not installed: {e:#}")); return false; }
+    let setup = ready.path;
     let pid = std::process::id().to_string();
     let mut args = vec!["--update", "--pid", pid.as_str()];
     if relaunch { args.push("--relaunch"); }
@@ -243,7 +246,7 @@ pub fn init(ui: &AppWindow, sh: Arc<Shared>) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use nether_core::update::newer;
 
     #[test]
     fn compares_versions() {

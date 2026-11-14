@@ -309,8 +309,11 @@ fn download_file(c: &Client, f: &Value, dest: &Path, prog: &dyn Fn(&str, u64, u6
         if bytes.len() > MAX { bail!("{name} is larger than expected"); }
         prog(name, bytes.len() as u64, total);
     }
-    if let Some(want) = f["hashes"]["sha512"].as_str() {
-        if !hex::encode(Sha512::digest(&bytes)).eq_ignore_ascii_case(want) { bail!("hash mismatch for {name}"); }
+    // never unchecked: sha512 (always sent by Modrinth), else sha1
+    match (f["hashes"]["sha512"].as_str(), f["hashes"]["sha1"].as_str()) {
+        (Some(want), _) => if !hex::encode(Sha512::digest(&bytes)).eq_ignore_ascii_case(want) { bail!("hash mismatch for {name}"); },
+        (None, Some(want)) => if !hex::encode(sha1::Sha1::digest(&bytes)).eq_ignore_ascii_case(want) { bail!("hash mismatch for {name}"); },
+        (None, None) => bail!("{name} comes without a hash, so it can't be checked"),
     }
     crate::store::write_atomic(dest, &bytes)?;
     Ok(())
@@ -326,7 +329,7 @@ fn apply_version(c: &Client, old: &Path, old_hash: &str, id: &str, prog: &dyn Fn
     let f = files.iter().find(|f| f["primary"].as_bool().unwrap_or(false)).or_else(|| files.first()).ok_or_else(|| anyhow!("version has no files"))?;
     if f["hashes"]["sha512"].as_str().is_some_and(|h| h.eq_ignore_ascii_case(old_hash)) { return Ok(None); }
     let name = f["filename"].as_str().ok_or_else(|| anyhow!("file has no name"))?;
-    if name.contains(['/', '\\']) || name.contains("..") { bail!("unsafe file name {name}"); }
+    if !crate::download::safe_file_name(name) { bail!("unsafe file name {name}"); }
     let dir = old.parent().ok_or_else(|| anyhow!("no parent folder"))?;
     let disabled = old.to_string_lossy().ends_with(".disabled");
     let new = dir.join(if disabled { format!("{name}.disabled") } else { name.to_string() });
@@ -403,7 +406,7 @@ fn install_version(c: &Client, v: &Value, mc: &str, loader: Option<&str>, dir: &
     let files = v["files"].as_array().ok_or_else(|| anyhow!("version has no files"))?;
     let f = files.iter().find(|f| f["primary"].as_bool().unwrap_or(false)).or_else(|| files.first()).ok_or_else(|| anyhow!("version has no files"))?;
     let name = f["filename"].as_str().ok_or_else(|| anyhow!("file has no name"))?;
-    if name.is_empty() || name.contains(['/', '\\']) || name.contains("..") { bail!("unsafe file name {name}"); }
+    if !crate::download::safe_file_name(name) { bail!("unsafe file name {name}"); }
     let dest = dir.join(name);
     // a file cut off by a crash or a full disk is replaced rather than kept forever
     let intact = |p: &Path| f["hashes"]["sha512"].as_str().is_none_or(|want| file_sha512(p).is_ok_and(|h| h.eq_ignore_ascii_case(want)));
