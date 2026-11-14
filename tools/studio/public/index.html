@@ -3,16 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nether Content Studio</title>
+<title>Nether Studio</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <header>
-  <div class="brand"><span class="dot"></span>NETHER <b>CONTENT STUDIO</b></div>
+  <div class="brand"><span class="dot"></span>NETHER <b>STUDIO</b></div>
+  <nav id="nav"><button data-v="content" class="on">Content</button><button data-v="code">Code</button><button data-v="build">Build</button><button data-v="release">Release</button><button data-v="status">Status</button></nav>
   <div class="pending" id="pending"></div>
-  <button id="publishBtn" class="solid">Publish…</button>
+  <button id="publishBtn" class="solid">Publish content…</button>
 </header>
-<main>
+<main data-view="content">
   <aside>
     <div class="tabs" id="tabs"></div>
     <div class="list" id="list"></div>
@@ -35,6 +36,63 @@
     </form>
   </section>
 </main>
+
+<main data-view="code" hidden class="page">
+  <div class="col">
+    <h2>Changes <span class="muted" id="gBranch"></span></h2>
+    <div class="files-list" id="gFiles"></div>
+    <label>Commit message<textarea id="gMsg" rows="3" maxlength="500" placeholder="What changed"></textarea></label>
+    <div class="row end"><button id="gPush" type="button">Push only</button><button id="gCommit" type="button">Commit</button><button id="gCommitPush" class="solid" type="button">Commit and push</button></div>
+  </div>
+  <div class="col">
+    <h2>Recent commits</h2>
+    <div class="files-list" id="gLog"></div>
+  </div>
+</main>
+
+<main data-view="build" hidden class="page">
+  <div class="col">
+    <h2>Build</h2>
+    <div class="cards">
+      <button class="card" data-task="agent"><b>In-game client</b><span>agent\build: needed before the launcher picks up client changes</span></button>
+      <button class="card" data-task="launcher"><b>Launcher</b><span>release build, target\release\nether-app.exe</span></button>
+      <button class="card" data-task="all"><b>Everything</b><span>in-game client, launcher and installer</span></button>
+      <button class="card" data-task="tests"><b>Run tests</b><span>cargo test --workspace</span></button>
+    </div>
+    <p class="help" id="bInfo"></p>
+  </div>
+</main>
+
+<main data-view="release" hidden class="page">
+  <div class="col">
+    <h2>New release <span class="muted" id="rCur"></span></h2>
+    <p class="help">Builds the in-game client, the launcher and the installer, signs them with your release key into dist\. Publishing also commits the version bump, tags it, pushes and creates the GitHub release; every installed launcher then updates itself. Commit your work first (Code tab).</p>
+    <div class="row"><label>Version<input id="rVer" placeholder="0.2.0" pattern="\d+\.\d+\.\d+"></label><label>Release key passphrase<input id="rPass" type="password" autocomplete="off"></label></div>
+    <label>Release notes<textarea id="rNotes" rows="3" maxlength="1000"></textarea></label>
+    <label class="check"><input type="checkbox" id="rPublish"> Publish it (GitHub release, launchers update)</label>
+    <label id="rConfirmWrap" hidden>Type RELEASE to confirm<input id="rConfirm" autocomplete="off"></label>
+    <div class="row end"><button id="rGo" class="solid" type="button">Build release</button></div>
+  </div>
+</main>
+
+<main data-view="status" hidden class="page">
+  <div class="col">
+    <h2>Tools and sign-ins</h2>
+    <div class="kv" id="sTools"></div>
+    <h2>Keys and content</h2>
+    <div class="kv" id="sKeys"></div>
+  </div>
+  <div class="col">
+    <h2>Live database</h2>
+    <div class="kv" id="sMig"></div>
+    <p class="help">A migration changes the live database. A new one ships with the Worker code that needs it; run it before publishing (publishing refuses while one is pending).</p>
+    <label id="mConfirmWrap">Type MIGRATE to confirm<input id="mConfirm" autocomplete="off"></label>
+    <div class="row end"><button id="mGo" class="solid" type="button">Run pending migrations</button></div>
+  </div>
+</main>
+
+<div class="jobbar" id="jobbar" hidden><span id="jobTitle"></span><button id="jobOpen" type="button">Show log</button></div>
+<dialog id="jobDlg"><form method="dialog"><h2 id="jobDlgTitle">Task</h2><pre id="jobLog"></pre><div class="row end"><button>Close</button></div></form></dialog>
 
 <dialog id="uploadDlg">
   <form method="dialog" id="uploadForm">
@@ -70,10 +128,8 @@
     <p class="help">Signs backend/content with your content key and deploys it with the Worker (wrangler must be signed in). Launchers pick it up within 30 minutes.</p>
     <div id="changes" class="changes"></div>
     <label>Content key passphrase<input type="password" id="pass" autocomplete="off"></label>
-    <label class="check"><input type="checkbox" id="migrated"> The database migrations this Worker needs have been run (Migrations…)</label>
     <label>Type PUBLISH to confirm (goes live for every player)<input id="confirmTxt" autocomplete="off"></label>
-    <div class="row end"><button value="cancel">Close</button><button id="migrateBtn" type="button" title="Run a database migration once, before deploying a Worker that needs it">Migrations…</button><button id="publishGo" class="solid" type="button">Sign and deploy</button></div>
-    <pre id="log" hidden></pre>
+    <div class="row end"><button value="cancel">Close</button><button id="publishGo" class="solid" type="button">Sign and deploy</button></div>
   </form>
 </dialog>
 

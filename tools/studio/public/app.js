@@ -189,40 +189,67 @@ $("publishBtn").onclick = () => {
   const all = [...pending.changed.map((f) => `+ ${f}`), ...pending.removed.map((f) => `− ${f}`)];
   c.append(el("div", "", all.length ? `${all.length} file change(s) since the last publish:` : "No changes since the last publish."));
   for (const f of all.slice(0, 40)) c.append(el("code", "", f));
-  $("log").hidden = !$("log").textContent;
   $("publishDlg").showModal();
 };
+// ---------------- tasks (publish, builds, commits, releases): one at a time, live log
 let polling = null;
-async function poll() {
+async function watchJob() {
   const j = await api("/api/job");
-  const lg = $("log");
-  lg.hidden = false;
-  lg.textContent = `${j.title}\n${j.log}`;
-  lg.scrollTop = lg.scrollHeight;
-  if (j.running) { polling = setTimeout(poll, 700); return; }
+  $("jobbar").hidden = !j.title;
+  $("jobTitle").textContent = j.running ? `${j.title}: running…` : `${j.title}: ${j.ok ? "done" : "failed"}`;
+  $("jobbar").className = "jobbar" + (j.running ? " run" : j.ok ? " ok" : " bad");
+  $("jobDlgTitle").textContent = j.title;
+  const lg = $("jobLog");
+  const atEnd = lg.scrollTop + lg.clientHeight >= lg.scrollHeight - 8;
+  lg.textContent = j.log;
+  if (atEnd) lg.scrollTop = lg.scrollHeight;
+  if (j.running) { polling = setTimeout(watchJob, 700); return; }
+  if (polling !== null) { toast(j.ok ? `${j.title}: done` : `${j.title} failed: open the log`, !j.ok); refresh(); loadPage(view); }
   polling = null;
-  $("publishGo").disabled = false;
-  toast(j.ok ? `${j.title}: done` : `${j.title} failed, see the log`, !j.ok);
-  refresh();
 }
-$("publishGo").onclick = async () => {
+$("jobOpen").onclick = () => $("jobDlg").showModal();
+const start = async (path, body) => { try { await api(path, body); toast("Started"); polling = 0; watchJob(); $("jobDlg").showModal(); } catch (e) { toast(e.message, true); } };
+
+// ---------------- pages
+let view = "content";
+document.querySelectorAll("#nav button").forEach((b) => (b.onclick = () => {
+  view = b.dataset.v;
+  document.querySelectorAll("#nav button").forEach((x) => x.classList.toggle("on", x === b));
+  document.querySelectorAll("main[data-view]").forEach((m) => (m.hidden = m.dataset.view !== view));
+  loadPage(view);
+}));
+async function loadPage(v) {
   try {
-    await api("/api/publish", { passphrase: $("pass").value, migrated: $("migrated").checked, confirm: $("confirmTxt").value.trim() });
-    $("pass").value = ""; $("confirmTxt").value = ""; $("migrated").checked = false;
-    $("publishGo").disabled = true;
-    if (!polling) poll();
+    if (v === "code") {
+      const g = await api("/api/git");
+      $("gBranch").textContent = `${g.branch}${g.ahead ? ` · ${g.ahead} to push` : ""}${g.behind ? ` · ${g.behind} behind` : ""}`;
+      $("gFiles").replaceChildren(...(g.files.length ? g.files.map((f) => { const r = el("div", "fl"); r.append(el("code", "st", f.st), el("span", "", f.path)); return r; }) : [el("div", "muted", "Nothing to commit.")]));
+      $("gLog").replaceChildren(...g.log.map((c) => { const r = el("div", "fl"); r.append(el("code", "st", c.h), el("span", "", c.s), el("span", "muted when", c.when)); return r; }));
+      $("gCommit").disabled = $("gCommitPush").disabled = !g.files.length;
+    } else if (v === "release") {
+      const g = await api("/api/git");
+      $("rCur").textContent = `current ${g.version}`;
+      if (!$("rVer").value) { const p = g.version.split(".").map(Number); if (p.length === 3) $("rVer").value = `${p[0]}.${p[1]}.${p[2] + 1}`; }
+    } else if (v === "status" || v === "build") {
+      const s = await api("/api/status");
+      const kv = (k, v, bad) => { const r = el("div", "kvr"); r.append(el("span", "k", k), el("span", bad ? "v bad" : "v", v)); return r; };
+      $("sTools").replaceChildren(...s.tools.map((t) => kv(t.k, t.v || "missing", !t.v)));
+      $("sKeys").replaceChildren(kv("Content key", s.keys.content, s.keys.content !== "protected"), kv("Release key", s.keys.release, s.keys.release !== "protected"), kv("Content signature", s.content.expires ? `valid until ${s.content.expires}` : "not signed", !s.content.expires));
+      $("sMig").replaceChildren(...s.migrations.files.map((f) => kv(f, s.migrations.applied.includes(f) ? "applied" : "PENDING", !s.migrations.applied.includes(f))));
+      $("mGo").disabled = !s.migrations.pending.length;
+      $("mConfirmWrap").hidden = !s.migrations.pending.length;
+      const ago = (d) => (d ? new Date(d).toLocaleString() : "never");
+      $("bInfo").textContent = `In-game client built: ${ago(s.agentBuilt)} · launcher built: ${ago(s.launcherBuilt)}`;
+    }
   } catch (e) { toast(e.message, true); }
-};
-$("migrateBtn").onclick = async () => {
-  try {
-    const { files } = await api("/api/migrations", {});
-    if (!confirm("Migrations change the live database. Continue?")) return;
-    const f = prompt(`Run which migration once on the live database?\n${files.join("\n")}\n(each one only once, before deploying)`, files[files.length - 1] || "");
-    if (!f) return;
-    await api("/api/migrate", { file: f.trim() });
-    if (!polling) poll();
-  } catch (e) { toast(e.message, true); }
-};
+}
+$("gCommit").onclick = () => start("/api/commit", { message: $("gMsg").value, push: false }).then(() => ($("gMsg").value = ""));
+$("gCommitPush").onclick = () => start("/api/commit", { message: $("gMsg").value, push: true }).then(() => ($("gMsg").value = ""));
+$("gPush").onclick = () => start("/api/push", {});
+document.querySelectorAll("[data-task]").forEach((b) => (b.onclick = () => start("/api/build", { task: b.dataset.task })));
+$("rPublish").onchange = () => { $("rConfirmWrap").hidden = !$("rPublish").checked; $("rGo").textContent = $("rPublish").checked ? "Build and publish" : "Build release"; };
+$("rGo").onclick = () => { start("/api/release", { version: $("rVer").value.trim(), notes: $("rNotes").value, publish: $("rPublish").checked, confirm: $("rConfirm").value.trim(), passphrase: $("rPass").value }); $("rPass").value = ""; $("rConfirm").value = ""; };
+$("mGo").onclick = () => { start("/api/migrate", { confirm: $("mConfirm").value.trim() }); $("mConfirm").value = ""; };
 
 // ---------------- toast
 let tt;
@@ -244,4 +271,5 @@ function toast(msg, bad) {
     viewer?.setSkin(skin);
   } catch { toast("No skin found: start the launcher once (or a game) so a skin is cached.", true); }
   try { await refresh(); } catch (e) { $("empty").textContent = e.message; }
+  watchJob();
 })();

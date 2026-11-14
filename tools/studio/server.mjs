@@ -1,4 +1,5 @@
-// Nether Content Studio: see, upload, edit, remove and publish capes and cosmetics from a browser on this PC.
+// Nether Studio: content (see, upload, edit, remove, publish capes and cosmetics), code (commit + push), builds and
+// releases, from a browser on this PC.
 //   node tools/studio/server.mjs        (or nether.bat > S)
 // Security: listens on 127.0.0.1 only; a random token (in the URL it opens, kept in the page) is required on every
 // request, the Host header must be our loopback address (stops DNS rebinding) and cross-site requests are refused, so
@@ -60,7 +61,15 @@ function list() {
   return { items: [...capes, ...cos], pending: dirty() };
 }
 
-// ---------------- jobs (sign + deploy, migration): one at a time, log kept for the page
+// ---------------- live database migrations: backend/worker/migrations/applied.txt lists what has run
+const migDir = join(root, "backend", "worker", "migrations");
+function migrations() {
+  const files = readdirSync(migDir).filter((f) => /^\d{4}_[a-z0-9_]+\.sql$/.test(f)).sort();
+  const applied = (existsSync(join(migDir, "applied.txt")) ? readFileSync(join(migDir, "applied.txt"), "utf8").split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith("#")) : []);
+  return { files, applied, pending: files.filter((f) => !applied.includes(f)) };
+}
+
+// ---------------- jobs (sign + deploy, migration, build, commit, release): one at a time, log kept for the page
 let job = null;
 function run(title, steps) {
   if (job && job.running) throw new Error("another task is still running");
@@ -77,6 +86,7 @@ function run(title, steps) {
         p.on("close", resolve);
       });
       if (code !== 0) { say(`\nFAILED (${s.label}, exit ${code})\n`); job.running = false; job.ok = false; return; }
+      if (s.after) try { s.after(); } catch (e) { say(`${e.message}\n`); }
     }
     say("\nDone.\n");
     job.running = false;
@@ -186,6 +196,55 @@ function update(b) {
   return `${b.id} saved`;
 }
 
+// ---------------- code, builds, status
+function sh(cmd, args, opts = {}, keep = false) {
+  const r = spawnSync(cmd, args, { cwd: root, encoding: "utf8", windowsHide: true, timeout: 20_000, ...opts });
+  return r.status === 0 ? (keep ? (r.stdout || "").replace(/\s+$/, "") : (r.stdout || "").trim()) : null;
+}
+function git() {
+  const st = sh("git", ["status", "--porcelain=v1"], {}, true) ?? "";
+  const ab = sh("git", ["rev-list", "--left-right", "--count", "@{upstream}...HEAD"]);
+  return {
+    branch: sh("git", ["rev-parse", "--abbrev-ref", "HEAD"]) || "?",
+    behind: ab ? Number(ab.split(/\s+/)[0]) : null, ahead: ab ? Number(ab.split(/\s+/)[1]) : null,
+    files: st ? st.split(/\r?\n/).map((l) => ({ st: l.slice(0, 2).trim(), path: l.slice(3) })) : [],
+    log: (sh("git", ["log", "-12", "--format=%h\t%cr\t%s"]) || "").split(/\r?\n/).filter(Boolean).map((l) => { const [h, when, s] = l.split("\t"); return { h, when, s }; }),
+    version: (readFileSync(join(root, "crates", "app", "Cargo.toml"), "utf8").match(/^version\s*=\s*"([^"]+)"/m) || [])[1] || "?",
+  };
+}
+function javacDir() {
+  if (sh("javac", ["-version"]) !== null) return null;
+  const base = join(process.env.APPDATA || "", "NetherClient", "runtimes");
+  if (!existsSync(base)) return null;
+  for (const r of readdirSync(base)) { const d = join(base, r, "bin"); if (existsSync(join(d, process.platform === "win32" ? "javac.exe" : "javac"))) return d; }
+  return null;
+}
+const withJdk = () => { const d = javacDir(); return d ? { PATH: `${d}${process.platform === "win32" ? ";" : ":"}${process.env.PATH}` } : {}; };
+const BUILDS = {
+  agent: { title: "Build in-game client", steps: () => [{ label: "agent/build.ps1", cmd: "powershell", args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", join(root, "agent", "build.ps1")], env: withJdk() }] },
+  launcher: { title: "Build launcher (release)", steps: () => [{ label: "cargo build -p nether-app --release", cmd: "cargo", args: ["build", "-p", "nether-app", "--release"] }] },
+  all: { title: "Build everything", steps: () => [...BUILDS.agent.steps(), { label: "cargo build -p nether-app --release", cmd: "cargo", args: ["build", "-p", "nether-app", "--release"] }, { label: "cargo build -p nether-setup --release", cmd: "cargo", args: ["build", "-p", "nether-setup", "--release"] }] },
+  tests: { title: "Run tests", steps: () => [{ label: "cargo test --workspace", cmd: "cargo", args: ["test", "--workspace"] }] },
+};
+function status() {
+  const signing = join(homedir(), ".nether-signing");
+  const key = (n) => { const f = join(signing, n); return !existsSync(f) ? "missing" : readFileSync(f, "utf8").includes("ENCRYPTED") ? "protected" : "NOT passphrase-protected"; };
+  const ghExe = sh("gh", ["--version"]) !== null ? "gh" : join(process.env.LOCALAPPDATA || "", "Programs", "gh", "gh.exe");
+  const manifest = readJson(join(content, "manifest.json"), {});
+  return {
+    tools: [
+      ["Rust", sh("cargo", ["--version"])], ["JDK", sh("javac", ["-version"], { env: { ...process.env, ...withJdk() } })], ["Node", process.version], ["Git", sh("git", ["--version"])],
+      ["GitHub CLI", sh(ghExe, ["auth", "status"]) !== null ? "signed in" : null],
+      ["Cloudflare", existsSync(join(process.env.APPDATA || "", "xdg.config", ".wrangler", "config", "default.toml")) ? "signed in" : null],
+    ].map(([k, v]) => ({ k, v: v ? String(v).split(/\r?\n/)[0] : null })),
+    keys: { content: key("content-ed25519.key"), release: key("release-ed25519.key") },
+    content: { expires: manifest.expires ? new Date(manifest.expires * 1000).toISOString().slice(0, 10) : null },
+    migrations: migrations(),
+    agentBuilt: existsSync(join(root, "agent", "build", "nether-agent.jar")) ? new Date(statSync(join(root, "agent", "build", "nether-agent.jar")).mtimeMs).toISOString() : null,
+    launcherBuilt: existsSync(join(root, "target", "release", "nether-app.exe")) ? new Date(statSync(join(root, "target", "release", "nether-app.exe")).mtimeMs).toISOString() : null,
+  };
+}
+
 // ---------------- HTTP
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".png": "image/png", ".json": "application/json" };
 const HEAD = {
@@ -224,6 +283,8 @@ const server = createServer(async (req, res) => {
     if (!okToken(req.headers["x-studio-token"])) return send(res, 401, { error: "missing token: open the link the studio printed" });
 
     if (req.method === "GET" && p === "/api/list") return send(res, 200, list());
+    if (req.method === "GET" && p === "/api/status") return send(res, 200, status());
+    if (req.method === "GET" && p === "/api/git") return send(res, 200, git());
     if (req.method === "GET" && p === "/api/job") return send(res, 200, job || { title: "", running: false, ok: null, log: "" });
     if (req.method === "GET" && p === "/api/skin") {
       const cands = [join(process.env.APPDATA || join(homedir(), ".config"), "NetherClient", "client", "wardrobe", "skin.png")];
@@ -246,7 +307,8 @@ const server = createServer(async (req, res) => {
     if (p === "/api/publish") {
       const pass = String(b.passphrase || "");
       if (b.confirm !== "PUBLISH") throw new Error("type PUBLISH to confirm: this goes live for every player");
-      if (b.migrated !== true) throw new Error("run the database migrations this Worker needs first (Migrations…), then tick the box");
+      const pend = migrations().pending;
+      if (pend.length) throw new Error(`run the pending database migration${pend.length > 1 ? "s" : ""} first (${pend.join(", ")}): Status tab`);
       const keyFile = join(homedir(), ".nether-signing", "content-ed25519.key");
       if (existsSync(keyFile) && readFileSync(keyFile, "utf8").includes("ENCRYPTED") && !pass) throw new Error("enter the content key passphrase");
       run("Publish", [
@@ -256,12 +318,49 @@ const server = createServer(async (req, res) => {
       return send(res, 200, { msg: "publishing" });
     }
     if (p === "/api/migrate") {
-      const f = String(b.file || "");
-      if (!/^\d{4}_[a-z0-9_]+\.sql$/.test(f) || !existsSync(join(root, "backend", "worker", "migrations", f))) throw new Error("unknown migration");
-      run(`Migration ${f}`, [{ label: `d1 execute ${f}`, cmd: npx.cmd, args: ["wrangler", "d1", "execute", "nether", "--remote", `--file=migrations/${f}`], cwd: join(root, "backend", "worker"), shell: npx.shell }]);
+      if (b.confirm !== "MIGRATE") throw new Error("type MIGRATE to confirm: this changes the live database");
+      const { pending } = migrations();
+      if (!pending.length) throw new Error("no pending migrations");
+      run(`Migrations ${pending.join(", ")}`, pending.map((f) => ({
+        label: `d1 execute ${f}`, cmd: npx.cmd, args: ["wrangler", "d1", "execute", "nether", "--remote", `--file=migrations/${f}`], cwd: join(root, "backend", "worker"), shell: npx.shell,
+        after: () => writeFileSync(join(migDir, "applied.txt"), readFileSync(join(migDir, "applied.txt"), "utf8").replace(/\s*$/, "\n") + f + "\n"),
+      })));
       return send(res, 200, { msg: "running" });
     }
-    if (p === "/api/migrations") return send(res, 200, { files: readdirSync(join(root, "backend", "worker", "migrations")).filter((f) => f.endsWith(".sql")) });
+    if (p === "/api/status") return send(res, 200, status());
+    if (p === "/api/git") return send(res, 200, git());
+    if (p === "/api/commit") {
+      const msg = String(b.message || "").trim();
+      if (!msg || msg.length > 500 || /[\x00-\x08\x0b-\x1f]/.test(msg)) throw new Error("write a commit message (one paragraph, up to 500 characters)");
+      const steps = [
+        { label: "git add -A", cmd: "git", args: ["add", "-A"] },
+        { label: "git commit", cmd: "git", args: ["commit", "-m", msg] },
+      ];
+      if (b.push) steps.push({ label: "git push", cmd: "git", args: ["push", "-u", "origin", "HEAD"] });
+      run(b.push ? "Commit and push" : "Commit", steps);
+      return send(res, 200, { msg: "running" });
+    }
+    if (p === "/api/push") { run("Push", [{ label: "git push", cmd: "git", args: ["push", "-u", "origin", "HEAD"] }]); return send(res, 200, { msg: "running" }); }
+    if (p === "/api/build") {
+      const t = BUILDS[b.task];
+      if (!t) throw new Error("unknown task");
+      run(t.title, t.steps());
+      return send(res, 200, { msg: "running" });
+    }
+    if (p === "/api/release") {
+      const v = String(b.version || "");
+      if (!/^\d+\.\d+\.\d+$/.test(v)) throw new Error("version like 0.2.0");
+      const notes = String(b.notes || "").trim();
+      if (notes.length > 1000 || /[\x00-\x08\x0b-\x1f"`$]/.test(notes)) throw new Error("release notes: up to 1000 characters, no quotes, backticks or $");
+      if (b.publish && b.confirm !== "RELEASE") throw new Error("type RELEASE to confirm: every installed launcher updates to it");
+      const args = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", join(root, "tools", "release.ps1"), "-Version", v];
+      if (b.publish) args.push("-Publish", "-Notes", notes || `Nether Client ${v}`);
+      run(`Release ${v}${b.publish ? " (publish)" : " (build only)"}`, [
+        ...BUILDS.agent.steps(),
+        { label: `tools/release.ps1 ${v}`, cmd: "powershell", args, env: b.passphrase ? { NETHER_SIGNING_PASS: String(b.passphrase) } : {} },
+      ]);
+      return send(res, 200, { msg: "running" });
+    }
     return send(res, 404, { error: "not found" });
   } catch (e) {
     return send(res, 400, { error: e.message });

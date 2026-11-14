@@ -23,7 +23,7 @@ echo     %W%5%X%  Run tests
 echo   %G%BUILD%X%
 echo     %W%6%X%  Build everything       %G%agent + launcher + installer (release)%X%
 echo   %G%PUBLISH%X%
-echo     %W%S%X%  Content studio         %G%browser: see, upload, remove, publish capes + cosmetics%X%
+echo     %W%S%X%  Studio                 %G%browser app: content, commit/push, builds, releases, status%X%
 echo     %W%7%X%  Publish content        %G%sign + deploy everything in backend\content as it is%X%
 echo     %W%8%X%  Commit and push        %G%to github.com/clapbxt/nether-client%X%
 echo     %W%9%X%  Make a release         %G%versioned installer, optional GitHub release%X%
