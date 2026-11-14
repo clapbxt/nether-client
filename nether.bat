@@ -129,7 +129,7 @@ echo     - Left: everything there is. Click one to see it on your skin (drag to 
 echo     - Upload: drop a Blockbench .bbmodel / Java .json + PNGs, a cape PNG, or an aura .json + .png.
 echo     - Tick items, then Remove. Edit name / rarity / description under the preview.
 echo     - Publish: content key passphrase, tick that migrations are run, type PUBLISH. Goes live for everyone.
-echo     - Blockbench templates: tools\cosmetics	emplates
+echo     - Blockbench templates: tools\cosmetics\templates
 echo   %G%Keep this window open while you use it. Ctrl+C here stops it.%X%
 echo.
 node tools\studio\server.mjs
