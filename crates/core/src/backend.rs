@@ -139,24 +139,57 @@ pub struct Cape {
     pub name: String,
     #[serde(default)]
     pub desc: String,
+    /// Animated capes: milliseconds per frame (20..=2000, default 100).
+    #[serde(default)]
+    pub frametime: Option<u32>,
 }
 
 /// Cape ids are path and URL components: lowercase letters, digits, `_`, `-`, 1 to 32 characters.
 pub fn valid_cape_id(id: &str) -> bool { (1..=32).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-') }
 
-/// A cape texture: PNG signature, a sane size (at most 64 KB, 256x128 px) before anything decodes it.
+/// Largest cape PNG accepted (bytes).
+pub const MAX_CAPE_PNG: usize = 4 * 1024 * 1024;
+
+/// Layout of a cape image (same rule in content/sign.mjs and the agent's Capes.java).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CapeLayout {
+    /// Scale over the 64x32 (or 22x17) base size.
+    pub scale: u32,
+    /// Frames, stacked vertically (more than 1 = animated).
+    pub frames: u32,
+    /// 64:32 frames carry cape + elytra; 22:17 frames are the cape only (the game keeps its own elytra).
+    pub full: bool,
+}
+
+impl CapeLayout {
+    /// `w` x `h` pixels: frames of 64:32 or 22:17 at any whole scale up to 32, at most 128 frames and 4 Mpx once
+    /// converted to 64:32 frames. None = not a cape.
+    pub fn of(w: u32, h: u32) -> Option<Self> {
+        [(64, 32, true), (22, 17, false)].into_iter().find_map(|(bw, bh, full)| {
+            if w == 0 || w % bw != 0 { return None; }
+            let (scale, fh) = (w / bw, w / bw * bh);
+            if h % fh != 0 { return None; }
+            let frames = h / fh;
+            (scale <= 32 && (1..=128).contains(&frames) && frames * scale * scale <= 2048).then_some(Self { scale, frames, full })
+        })
+    }
+}
+
+/// A cape texture: PNG signature and a valid cape layout before anything decodes it.
 fn valid_cape_png(b: &[u8]) -> bool {
-    if b.len() < 33 || b.len() > 64 * 1024 || b[..8] != [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a] || &b[12..16] != b"IHDR" { return false; }
+    if b.len() < 33 || b.len() > MAX_CAPE_PNG || b[..8] != [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a] || &b[12..16] != b"IHDR" { return false; }
     let (w, h) = (u32::from_be_bytes([b[16], b[17], b[18], b[19]]), u32::from_be_bytes([b[20], b[21], b[22], b[23]]));
-    (22..=256).contains(&w) && (17..=128).contains(&h)
+    CapeLayout::of(w, h).is_some()
 }
 
 impl Cape {
-    /// The verified, size-checked PNG bytes of this cape (64x32 Minecraft cape texture), or None.
+    /// The verified, layout-checked PNG bytes of this cape, or None.
     pub fn png(&self, c: &Client) -> Option<Vec<u8>> {
         if !valid_cape_id(&self.id) { return None; }
         content_file(Some(c), &format!("capes/{}.png", self.id)).filter(|b| valid_cape_png(b))
     }
+    /// Milliseconds per animation frame.
+    pub fn frame_ms(&self) -> u32 { self.frametime.unwrap_or(100).clamp(20, 2000) }
 }
 
 /// Launcher news, newest first.
@@ -170,14 +203,16 @@ pub fn packs_cached() -> Vec<NetherPack> {
 /// The Nether cape directory (invalid ids dropped).
 pub fn capes(c: &Client) -> Vec<Cape> { content::<Cape>(c, "capes/index.json").into_iter().filter(|x| valid_cape_id(&x.id)).collect() }
 
-/// Hand the game agent the verified cape hashes (`<id> <sha256>` per line); it only accepts a cape PNG that matches.
+/// Hand the game agent the verified cape hashes (`<id> <sha256> <ms per frame>` per line); it only accepts a cape PNG that matches.
 /// Returns the file path, None when there is no verified manifest (the agent then shows no capes).
 pub fn cape_sums_file(c: &Client) -> Option<std::path::PathBuf> {
     let m = manifest(Some(c))?;
+    let dir = capes(c);
     let mut out = String::new();
     for (path, e) in &m.files {
         if let Some(id) = path.strip_prefix("capes/").and_then(|p| p.strip_suffix(".png")) {
-            if valid_cape_id(id) { out.push_str(&format!("{id} {}\n", e.sha256)); }
+            let ms = dir.iter().find(|x| x.id == id).map_or(100, Cape::frame_ms);
+            if valid_cape_id(id) { out.push_str(&format!("{id} {} {ms}\n", e.sha256)); }
         }
     }
     let f = cache_dir().join("cape-sums.txt");
@@ -289,7 +324,7 @@ mod tests {
         let news: Vec<NewsItem> = serde_json::from_str(include_str!("../../../backend/content/news.json")).unwrap();
         assert_eq!(news[0].tag, "NETHER");
         let capes: Vec<Cape> = serde_json::from_str(include_str!("../../../backend/content/capes/index.json")).unwrap();
-        assert!(capes.iter().any(|c| c.id == "obsidian"));
+        assert!(capes.iter().any(|c| c.id == "snowman"));
         let _: Vec<NetherPack> = serde_json::from_str(include_str!("../../../backend/content/packs.json")).unwrap();
     }
 
@@ -322,7 +357,7 @@ mod tests {
         let sig = include_str!("../../../backend/content/manifest.sig");
         let key = hex::decode(CONTENT_KEY_HEX.trim()).unwrap();
         let m = verify_manifest(&key, body, sig, 0, 0).unwrap();
-        assert!(m.files.contains_key("capes/obsidian.png"));
+        assert!(m.files.contains_key("capes/snowman.png"));
         for (p, e) in &m.files {
             let b = std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../backend/content").join(p)).unwrap();
             assert_eq!(hex::encode(Sha256::digest(&b)), e.sha256, "{p}");
@@ -331,14 +366,22 @@ mod tests {
 
     #[test]
     fn cape_ids_and_pngs() {
-        assert!(valid_cape_id("obsidian") && valid_cape_id("a_b-9"));
+        assert!(valid_cape_id("snowman") && valid_cape_id("a_b-9"));
         for bad in ["", "A", "x/../y", "..", "a.b", "a b", "x\\y", &"a".repeat(33)] { assert!(!valid_cape_id(bad), "{bad}"); }
-        let png = std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../backend/content/capes/obsidian.png")).unwrap();
+        let png = std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../backend/content/capes/snowman.png")).unwrap();
         assert!(valid_cape_png(&png));
         let mut huge = png.clone();
         huge[16..20].copy_from_slice(&20000u32.to_be_bytes());
         assert!(!valid_cape_png(&huge));
         assert!(!valid_cape_png(b"not a png at all, definitely not a png file"));
         assert!(!valid_cape_png(&vec![0u8; 70_000]));
+        let l = |w, h| CapeLayout::of(w, h).map(|l| (l.scale, l.frames, l.full));
+        assert_eq!(l(64, 32), Some((1, 1, true)));
+        assert_eq!(l(2048, 1024), Some((32, 1, true)));
+        assert_eq!(l(352, 272), Some((16, 1, false)));
+        assert_eq!(l(128, 64 * 8), Some((2, 8, true)));
+        assert_eq!(l(2048, 2048), Some((32, 2, true))); // 4 Mpx, the most
+        assert_eq!(l(2048, 3072), None);
+        assert_eq!(l(64, 48), None);
     }
 }

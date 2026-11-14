@@ -178,7 +178,7 @@ export component ModDetail inherits Rectangle {
             x: root.W - 32px - 224px - 10px - 150px; y: 76px; width: 150px; height: 48px;
             visible: root.d.page-url != "";
             background: mr.pressed ? #ffffff22 : (mr.has-hover ? #ffffff14 : #ffffff08);
-            border-width: 1px; border-color: mr.has-hover ? #ffffff55 : #ffffff2e; border-radius: 8px;
+            border-width: 1px; border-color: mr.has-hover ? Theme.mut : #ffffff2e; border-radius: 8px;
             animate background, border-color { duration: Theme.mid; }
             HorizontalLayout { alignment: center; spacing: 8px;
                 Text { text: "MODRINTH"; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 0.7px; vertical-alignment: center; }
@@ -232,7 +232,7 @@ export component ModDetail inherits Rectangle {
                     height: 136px;
                     for g[i] in root.d.gallery: Rectangle {
                         x: i * 186px; width: 174px; height: 124px; clip: true; visible: i < 4;
-                        background: #ffffff08; border-width: 1px; border-color: gt.has-hover ? #ffffff66 : #ffffff1a; border-radius: 8px;
+                        background: #ffffff08; border-width: 1px; border-color: gt.has-hover ? Theme.mut : #ffffff1a; border-radius: 8px;
                         Image { width: parent.width; height: parent.height; source: g; image-fit: cover; }
                         gt := TouchArea { mouse-cursor: pointer; clicked => { root.zoom = g; root.zoomed = true; } }
                     }

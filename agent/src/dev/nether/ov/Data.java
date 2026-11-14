@@ -185,6 +185,41 @@ final class Data {
         }
     }
 
+    private static Field hitEntF;
+    private static Class<?> livingC;
+    private static boolean hitEntTried;
+
+    /**
+     * The living entity under the crosshair, or null (none, or an item frame / boat / other non-living entity). Found by
+     * type, no names: the hit result's field typed as a superclass of the player is Entity, and the player's ancestor
+     * directly below it is LivingEntity.
+     */
+    static Object hitLiving() {
+        try {
+            Object mc = Game.mc(), me = self();
+            if (mc == null || me == null || hitType() != 2) return null;
+            Object hr = Game.legacy() ? fld(mc, l("s", "field_71476_x")) : fld(mc, "field_1765");
+            if (hr == null) return null;
+            if (!hitEntTried) {
+                hitEntTried = true;
+                for (Class<?> c = hr.getClass(); c != null && hitEntF == null; c = c.getSuperclass())
+                    for (Field f : c.getDeclaredFields()) {
+                        Class<?> t = f.getType();
+                        if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || t == Object.class || t.isPrimitive() || !t.isAssignableFrom(me.getClass())) continue;
+                        f.setAccessible(true);
+                        hitEntF = f;
+                        for (Class<?> p = me.getClass(); p != null; p = p.getSuperclass()) if (p.getSuperclass() == t) { livingC = p; break; }
+                        break;
+                    }
+            }
+            if (hitEntF == null) return null;
+            Object e = hitEntF.get(hr);
+            return e != null && (livingC == null || livingC.isInstance(e)) ? e : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     private static final java.util.Map<String, Object> optByKey = new java.util.HashMap<>();
     private static Field optValF;
     private static boolean optScanned;

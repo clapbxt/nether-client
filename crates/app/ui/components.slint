@@ -183,10 +183,10 @@ export component Btn inherits Rectangle {
     width: t.preferred-width + (root.icon == "" ? 32px : 54px);
     opacity: root.enabled ? 1 : 0.4;
     background: root.solid
-        ? (root.danger ? (ta.pressed ? Theme.red3 : (ta.has-hover ? Theme.red2 : Theme.red)) : (ta.pressed ? #B9C1CC : (ta.has-hover ? #FFFFFF : Theme.ice)))
+        ? (root.danger ? (ta.pressed ? Theme.red3 : (ta.has-hover ? Theme.red2 : Theme.red)) : (ta.pressed ? Theme.ice.with-alpha(0.72) : (ta.has-hover ? Theme.ice.with-alpha(0.86) : Theme.ice)))
         : (ta.pressed ? Theme.s3 : (ta.has-hover ? Theme.s2 : transparent));
     border-width: 1px;
-    border-color: root.solid ? transparent : (root.danger ? (ta.has-hover ? Theme.red2 : Theme.red2.with-alpha(0.439)) : (ta.has-hover ? #ffffff66 : Theme.ln2));
+    border-color: root.solid ? transparent : (root.danger ? (ta.has-hover ? Theme.red2 : Theme.red2.with-alpha(0.439)) : (ta.has-hover ? Theme.mut : Theme.ln2));
     animate background, border-color { duration: Theme.fast; }
     property <color> fg: root.solid ? (root.danger ? white : Theme.ink) : (root.danger ? Theme.redtx : Theme.tx);
     property <length> cw: t.preferred-width + (root.icon == "" ? 0px : 22px);
@@ -242,9 +242,9 @@ export component IconBtn inherits Rectangle {
     background: root.solid || (root.hot && ta.has-hover) ? (ta.pressed ? Theme.press : (ta.has-hover ? Theme.red2 : Theme.red))
         : (ta.pressed ? Theme.s3 : (ta.has-hover ? (root.danger ? Theme.red.with-alpha(0.188) : Theme.s2) : transparent));
     border-width: root.solid || (root.hot && ta.has-hover) ? 0px : 1px;
-    border-color: root.danger ? (ta.has-hover ? Theme.red2 : Theme.red2.with-alpha(0.333)) : (ta.has-hover ? #ffffff66 : Theme.ln2);
+    border-color: root.danger && ta.has-hover ? Theme.red2 : (ta.has-hover ? Theme.mut : Theme.ln2);
     animate background, border-color { duration: Theme.fast; }
-    Icon { x: (parent.width - 12px) / 2; y: (parent.height - 12px) / 2 + (ta.pressed ? 1px : 0px); d: root.d; solid: root.solid || root.hot; tint: root.solid || (root.hot && ta.has-hover) ? white : (root.danger ? Theme.redtx : (ta.has-hover ? Theme.tx : Theme.dim)); }
+    Icon { x: (parent.width - 12px) / 2; y: (parent.height - 12px) / 2 + (ta.pressed ? 1px : 0px); d: root.d; solid: root.solid || root.hot; tint: root.solid || (root.hot && ta.has-hover) ? white : (root.danger && ta.has-hover ? Theme.redtx : (ta.has-hover ? Theme.tx : Theme.dim)); }
     ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false; enabled: true;
         key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
@@ -326,7 +326,7 @@ export component Toggle inherits Rectangle {
     width: 34px; height: 20px; border-radius: 10px;
     background: root.on ? Theme.red : Theme.s3;
     border-width: 1px;
-    border-color: root.on ? Theme.red : (ta.has-hover ? #ffffff55 : Theme.ln2);
+    border-color: root.on ? Theme.red : (ta.has-hover ? Theme.mut : Theme.ln2);
     animate background, border-color { duration: Theme.mid; }
     Rectangle {
         x: root.on ? 16px : 2px; y: 2px; width: 14px; height: 14px; border-radius: 7px; background: root.on ? white : Theme.dim;
@@ -349,7 +349,7 @@ export component Dropdown inherits Rectangle {
     height: 40px;
     background: ta.has-hover ? Theme.s2 : Theme.s1;
     border-width: 1px;
-    border-color: ta.has-hover ? #ffffff66 : Theme.ln2;
+    border-color: ta.has-hover ? Theme.mut : Theme.ln2;
     animate border-color, background { duration: Theme.fast; }
     Text { x: 14px; width: parent.width - 44px; text: root.items[root.current]; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 500; vertical-alignment: center; overflow: elide; }
     Icon { x: parent.width - 26px; y: (parent.height - 12px) / 2; d: Ico.down; tint: ta.has-hover ? Theme.tx : Theme.dim; }
@@ -448,7 +448,7 @@ export component Field inherits Rectangle {
     height: 40px;
     background: Theme.s1;
     border-width: 1px;
-    border-color: inp.has-focus ? Theme.red2 : (ta.has-hover ? #ffffff55 : Theme.ln2);
+    border-color: inp.has-focus ? Theme.red2 : (ta.has-hover ? Theme.mut : Theme.ln2);
     animate border-color { duration: Theme.mid; }
     ta := TouchArea { mouse-cursor: MouseCursor.text; clicked => { inp.focus(); } }
     if root.search: Icon { x: 14px; y: (parent.height - 12px) / 2; d: Ico.search; tint: inp.has-focus ? Theme.tx : Theme.mut; }
@@ -462,23 +462,28 @@ export component Field inherits Rectangle {
     }
 }
 
-// Text tabs with a sliding slanted marker.
+// Text tabs: each as wide as its label (Nether Pixel runs wide), the accent line sits under the current label.
 export component UTabs inherits Rectangle {
     in property <[string]> items;
+    // kept for old call sites; tabs now size to their labels
     in property <length> item-w: 130px;
     in-out property <int> current: 0;
     height: 38px;
     Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; }
-    for it[i] in root.items: Rectangle {
-        x: i * root.item-w; width: root.item-w; height: parent.height;
-        Text {
-            x: 0px; width: parent.width - 8px;
-            text: it; font-family: Theme.disp; font-size: 16px; font-weight: 700;
-            color: root.current == i ? Theme.tx : (t.has-hover ? Theme.dim : Theme.mut);
-            vertical-alignment: center;
-            animate color { duration: Theme.mid; }
+    HorizontalLayout {
+        alignment: start; spacing: 36px;
+        for it[i] in root.items: Rectangle {
+            min-width: lt.preferred-width; horizontal-stretch: 0;
+            lt := Text {
+                x: 0px; text: it; font-family: Theme.disp; font-size: 16px; font-weight: 700;
+                color: root.current == i ? Theme.tx : (t.has-hover ? Theme.dim : Theme.mut);
+                vertical-alignment: center;
+                animate color { duration: Theme.mid; }
+            }
+            Rectangle { y: parent.height - 2px; height: 2px; border-radius: 1px; background: Theme.red2; opacity: root.current == i ? 1 : 0; animate opacity { duration: Theme.mid; } }
+            if fs.has-focus && root.current == i: Rectangle { x: -6px; y: 2px; width: parent.width + 12px; height: parent.height - 4px; border-width: 2px; border-color: Theme.ice; }
+            t := TouchArea { mouse-cursor: pointer; clicked => { root.current = i; } }
         }
-        t := TouchArea { mouse-cursor: pointer; clicked => { root.current = i; } }
     }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
         key-pressed(e) => {
@@ -486,11 +491,6 @@ export component UTabs inherits Rectangle {
             if e.text == Key.RightArrow && root.current < root.items.length - 1 { root.current += 1; return accept; }
             return reject;
         } }
-    if fs.has-focus: Rectangle { x: root.current * root.item-w - 6px; y: 2px; width: root.item-w - 16px; height: parent.height - 4px; border-width: 2px; border-color: Theme.ice; }
-    Rectangle {
-        x: root.current * root.item-w; y: parent.height - 2px; width: root.item-w - 8px; height: 2px; background: Theme.red2;
-        animate x { duration: Theme.slow; easing: ease-out-quint; }
-    }
 }
 
 // Horizontal gauge: label, bar, value.
@@ -588,6 +588,16 @@ export component Pulse inherits Rectangle {
     opacity: Backend.calm ? 1 : 0.45 + 0.55 * Math.abs(sin(Backend.tick / 1.6s * 180deg));
 }
 
+// Soft ground shadow under a standing player (stacked pills read as a blurred ellipse).
+export component GroundShadow inherits Rectangle {
+    width: 220px; height: 30px;
+    for k in 4: Rectangle {
+        x: k * root.width / 10; y: k * root.height / 10;
+        width: root.width * (1 - k / 5); height: root.height * (1 - k / 5);
+        border-radius: self.height / 2; background: #00000030;
+    }
+}
+
 // Click-and-drag over the player preview to turn the model (auto spin always runs, pauses while held).
 export component SpinArea inherits TouchArea {
     property <length> last;
@@ -605,7 +615,7 @@ export component SetRow inherits Rectangle {
     // text starts here (room for a leading image)
     in property <length> indent: 0px;
     height: 64px;
-    Text { x: root.indent; y: 12px; text: root.title; color: root.dimmed ? Theme.mut : Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; }
+    Text { x: root.indent; y: 12px; text: root.title; color: root.dimmed ? Theme.mut : Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; }
     Text { x: root.indent; y: 35px; width: parent.width - root.reserve - root.indent; text: root.sub; color: root.dimmed ? Theme.mut : Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; overflow: elide; }
     Rectangle { x: 0px; y: parent.height - 1px; height: 1px; background: Theme.ln; }
     @children

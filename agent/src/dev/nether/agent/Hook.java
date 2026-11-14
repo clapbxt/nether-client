@@ -58,10 +58,27 @@ public final class Hook {
     /** The show-name test was hooked (the overlay then leaves the tag to the game). */
     public static volatile boolean labelHooked;
 
+    /** entity of the shouldShowName call in progress (render thread), taken at the method's start */
+    private static Object labelOf;
+
+    /** Start of LivingEntityRenderer.shouldShowName: its entity (the argument slot may be dead or reused by the returns). */
+    public static void labelArg(Object entity) { labelOf = entity; }
+
     /** End of LivingEntityRenderer.shouldShowName: true for {@link #self}, else the game's answer. */
-    public static boolean label(boolean shown, Object entity) {
-        return shown || (entity != null && entity == self);
+    public static boolean label(boolean shown) {
+        Object e = labelOf;
+        return shown || (e != null && e == self);
     }
+
+    /** Zoom: GameRenderer's FOV multiplier reads (in getFov) are divided by this (1 = none); set by the overlay. */
+    public static volatile float fovDiv = 1;
+    /** Held items shown (1) .. eased below the screen (0); ItemInHandRenderer's equip-height reads are scaled by it. */
+    public static volatile float handShow = 1;
+    /** The FOV / held-item reads were hooked (else Zoom falls back to the FOV option and cannot hide the hand). */
+    public static volatile boolean fovHooked, handHooked;
+
+    public static float fov(float v) { float d = fovDiv; return d > 1 ? v / d : v; }
+    public static float hand(float v) { float s = handShow; return s < 1 ? v * Math.max(0, s) : v; }
 
     /** component -> chat line to show; set by the overlay (the Nether badge before Nether players' names). */
     public static volatile java.util.function.Function<Object, Object> chat;

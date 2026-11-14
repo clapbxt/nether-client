@@ -242,6 +242,21 @@ export component InstancesScreen inherits Rectangle {
                     }
                 }
             }
+            // a quiet "add" row after the list, so a short list ends in a next step instead of a void
+            if Backend.instances.length > 0 && Backend.inst-query == "": Rectangle {
+                height: 76px;
+                Rectangle {
+                    y: 14px; height: 56px; border-radius: 6px; background: adt.has-hover ? Theme.hov : transparent;
+                    border-width: 1px; border-color: adt.has-hover ? Theme.mut : Theme.ln2;
+                    animate background, border-color { duration: Theme.fast; }
+                    Rectangle { x: 18px; y: 10px; width: 36px; height: 36px; border-radius: 6px; border-width: 1px; border-color: Theme.ln2;
+                        Icon { x: 12px; y: 12px; d: Ico.plus; tint: adt.has-hover ? Theme.tx : Theme.dim; } }
+                    Text { x: 66px; y: 9px; text: "New instance"; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; }
+                    Text { x: 66px; y: 30px; text: "Pick a version and loader, or start from a modpack"; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
+                    adt := TouchArea { mouse-cursor: pointer; clicked => { Backend.create-open = true; } }
+                    LinkBtn { x: parent.width - self.width - 18px; y: 14px; text: "BROWSE MODPACKS"; clicked => { root.go-discover(); } }
+                }
+            }
             }
             // empty states
             if Backend.visible-insts.length == 0: Rectangle {
@@ -412,7 +427,7 @@ export component InstancesScreen inherits Rectangle {
                     Btn { x: parent.width - self.width; y: 14px; text: Backend.instances[root.sel].group == "" ? "ADD TO GROUP" : "CHANGE GROUP"; icon: Ico.folder; clicked => { root.act(root.sel, 7); } } }
                 Rectangle {
                     x: 56px; y: ocp.y + ocp.height + 148px; width: 880px; height: 140px;
-                    background: Theme.s1; border-width: 1px; border-color: notes.has-focus ? Theme.red2 : (nta.has-hover ? #ffffff55 : Theme.ln2); border-radius: 8px;
+                    background: Theme.s1; border-width: 1px; border-color: notes.has-focus ? Theme.red2 : (nta.has-hover ? Theme.mut : Theme.ln2); border-radius: 8px;
                     animate border-color { duration: Theme.mid; }
                     property <int> s: root.sel;
                     changed s => { notes.text = Backend.instances[root.sel].notes; }

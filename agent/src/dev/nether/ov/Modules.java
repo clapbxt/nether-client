@@ -1,5 +1,6 @@
 package dev.nether.ov;
 
+import dev.nether.agent.Hook;
 import java.time.LocalTime;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -101,7 +102,8 @@ final class Modules {
     static boolean onScroll(double y) {
         Zoom z = ZOOM;
         if (!z.held || !z.enabled() || !z.bool("scroll") || y == 0) return false;
-        Config.set("zoom", "level", Math.max(1.5, Math.min(10, z.num("level") + Math.signum(y) * 0.5)));
+        // x1.25 per notch (even steps at any zoom), up to 50x; only this zoom: the next one starts at the set level
+        z.live = Math.max(1.5, Math.min(50, z.level() * (y > 0 ? 1.25 : 0.8)));
         return true;
     }
 
@@ -354,8 +356,11 @@ final class Modules {
         if (action == 1 && (key == 300 || key == 66 && (Input.keys[341] || Input.keys[345]))) restoreOptions();
         Zoom zm = ZOOM;
         if (key == (int) zm.num("zoomKey")) {
-            if (action == 1 && zm.enabled() && Input.inWorld()) zm.held = zm.toggle() ? !zm.held : true;
-            else if (action == 0 && !zm.toggle()) zm.held = false;
+            if (action != 0 && zm.enabled() && Input.inWorld()) { // the game never sees the zoom key (no hotbar save on C)
+                if (action == 1) zm.held = zm.toggle() ? !zm.held : true;
+                return true;
+            }
+            if (action == 0 && !zm.toggle()) zm.held = false;
         }
         if (press && !Input.inWorld()) return false;
         Waypoints wp = WAYPOINTS;
@@ -373,13 +378,11 @@ final class Modules {
         Fps() {
             super("fps", "FPS", "HUD", "Frames per second, updated every second.", true, 0.012, 0.02);
             add(Setting.bool("ms", "Show frame time", false));
-            add(Setting.bool("tint", "Color by speed", false));
-            add(Setting.slider("good", "Green from (FPS)", 20, 360, 5, 60).hint("FPS at or above this is green."));
-            add(Setting.slider("ok", "Amber from (FPS)", 10, 240, 5, 30).hint("FPS at or above this (and below green) is amber, lower is red."));
+            add(Setting.bool("tint", "Color by speed", false).hint("Green at 60 FPS and up, amber from 30, red below."));
             add(Setting.bool("stats", "Show average, minimum, 1% low", false).hint("Over the last 10 seconds. The 1% low is the speed of your worst frames."));
         }
         @Override void tick() { if (live() && bool("stats")) FrameStats.want = true; }
-        private String c(float f, String v) { return bool("tint") ? tint(f >= num("good"), f >= num("ok"), v) : v; }
+        private String c(float f, String v) { return bool("tint") ? tint(f >= 60, f >= 30, v) : v; }
         @Override String[][] rows() {
             int f = Overlay.fps;
             String v = bool("ms") && f > 0 ? f + "  " + String.format(Locale.ROOT, "%.1f ms", 1000.0 / f) : String.valueOf(f);
@@ -394,7 +397,6 @@ final class Modules {
     static final class Cps extends RowsModule {
         Cps() {
             super("cps", "CPS", "HUD", "Left and right clicks per second.", true, 0.012, 0.105);
-            add(Setting.bool("right", "Show right click", true));
             add(Setting.choice("show", "Show", "Split", "Split", "Combined", "Left", "Right").hint("Split = left | right, Combined = both added, or one button only."));
             add(Setting.bool("only", "Only while clicking", false).hint("The box is hidden until you click."));
         }
@@ -405,7 +407,7 @@ final class Modules {
                 case "Combined": return new String[][] {{"CPS", String.valueOf(l + r)}};
                 case "Left": return new String[][] {{"CPS L", String.valueOf(l)}};
                 case "Right": return new String[][] {{"CPS R", String.valueOf(r)}};
-                default: return new String[][] {{"CPS", bool("right") ? l + " | " + r : String.valueOf(l)}};
+                default: return new String[][] {{"CPS", l + " | " + r}};
             }
         }
     }
@@ -518,22 +520,31 @@ final class Modules {
         Keystrokes() {
             super("keys", "Keystrokes", "HUD", "WASD, space and mouse buttons with live CPS.", true, true, 1.0, 1.0);
             add(Setting.bool("mouse", "Mouse buttons", true));
-            add(Setting.bool("cps", "Show CPS", true));
+            add(Setting.bool("cps", "Show CPS", true).when(() -> bool("mouse")));
             add(Setting.bool("space", "Space bar", true));
-            add(Setting.choice("layout", "Layout", "Custom", "Custom", "WASD", "WASD + mouse", "WASD + space", "Full").hint("Presets override the three switches above; Custom uses them."));
             add(Setting.slider("fade", "Pressed fade (ms)", 10, 400, 5, 55).hint("How long a key takes to light up and fade out."));
             drop("accent");
         }
 
         @Override void tick() {
-            if (!live() || !due(1000) || !Game.moveKeys(read)) return;
+            if (!live() || !due(1000)) return;
+            migrate();
+            if (!Game.moveKeys(read)) return;
             for (int i = 0; i < 5; i++) if (read[i] != bind[i]) { bind[i] = read[i]; names[i] = read[i] < 0 ? "-" : Menu.keyName(read[i]); }
         }
 
         private boolean down(int i) { int k = bind[i]; return k >= 0 && k < Input.keys.length && Input.keys[k]; }
 
-        private boolean mouse() { String l = str("layout"); return l.equals("Custom") ? bool("mouse") : l.equals("WASD + mouse") || l.equals("Full"); }
-        private boolean space() { String l = str("layout"); return l.equals("Custom") ? bool("space") : l.equals("WASD + space") || l.equals("Full"); }
+        private boolean mouse() { return bool("mouse"); }
+        private boolean space() { return bool("space"); }
+
+        /** Once: an old Layout preset becomes the two switches it stood for. */
+        private void migrate() {
+            Object l = Config.raw(id, "layout");
+            if (!(l instanceof String)) return;
+            if (!"Custom".equals(l)) { Config.set(id, "mouse", l.equals("WASD + mouse") || l.equals("Full")); Config.set(id, "space", l.equals("WASD + space") || l.equals("Full")); }
+            Config.set(id, "layout", null);
+        }
 
         @Override void measure() {
             w = C * 3 + G * 2;
@@ -580,7 +591,7 @@ final class Modules {
 
     static final class Zoom extends Module {
         boolean held;
-        private float cur = 1;
+        private float cur = 1, hand = 1;
         private double origFov = -1;
         /** mouse speed factor while zoomed (1 = none), see {@link Modules#syncSens} */
         double sensScale = 1;
@@ -591,28 +602,45 @@ final class Modules {
             add(Setting.choice("mode", "Mode", "Hold", "Hold", "Toggle"));
             add(Setting.slider("level", "Zoom level", 1.5, 10, 0.5, 4));
             add(Setting.bool("smooth", "Smooth zoom", true));
-            add(Setting.bool("scroll", "Scroll to adjust", true));
+            add(Setting.bool("scroll", "Scroll to adjust", true).hint("Up to 50x, for this zoom only: the next one starts at the zoom level again."));
             add(Setting.bool("sens", "Lower sensitivity while zoomed", true));
+            add(Setting.bool("hideHand", "Hide held item while zoomed", false).hint("Eases it down out of view and back up (Fabric, Forge, NeoForge and 26.x)"));
             needs(3);
         }
 
+        /** level scrolled to during this zoom (0 = the set level); dropped when the zoom ends */
+        double live;
+
         boolean toggle() { return str("mode").equals("Toggle"); }
+        double level() { return live > 0 ? live : num("level"); }
         @Override boolean available() { return super.available() && Game.optionsOk(); }
 
         @Override void tick() {
             if (!enabled() || !Game.playing()) { held = false; cur = 1; }
-            float target = held ? (float) num("level") : 1f;
-            if (bool("smooth")) cur += (target - cur) * Math.min(1f, Gfx.dt * 14f); else cur = target;
-            if (Math.abs(cur - target) < 0.004f) cur = target;
+            if (!held) live = 0;
+            float target = held ? (float) level() : 1f;
+            // eased in log space: every step is the same share of the view, so it reads as one even glide
+            if (bool("smooth") && !Config.calm()) cur = (float) Math.exp(Math.log(cur) + (Math.log(target) - Math.log(cur)) * Math.min(1f, Gfx.dt * 12f));
+            else cur = target;
+            if (Math.abs(cur - target) < 0.002f) cur = target;
+            float ht = held && bool("hideHand") ? 0 : 1;
+            hand = Config.calm() ? ht : hand + (ht - hand) * Math.min(1f, Gfx.dt * 10f);
+            if (Math.abs(hand - ht) < 0.01f) hand = ht;
+            Hook.handShow = hand;
             if (cur > 1f) {
-                if (origFov < 0) origFov = Game.fov();
-                Game.setFov(Math.max(2, origFov / cur));
+                // hooked: GameRenderer's float FOV multiplier is divided (no whole-degree steps); else the FOV option
+                if (Hook.fovHooked) Hook.fovDiv = cur;
+                else {
+                    if (origFov < 0) origFov = Game.fov();
+                    Game.setFov(Math.max(2, origFov / cur));
+                }
                 sensScale = bool("sens") ? 1 / cur : 1; // mouse speed proportional to the field of view
                 syncSens();
             } else restore();
         }
 
         void restore() {
+            Hook.fovDiv = 1;
             if (origFov >= 0) { Game.setFov(origFov); origFov = -1; }
             if (sensScale != 1) { sensScale = 1; syncSens(); }
             cur = 1;
@@ -678,7 +706,7 @@ final class Modules {
             add(Setting.slider("lowSecs", "Warn below (s)", 3, 60, 1, 10).hint("Time left under this turns red."));
             add(Setting.choice("sort", "Sort by", "Time left", "Time left", "Level", "Name").hint("Order of the list."));
             add(Setting.bool("ambient", "Hide beacon effects", false).hint("Leaves out the effects a beacon or conduit keeps giving you."));
-            add(Setting.bool("compact", "Compact", false).hint("Icon and time only, tighter rows (names stay for effects without an icon)."));
+            add(Setting.bool("compact", "Compact", false).when(() -> bool("icons")).hint("Icon and time only, tighter rows (names stay for effects without an icon)."));
             needs(4);
         }
 
@@ -756,16 +784,14 @@ final class Modules {
         private String v = "-";
 
         Ping() { super("ping", "Ping", "HUD", "Latency to the server, from the player list.", false, 0.15, 0.02); needs(4);
-            add(Setting.bool("tint", "Color by latency", true));
-            add(Setting.slider("good", "Green below (ms)", 20, 300, 5, 80).hint("Latency under this is green."));
-            add(Setting.slider("ok", "Amber below (ms)", 40, 600, 5, 160).hint("Latency under this (and above green) is amber, higher is red."));
+            add(Setting.bool("tint", "Color by latency", true).hint("Green under 80 ms, amber under 160, red above."));
         }
 
         @Override void tick() {
             if (!live() || !due(500)) return;
             String sv = Game.server();
             int p = Game.ping();
-            v = sv == null ? "-" : sv.equals("Singleplayer") ? "LOCAL" : p >= 0 ? (bool("tint") ? tint(p < num("good"), p < num("ok"), p + " ms") : p + " ms") : "-";
+            v = sv == null ? "-" : sv.equals("Singleplayer") ? "LOCAL" : p >= 0 ? (bool("tint") ? tint(p < 80, p < 160, p + " ms") : p + " ms") : "-";
         }
 
         @Override String[][] rows() { return new String[][] {{"PING", v}}; }
@@ -774,11 +800,18 @@ final class Modules {
     static final class Address extends RowsModule {
         private String v = "-";
 
-        Address() { super("server", "Server Address", "HUD", "Address of the server you are connected to.", false, 0.15, 0.105); needs(4); }
+        Address() {
+            super("server", "Server Address", "HUD", "Address of the server you are connected to.", false, 0.15, 0.105); needs(4);
+            add(Setting.bool("mask", "Streamer mode", false).hint("Shows play.***.net instead of the full address."));
+        }
 
         @Override void tick() {
             if (!live() || !due(1000)) return;
             String sv = Game.server();
+            if (sv != null && bool("mask") && !sv.equals("Singleplayer")) {
+                String[] p = sv.replaceAll(":\\d+$", "").split("\\.");
+                sv = p.length >= 3 && !p[0].matches("\\d+") ? p[0] + ".***." + p[p.length - 1] : p.length == 2 ? "***." + p[1] : "***";
+            }
             v = sv == null ? "-" : sv.length() > 26 ? sv.substring(0, 25) + ".." : sv;
         }
 
@@ -916,11 +949,11 @@ final class Modules {
     static final class Crosshair extends Module {
         Crosshair() {
             super("crosshair", "Crosshair", "Visual", "Your own crosshair shape, drawn by the game like a resource pack's.", false, false, 0, 0);
-            add(Setting.choice("style", "Style", "Cross", "Cross", "Plus", "Dot", "Circle", "Square"));
+            add(Setting.choice("style", "Style", "Cross", "Cross", "Dot", "Circle", "Square").hint("Cross with gap 0 is a plus."));
             add(Setting.slider("size", "Size", 2, 12, 1, 5));
             add(Setting.slider("thickness", "Thickness", 0.5, 3, 0.5, 1));
-            add(Setting.slider("gap", "Gap", 0, 8, 1, 3));
-            add(Setting.bool("dot", "Center dot", false));
+            add(Setting.slider("gap", "Gap", 0, 8, 1, 3).when(() -> !str("style").equals("Dot")));
+            add(Setting.bool("dot", "Center dot", false).when(() -> !str("style").equals("Dot")));
         }
 
         /** texels per GUI pixel of the texture we write (the game draws the crosshair 15 GUI px square) */
@@ -1013,6 +1046,7 @@ final class Modules {
         /** Keeps the pack file in step with the settings (checked 2x a second); a changed file asks the game to reload once our menu is closed. */
         void sync() {
             long now = System.currentTimeMillis();
+            if ("Plus".equals(Config.raw(id, "style"))) { Config.set(id, "style", "Cross"); Config.set(id, "gap", 0.0); } // Plus was Cross at gap 0
             if (reload && !Input.menuOpen && now - changedAt > 400) { reload = false; reloadGame(); }
             if (now - checkedAt < 500) return;
             checkedAt = now;

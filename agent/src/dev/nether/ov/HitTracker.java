@@ -23,6 +23,7 @@ final class HitTracker {
     private static int prevHurt;
     private static long lastCount, lastPoll;
     private static final double[] pos = new double[3];
+    private static java.lang.ref.WeakReference<Object> target = new java.lang.ref.WeakReference<>(null);
 
     /** Attack click (left button in the world), from {@link Input}. */
     static void attack() { if (reachOn || comboOn) pending = true; }
@@ -46,8 +47,11 @@ final class HitTracker {
                         reachAt = now;
                     }
                 }
-                // a click on a target is counted at most every 0.4 s: the target ignores faster ones (no damage), so they are no hit
-                if (comboOn && now - lastCount > 400) {
+                // living targets only (no item frames, boats); a hit is counted at most every 0.5 s, the 10-tick hurt
+                // immunity: the target ignores faster clicks (no damage), so they are no hit. A new target starts over.
+                Object e = comboOn ? Data.hitLiving() : null;
+                if (e != null && now - lastCount >= 500) {
+                    if (target.get() != e) { combo = 0; target = new java.lang.ref.WeakReference<>(e); }
                     combo++;
                     best = Math.max(best, combo);
                     hitAt = lastCount = now;

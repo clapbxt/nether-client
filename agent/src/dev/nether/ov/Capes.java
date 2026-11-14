@@ -26,7 +26,10 @@ import java.util.function.Supplier;
  * get it in front (Agent hooks the chat HUD's add-message methods). The badge is always shown. Who: -Dnether.capeApi
  * (GET /v1/players?u= -> {uuid: cape id or ""} for every Nether player), textures from
  * -Dnether.capeContent (/capes/(id).png), fetched off the render thread. -Dnether.capeDev=(id) puts that cape on
- * every player (testing without the API).
+ * every player (testing without the API). Cape PNGs (same rule as core backend.rs / content sign.mjs): frames of 64:32
+ * (cape + elytra) or 22:17 (cape only: drawn into the 64:32 layout over the game's own elytra texture), any whole scale
+ * (HD), stacked vertically = animated (ms per frame from the sums file); each frame is its own texture and the skin
+ * supplier (1.8.9: the cape location, every frame) picks the current one.
  */
 final class Capes {
     private static final String API = trim(System.getProperty("nether.capeApi")), CONTENT = trim(System.getProperty("nether.capeContent"));
@@ -38,14 +41,20 @@ final class Capes {
     /** uuid -> profile name of players in the tab list (Nether players only), for the chat badge */
     private static final Map<String, String> names = new ConcurrentHashMap<>();
     private static final Map<String, Long> asked = new ConcurrentHashMap<>();
-    // cape id -> PNG bytes (worker) -> registered texture (render thread): ClientAsset (1.21.9+) or ResourceLocation
-    private static final Map<String, byte[]> png = new ConcurrentHashMap<>();
+    // cape id -> decoded 64:32 frames (worker) -> registered texture or Anim (render thread): ClientAsset (1.21.9+) or ResourceLocation
+    private static final Map<String, Object[]> png = new ConcurrentHashMap<>();
     private static final Map<String, Boolean> fetching = new ConcurrentHashMap<>();
     /** cape id -> earliest next download try after a failed one */
     private static final Map<String, Long> retryAt = new ConcurrentHashMap<>();
-    private static final int MAX_PNG = 64 * 1024, MAX_API = 256 * 1024;
-    /** verified cape sha256s from the launcher (-Dnether.capeSums: "id sha256" lines, from the signed content manifest) */
+    private static final int MAX_PNG = 4 * 1024 * 1024, MAX_API = 256 * 1024;
+    /** ms per animation frame by cape id (from the sums file; default 100) */
+    private static final Map<String, Integer> MS = new HashMap<>();
+    /** verified cape sha256s from the launcher (-Dnether.capeSums: "id sha256 ms" lines, from the signed content manifest) */
     private static final Map<String, String> SUMS = sums();
+    /** every cape texture we registered (identity: 1.8.9 takes ours off by spotting it) */
+    private static final java.util.Set<Object> ours = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+    /** 1.8.9: player info -> its animated cape, re-pointed every frame */
+    private static final Map<Object, Anim> legacyAnim = new java.util.IdentityHashMap<>();
     // API backoff: after a failed batch wait 30 s, doubling to 15 min (+/-25 % jitter); give up for the session after
     // 8 failures in a row; at most 60 requests per 10 minutes whatever happens
     private static int failures;
@@ -63,7 +72,9 @@ final class Capes {
         try {
             for (String l : java.nio.file.Files.readAllLines(java.nio.file.Paths.get(p), StandardCharsets.UTF_8)) {
                 String[] t = l.trim().split(" ");
-                if (t.length == 2 && t[0].matches("[a-z0-9_-]{1,32}") && t[1].matches("[0-9a-f]{64}")) m.put(t[0], t[1]);
+                if (t.length < 2 || !t[0].matches("[a-z0-9_-]{1,32}") || !t[1].matches("[0-9a-f]{64}")) continue;
+                m.put(t[0], t[1]);
+                if (t.length > 2 && t[2].matches("\\d{2,4}")) MS.put(t[0], Math.max(20, Math.min(2000, Integer.parseInt(t[2]))));
             }
         } catch (Throwable t) { System.out.println("[nether-agent] cape hashes unavailable: " + t); }
         return m;
@@ -73,8 +84,63 @@ final class Capes {
         if (d.length < 33 || d.length > MAX_PNG) return false;
         long w = ((d[16] & 255L) << 24) | ((d[17] & 255) << 16) | ((d[18] & 255) << 8) | (d[19] & 255);
         long h = ((d[20] & 255L) << 24) | ((d[21] & 255) << 16) | ((d[22] & 255) << 8) | (d[23] & 255);
-        return w >= 22 && w <= 256 && h >= 17 && h <= 128;
+        return w < 1 << 16 && h < 1 << 16 && layout((int) w, (int) h) != null;
     }
+
+    /** {scale, frames, full (1) or cape only (0)} for a w x h cape image, null if it is not one. */
+    private static int[] layout(int w, int h) {
+        for (int[] b : new int[][] {{64, 32, 1}, {22, 17, 0}}) {
+            if (w <= 0 || w % b[0] != 0) continue;
+            int s = w / b[0], fh = s * b[1];
+            if (h % fh != 0) continue;
+            int n = h / fh;
+            if (s <= 32 && n >= 1 && n <= 128 && n * s * s <= 2048) return new int[] {s, n, b[2]};
+        }
+        return null;
+    }
+
+    /**
+     * Worker thread: the cape as 64:32 frames (1.8.9: BufferedImages, else PNG bytes for NativeImage). Cape-only art
+     * goes over the game's elytra texture (resource packs apply), so elytra keep their normal look.
+     */
+    private static Object[] frames(byte[] d, boolean legacy) throws Exception {
+        java.awt.image.BufferedImage img = Icons.decode(new ByteArrayInputStream(d));
+        if (img == null) throw new IllegalStateException("unreadable PNG");
+        int[] l = layout(img.getWidth(), img.getHeight());
+        if (l == null) throw new IllegalStateException("bad cape size");
+        int s = l[0], fh = s * (l[2] == 1 ? 32 : 17);
+        java.awt.image.BufferedImage wings = null;
+        if (l[2] == 0 && !legacy) {
+            wings = Res.image("assets/minecraft/textures/entity/equipment/wings/elytra.png"); // 1.21.2+
+            if (wings == null) wings = Res.image("assets/minecraft/textures/entity/elytra.png");
+        }
+        Object[] out = new Object[l[1]];
+        for (int i = 0; i < out.length; i++) {
+            java.awt.image.BufferedImage f = new java.awt.image.BufferedImage(64 * s, 32 * s, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+            java.awt.Graphics2D g = f.createGraphics();
+            g.setComposite(java.awt.AlphaComposite.Src);
+            g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+            if (wings != null) g.drawImage(wings, 0, 0, 64 * s, 32 * s, null);
+            g.drawImage(img.getSubimage(0, i * fh, img.getWidth(), fh), 0, 0, null);
+            g.dispose();
+            if (legacy) { out[i] = f; continue; }
+            ByteArrayOutputStream o = new ByteArrayOutputStream();
+            if (!javax.imageio.ImageIO.write(f, "png", o)) throw new IllegalStateException("no PNG writer");
+            out[i] = o.toByteArray();
+        }
+        return out;
+    }
+
+    /** An animated cape: one texture per frame. */
+    static final class Anim {
+        final Object[] tex;
+        final int ms;
+        Anim(Object[] tex, int ms) { this.tex = tex; this.ms = ms; }
+        Object now() { return tex[(int) (System.currentTimeMillis() / ms % tex.length)]; }
+    }
+
+    /** The texture to show now: the current frame of an animated cape. */
+    private static Object frame(Object cape) { return cape instanceof Anim ? ((Anim) cape).now() : cape; }
 
     private static String sha256(byte[] d) throws Exception {
         StringBuilder sb = new StringBuilder();
@@ -87,6 +153,10 @@ final class Capes {
     /** Render thread, every frame. */
     static void tick() {
         if (off || CONTENT == null || (API == null && DEV == null)) return;
+        if (!legacyAnim.isEmpty()) {
+            try { for (Map.Entry<Object, Anim> e : legacyAnim.entrySet()) { Object f = e.getValue().now(); if (capeField.get(e.getKey()) != f) capeField.set(e.getKey(), f); } }
+            catch (Throwable t) { legacyAnim.clear(); }
+        }
         long t0 = System.currentTimeMillis();
         if (t0 < nextAt) return; // 3x a second whatever the frame rate (player lists can be long)
         nextAt = t0 + 333;
@@ -98,6 +168,7 @@ final class Capes {
                 : Game.call(Game.call(mc, "method_1562"), "method_2880");
             if (!(all instanceof Collection)) return;
             long now = System.currentTimeMillis();
+            legacyAnim.clear(); // players who left drop out; the rest are re-added below
             for (Object pi : (Collection<?>) all) {
                 Object prof = Game.call(pi, legacy ? Game.l("a", "func_178845_a") : "method_2966");
                 String uuid = uuid(prof);
@@ -194,7 +265,7 @@ final class Capes {
     /** Cape texture for an id once its PNG is registered; null while it downloads (or if it can't). */
     private static Object texture(String id, boolean legacy) throws Exception {
         if (asset.containsKey(id)) return asset.get(id);
-        byte[] b = png.get(id);
+        Object[] b = png.get(id);
         if (b == null) {
             Long r = retryAt.get(id);
             if (SUMS.get(id) == null && DEV == null) { retryAt.put(id, System.currentTimeMillis() + 3_600_000L); return null; } // not in the signed manifest
@@ -206,7 +277,7 @@ final class Capes {
                         if (want != null && !want.equals(sha256(d))) throw new IllegalStateException("hash mismatch");
                         if (!pngSane(d)) throw new IllegalStateException("bad cape size");
                         if (d.length < 8 || (d[0] & 255) != 0x89 || d[1] != 'P' || d[2] != 'N' || d[3] != 'G') throw new IllegalStateException("not a PNG");
-                        png.put(id, d);
+                        png.put(id, frames(d, legacy));
                         retryAt.remove(id);
                     } catch (Throwable t) {
                         System.out.println("[nether-agent] cape " + id + ": " + t);
@@ -217,9 +288,16 @@ final class Capes {
                 });
             return null;
         }
-        Object a = legacy ? legacyTexture(id, b) : texture(id, b);
+        png.remove(id);
+        Object[] tex = new Object[b.length];
+        for (int i = 0; i < b.length; i++) {
+            String name = b.length == 1 ? id : id + "/" + i;
+            tex[i] = legacy ? legacyTexture(name, (java.awt.image.BufferedImage) b[i]) : texture(name, (byte[]) b[i]);
+            ours.add(tex[i]);
+        }
+        Object a = tex.length == 1 ? tex[0] : new Anim(tex, MS.getOrDefault(id, 100));
         asset.put(id, a);
-        System.out.println("[nether-agent] cape " + id + " ready");
+        System.out.println("[nether-agent] cape " + id + " ready (" + tex.length + " frame" + (tex.length == 1 ? ")" : "s)"));
         return a;
     }
 
@@ -240,10 +318,8 @@ final class Capes {
     }
 
     /** 1.8.9: DynamicTexture(BufferedImage) registered under nether:capes/(id); the cape is that location. */
-    private static Object legacyTexture(String id, byte[] b) throws Exception {
+    private static Object legacyTexture(String id, java.awt.image.BufferedImage img) throws Exception {
         Object loc = Game.cls(Game.l("jy", "net.minecraft.util.ResourceLocation")).getConstructor(String.class, String.class).newInstance("nether", "capes/" + id);
-        java.awt.image.BufferedImage img = Icons.decode(new ByteArrayInputStream(b));
-        if (img == null) throw new IllegalStateException("unreadable PNG");
         Object tex = Game.cls(Game.l("blz", "net.minecraft.client.renderer.texture.DynamicTexture")).getConstructor(java.awt.image.BufferedImage.class).newInstance(img);
         Game.call(Game.call(Game.mc(), Game.l("P", "func_110434_K")), Game.l("a", "func_110579_a"), loc, tex);
         return loc;
@@ -389,12 +465,13 @@ final class Capes {
 
     private static Field capeField;
     /** 1.8.9: NetworkPlayerInfo.locationCape = ours (re-set every pass: a vanilla cape loading later would replace it). */
-    private static void legacyCape(Object pi, Object loc) throws Exception {
+    private static void legacyCape(Object pi, Object tex) throws Exception {
         if (capeField == null) capeField = Game.field(pi.getClass(), Game.l("f", "field_178862_f"));
         if (capeField == null) throw new IllegalStateException("NetworkPlayerInfo.locationCape missing");
-        Object cur = capeField.get(pi);
+        if (tex instanceof Anim) legacyAnim.put(pi, (Anim) tex);
+        Object cur = capeField.get(pi), loc = frame(tex);
         if (loc != null) { if (cur != loc) capeField.set(pi, loc); }
-        else if (cur != null && asset.containsValue(cur)) capeField.set(pi, null);
+        else if (cur != null && ours.contains(cur)) capeField.set(pi, null);
     }
 
     private static Field skinField;
@@ -453,7 +530,7 @@ final class Capes {
         Skin(Supplier<Object> base, Object cape) { this.base = base; this.cape = cape; }
 
         @Override public Object get() {
-            Object s = base.get(), c = cape;
+            Object s = base.get(), c = frame(cape);
             if (s == null || c == null) return s;
             if (s == last && c == lastCape && out != null) return out;
             try {

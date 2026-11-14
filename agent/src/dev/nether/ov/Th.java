@@ -1,7 +1,7 @@
 package dev.nether.ov;
 
 /**
- * Menu theme (OLED default, Obsidian, Slate, Ice) and accent, read from the global client.json
+ * Menu theme (OLED, Obsidian default, Slate, Ice) and accent, read from the global client.json
  * ({@code modules.client.theme / accent / accent2}, written by the launcher's Settings and by the in-game Settings tab).
  * Only the menu, wardrobe and editor chrome use these; HUD modules keep {@link Gfx}'s fixed colours so they read over the world.
  */
@@ -18,7 +18,7 @@ final class Th {
     static int bg, s1, s2, s3, ln, ln2, tx, dim, mut, ov, ac = Gfx.RED, ac2 = Gfx.RED2, theme = -1;
     private static String accKey = "";
 
-    static { set(0); }
+    static { set(1); }
 
     private static void set(int i) {
         int[] c = SET[i];
@@ -28,11 +28,11 @@ final class Th {
 
     /** Frame start: follow the config (cheap: a few string reads). */
     static void tick() {
-        String n = Config.str("client", "theme", "OLED");
+        String n = Config.str("client", "theme", "Obsidian");
         int i = 0;
         for (int k = 0; k < NAMES.length; k++) if (NAMES[k].equalsIgnoreCase(n)) i = k;
         if (i != theme) set(i);
-        String a = Config.str("client", "accent", "#E5372D"), b = Config.str("client", "accent2", "#FF6157");
+        String a = Config.str("client", "accent", "#F76A05"), b = Config.str("client", "accent2", "#FF9A2E");
         if (!(a + b).equals(accKey)) {
             accKey = a + b;
             ac = parse(a, Gfx.RED);

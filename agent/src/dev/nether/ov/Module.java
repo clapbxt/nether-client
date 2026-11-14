@@ -18,6 +18,12 @@ final class Setting {
     String hint;
     /** ACTION only: runs on the render thread when its button is clicked in the menu. */
     Runnable run;
+    /** Shown on the settings page only while this holds (null = always): settings that do nothing in the current mode stay out of the way. */
+    java.util.function.BooleanSupplier when;
+    /** HEADER only: a folding group (click to open); its settings show only while open (see {@link #open}). */
+    String fold;
+    /** folding groups open this session, "<module id>#<header>" */
+    static final java.util.Set<String> open = new java.util.HashSet<>();
 
     Setting(int t, String key, String label, double min, double max, double step, Object def, String[] opts) {
         this.t = t; this.key = key; this.label = label; this.min = min; this.max = max; this.step = step; this.def = def; this.opts = opts;
@@ -37,6 +43,9 @@ final class Setting {
     }
 
     Setting hint(String h) { hint = h; return this; }
+    /** Shown only while w holds (added to any condition already set). */
+    Setting when(java.util.function.BooleanSupplier w) { java.util.function.BooleanSupplier a = when; when = a == null ? w : () -> a.getAsBoolean() && w.getAsBoolean(); return this; }
+    boolean shown() { try { return when == null || when.getAsBoolean(); } catch (RuntimeException e) { return true; } }
     /** Has a value under modules.<id>.<key> (headers and buttons do not). */
     boolean stored() { return t != HEADER && t != ACTION; }
 }
@@ -59,25 +68,48 @@ abstract class Module {
     Module(String id, String name, String cat, String desc, boolean hud, boolean defOn, double dx, double dy) {
         this.id = id; this.name = name; this.cat = cat; this.desc = desc; this.hud = hud; this.defOn = defOn; this.dx = dx; this.dy = dy;
         if (hud) {
-            add(Setting.slider("scale", "Scale", 0.5, 2.5, 0.05, 1.0));
-            add(Setting.color("color", "Text color", "#EAEEF3"));
-            add(Setting.bool("bg", "Background", true));
-            add(Setting.slider("bgAlpha", "Background opacity", 0.2, 0.95, 0.01, 0.62));
-            add(Setting.bool("shadow", "Text shadow", false));
-            add(Setting.bool("accent", "Accent bar", true));
-            add(Setting.bool("border", "Outline", false));
-            add(Setting.bool("chroma", "Rainbow text", false));
-            add(Setting.color("labelColor", "Label color", "#8A93A1"));
-            add(Setting.bool("labels", "Show labels", true));
+            // the shared look of every HUD box: a folded "Style" group kept after the module's own settings (see add)
+            Setting h = Setting.header("Style");
+            h.fold = id + "#Style";
+            String f = h.fold;
+            java.util.function.BooleanSupplier op = () -> Setting.open.contains(f);
+            add(h);
+            add(Setting.slider("scale", "Scale", 0.5, 2.5, 0.05, 1.0).when(op));
+            add(Setting.color("color", "Text color", "#EAEEF3").when(op));
+            add(Setting.bool("chroma", "Rainbow text", false).when(op));
+            add(Setting.bool("labels", "Show labels", true).when(op));
+            add(Setting.color("labelColor", "Label color", "#8A93A1").when(op).when(() -> bool("labels")));
+            add(Setting.bool("shadow", "Text shadow", false).when(op));
+            add(Setting.bool("bg", "Background", true).when(op));
+            add(Setting.slider("bgAlpha", "Background opacity", 0.2, 0.95, 0.01, 0.62).when(op).when(() -> bool("bg")));
+            add(Setting.bool("accent", "Accent bar", true).when(op).when(() -> bool("bg")));
+            add(Setting.bool("border", "Outline", false).when(op).when(() -> bool("bg")));
+            styleN = settings.size();
         }
     }
 
-    Module add(Setting s) { settings.add(s); byKey.put(s.key, s); return this; }
+    /** Row i of the settings page is drawn: a shown setting, a folding header, or a header with a shown setting under it. */
+    boolean row(int i) {
+        Setting s = settings.get(i);
+        if (s.t != Setting.HEADER) return s.shown();
+        if (s.fold != null) return true;
+        for (int j = i + 1; j < settings.size() && settings.get(j).t != Setting.HEADER; j++) if (settings.get(j).shown()) return true;
+        return false;
+    }
+
+    /** settings at the end of the list that belong to the Style group (HUD modules) */
+    private int styleN;
+
+    /** Adds a setting; a HUD module's own settings go before its Style group. */
+    Module add(Setting s) { settings.add(settings.size() - styleN, s); byKey.put(s.key, s); return this; }
     boolean has(String key) { return byKey.containsKey(key); }
     Setting setting(String key) { return byKey.get(key); }
     Module needs(int n) { needs = n; return this; }
 
-    void drop(String key) { settings.removeIf(s -> s.key.equals(key)); byKey.remove(key); }
+    void drop(String key) {
+        for (int i = settings.size() - 1; i >= 0; i--) if (settings.get(i).key.equals(key)) { if (i >= settings.size() - styleN) styleN--; settings.remove(i); }
+        byKey.remove(key);
+    }
 
     /** Built-in feature that is not a user module (the title screen): always on, never listed, not in the launcher schema. */
     boolean hidden() { return false; }

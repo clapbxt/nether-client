@@ -112,7 +112,9 @@ final class Net {
         File body = d == null ? null : d.resolve(h).toFile(), miss = d == null ? null : d.resolve(h + ".404").toFile();
         long now = System.currentTimeMillis();
         if (miss != null && miss.exists() && now - miss.lastModified() < NEG_TTL) { r.status = 404; r.cached = true; return; }
-        if (body != null && r.ttl > 0 && body.exists() && now - body.lastModified() < r.ttl && body.length() <= r.maxBytes) {
+        // an empty answer ("[]", "{}": nothing found yet) is asked again after a day, not the caller's long TTL
+        long ttl = body != null && body.length() <= 2 ? Math.min(r.ttl, 24L * 3600 * 1000) : r.ttl;
+        if (body != null && ttl > 0 && body.exists() && now - body.lastModified() < ttl && body.length() <= r.maxBytes) {
             r.body = Files.readAllBytes(body.toPath());
             r.status = 200;
             r.cached = true;

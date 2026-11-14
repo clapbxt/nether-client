@@ -1,19 +1,31 @@
 {
- "version": 1794505873,
- "issued": 1794505873,
- "expires": 1802281873,
+ "version": 1794637428,
+ "issued": 1794637428,
+ "expires": 1802413428,
  "files": {
-  "capes/ice.png": {
-   "sha256": "c498d00a4214493c71527c26689210ab92776b016946fd7f250271e5e14799d9",
-   "size": 817
+  "capes/duck.png": {
+   "sha256": "d7e3fd8ad3355acb8e090a57608374d915df22c2c68049e720d5b54e43a98a6d",
+   "size": 611
+  },
+  "capes/fortnite_meme.png": {
+   "sha256": "10b3169263234b180ab80e5ead8db1d2d1ec72a6ae84478cc368fd6807bd4548",
+   "size": 37726
+  },
+  "capes/galaxy.png": {
+   "sha256": "3e86e1fb87f87e0b307fa65b11c55ecf76e1245b47318e6b76956598c04bead6",
+   "size": 325699
+  },
+  "capes/girl.png": {
+   "sha256": "fb21d4817239b1b168eefd381028046893b1bd9dd7028e18028e00d7b6574fe4",
+   "size": 17584
   },
   "capes/index.json": {
-   "sha256": "d4249bf9623b13c29c70f1656bca61eaf711d3373c0f6f47b5d42ca06e8a24f9",
-   "size": 170
+   "sha256": "93c653c7a0c699c08dc8f1632222ed6eb3b18d4831e4cd5e042f5e3135a1329c",
+   "size": 419
   },
-  "capes/obsidian.png": {
-   "sha256": "09626e47391a40a80ba2375306c40eb4227ae157872283368452a5d11f2396d2",
-   "size": 819
+  "capes/snowman.png": {
+   "sha256": "6b72e413f887e4c4592c277ff95754e3281c1fa4424e81b122814fc5bab99226",
+   "size": 933
   },
   "news.json": {
    "sha256": "03d9024b9986651ca6603654de25207e9055b99bad82645282d4ede7fc15c9f3",

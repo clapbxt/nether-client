@@ -28,14 +28,12 @@ final class MediaPlayer extends Module {
     MediaPlayer() {
         super("media", "Media Player", "HUD", "Now playing from Spotify, your browser or any app in the Windows media controls, with album art and playback controls. Reads local playback info only; nothing leaves your PC.", true, false, 0.7, 0.2);
         add(Setting.choice("layout", "Layout", "Card", "Card", "Compact", "Art only"));
-        add(Setting.slider("width", "Width", 150, 320, 2, 220).hint("Card and Compact layouts"));
-        add(Setting.bool("art", "Album art", true));
-        add(Setting.slider("artSize", "Album art size", 36, 96, 2, 56));
+        java.util.function.BooleanSupplier box = () -> !str("layout").equals("Art only");
+        add(Setting.slider("width", "Width", 150, 320, 2, 220).when(box));
+        add(Setting.bool("art", "Album art", true).when(box));
         add(Setting.bool("albumAccent", "Album colour accent", false).hint("Accent bar and progress take the cover's colour"));
-        add(Setting.bool("marquee", "Scroll long titles", true));
-        add(Setting.slider("speed", "Scroll speed", 10, 60, 1, 24));
-        add(Setting.bool("app", "Source app", true));
-        add(Setting.choice("time", "Time", "Elapsed / total", "Elapsed / total", "Remaining", "Hidden"));
+        add(Setting.bool("marquee", "Scroll long titles", true).when(box));
+        add(Setting.choice("time", "Time", "Elapsed / total", "Elapsed / total", "Remaining", "Hidden").when(() -> str("layout").equals("Card")));
         add(Setting.choice("bar", "Progress bar", "Thin", "Thin", "Thick", "Hidden"));
         add(Setting.choice("controls", "Controls", "When the cursor is free", "When the cursor is free", "Always", "Never").hint("Clickable while chat, the inventory or this menu is open"));
         add(Setting.choice("paused", "When paused", "Show", "Show", "Fade after 10 s", "Hide"));
@@ -92,8 +90,8 @@ final class MediaPlayer extends Module {
 
     @Override void measure() {
         String l = str("layout");
-        A = bool("art") ? (float) num("artSize") : 0;
-        if (l.equals("Art only")) { A = Math.max(48, (float) num("artSize")); w = h = A; }
+        A = bool("art") ? 56 : 0;
+        if (l.equals("Art only")) { A = 64; w = h = A; }
         else if (l.equals("Compact")) { w = (float) num("width"); h = 28; }
         else { w = (float) num("width"); h = P * 2 + Math.max(A, ROWS); }
     }
@@ -129,7 +127,7 @@ final class MediaPlayer extends Module {
         if (A > 0) art(ax, y + (h - A) / 2, A);
         boolean ctl = controls();
         float bw = ctl ? 3 * 18 : 0;
-        String label = s == SAMPLE && Media.problem != null ? Media.problem : bool("app") ? s.app.toUpperCase(Locale.ROOT) : "";
+        String label = s == SAMPLE && Media.problem != null ? Media.problem : s.app.toUpperCase(Locale.ROOT);
         int lc = s == SAMPLE && Media.problem != null ? Gfx.RED2 : labelColor();
         if (!label.isEmpty()) marquee(Gfx.SEMI, 9, cx, top + 6, cw - bw - 4, lc, label, 1.2f);
         if (ctl) buttons(x + w - P - bw, top + 6, s);
@@ -240,7 +238,7 @@ final class MediaPlayer extends Module {
         if (tw <= w) { Gfx.text(font, size, x, cy, col, s, bool("shadow"), sp); return; }
         float off = 0, a = 1, travel = tw - w + 6;
         if (bool("marquee") && !Config.calm()) {
-            float speed = (float) num("speed"), glide = travel / speed, cycle = 1.5f + glide + 1.5f;
+            float speed = 24, glide = travel / speed, cycle = 1.5f + glide + 1.5f;
             float t = ((System.currentTimeMillis() - trackAt) / 1000f) % cycle;
             off = t < 1.5f ? 0 : t < 1.5f + glide ? (t - 1.5f) * speed : travel;
             if (t > cycle - 0.3f) a = (cycle - t) / 0.3f;

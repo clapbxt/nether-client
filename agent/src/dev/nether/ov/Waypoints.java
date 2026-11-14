@@ -23,13 +23,13 @@ final class Waypoints extends Module {
         add(Setting.bool("edge", "Keep off-screen markers at the edge", true));
         add(Setting.slider("size", "Marker size", 0.6, 2, 0.05, 1));
         add(Setting.slider("maxDist", "Hide beyond (blocks, 0 = never)", 0, 5000, 50, 0));
-        add(Setting.bool("death", "Mark where you die", true).hint("Adds a 'Death' waypoint at the spot (the old one is replaced), so you can find your items."));
+        add(Setting.bool("death", "Mark where you die", true).hint("Adds a 'Death' waypoint at the spot (the old one is replaced), so you can find your items. It clears when you get there."));
         needs(4);
     }
 
     private double[] alive;
     private boolean wasDead;
-    private long deathAt;
+    private long deathAt, diedAt;
     private String aliveKey;
 
     /** Tracks your last living position; the moment health reaches 0 a Death waypoint goes there. */
@@ -43,10 +43,18 @@ final class Waypoints extends Module {
             wasDead = false;
             double[] p = Game.player();
             if (p != null) { if (alive == null) alive = new double[3]; alive[0] = p[0]; alive[1] = p[1]; alive[2] = p[2]; aliveKey = key; }
+            // back at the Death waypoint (your items picked up): it goes away by itself
+            List<Map<String, Object>> l = p != null && now - diedAt > 5000 ? list(false) : null;
+            if (l != null && l.removeIf(w -> "Death".equals(str(w, "name", "")) && Math.abs(num(w, "x") + 0.5 - p[0]) < 3 && Math.abs(num(w, "z") + 0.5 - p[2]) < 3 && Math.abs(num(w, "y") - p[1]) < 4)) {
+                changed();
+                toast = "Death waypoint reached";
+                toastAt = now;
+            }
             return;
         }
         if (wasDead || alive == null || aliveKey == null || Game.reducedDebug()) return;
         wasDead = true;
+        diedAt = now;
         String k = key;
         key = aliveKey;
         List<Map<String, Object>> l = list(true);

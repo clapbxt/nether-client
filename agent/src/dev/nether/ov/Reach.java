@@ -7,11 +7,10 @@ final class Reach extends RowsModule {
     Reach() {
         super("reach", "Reach Display", "HUD", "Shows how far away your last attack on a player or mob was.", false, 0.15, 0.35);
         add(Setting.slider("decimals", "Decimals", 0, 3, 1, 2).hint("Digits after the point."));
-        add(Setting.bool("tint", "Color by range", true).hint("Green up to the first limit, amber up to the second, red beyond."));
-        add(Setting.slider("good", "Green up to (blocks)", 2, 6, 0.1, 3.0).hint("Hits at or below this are green."));
-        add(Setting.slider("ok", "Amber up to (blocks)", 2, 6, 0.1, 3.5).hint("Hits above the green limit and up to this are amber."));
+        add(Setting.bool("tint", "Color by range", true).hint("Green up to 3 blocks, amber up to 3.5, red beyond."));
         add(Setting.slider("hideAfter", "Hide after (s, 0 = keep)", 0, 30, 1, 5).hint("The value disappears this long after the attack."));
-        needs(1);
+        needs(1);
+
     }
 
     @Override void tick() {
@@ -28,6 +27,6 @@ final class Reach extends RowsModule {
         double r = Modules.sampling(this) && HitTracker.reach < 0 ? 2.84 : HitTracker.reach;
         if (r < 0) return new String[][] {{"REACH", "-"}};
         String v = String.format(Locale.ROOT, "%." + (int) num("decimals") + "f", r);
-        return new String[][] {{"REACH", bool("tint") ? Modules.tint(r <= num("good"), r <= Math.max(num("good"), num("ok")), v) : v}};
+        return new String[][] {{"REACH", bool("tint") ? Modules.tint(r <= 3.0, r <= 3.5, v) : v}};
     }
 }

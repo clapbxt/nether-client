@@ -26,16 +26,15 @@ final class Armor extends Module {
         add(Setting.choice("layout", "Layout", "List", "List", "Icons", "Compact", "Vanilla").hint("Vanilla: the game's own hotbar slots, durability bars and stack counts (resource packs apply)"));
         add(Setting.choice("value", "Durability as", "Percent", "Percent", "Durability", "Remaining", "Hidden"));
         add(Setting.bool("bar", "Durability bar", true));
-        add(Setting.bool("names", "Item names", true));
-        add(Setting.bool("icons", "Item icons", true));
-        add(Setting.choice("orient", "Direction", "Horizontal", "Horizontal", "Vertical").hint("Icons and Vanilla layouts"));
+        add(Setting.bool("names", "Item names", true).when(() -> str("layout").equals("List")));
+        add(Setting.bool("icons", "Item icons", true).when(() -> !str("layout").equals("Vanilla")));
+        add(Setting.choice("orient", "Direction", "Horizontal", "Horizontal", "Vertical").when(() -> str("layout").equals("Icons") || str("layout").equals("Vanilla")));
         add(Setting.choice("order", "Order", "Head first", "Head first", "Feet first"));
         add(Setting.bool("held", "Held item", false).hint("Main hand item with its durability or stack size"));
         add(Setting.bool("offhand", "Off-hand item", false).hint("1.9 and newer (1.8.9 has no off hand)"));
         add(Setting.bool("arrows", "Arrow count with a bow or crossbow", true).hint("Arrows in your whole inventory while a bow or crossbow is in either hand"));
         add(Setting.bool("hideEmpty", "Hide when no armor is worn", true));
-        add(Setting.slider("warn", "Low durability warning (%)", 0, 50, 1, 10).hint("Pieces at or below this show the warning colour; 0 = off"));
-        add(Setting.color("warnColor", "Warning colour", "#FF3B2F"));
+        add(Setting.slider("warn", "Low durability warning (%)", 0, 50, 1, 10).hint("Pieces at or below this turn red; 0 = off"));
         needs(4);
     }
 
@@ -96,9 +95,12 @@ final class Armor extends Module {
         return thr > 0 && max[i] > 0 && (max[i] - dmg[i]) * 100.0 / max[i] <= thr;
     }
 
-    private int warnCol() { return Config.color(id, "warnColor", Gfx.RED2); }
+    private static int warnCol() { return Gfx.RED2; }
     private static int barCol(float f) { return f > 0.3f ? Gfx.ICE : f > 0.15f ? 0xFFFFB020 : Gfx.RED2; }
     private boolean vertical() { return str("orient").equals("Vertical"); }
+    /** Panel padding; without a background the box hugs its content, so it can sit flush to a screen edge. */
+    private float px() { return bool("bg") ? RowsModule.PX : 0; }
+    private float py() { return bool("bg") ? RowsModule.PY : 0; }
 
     // ---------------------------------------------------------------- layout
 
@@ -124,20 +126,20 @@ final class Armor extends Module {
                 break;
             case "Icons":
                 if (vertical()) {
-                    w = RowsModule.PX * 2 + T + 8;
-                    h = RowsModule.PY * 2 + k * (T + (val ? 13 : 0)) + (k - 1) * TG;
+                    w = px() * 2 + T + 8;
+                    h = py() * 2 + k * (T + (val ? 13 : 0)) + (k - 1) * TG;
                 } else {
-                    w = RowsModule.PX * 2 + k * T + (k - 1) * TG;
-                    h = RowsModule.PY * 2 + T + (val ? 13 : 0);
+                    w = px() * 2 + k * T + (k - 1) * TG;
+                    h = py() * 2 + T + (val ? 13 : 0);
                 }
                 break;
             case "Compact":
-                w = RowsModule.PX * 2 + 24 + (val ? (str("value").equals("Durability") ? 62 : 36) : 0) + (bool("bar") ? 30 : 0);
-                h = RowsModule.PY * 2 + RowsModule.RH * k;
+                w = px() * 2 + 24 + (val ? (str("value").equals("Durability") ? 62 : 36) : 0) + (bool("bar") ? 30 : 0);
+                h = py() * 2 + RowsModule.RH * k;
                 break;
             default:
                 w = (bool("names") ? 132 : 32) + (bool("bar") ? 46 : 0) + (val ? (str("value").equals("Durability") ? 64 : 40) : 0);
-                h = RowsModule.PY * 2 + RowsModule.RH * k;
+                h = py() * 2 + RowsModule.RH * k;
         }
     }
 
@@ -156,14 +158,14 @@ final class Armor extends Module {
         float off = bool("accent") && bool("bg") ? 1 : 0, nameW = 96;
         for (int i = 0; i < n; i++) {
             String[] p = items[i];
-            float cy = y + RowsModule.PY + RowsModule.RH * (i + 0.5f);
+            float cy = y + py() + RowsModule.RH * (i + 0.5f);
             int[] ic = bool("icons") ? Icons.get(p[3]) : null;
-            if (ic != null) Gfx.icon(ic, x + RowsModule.PX + off + 1, cy - 7, 14);
-            else Gfx.text(Gfx.SEMI, 9, x + RowsModule.PX + off, cy, Gfx.DIM, TAG[kind[i]], false, 0);
-            if (names) txt(Gfx.UI, 12, x + RowsModule.PX + 32 + off, cy, color(), cut(p[0], nameW));
+            if (ic != null) Gfx.icon(ic, x + px() + off + 1, cy - 7, 14);
+            else Gfx.text(Gfx.SEMI, 9, x + px() + off, cy, Gfx.DIM, TAG[kind[i]], false, 0);
+            if (names) txt(Gfx.UI, 12, x + px() + 32 + off, cy, color(), cut(p[0], nameW));
             if (max[i] <= 0) {
                 String c = count(i);
-                if (!c.isEmpty()) Gfx.text(Gfx.MONO, 11, x + w - RowsModule.PX - Gfx.width(Gfx.MONO, 11, c), cy, low(i) ? warnCol() : color(), c, bool("shadow"), 0);
+                if (!c.isEmpty()) Gfx.text(Gfx.MONO, 11, x + w - px() - Gfx.width(Gfx.MONO, 11, c), cy, low(i) ? warnCol() : color(), c, bool("shadow"), 0);
                 continue;
             }
             float f = (max[i] - dmg[i]) / (float) max[i];
@@ -171,17 +173,17 @@ final class Armor extends Module {
             String v = vals[i];
             float vw = Gfx.width(Gfx.MONO, 11, v);
             if (bar) {
-                float bw = lay.equals("List") ? 38 : 24, bx = x + RowsModule.PX + off + (names ? 38 + nameW : 26);
+                float bw = lay.equals("List") ? 38 : 24, bx = x + px() + off + (names ? 38 + nameW : 26);
                 Gfx.rect(bx, cy - 2, bw, 4, 2, Gfx.a(Gfx.ICE, 0.14f));
                 Gfx.rect(bx, cy - 2, Math.max(3, bw * f), 4, 2, col);
             }
-            if (!v.isEmpty()) Gfx.text(Gfx.MONO, 11, x + w - RowsModule.PX - vw, cy, bar ? Gfx.mix(Gfx.DIM, col, 0.5f) : col, v, bool("shadow"), 0);
+            if (!v.isEmpty()) Gfx.text(Gfx.MONO, 11, x + w - px() - vw, cy, bar ? Gfx.mix(Gfx.DIM, col, 0.5f) : col, v, bool("shadow"), 0);
         }
     }
 
     /** Icon tiles in a row (or column) with a durability bar (and value) under each. */
     private void drawTiles(float x, float y) {
-        float tx = x + RowsModule.PX, ty = y + RowsModule.PY;
+        float tx = x + px(), ty = y + py();
         boolean bar = bool("bar"), vert = vertical(), val = !str("value").equals("Hidden");
         for (int i = 0; i < n; i++) {
             String[] p = items[i];

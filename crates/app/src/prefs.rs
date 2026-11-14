@@ -21,9 +21,9 @@ pub struct LauncherPrefs {
     pub on_close: i32,
     /// stop ambient animations (saves GPU/CPU)
     pub calm: bool,
-    /// accent colour (settings::ACCENTS index, 0 = racing red)
+    /// accent colour (settings::ACCENTS index, 0 = fire)
     pub accent: i32,
-    /// theme (settings::THEME_NAMES index, 0 = OLED)
+    /// theme (settings::THEME_NAMES index, 1 = Obsidian, the default)
     pub theme: i32,
     /// reading-text size: 0 default, 1 large, 2 larger
     pub text: i32,
@@ -36,7 +36,7 @@ pub struct LauncherPrefs {
 }
 
 impl Default for LauncherPrefs {
-    fn default() -> Self { LauncherPrefs { gpu: true, autostart: false, on_launch: 1, on_close: 0, calm: false, accent: 0, theme: 0, text: 0, capes: true, discord: false, auto_update: true } }
+    fn default() -> Self { LauncherPrefs { gpu: true, autostart: false, on_launch: 1, on_close: 0, calm: false, accent: 0, theme: 1, text: 0, capes: true, discord: false, auto_update: true } }
 }
 
 pub fn load(paths: &Paths) -> LauncherPrefs {

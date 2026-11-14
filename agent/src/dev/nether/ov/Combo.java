@@ -6,12 +6,12 @@ final class Combo extends RowsModule {
         super("combo", "Combo Counter", "HUD", "Hits in a row on your target, reset when you are hit or stop attacking.", false, 0.15, 0.43);
         add(Setting.slider("timeout", "Reset after (s)", 1, 5, 0.5, 2.5).hint("No hit for this long ends the combo."));
         add(Setting.bool("best", "Show best", true).hint("Your best combo this session."));
-        add(Setting.bool("pulse", "Flash on hit", true).hint("The number flashes red for a moment with each hit."));
         add(Setting.bool("hideZero", "Hide at 0", true).hint("Only shown while a combo is running."));
         needs(1);
     }
 
     @Override void tick() {
+        if (Config.raw(id, "pulse") != null) Config.set(id, "pulse", null);
         HitTracker.comboOn = enabled();
         if (HitTracker.comboOn) { HitTracker.timeout = num("timeout"); HitTracker.poll(); }
     }
@@ -22,7 +22,7 @@ final class Combo extends RowsModule {
         boolean s = Modules.sampling(this) && HitTracker.best == 0;
         int c = s ? 4 : HitTracker.combo, b = s ? 7 : HitTracker.best;
         String v = String.valueOf(c);
-        if (bool("pulse") && !Config.calm() && c > 0) {
+        if (!Config.calm() && c > 0) { // the number flashes red on each hit (Reduce motion: never)
             float t = Math.min(1f, (System.currentTimeMillis() - HitTracker.hitAt) / 350f);
             if (t < 1f) v = String.format("#%06X|", Gfx.mix(Gfx.RED2, color(), t) & 0xFFFFFF) + v;
         }

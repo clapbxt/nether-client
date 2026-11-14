@@ -14,8 +14,8 @@ const MAJORS: [(u32, &str); 4] = [(8, "Minecraft 1.16.5 and older"), (17, "Minec
 
 /// Accent palettes: base, bright, deep, text on dark, pressed, PLAY plate (same order as the Settings swatches).
 const ACCENTS: [[u32; 6]; 5] = [
+    [0xF76A05, 0xFF9A2E, 0x8F3A02, 0xFFAA66, 0xD65A04, 0x4A2002], // fire (the logo's orange; default)
     [0xE5372D, 0xFF6157, 0x9E1F18, 0xFF8A82, 0xC42A21, 0x4A1210], // racing red
-    [0xE8590C, 0xFF7A2E, 0x8F3604, 0xFFA06B, 0xC74A08, 0x4A1C02], // ember
     [0x22A845, 0x3DDC6A, 0x146B2B, 0x7BE89A, 0x1B8A39, 0x0B3816], // acid
     [0x1F6FEB, 0x4C8DFF, 0x123F86, 0x8AB4FF, 0x1A5DC7, 0x0A2148], // cobalt
     [0x8B3DFF, 0xA66BFF, 0x4F1F99, 0xC4A1FF, 0x7330D9, 0x26104A], // violet

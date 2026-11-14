@@ -68,6 +68,13 @@ public final class Agent {
     /** Living entity renderer class -> {method, descriptor start}: its show-name test is filtered by Hook.label (own nametag). */
     private static final Map<String, String[]> LABEL_HOOKS = new HashMap<>();
 
+    /**
+     * Class -> {method, descriptor start, hook}: every float field of the class read inside that method goes through
+     * Hook.<hook>(F)F. GameRenderer.getFov (its FOV multiplier: smooth zoom) and ItemInHandRenderer.renderHandsWithItems
+     * (its equip heights: Zoom's hide-held-item ease). Vanilla code only, no Sodium/Iris class.
+     */
+    private static final Map<String, String[]> FLOAT_HOOKS = new HashMap<>();
+
     /** Chat HUD class -> chat component type: each of its add-message methods gets its message from Hook.chat first. */
     private static final Map<String, String> CHAT_HOOKS = new HashMap<>();
 
@@ -82,6 +89,10 @@ public final class Agent {
         LABEL_HOOKS.put("net/minecraft/client/renderer/entity/LivingEntityRenderer", new String[] {"shouldShowName", "(Lnet/minecraft/world/entity/LivingEntity;"}); // Forge/NeoForge, 26.x
         LABEL_HOOKS.put("net/minecraft/client/renderer/entity/RenderLivingBase", new String[] {"func_110813_b", "(Lnet/minecraft/entity/EntityLivingBase;"}); // Forge 1.12.2 canRenderName
         LABEL_HOOKS.put("net/minecraft/client/renderer/entity/RendererLivingEntity", new String[] {"func_110813_b", "(Lnet/minecraft/entity/EntityLivingBase;"}); // Forge 1.8.9 canRenderName
+        FLOAT_HOOKS.put("net/minecraft/class_757", new String[] {"method_3196", "(Lnet/minecraft/class_4184;F", "fov"}); // Fabric getFov
+        FLOAT_HOOKS.put("net/minecraft/client/renderer/GameRenderer", new String[] {"getFov", "(Lnet/minecraft/client/Camera;F", "fov"}); // Forge/NeoForge, 26.x
+        FLOAT_HOOKS.put("net/minecraft/class_759", new String[] {"method_22976", "(F", "hand"}); // Fabric renderItem
+        FLOAT_HOOKS.put("net/minecraft/client/renderer/ItemInHandRenderer", new String[] {"renderHandsWithItems", "(F", "hand"}); // Forge/NeoForge, 26.x
         String[] a = String.valueOf(System.getProperty("sun.java.command")).split(" ");
         String v = null;
         for (int i = 0; i + 1 < a.length; i++) if (a[i].equals("--version")) v = a[i + 1];
@@ -213,6 +224,8 @@ public final class Agent {
             if (nh != null) return playerName(bytes, nh[0], nh[1]);
             String[] lh = name == null ? null : LABEL_HOOKS.get(name);
             if (lh != null) return label(bytes, lh[0], lh[1]);
+            String[] fh = name == null ? null : FLOAT_HOOKS.get(name);
+            if (fh != null) return floatReads(bytes, name, fh[0], fh[1], fh[2]);
             String ct = name == null ? null : CHAT_HOOKS.get(name);
             if (ct != null) return chat(bytes, ct);
             if (name == null || !name.startsWith("org/lwjgl/")) return null;
@@ -258,13 +271,18 @@ public final class Agent {
                         MethodVisitor mv = super.visitMethod(access, mname, desc, sig, ex);
                         if (!method.equals(mname) || !desc.startsWith(descStart) || !desc.endsWith(")Z") || (access & Opcodes.ACC_STATIC) != 0) return mv;
                         done[0] = true;
+                        // the entity is read at the start only: at a return its slot can be dead in the stack map (VerifyError)
                         return new MethodVisitor(Opcodes.ASM9, mv) {
                             @Override
+                            public void visitCode() {
+                                super.visitCode();
+                                super.visitVarInsn(Opcodes.ALOAD, 1);
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "labelArg", "(Ljava/lang/Object;)V", false);
+                            }
+
+                            @Override
                             public void visitInsn(int op) {
-                                if (op == Opcodes.IRETURN) {
-                                    super.visitVarInsn(Opcodes.ALOAD, 1);
-                                    super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "label", "(ZLjava/lang/Object;)Z", false);
-                                }
+                                if (op == Opcodes.IRETURN) super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "label", "(Z)Z", false);
                                 super.visitInsn(op);
                             }
                         };
@@ -276,6 +294,39 @@ public final class Agent {
                 return cw.toByteArray();
             } catch (Throwable t) {
                 System.out.println("[nether-agent] nametag visibility hook failed: " + t);
+                return null;
+            }
+        }
+
+        /** In owner.method(descStart...): each read of a float field of owner is passed through Hook.<hook>(F)F. */
+        private static byte[] floatReads(byte[] bytes, final String owner, final String method, final String descStart, final String hook) {
+            try {
+                ClassReader cr = new ClassReader(bytes);
+                ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+                final int[] n = {0};
+                cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
+                    @Override
+                    public MethodVisitor visitMethod(int access, String mname, String desc, String sig, String[] ex) {
+                        MethodVisitor mv = super.visitMethod(access, mname, desc, sig, ex);
+                        if (!method.equals(mname) || !desc.startsWith(descStart) || (access & Opcodes.ACC_STATIC) != 0) return mv;
+                        return new MethodVisitor(Opcodes.ASM9, mv) {
+                            @Override
+                            public void visitFieldInsn(int op, String fo, String fn, String fd) {
+                                super.visitFieldInsn(op, fo, fn, fd);
+                                if (op == Opcodes.GETFIELD && owner.equals(fo) && "F".equals(fd)) {
+                                    super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, hook, "(F)F", false);
+                                    n[0]++;
+                                }
+                            }
+                        };
+                    }
+                }, 0);
+                if (n[0] == 0) return null;
+                if (hook.equals("fov")) Hook.fovHooked = true; else Hook.handHooked = true;
+                System.out.println("[nether-agent] hooked " + hook + " (" + n[0] + " reads)");
+                return cw.toByteArray();
+            } catch (Throwable t) {
+                System.out.println("[nether-agent] " + hook + " hook failed: " + t);
                 return null;
             }
         }

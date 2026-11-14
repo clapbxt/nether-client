@@ -19,26 +19,6 @@ import { HostScreen } from "host.slint";
 import { WardrobeScreen } from "wardrobe.slint";
 import { SettingsScreen } from "settings.slint";
 
-component TabBtn inherits Rectangle {
-    in property <string> label;
-    in property <bool> active;
-    callback clicked();
-    height: 28px;
-    border-radius: 8px;
-    background: root.active ? Theme.ln2 : (ta.has-hover ? Theme.hov : transparent);
-    animate background { duration: Theme.fast; }
-    Text {
-        text: root.label;
-        color: root.active ? Theme.tx : (ta.has-hover ? Theme.tx : Theme.dim);
-        font-family: Theme.disp; font-size: 16px; font-weight: 700;
-        horizontal-alignment: center; vertical-alignment: center;
-    }
-    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
-    fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
-        key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
-    if fs.has-focus: Rectangle { x: -2px; y: -2px; width: parent.width + 4px; height: parent.height + 4px; border-radius: 10px; border-width: 2px; border-color: Theme.ice; }
-}
-
 // Top-bar square button (settings cog) with keyboard focus and a hover label below it.
 component BarBtn inherits Rectangle {
     in property <bool> active;
@@ -54,6 +34,32 @@ component BarBtn inherits Rectangle {
     if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-width: 2px; border-color: Theme.ice; }
 }
 
+// Left rail item (Lunar-style): 48 square, line icon (20 grid), accent tint + left bar when active, page name to the right on hover.
+component RailBtn inherits Rectangle {
+    in property <string> d;
+    in property <string> label;
+    in property <bool> active;
+    callback clicked();
+    width: 48px; height: 48px; border-radius: 10px;
+    background: root.active ? Theme.red.with-alpha(0.16) : (ta.has-hover ? Theme.hov : transparent);
+    animate background { duration: Theme.fast; }
+    if root.active: Rectangle { x: -14px; y: 12px; width: 3px; height: 24px; border-radius: 1.5px; background: Theme.red; }
+    Path {
+        x: 13px; y: 13px; width: 22px; height: 22px; viewbox-width: 20; viewbox-height: 20;
+        commands: root.d; fill: transparent; stroke-width: 1.6px;
+        stroke: root.active ? Theme.red2 : (ta.has-hover ? Theme.tx : Theme.dim);
+    }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
+        key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
+    if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-radius: 12px; border-width: 2px; border-color: Theme.ice; }
+    if ta.has-hover || fs.has-focus: Rectangle {
+        x: parent.width + 16px; y: (parent.height - 28px) / 2; width: tl.preferred-width + 20px; height: 28px; border-radius: 6px;
+        background: Theme.s3; border-width: 1px; border-color: Theme.ln2;
+        tl := Text { text: root.label; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+    }
+}
+
 // "Waiting" line used by the sign-in states.
 component Waiting inherits Rectangle {
     in property <string> text;
@@ -65,7 +71,7 @@ component Waiting inherits Rectangle {
 export component AppWindow inherits Window {
     title: "Nether Client";
     icon: @image-url("assets/nether-icon.png");
-    preferred-width: 1440px;
+    preferred-width: 1516px;
     preferred-height: 900px;
     min-width: 960px;
     min-height: 600px;
@@ -80,14 +86,21 @@ export component AppWindow inherits Window {
     in-out property <bool> snap-confirm: false;
     // Wardrobe SKINS/CAPES page (kept across tab switches)
     in-out property <int> ward-page: 0;
-    // uniform UI scale from the 1440x900 design; the stage grows on the longer axis (no letterbox)
-    property <float> s: Math.min(root.width / 1440px, root.height / 900px);
+    // uniform UI scale from the 1440x900 page design plus the 76 rail; the stage grows on the longer axis (no letterbox)
+    property <float> s: Math.min(root.width / 1516px, root.height / 900px);
     property <length> W: root.width / root.s;
     property <length> H: root.height / root.s;
     property <[string]> labels: ["Home", "Instances", "Discover", "Host", "Wardrobe"];
     property <[int]> ids: [0, 1, 2, 4, 5];
-    property <[length]> ptx: [0px, 78px, 212px, 336px, 414px];
-    property <[length]> ptw: [74px, 130px, 120px, 74px, 130px];
+    // rail icons (design/module-icons, 20 grid): home, instances, discover, host, wardrobe
+    property <[string]> icons: [
+        "M3 9l7-6 7 6v8H3z M8 17v-5h4v5",
+        "M3 5h14M3 10h14M3 15h9",
+        "M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0 M13 7l-2 4-4 2 2-4z",
+        "M4 3h12a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-12a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1z M4 11h12a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-12a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1z M6 6h1M6 14h1",
+        "M7 3l3 2 3-2 4 3-2 3h-2v8H7V9H5L3 6z"];
+    // left icon rail (Lunar-style); every page sits right of it
+    property <length> rail: 76px;
     property <[length]> tx: [0px, 82px, 204px, 362px, 452px, 526px];
     property <[length]> tw: [82px, 122px, 158px, 90px, 74px, 124px];
     property <length> top: 56px;
@@ -138,20 +151,27 @@ export component AppWindow inherits Window {
         background: Theme.bg;
         clip: true;
 
+        // ambient: the launch target's wallpaper, faint, behind the top of every page (the user's world instead of a black void)
+        if root.tab != 0 && root.tab != 6 && root.has-inst && Backend.instances[root.ai].has-cover: Rectangle {
+            x: root.rail; y: root.top; width: root.W - root.rail; height: 360px; clip: true; opacity: 0.18; cache-rendering-hint: true;
+            Image { width: parent.width; height: parent.height; source: Backend.instances[root.ai].cover-img; image-fit: cover; }
+            Rectangle { background: @linear-gradient(180deg, Theme.bg.with-alpha(0.2) 0%, Theme.bg 100%); }
+        }
+
         // screens (recreated on tab change, so selection state resets when you leave)
         // each Page fades + slides in when its tab is opened (the tab transition)
-        if root.tab == 0: Page { y: 0px; width: root.W; height: root.H;
+        if root.tab == 0: Page { x: root.rail; y: root.top; width: root.W - root.rail; height: root.H - root.top;
             HomeScreen {
-                width: root.W; height: root.H;
+                width: root.W - root.rail; height: root.H - root.top;
                 open-instance(i) => { root.open-idx = i; root.open-tab = 0; root.open-mode = 0; root.tab = 1; }
                 open-crash(i) => { Backend.log-kind = 2; root.open-idx = i; root.open-tab = 5; root.open-mode = 0; root.tab = 1; }
                 go-wardrobe => { root.open-idx = -1; root.tab = 5; }
                 go-discover => { root.open-idx = -1; root.tab = 2; }
             }
         }
-        if root.tab == 1: Page { y: root.top; width: root.W; height: root.body;
+        if root.tab == 1: Page { x: root.rail; y: root.top; width: root.W - root.rail; height: root.body;
             InstancesScreen {
-                width: root.W; height: root.body;
+                width: root.W - root.rail; height: root.body;
                 sel <=> root.open-idx;
                 itab <=> root.open-tab;
                 mode <=> root.open-mode;
@@ -160,48 +180,43 @@ export component AppWindow inherits Window {
                 go-settings => { root.open-idx = -1; root.tab = 6; }
             }
         }
-        if root.tab == 2: Page { y: root.top; width: root.W; height: root.body; DiscoverScreen { width: root.W; height: root.body; } }
-        if root.tab == 4: Page { y: root.top; width: root.W; height: root.body; HostScreen { width: root.W; height: root.body; go-instances => { root.open-idx = -1; root.tab = 1; } } }
-        if root.tab == 5: Page { y: root.top; width: root.W; height: root.body; WardrobeScreen { width: root.W; height: root.body; page <=> root.ward-page; } }
-        if root.tab == 6: Page { y: root.top; width: root.W; height: root.body; SettingsScreen { width: root.W; height: root.body; } }
+        if root.tab == 2: Page { x: root.rail; y: root.top; width: root.W - root.rail; height: root.body; DiscoverScreen { width: root.W - root.rail; height: root.body; } }
+        if root.tab == 4: Page { x: root.rail; y: root.top; width: root.W - root.rail; height: root.body; HostScreen { width: root.W - root.rail; height: root.body; go-instances => { root.open-idx = -1; root.tab = 1; } } }
+        if root.tab == 5: Page { x: root.rail; y: root.top; width: root.W - root.rail; height: root.body; WardrobeScreen { width: root.W - root.rail; height: root.body; page <=> root.ward-page; } }
+        if root.tab == 6: Page { x: root.rail; y: root.top; width: root.W - root.rail; height: root.body; SettingsScreen { width: root.W - root.rail; height: root.body; } }
 
-        // ---------- top bar: logo + name, glass tab pill, account / settings (transparent on Home) ----------
+        // ---------- top bar: page title, account chip, window buttons ----------
         Rectangle {
-            x: 0px; y: 0px; width: root.W; height: root.top;
-            background: root.tab == 0 ? transparent : Theme.bg;
+            x: root.rail; y: 0px; width: root.W - root.rail; height: root.top;
+            background: Theme.bg;
             // empty bar = window drag handle
             TouchArea { pointer-event(e) => { if e.kind == PointerEventKind.down && e.button == PointerEventButton.left { Backend.win-drag(); } } }
-            if root.tab != 0: Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; }
+            Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; }
             // window buttons (no native title bar)
-            WinButtons { stage-w: root.W; }
-            Image { source: @image-url("assets/nether-logo.svg"); x: 20px; y: 10px; width: 36px; height: 36px; }
-            Text { x: 66px; height: parent.height; text: "Nether"; color: root.tab == 0 ? #FFFFFF : Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; vertical-alignment: center; }
-            // glass tab pill
-            Rectangle {
-                x: (root.W - self.width) / 2; y: 10px; width: 560px + 16px; height: 36px; border-radius: 10px;
-                background: Theme.glass; border-width: 1px; border-color: Theme.glass-ln;
-                for l[i] in root.labels: TabBtn {
-                    x: 8px + root.ptx[i]; y: 4px; width: root.ptw[i];
-                    label: l; active: root.tab == root.ids[i];
-                    clicked => { root.open-idx = -1; root.tab = root.ids[i]; }
+            WinButtons { stage-w: root.W - root.rail; }
+            // quick play (Lunar-style): every instance's icon, click = launch it
+            if root.has-inst: Rectangle {
+                x: 20px; y: 8px; height: 40px; width: ql.preferred-width + 36px + Math.min(Backend.instances.length, 10) * 40px; border-radius: 8px;
+                background: Theme.s1; border-width: 1px; border-color: Theme.ln;
+                ql := Text { x: 14px; height: parent.height; vertical-alignment: center; text: "QUICK PLAY"; color: Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; }
+                for it[i] in Backend.instances: Rectangle {
+                    visible: i < 10;
+                    x: ql.preferred-width + 28px + i * 40px; y: 4px; width: 32px; height: 32px; border-radius: 6px;
+                    background: qt.has-hover ? Theme.hov : transparent;
+                    Image { x: 4px; y: 4px; width: 24px; height: 24px; source: it.icon-img; image-rendering: pixelated; }
+                    if it.running: Rectangle { x: parent.width - 8px; y: 2px; width: 6px; height: 6px; border-radius: 3px; background: Theme.red2; }
+                    qt := TouchArea { mouse-cursor: pointer; clicked => { Backend.active-inst = i; if !it.running && !it.starting { Backend.play(it.name); } } }
+                    if qt.has-hover: Rectangle {
+                        x: (parent.width - self.width) / 2; y: parent.height + 10px; width: qn.preferred-width + 20px; height: 26px; border-radius: 6px;
+                        background: Theme.s3; border-width: 1px; border-color: Theme.ln2;
+                        qn := Text { text: it.running ? it.name + " · running" : "Play " + it.name; color: Theme.tx; font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+                    }
                 }
-            }
-            // settings
-            gear := BarBtn {
-                x: root.W - 138px - 12px - 40px; y: 8px; width: 40px; height: 40px; active: root.tab == 6;
-                clicked => { root.open-idx = -1; root.tab = 6; }
-                // Tabler "settings" cog
-                Path {
-                    x: 9px; y: 9px; width: 22px; height: 22px; viewbox-width: 24; viewbox-height: 24;
-                    stroke: root.tab == 6 || gear.hot ? Theme.tx : Theme.dim; stroke-width: 1.6px; fill: transparent;
-                    commands: "M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065z M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0";
-                }
-                
             }
 
             // account
             chip := BarBtn {
-                x: root.W - 138px - 12px - 40px - 8px - 160px; y: 8px; width: 160px; height: 40px; active: Backend.acct-open;
+                x: root.W - root.rail - 138px - 12px - 160px; y: 8px; width: 160px; height: 40px; active: Backend.acct-open;
                 clicked => { Backend.acct-open = !Backend.acct-open; }
                 // player head (face + hat layer from the skin)
                 Rectangle { x: 6px; y: 6px; width: 28px; height: 28px; background: Theme.s2; border-radius: 4px; clip: true;
@@ -214,21 +229,34 @@ export component AppWindow inherits Window {
         }
 
 
-        // settings tooltip, below the cog (drawn over the page)
-        if gear.hot && root.tab != 6: Rectangle {
-            x: gear.x + (gear.width - self.width) / 2; y: 52px; width: gt.preferred-width + 18px; height: 24px;
-            background: Theme.s3; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
-            gt := Text { text: "Settings"; color: Theme.tx; font-family: Theme.ui; font-size: 12px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }
+        // ---------- left rail: logo, pages, settings at the bottom (Lunar-style; drawn over pages so tooltips show) ----------
+        Rectangle {
+            x: 0px; y: 0px; width: root.rail; height: root.H; background: Theme.s1;
+            TouchArea { pointer-event(e) => { if e.kind == PointerEventKind.down && e.button == PointerEventButton.left && self.mouse-y < root.top { Backend.win-drag(); } } }
+            Rectangle { x: parent.width - 1px; width: 1px; background: Theme.ln; }
+            Image { source: @image-url("assets/nether-logo.svg"); x: (root.rail - 44px) / 2; y: 6px; width: 44px; height: 44px; }
+            Rectangle { x: 18px; y: root.top + 6px; width: root.rail - 36px; height: 1px; background: Theme.ln; }
+            for l[i] in root.labels: RailBtn {
+                x: (root.rail - 48px) / 2; y: root.top + 22px + i * 58px;
+                d: root.icons[i]; label: l; active: root.tab == root.ids[i];
+                clicked => { root.open-idx = -1; root.tab = root.ids[i]; }
+            }
+            RailBtn {
+                x: (root.rail - 48px) / 2; y: root.H - 48px - 20px; label: "Settings"; active: root.tab == 6;
+                d: "M8.6 3.6c.35-1.47 2.45-1.47 2.8 0a1.44 1.44 0 0 0 2.15.89c1.29-.79 2.77.69 1.98 1.98a1.44 1.44 0 0 0 .89 2.15c1.47.35 1.47 2.45 0 2.8a1.44 1.44 0 0 0-.89 2.15c.79 1.29-.69 2.77-1.98 1.98a1.44 1.44 0 0 0-2.15.89c-.35 1.47-2.45 1.47-2.8 0a1.44 1.44 0 0 0-2.15-.89c-1.29.79-2.77-.69-1.98-1.98a1.44 1.44 0 0 0-.89-2.15c-1.47-.35-1.47-2.45 0-2.8a1.44 1.44 0 0 0 .89-2.15c-.79-1.29.69-2.77 1.98-1.98a1.44 1.44 0 0 0 2.15-.89z M7.5 10a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0 -5 0";
+                clicked => { root.open-idx = -1; root.tab = 6; }
+            }
         }
 
         // ---------- bottom deck: launch target + what is running / downloading ----------
         dk := Rectangle {
             visible: root.tab != 0;
-            x: 0px; y: root.H - root.deck; width: root.W; height: root.deck;
+            x: root.rail; y: root.H - root.deck; width: root.W - root.rail; height: root.deck;
             background: Theme.s1;
             TouchArea { }
             Rectangle { y: 0px; height: 1px; background: Theme.ln; }
-            property <bool> launch: root.tab != 0 && root.has-inst;
+            // Home, Instances and Host carry their own accent action (PLAY / START SERVER): one per screen
+            property <bool> launch: root.tab != 0 && root.tab != 1 && root.tab != 4 && root.has-inst;
             // launch target (hidden on Home, where the hero is the launch control)
             if dk.launch: Rectangle {
                 x: 0px; width: 330px;
@@ -270,7 +298,7 @@ export component AppWindow inherits Window {
             if dk.launch: Rectangle { x: 500px; y: 16px; width: 1px; height: 24px; background: Theme.ln; }
             // activity
             Rectangle {
-                x: dk.launch ? 524px : 24px; width: root.W - self.x - 24px;
+                x: dk.launch ? 524px : 24px; width: dk.width - self.x - 24px;
                 if Backend.job-on: Rectangle {
                     Pulse { x: 0px; y: 24px; }
                     Text { x: 20px; width: parent.width - 420px - (Backend.job-more > 0 ? 90px : 0px); text: Backend.job-text; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 500; vertical-alignment: center; overflow: elide; }
@@ -299,7 +327,7 @@ export component AppWindow inherits Window {
             x: 0px; y: root.top; width: root.W; height: root.H - root.top;
             TouchArea { clicked => { Backend.acct-open = false; } }
             Rectangle {
-                x: root.W - 198px - 400px; y: 6px; width: 400px; height: Backend.acct-state == 1 ? 268px : (Backend.acct-state == 2 ? 112px + Backend.accounts.length * 48px + (Backend.acct-offline ? 26px : 0px) : (Backend.acct-msg != "" ? 210px : 152px));
+                x: root.W - 138px - 12px - 400px; y: 6px; width: 400px; height: Backend.acct-state == 1 ? 268px : (Backend.acct-state == 2 ? 112px + Backend.accounts.length * 48px + (Backend.acct-offline ? 26px : 0px) : (Backend.acct-msg != "" ? 210px : 152px));
                 background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
                 TouchArea { }
                 Eyebrow { x: 22px; y: 18px; text: "MICROSOFT ACCOUNT"; }
@@ -590,7 +618,7 @@ export component AppWindow inherits Window {
                 Text { x: 32px; y: 98px; width: parent.width - 64px; text: rd.nm + " as it was then: mods, worlds, configs, settings, version and loader (" + Backend.rpoints[Backend.rp-ask].size + ")."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
                 for o[i] in [{t: "As a new instance", s: "A copy next to this one. Nothing in " + rd.nm + " changes."}, {t: "Replace " + rd.nm, s: "Goes back to that point. Its current state is saved as a restore point first."}]: Rectangle {
                     x: 32px; y: 150px + i * 70px; width: parent.width - 64px; height: 62px;
-                    background: ota.has-hover ? Theme.s2 : Theme.s1; border-width: 1px; border-color: ota.has-hover ? (i == 1 ? Theme.red2 : #ffffff55) : Theme.ln; border-radius: 8px;
+                    background: ota.has-hover ? Theme.s2 : Theme.s1; border-width: 1px; border-color: ota.has-hover ? (i == 1 ? Theme.red2 : Theme.mut) : Theme.ln; border-radius: 8px;
                     animate background, border-color { duration: Theme.fast; }
                     Rectangle { x: 0px; width: 3px; background: i == 0 ? Theme.ice : Theme.red2; }
                     Text { x: 20px; y: 11px; width: parent.width - 60px; text: o.t; color: i == 1 ? Theme.redtx : Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; overflow: elide; }

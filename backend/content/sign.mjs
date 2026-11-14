@@ -24,6 +24,19 @@ function files(dir) {
   });
 }
 
+// Cape PNG layout (same rule in core backend.rs and the agent's Capes.java): frames of 64:32 (cape + elytra) or 22:17
+// (cape only; the game adds its own elytra), any whole scale, stacked vertically = animated. -> {s, n, full} or null.
+function capeLayout(w, h) {
+  for (const [bw, bh, full] of [[64, 32, true], [22, 17, false]]) {
+    if (w % bw !== 0 || w === 0) continue;
+    const s = w / bw, fh = s * bh;
+    if (h % fh !== 0) continue;
+    const n = h / fh;
+    if (s <= 32 && n >= 1 && n <= 128 && n * s * s <= 2048) return { s, n, full };
+  }
+  return null;
+}
+
 const cmd = process.argv[2];
 if (cmd === "keygen") {
   if (existsSync(keyFile)) { console.error(`refusing to overwrite ${keyFile}`); process.exit(1); }
@@ -45,7 +58,13 @@ if (cmd === "keygen") {
     if (!/^[a-z0-9_-]{1,32}$/.test(c.id || "") || typeof c.name !== "string") throw new Error(`cape ${JSON.stringify(c)}: needs an "id" (a-z 0-9 _ -, max 32) and a "name"`);
     const png = join(here, "capes", `${c.id}.png`);
     if (!existsSync(png)) throw new Error(`cape "${c.id}": capes/${c.id}.png is missing`);
-    if (statSync(png).size > 64 * 1024) throw new Error(`cape "${c.id}": PNG is over 64 KB`);
+    const b = readFileSync(png);
+    if (b.length > 4 * 1024 * 1024) throw new Error(`cape "${c.id}": PNG is over 4 MB`);
+    if (b.length < 33 || b.readUInt32BE(0) !== 0x89504e47 || b.toString("latin1", 12, 16) !== "IHDR") throw new Error(`cape "${c.id}": not a PNG`);
+    const L = capeLayout(b.readUInt32BE(16), b.readUInt32BE(20));
+    if (!L) throw new Error(`cape "${c.id}": ${b.readUInt32BE(16)}x${b.readUInt32BE(20)} is not a cape layout (frames of 64:32 cape+elytra or 22:17 cape only, `
+      + "stacked vertically when animated; at most 2048 px wide, 128 frames, 4 Mpx after conversion to 64:32)");
+    if (c.frametime !== undefined && !(Number.isInteger(c.frametime) && c.frametime >= 20 && c.frametime <= 2000)) throw new Error(`cape "${c.id}": "frametime" is ms per frame, 20..2000`);
   }
   const map = {};
   for (const p of files(here).sort()) {

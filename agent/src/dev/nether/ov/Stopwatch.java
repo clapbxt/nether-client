@@ -13,7 +13,7 @@ final class Stopwatch extends RowsModule {
 
     Stopwatch() {
         super("stopwatch", "Stopwatch", "HUD", "A stopwatch with lap times, driven by keys.", false, 0.15, 0.6);
-        add(Setting.key("toggleKey", "Start / stop key", 297).hint("Default F8."));
+        add(Setting.key("toggleKey", "Start / stop key", 295).hint("Default F6 (F8 is the game's smooth camera on 1.8.9)."));
         add(Setting.key("lapKey", "Lap key", 298).hint("Default F9. Shows the last three laps."));
         add(Setting.key("resetKey", "Reset key", 296).hint("Default F7. Clears the time and the laps."));
         add(Setting.bool("hundredths", "Show hundredths", true));

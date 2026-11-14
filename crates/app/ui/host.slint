@@ -103,7 +103,7 @@ export component HostScreen inherits Rectangle {
         pick := Rectangle {
             x: 196px; y: 34px; width: 330px; height: 48px;
             background: pt.has-hover ? Theme.s2 : Theme.s1;
-            border-width: 1px; border-color: pt.has-hover ? #ffffff66 : Theme.ln2; border-radius: 8px;
+            border-width: 1px; border-color: pt.has-hover ? Theme.mut : Theme.ln2; border-radius: 8px;
             animate background, border-color { duration: Theme.fast; }
             property <bool> ok: HostState.idx >= 0 && HostState.idx < HostState.servers.length;
             Dot { x: 18px; y: 19px; status: pick.ok ? HostState.servers[HostState.idx].status : 0; }
@@ -166,7 +166,7 @@ export component HostScreen inherits Rectangle {
             if !root.live: Rectangle { x: 32px; y: 34px; width: 10px; height: 10px; background: root.st == 4 ? Theme.red2 : Theme.mut; }
             Eyebrow { x: 52px; y: 30px; width: parent.width - 80px; text: HostState.inst-name.to-uppercase() + "  ·  " + HostState.inst-meta; color: Theme.dim; font-size: 15px * Theme.ts; overflow: elide; }
             Heading {
-                x: 28px; y: 40px; font-size: 128px;
+                x: 30px; y: 62px; font-size: 96px;
                 text: HostState.phase == 0 ? "…" : HostState.phase == 2 ? "NOT SET UP"
                     : root.st == 1 ? "STARTING" : root.st == 2 ? "ONLINE" : root.st == 3 ? "STOPPING" : root.st == 4 ? "CRASHED" : "OFFLINE";
                 color: root.st == 4 ? Theme.red2 : (root.st == 2 || root.st == 1 ? Theme.tx : Theme.dim);
@@ -195,7 +195,7 @@ export component HostScreen inherits Rectangle {
                 ccta := TouchArea { mouse-cursor: pointer; clicked => { Backend.copy-text(HostState.addr); Backend.toast("Address copied"); } }
             }
             if tk.has: Text { x: 28px; y: 50px; width: parent.width - 56px; height: 60px; text: HostState.addr; color: Theme.tx; font-family: Theme.mono; font-size: HostState.addr.character-count > 17 ? 22px : 34px; font-weight: 700; vertical-alignment: center; overflow: elide; }
-            if !tk.has: Text { x: 28px; y: 50px; width: parent.width - 56px; height: 60px; text: "Not running"; color: Theme.mut; font-family: Theme.disp; font-size: 32px; font-weight: 800;  vertical-alignment: center; }
+            if !tk.has: Text { x: 28px; y: 50px; width: parent.width - 56px; height: 60px; text: "Not running yet"; color: Theme.dim; font-family: Theme.ui; font-size: 20px * Theme.ts; font-weight: 500; vertical-alignment: center; }
             Rectangle { x: 28px; y: 118px; width: parent.width - 56px; height: 1px; background: Theme.ln2; }
             Rectangle { x: 28px; y: 166px; width: parent.width - 56px; height: 1px; background: Theme.ln2; }
             Text { x: 28px; y: 118px; width: parent.width - 56px - 96px; height: 48px; text: "Minecraft › Multiplayer › Add Server › paste"; color: tk.has ? Theme.tx : Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }

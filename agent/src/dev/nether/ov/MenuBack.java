@@ -65,7 +65,7 @@ final class MenuBack {
                     Gfx.rect(0, H - 100, W, 100, 0, Gfx.BG);
                 }
         }
-        vignette(W, H, (float) m.num("vignette"));
+        vignette(W, H, 0.5f);
     }
 
     /** One device pixel in units (hairlines stay 1 px sharp at any scale). */

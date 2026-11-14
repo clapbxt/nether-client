@@ -1,6 +1,7 @@
 //! Player preview: a small software renderer for the Minecraft player model (skin + outer layer + cape),
 //! plus loading the account's skin/capes and equipping capes. Rendered on the UI thread by a timer.
 use std::cell::RefCell;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use image::RgbaImage;
@@ -19,17 +20,21 @@ pub const H: u32 = 780;
 pub struct Look {
     pub skin: RgbaImage,
     pub slim: bool,
-    pub cape: Option<RgbaImage>,
+    pub cape: Option<Rc<RgbaImage>>,
 }
 
-struct CapeTex { id: String, img: RgbaImage }
+/// A cape texture in the 64:32 layout; Nether capes may have animation frames (`img` = the first).
+#[derive(Clone)]
+struct CapeTex { id: String, img: Rc<RgbaImage>, frames: Rc<[Rc<RgbaImage>]>, ms: u32 }
 
 thread_local! {
     static LOOK: RefCell<Option<Look>> = const { RefCell::new(None) };
     static CAPES: RefCell<Vec<CapeTex>> = const { RefCell::new(Vec::new()) };
     // Nether cape textures by id, and the one worn (shown on the preview over the account cape)
     static NCAPES: RefCell<Vec<CapeTex>> = const { RefCell::new(Vec::new()) };
-    static NWORN: RefCell<Option<RgbaImage>> = const { RefCell::new(None) };
+    static NWORN: RefCell<Option<CapeTex>> = const { RefCell::new(None) };
+    // the previewed cape's animation: frames, ms per frame, frame shown
+    static ANIM: RefCell<Option<(Rc<[Rc<RgbaImage>]>, u32, usize)>> = const { RefCell::new(None) };
     static NUUID: RefCell<Option<String>> = const { RefCell::new(None) };
     static YAW: RefCell<f32> = const { RefCell::new(0.5) };
     static DIRTY: RefCell<bool> = const { RefCell::new(true) };
@@ -75,6 +80,20 @@ pub fn upgrade_legacy(src: &RgbaImage) -> RgbaImage {
         (44, 16, 36, 48, 4, 4), (48, 16, 40, 48, 4, 4), (40, 20, 40, 52, 4, 12), (44, 20, 36, 52, 4, 12), (48, 20, 32, 52, 4, 12), (52, 20, 44, 52, 4, 12),
     ] { copy(sx, sy, dx, dy, w, h); }
     out
+}
+
+/// A Nether cape PNG as 64:32 frames (stacked frames = animation); 22:17 cape-only art is placed into the 64:32 layout.
+fn cape_frames(img: &RgbaImage) -> Vec<RgbaImage> {
+    let Some(l) = nether_core::backend::CapeLayout::of(img.width(), img.height()) else { return vec![] };
+    let (s, w) = (l.scale, img.width());
+    let fh = if l.full { 32 * s } else { 17 * s };
+    (0..l.frames).map(|i| {
+        let f = image::imageops::crop_imm(img, 0, i * fh, w, fh).to_image();
+        if l.full { return f; }
+        let mut out = RgbaImage::new(64 * s, 32 * s);
+        image::imageops::overlay(&mut out, &f, 0, 0);
+        out
+    }).collect()
 }
 
 /// The outside face of a cape (for cards and the Home preview).
@@ -130,8 +149,8 @@ pub fn load(weak: slint::Weak<AppWindow>, sh: Arc<Shared>, skins: Vec<Value>, ca
             let active = list.iter().position(|c| c.2);
             let mut cards = vec![Cape { id: "".into(), name: "No cape".into(), img: Image::default() }];
             cards.extend(list.iter().map(|c| Cape { id: c.0.as_str().into(), name: c.1.as_str().into(), img: cape_front(&c.3) }));
-            let cape = NWORN.with(|n| n.borrow().clone()).or_else(|| active.map(|i| list[i].3.clone()));
-            CAPES.with(|v| *v.borrow_mut() = list.into_iter().map(|c| CapeTex { id: c.0, img: c.3 }).collect());
+            let cape = NWORN.with(|n| n.borrow().as_ref().map(|c| c.img.clone())).or_else(|| active.map(|i| Rc::new(list[i].3.clone())));
+            CAPES.with(|v| *v.borrow_mut() = list.into_iter().map(|c| CapeTex { id: c.0, img: Rc::new(c.3), frames: Rc::from([]), ms: 0 }).collect());
             // another account: look its Nether cape up again
             if ui.global::<Backend>().get_ncape_state() == 2 && NUUID.with(|u| *u.borrow() != msa_uuid(&sh)) {
                 NWORN.with(|n| *n.borrow_mut() = None);
@@ -196,8 +215,8 @@ fn account_cape_id(ui: &AppWindow) -> String {
 }
 
 fn set_worn(ui: &AppWindow, id: &str) {
-    let img = NCAPES.with(|v| v.borrow().iter().find(|c| c.id == id).map(|c| c.img.clone()));
-    NWORN.with(|n| *n.borrow_mut() = img);
+    let tex = NCAPES.with(|v| v.borrow().iter().find(|c| c.id == id).cloned());
+    NWORN.with(|n| *n.borrow_mut() = tex);
     ui.global::<Backend>().set_ncape_worn(id.into());
     set_preview_cape(&account_cape_id(ui));
 }
@@ -215,14 +234,18 @@ pub fn load_ncapes(ui: &AppWindow, sh: &Arc<Shared>) {
     let sh = sh.clone();
     std::thread::spawn(move || {
         let c = client();
-        let list: Vec<(nether_core::backend::Cape, RgbaImage)> = nether_core::backend::capes(&c).into_iter()
-            .filter_map(|cape| { let img = image::load_from_memory(&cape.png(&c)?).ok()?.to_rgba8(); Some((cape, img)) }).collect(); // signed + size-checked bytes only
+        let list: Vec<(nether_core::backend::Cape, Vec<RgbaImage>)> = nether_core::backend::capes(&c).into_iter()
+            .filter_map(|cape| { let f = cape_frames(&image::load_from_memory(&cape.png(&c)?).ok()?.to_rgba8()); (!f.is_empty()).then_some((cape, f)) }).collect(); // signed + layout-checked bytes only
         let worn = uuid.as_deref().and_then(|u| nether_core::backend::players(&c, &[u]).ok()).and_then(|m| m.into_values().next()).unwrap_or_default();
         ui_do(&weak, move |ui| {
             let b = ui.global::<Backend>();
             if list.is_empty() { b.set_ncape_state(3); return; }
-            b.set_ncapes(ModelRc::new(VecModel::from(list.iter().map(|(c, img)| Cape { id: c.id.as_str().into(), name: c.name.as_str().into(), img: cape_front(img) }).collect::<Vec<_>>())));
-            NCAPES.with(|v| *v.borrow_mut() = list.into_iter().map(|(c, img)| CapeTex { id: c.id, img }).collect());
+            b.set_ncapes(ModelRc::new(VecModel::from(list.iter().map(|(c, f)| Cape { id: c.id.as_str().into(), name: c.name.as_str().into(), img: cape_front(&f[0]) }).collect::<Vec<_>>())));
+            NCAPES.with(|v| *v.borrow_mut() = list.into_iter().map(|(c, f)| {
+                let ms = c.frame_ms();
+                let frames: Rc<[Rc<RgbaImage>]> = f.into_iter().map(Rc::new).collect();
+                CapeTex { id: c.id, img: frames[0].clone(), frames, ms }
+            }).collect());
             set_worn(ui, &worn);
             b.set_ncape_state(2);
             export(ui, &sh);
@@ -325,8 +348,9 @@ fn apply_request(ui: &AppWindow, sh: &Arc<Shared>, req: &Value) {
 }
 
 fn set_preview_cape(id: &str) {
-    let img = NWORN.with(|n| n.borrow().clone()).or_else(|| CAPES.with(|v| v.borrow().iter().find(|c| c.id == id).map(|c| c.img.clone())));
-    LOOK.with(|l| if let Some(l) = l.borrow_mut().as_mut() { l.cape = img; });
+    let tex = NWORN.with(|n| n.borrow().clone()).or_else(|| CAPES.with(|v| v.borrow().iter().find(|c| c.id == id).cloned()));
+    ANIM.with(|a| *a.borrow_mut() = tex.as_ref().filter(|t| t.frames.len() > 1).map(|t| (t.frames.clone(), t.ms, 0)));
+    LOOK.with(|l| if let Some(l) = l.borrow_mut().as_mut() { l.cape = tex.map(|t| t.img); });
     mark_dirty();
 }
 
@@ -337,6 +361,7 @@ thread_local! {
     static DEPTH: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
     static DIMS: std::cell::Cell<(u32, u32)> = const { std::cell::Cell::new((0, 0)) };
     static LAST: RefCell<std::time::Instant> = RefCell::new(std::time::Instant::now());
+    static START: std::time::Instant = std::time::Instant::now();
 }
 
 pub fn init(ui: &AppWindow) { UI.with(|u| *u.borrow_mut() = Some(ui.as_weak())); wake(); }
@@ -370,10 +395,17 @@ fn tick(ui: &AppWindow, dt: f32) -> bool {
     let spin = b.get_skin_spin() && !b.get_skin_held() && !b.get_calm();
     if spin { YAW.with(|y| *y.borrow_mut() += dt * std::f32::consts::TAU / 14.0); }
     let slim = b.get_skin_slim();
+    // an animated cape keeps the preview drawing (first frame only with reduced motion)
+    let mut anim = false;
     LOOK.with(|l| {
         let mut l = l.borrow_mut();
         let Some(look) = l.as_mut() else { return };
-        let dirty = DIRTY.with(|d| std::mem::replace(&mut *d.borrow_mut(), false));
+        let mut dirty = DIRTY.with(|d| std::mem::replace(&mut *d.borrow_mut(), false));
+        ANIM.with(|a| if let Some((f, ms, cur)) = a.borrow_mut().as_mut() {
+            anim = !b.get_calm();
+            let i = if anim { (START.with(|s| s.elapsed().as_millis()) / *ms as u128 % f.len() as u128) as usize } else { 0 };
+            if i != *cur { *cur = i; look.cape = Some(f[i].clone()); dirty = true; }
+        });
         // pixels actually shown: the tallest preview (Wardrobe, 490 stage px) at the window's stage scale
         let win = ui.window().size();
         let fh = ((490.0 * (win.width as f32 / 1440.0).min(win.height as f32 / 900.0)).round() as u32).clamp(360, H);
@@ -384,7 +416,7 @@ fn tick(ui: &AppWindow, dt: f32) -> bool {
         let yaw = YAW.with(|y| *y.borrow());
         b.set_skin_frame(Image::from_rgba8(render_at(look, yaw, dims.0, dims.1)));
     });
-    spin || b.get_skin_held()
+    spin || anim || b.get_skin_held()
 }
 
 // ---------------- renderer ----------------
@@ -463,7 +495,7 @@ pub fn render_at(look: &Look, yaw: f32, fw: u32, fh: u32) -> SharedPixelBuffer<R
     let light = { let l = [-0.45f32, 0.6, 0.75]; let n = (l[0] * l[0] + l[1] * l[1] + l[2] * l[2]).sqrt(); [l[0] / n, l[1] / n, l[2] / n] };
 
     for quad in model(look) {
-        let tex = if quad.cape { match &look.cape { Some(c) => c, None => continue } } else { &look.skin };
+        let tex = if quad.cape { match &look.cape { Some(c) => &**c, None => continue } } else { &look.skin };
         let scale = tex.width() as f32 / 64.0;
         // camera space: centre the model, spin, tilt slightly down
         let cam: Vec<V3> = quad.p.iter().map(|&p| rot_x(rot_y([p[0], p[1] - 16.5, p[2]], yaw), 0.12)).collect();

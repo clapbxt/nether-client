@@ -107,7 +107,7 @@ export component SettingsScreen inherits Rectangle {
     property <[length]> tops: [0px, root.y2, root.y3, root.y4, root.y5, root.y6, root.y7];
     property <int> at: root.pos >= Math.min(root.y7 - 120px, root.end) ? 6 : (root.pos >= root.y6 - 120px ? 5 : (root.pos >= root.y5 - 120px ? 4 : (root.pos >= root.y4 - 120px ? 3 : (root.pos >= root.y3 - 120px ? 2 : (root.pos >= root.y2 - 120px ? 1 : 0)))));
     property <[string]> accent-names: ["Racing red", "Ember", "Acid", "Cobalt", "Violet"];
-    property <[color]> accents: [#E10600, #E8590C, #22A845, #1F6FEB, #8B3DFF];
+    property <[color]> accents: [#F76A05, #E5372D, #22A845, #1F6FEB, #8B3DFF];
     // L2: what connects where (Rule 6); k = what for, url = hosts and when
     property <[Link]> hosts: [
         {k: "Sign-in", url: "login.microsoftonline.com, xboxlive.com, api.minecraftservices.com · your token goes only to Microsoft and Mojang"},
@@ -236,21 +236,36 @@ export component SettingsScreen inherits Rectangle {
         for h[i] in root.hosts: SetRow { x: 0px; y: root.y7 + 88px + root.dy + i * 64px; width: root.cw; reserve: 0px; title: h.k; sub: h.url; }
     }
 
-    // how sharing works (beside the Game section it explains)
+    // side notes for the section in view (the column used to sit empty past the Game section)
+    property <[string]> note-heads: ["HOW SHARING WORKS", "ABOUT ACCOUNTS", "ABOUT JAVA", "GOOD TO KNOW", "MAKE IT YOURS", "STORAGE & UPDATES", "WHAT WE COLLECT"];
+    property <[{s: int, n: int, h: string, b: string}]> notes: [
+        {s: 0, n: 0, h: "Every loader", b: "Settings are merged into each instance's own options.txt before launch, so Vanilla, Fabric, Quilt, Forge and NeoForge all read them the normal way."},
+        {s: 0, n: 1, h: "Different mods per instance", b: "Mod keybinds are kept even in instances without that mod, and come back in any instance that has it."},
+        {s: 0, n: 2, h: "Old and new versions", b: "1.8.9-1.12 key codes are translated to and from modern key names, so binds carry between eras."},
+        {s: 0, n: 3, h: "Changes made in game", b: "When the game closes, what you changed is saved back. Instances can opt out on their Overview page."},
+        {s: 1, n: 0, h: "Switch in one click", b: "Every saved account sits in the chip at the top right. Pick one there before you press Play."},
+        {s: 1, n: 1, h: "Your sign-in stays here", b: "Tokens are kept in Windows Credential Manager and only ever sent to Microsoft and Mojang."},
+        {s: 1, n: 2, h: "No connection?", b: "You can still play singleplayer with the last account that signed in."},
+        {s: 2, n: 0, h: "Nothing to install", b: "Nether downloads the right Java for each Minecraft version the first time you play it."},
+        {s: 2, n: 1, h: "Bring your own", b: "Choose a folder to use your own Java for that version. Reset goes back to ours."},
+        {s: 2, n: 2, h: "Per instance", b: "An instance can pin a Java on its Overview page, next to memory and JVM flags."},
+        {s: 3, n: 0, h: "Find anything", b: "Ctrl+K searches instances, worlds, mods, settings and actions from any page."},
+        {s: 3, n: 1, h: "Out of the way", b: "Hide to tray keeps Nether ready without a window. The tray icon brings it back."},
+        {s: 4, n: 0, h: "In game too", b: "Theme and accent follow you into the Right Shift menu and HUD editor."},
+        {s: 4, n: 1, h: "Your pictures", b: "Uploaded icons and wallpapers show up when you make or edit an instance. Home uses the wallpaper full screen."},
+        {s: 5, n: 0, h: "Safe to clear", b: "The download cache only holds icons and lookups. It refills as you browse."},
+        {s: 5, n: 1, h: "Signed updates", b: "Every update is checked against our signing key before it installs."},
+        {s: 6, n: 0, h: "No telemetry", b: "No analytics, no ads, no tracking. The list on the left is every service Nether talks to."},
+        {s: 6, n: 1, h: "Only when you use it", b: "Hosting, log sharing and lyrics connect only while you use them."},
+    ];
     Rectangle {
         x: 1124px; y: 0px; width: 316px; height: parent.height; background: Theme.s1;
-        opacity: root.at == 0 ? 1 : 0;
-        animate opacity { duration: Theme.mid; }
         Rectangle { x: 0px; width: 1px; background: Theme.ln; }
-        Eyebrow { x: 28px; y: 124px; text: "HOW SHARING WORKS"; }
-        for t[i] in [
-            {h: "Every loader", b: "Settings are merged into each instance's own options.txt before launch, so Vanilla, Fabric, Quilt, Forge and NeoForge all read them the normal way."},
-            {h: "Different mods per instance", b: "Mod keybinds are kept even in instances without that mod, and come back in any instance that has it."},
-            {h: "Old and new versions", b: "1.8.9-1.12 key codes are translated to and from modern key names, so binds carry between eras."},
-            {h: "Changes made in game", b: "When the game closes, what you changed is saved back. Instances can opt out on their Overview page."},
-        ]: Rectangle {
-            x: 28px; y: 156px + i * 124px * Theme.ts; height: 124px * Theme.ts; width: parent.width - 56px;
-            Text { x: 0px; y: 0px; text: "0\{i + 1}"; color: Theme.red2; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; }
+        Eyebrow { x: 28px; y: 124px; text: root.note-heads[root.at]; }
+        for t[i] in root.notes: Rectangle {
+            visible: t.s == root.at;
+            x: 28px; y: 156px + t.n * 124px * Theme.ts; height: 124px * Theme.ts; width: parent.width - 56px;
+            Text { x: 0px; y: 0px; text: "0\{t.n + 1}"; color: Theme.red2; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; }
             Text { x: 0px; y: 18px; width: parent.width; text: t.h; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; }
             Text { x: 0px; y: 40px; width: parent.width; text: t.b; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
         }

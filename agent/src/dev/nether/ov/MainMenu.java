@@ -35,14 +35,14 @@ final class MainMenu {
         m.add(Setting.header("Background"));
         m.add(Setting.choice("bg", "Background", "Panorama", MenuBack.KINDS));
         m.add(Setting.slider("dim", "Dim", 0, 0.8, 0.05, 0.3).hint("Darkens the panorama or image behind the menu."));
-        m.add(Setting.slider("vignette", "Vignette", 0, 1, 0.05, 0.5));
         m.add(Setting.bool("motion", "Animate background", true).hint("Ember drift, grid sweep, slow pan on images. Reduce motion stops it."));
-        m.add(Setting.choice("imageFit", "Image fit", "Fill", "Fill", "Fit", "Stretch"));
-        m.add(Setting.slider("imageBlur", "Image blur", 0, 1, 0.1, 0).hint("Images only: the panorama is drawn by the game and stays sharp."));
-        m.add(Setting.slider("slideshow", "Slideshow (seconds)", 0, 120, 5, 0).hint("0 keeps one image, otherwise every image in the folder in turn."));
-        m.add(Setting.text("imageFile", "Image file", "", 96).hint("A file in client/backgrounds; empty shows the first one."));
-        m.add(Setting.action("folder", "Backgrounds folder", "OPEN", MenuBack::openFolder).hint("PNG, JPG or GIF (first frame)."));
-        m.add(Setting.action("next", "Next image", "NEXT", MenuBack::next));
+        java.util.function.BooleanSupplier img = () -> m.str("bg").equals("Image");
+        m.add(Setting.choice("imageFit", "Image fit", "Fill", "Fill", "Fit", "Stretch").when(img));
+        m.add(Setting.slider("imageBlur", "Image blur", 0, 1, 0.1, 0).when(img));
+        m.add(Setting.slider("slideshow", "Slideshow (seconds)", 0, 120, 5, 0).hint("0 keeps one image, otherwise every image in the folder in turn.").when(img));
+        m.add(Setting.text("imageFile", "Image file", "", 96).hint("A file in client/backgrounds; empty shows the first one.").when(img));
+        m.add(Setting.action("folder", "Backgrounds folder", "OPEN", MenuBack::openFolder).hint("PNG, JPG or GIF (first frame).").when(img));
+        m.add(Setting.action("next", "Next image", "NEXT", MenuBack::next).when(img));
         m.add(Setting.header("Layout"));
         m.add(Setting.choice("layout", "Layout", "Center", LAYOUTS));
         m.add(Setting.choice("buttons", "Button style", "Solid", STYLES));
@@ -296,11 +296,11 @@ final class MainMenu {
         float sy;
         if (mode.equals("Mark")) {
             float s = 54 * sc;
-            ghast(centred ? x - s / 2 : x, y, s);
+            mark(centred ? x - s / 2 : x, y, s);
             sy = y + 70 * sc;
         } else {
             float s = 46 * sc;
-            ghast(centred ? x - s / 2 : x + 2, y, s);
+            mark(centred ? x - s / 2 : x + 2, y, s);
             if (centred) {
                 Gfx.textC(Gfx.HEAD, 34 * sc, x, y + 80 * sc, Gfx.ICE, "NETHER", 0);
                 Gfx.textC(Gfx.UI, 11 * sc, x, y + 104 * sc, Gfx.DIM, "CLIENT", 0);
@@ -322,7 +322,7 @@ final class MainMenu {
         boolean mods = cMods != null;
         float bw = 232, bh = 30, gap = 6, cx = W / 2;
         int rows = mods ? 4 : 3;
-        float lh = logoH(1), block = lh + (lh > 0 ? 10 : 0) + rows * (bh + gap) + 8 + bh;
+        float lh = logoH(1), block = lh + (lh > 0 ? 10 : 0) + rows * (bh + gap) - gap;
         float top = 60 + Math.max(0, (H - 96 - block) * 0.45f) + rise;
         // legibility scrim behind the column (any background)
         float sw = bw + 300;
@@ -335,8 +335,6 @@ final class MainMenu {
         if (mods) { button(MODS, x0, y, bw, bh, false, scr); y += bh + gap; }
         button(OPTIONS, x0, y, half, bh, false, scr);
         button(QUIT, x0 + half + gap, y, half, bh, false, scr);
-        y += bh + gap + 8;
-        button(NETHER, x0, y, bw, bh, false, scr);
         float cw = 256;
         if (W - 16 - cw > cx + bw / 2 + 24) QuickJoin.card(W - 16 - cw, H - 36, cw, 76, scr);
     }
@@ -358,8 +356,6 @@ final class MainMenu {
         if (mods) { button(MODS, x, y, bw, bh, true, scr); y += bh + gap; }
         button(OPTIONS, x, y, half, bh, true, scr);
         button(QUIT, x + half + gap, y, half, bh, true, scr);
-        y += bh + gap + 8;
-        button(NETHER, x, y, bw, bh, true, scr);
         y += bh;
         boolean accTop = true;
         if (MODULE.bool("account") && y + 20 < H - 34 - 44) { accTop = accountCard(x, H - 34 - 44, bw) <= 0; }
@@ -373,7 +369,7 @@ final class MainMenu {
         float barH = 58, by = H - barH - 26;
         Gfx.rect(0, by, W, barH, 0, Gfx.a(Gfx.BG, 0.84f));
         Gfx.rect(0, by, W, MenuBack.lw(), 0, Gfx.LN);
-        int[] ids = cMods != null ? new int[] {SINGLE, MULTI, MODS, OPTIONS, QUIT, NETHER} : new int[] {SINGLE, MULTI, OPTIONS, QUIT, NETHER};
+        int[] ids = cMods != null ? new int[] {SINGLE, MULTI, MODS, OPTIONS, QUIT} : new int[] {SINGLE, MULTI, OPTIONS, QUIT};
         float gap = 8, bh = 34, bw = Math.min(156, (W - 48 - gap * (ids.length - 1)) / ids.length);
         float x = (W - (ids.length * bw + (ids.length - 1) * gap)) / 2;
         for (int id : ids) { button(id, x, by + (barH - bh) / 2, bw, bh, false, scr); x += bw + gap; }
@@ -590,7 +586,7 @@ final class MainMenu {
         Gfx.rect(x, y, w, h, 6, Gfx.mix(Gfx.a(Gfx.CARD, 0.86f), Gfx.CARD2, t));
         Gfx.ring(x, y, w, h, 6, 1, Gfx.mix(Gfx.LN2, Gfx.a(Gfx.ICE, 0.4f), t));
         float tx = x + 12;
-        if (mark) { ghast(tx, y + (h - 16.5f) / 2, 14); tx += 22; }
+        if (mark) { mark(tx, y + (h - 16.5f) / 2, 14); tx += 22; }
         else { // three sliders
             int c = Gfx.mix(Gfx.DIM, Gfx.ICE, t);
             for (int i = 0; i < 3; i++) {
@@ -614,7 +610,7 @@ final class MainMenu {
 
     private static boolean panelOpen;
     private static float panelA;
-    private static final float PW = 500, PH = 286;
+    private static final float PW = 300, PH = 152;
     private static final String[] DIMS = {"OFF", "20%", "40%", "60%", "80%"};
 
     private static void panel(float W, float H) {
@@ -626,60 +622,26 @@ final class MainMenu {
         Gfx.rect(x, y + 4, w, h, 10, Gfx.a(Gfx.BLACK, 0.4f));
         Gfx.rect(x, y, w, h, 10, Gfx.a(Gfx.CARD, 0.96f));
         Gfx.ring(x, y, w, h, 10, 1, Gfx.LN2);
-        float cw = (w - 52) / 2, c1 = x + 16, c2 = x + 16 + cw + 20, yy = y + 18;
-        // left: background, dim, show
-        label("BACKGROUND", c1, yy);
-        choices("bg", MenuBack.KINDS, c1, yy + 12, cw, 3);
-        label("DIM", c1, yy + 82);
+        float cw = w - 32, c1 = x + 16, yy = y + 18;
+        label("DIM", c1, yy);
         double dim = MODULE.num("dim");
         for (int i = 0; i < DIMS.length; i++) {
             float cwi = (cw - 4 * 4) / 5, cx = c1 + i * (cwi + 4);
-            if (cell("dim" + i, DIMS[i], cx, yy + 94, cwi, Math.abs(dim - i * 0.2) < 0.06)) Config.set("menu", "dim", i * 0.2);
+            if (cell("dim" + i, DIMS[i], cx, yy + 12, cwi, Math.abs(dim - i * 0.2) < 0.06)) Config.set("menu", "dim", i * 0.2);
         }
-        label("SHOW", c1, yy + 136);
+        label("SHOW", c1, yy + 54);
         String[] tk = {"clock", "account", "servers", "splash"}, tl = {"CLOCK", "ACCOUNT", "QUICK JOIN", "SPLASH"};
         for (int i = 0; i < 4; i++) {
-            float bx = c1 + (i % 2) * (cw / 2 + 2), by = yy + 148 + (i / 2) * 28, bw = cw / 2 - 2;
+            float bx = c1 + (i % 2) * (cw / 2 + 2), by = yy + 66 + (i / 2) * 28, bw = cw / 2 - 2;
             boolean on = tk[i].equals("servers") ? MODULE.num("servers") > 0 : MODULE.bool(tk[i]);
             if (toggle("tg" + i, tl[i], bx, by, bw, on))
                 Config.set("menu", tk[i], tk[i].equals("servers") ? (Object) (on ? 0.0 : 3.0) : (Object) !on);
         }
-        // right: layout, buttons, logo
-        label("LAYOUT", c2, yy);
-        choices("layout", LAYOUTS, c2, yy + 12, cw, 3);
-        label("BUTTONS", c2, yy + 54);
-        choices("buttons", STYLES, c2, yy + 66, cw, 3);
-        label("LOGO", c2, yy + 108);
-        choices("logo", LOGOS, c2, yy + 120, cw, 3);
-        // image folder (right column, under logo)
-        if (MODULE.str("bg").equals("Image")) {
-            int n = MenuBack.count();
-            label(n == 0 ? "NO IMAGES YET" : n + (n == 1 ? " IMAGE" : " IMAGES"), c2, yy + 162);
-            if (cell("folder", "OPEN FOLDER", c2, yy + 174, (cw - 4) / 2, false)) MenuBack.openFolder();
-            if (n > 1 && cell("nextimg", "NEXT IMAGE", c2 + (cw + 4) / 2, yy + 174, (cw - 4) / 2, false)) MenuBack.next();
-            if (n == 0) Gfx.text(Gfx.UI, 10.5f, c2, yy + 214, Gfx.DIM, "Add PNG or JPG files to client/backgrounds.");
-        }
-        // footer
-        float fy = y + h - 42;
-        Gfx.rect(x + 16, fy - 8, w - 32, MenuBack.lw(), 0, Gfx.LN);
-        Gfx.text(Gfx.UI, 10.5f, c1, fy + 13, Gfx.DIM, "Blur, motion, slideshow and more in the full settings.");
-        float bw = Gfx.width(Gfx.SEMI, 11, "ALL SETTINGS") + 28;
-        if (btn("all", "ALL SETTINGS", x + w - 16 - bw, fy, bw)) { panelOpen = false; Menu.openMainMenuSettings(); Input.setMenu(true); }
         Gfx.alpha = a0;
         inModal = false;
     }
 
     private static void label(String s, float x, float y) { Gfx.text(Gfx.UI, 9, x, y, Gfx.SUB, s); }
-
-    /** Grid of option cells for setting key (red = selected, like the menu's choice rows). */
-    private static void choices(String key, String[] opts, float x, float y, float w, int cols) {
-        String cur = MODULE.str(key);
-        float cwi = (w - (cols - 1) * 4) / cols;
-        for (int i = 0; i < opts.length; i++) {
-            float cx = x + (i % cols) * (cwi + 4), cy = y + (i / cols) * 28;
-            if (cell(key + i, opts[i].toUpperCase(Locale.ROOT), cx, cy, cwi, opts[i].equals(cur))) Config.set("menu", key, opts[i]);
-        }
-    }
 
     /** Seg-style option cell: selected = s3 fill + hairline, hover = faint fill (v6 `Seg`). */
     private static boolean cell(String id, String label, float x, float y, float w, boolean sel) {
@@ -687,15 +649,6 @@ final class MainMenu {
         Gfx.rect(x, y, w, h, 4, Gfx.mix(Gfx.a(Gfx.ICE, 0.03f + 0.04f * t), Gfx.S3, s));
         if (s > 0.02f) Gfx.ring(x, y, w, h, 4, 1, Gfx.a(Gfx.LN2, s));
         Gfx.textC(Gfx.SEMI, 10, x + w / 2, y + h / 2, Gfx.mix(Gfx.DIM, Gfx.ICE, Math.max(t, s)), fit(Gfx.SEMI, 10, label, 0, w - 6), 0);
-        return hit(x, y, w, h);
-    }
-
-    /** v6 outline button (`Btn`): hairline, s2 on hover, radius 6. */
-    private static boolean btn(String id, String label, float x, float y, float w) {
-        float h = 26, t = an("b" + id, over(x, y, w, h));
-        Gfx.rect(x, y, w, h, 6, Gfx.a(Gfx.CARD2, t));
-        Gfx.ring(x, y, w, h, 6, 1, Gfx.mix(Gfx.LN2, Gfx.a(Gfx.ICE, 0.4f), t));
-        Gfx.textC(Gfx.SEMI, 11, x + w / 2, y + h / 2, Gfx.mix(Gfx.DIM, Gfx.ICE, 0.6f + 0.4f * t), label, 0);
         return hit(x, y, w, h);
     }
 
@@ -712,18 +665,10 @@ final class MainMenu {
 
     // ---------------------------------------------------------------- marks + actions
 
-    /** The ghast mark from the logo, in flat rects (size = body width). */
-    static void ghast(float x, float y, float s) {
-        float u = s / 16;
-        Gfx.rect(x, y, s, 12 * u, 2 * u, Gfx.ICE);
-        Gfx.rect(x, y + 10.5f * u, s, 1.5f * u, 0, 0xFFC9CED6);
-        Gfx.rect(x + 12 * u, y, 4 * u, 3 * u, 0, Gfx.BG);
-        Gfx.rect(x + 14 * u, y + 3 * u, 2 * u, 2 * u, 0, Gfx.BG);
-        Gfx.rect(x + 3 * u, y + 4.6f * u, 3.4f * u, 0.9f * u, 0.4f * u, Gfx.BG);
-        Gfx.rect(x + 9.6f * u, y + 4.6f * u, 3.4f * u, 0.9f * u, 0.4f * u, Gfx.BG);
-        Gfx.rect(x + 6.8f * u, y + 6.6f * u, 2.4f * u, 3 * u, 0.6f * u, Gfx.BG);
-        float[] tl = {4.5f, 7, 3.5f, 6.5f, 5};
-        for (int i = 0; i < 5; i++) Gfx.rect(x + (0.8f + i * 3.1f) * u, y + 12 * u, 1.9f * u, tl[i] * u, 0.8f * u, i % 2 == 0 ? Gfx.ICE : 0xFFC9CED6);
+    /** The logo mark (pixel fireball) centred in an s x 19s/16 box (the old ghast mark's box, so layouts keep their spacing). */
+    static void mark(float x, float y, float s) {
+        float h = s * 19 / 16;
+        Logo.draw(x + (s - Logo.width(h)) / 2, y, h);
     }
 
     static void act(int i, Object screen) {

@@ -13,6 +13,8 @@ final class Input {
 
     static final int CURSOR = 0x33001, NORMAL = 0x34001, DISABLED = 0x34003;
     static final int RELEASE = 0, PRESS = 1;
+    /** bound mouse buttons are stored as key codes MOUSE + button (2 middle, 3 back, 4 forward), above every keyboard code */
+    static final int MOUSE = 400;
 
     static long window;
     static int ww = 1, wh = 1;
@@ -28,6 +30,8 @@ final class Input {
     static volatile boolean dead;
     /** A printable menu key toggled the menu: its character event (which follows the key event) must not be typed. */
     private static long eatCharAt;
+    /** Esc closed the menu: its repeats and release stay ours. */
+    private static boolean escHeld;
     /** cursor mode the game wants (what it last asked for, or had when the menu opened) */
     static int gameMode = NORMAL;
 
@@ -99,7 +103,15 @@ final class Input {
             if (action == PRESS) keys[key] = true;
             else if (action == RELEASE) keys[key] = false;
         }
-        if (action == PRESS && Menu.capturing()) { Menu.capture(key); return true; }
+        if (action == PRESS && Menu.capturing()) { // a bound letter / digit must not also type into the search box
+            Menu.capture(key);
+            if (key >= 32 && key <= 162) eatCharAt = System.currentTimeMillis();
+            return true;
+        }
+        // Esc with nothing left to step back from closes the menu here, like the menu key (not a frame later, so the
+        // game never sees its repeats or release and the cursor is handed back at once)
+        if (key == 256 && escHeld) { if (action == RELEASE) escHeld = false; return true; }
+        if (key == 256 && action == PRESS && menuOpen && Menu.escCloses()) { setMenu(false); escHeld = true; return true; }
         if (action == PRESS && key == Config.menuKey() && !Keybind.listening()) {
             boolean printable = key >= 32 && key <= 162;
             // a letter menu key types into the search box / waypoint name instead of closing the menu
@@ -125,6 +137,8 @@ final class Input {
         if (dead) return false;
         if (b < 0 || b >= btn.length) return menuOpen;
         btn[b] = action == PRESS;
+        // middle / side buttons bind like keys (code 400 + button); left and right stay the menu's own clicks
+        if (b >= 2 && action == PRESS && Menu.capturing()) { Menu.capture(MOUSE + b); return true; }
         if (menuOpen) {
             if (action == PRESS) {
                 if (b == 0) clickL = true;
@@ -132,10 +146,13 @@ final class Input {
                 return true;
             }
             if (b == 0) upL = true;
+            if (b >= 2) Modules.onKey(MOUSE + b, 0);
             if (gameBtn[b]) { gameBtn[b] = false; return false; } // pass releases of buttons the game saw pressed
             return true;
         }
         // our title screen / pause button / HUD widgets (cursor free only) take their clicks; the game never sees those presses
+        // bound middle / side buttons (Zoom on mouse 4 ...): releases always reach the module so a hold ends
+        if (b >= 2 && Modules.onKey(MOUSE + b, action == PRESS ? 1 : 0) && action == PRESS) { ourBtn[b] = true; return true; }
         if (action == PRESS && (MainMenu.press(b) || Hits.press(b))) { ourBtn[b] = true; return true; }
         if (action != PRESS && ourBtn[b]) { ourBtn[b] = false; return true; }
         gameBtn[b] = action == PRESS;

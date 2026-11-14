@@ -31,7 +31,7 @@ final class Items extends Module {
         add(Setting.bool("held", "Held item total", false).hint("Total of the item you are holding, across your whole inventory."));
         add(Setting.text("custom", "More item ids", "", 120).hint("Item ids separated by commas, e.g. snowball, minecraft:cobweb."));
         add(Setting.choice("layout", "Layout", "Column", "Column", "Row", "Vanilla").hint("Vanilla: the game's own hotbar slots and stack counts (resource packs apply)"));
-        add(Setting.bool("icons", "Item icons", true).hint("Flat item textures; items without one show their name."));
+        add(Setting.bool("icons", "Item icons", true).when(() -> !str("layout").equals("Vanilla")).hint("Flat item textures; items without one show their name."));
         add(Setting.bool("hideZero", "Hide at zero", true).hint("Items you have none of are left out."));
         add(Setting.slider("low", "Low count at or below", 0, 64, 1, 0).hint("Counts this low turn red (0 = off)."));
         needs(4);
@@ -82,7 +82,9 @@ final class Items extends Module {
         }
         if (bool("held")) {
             String[] h = Data.hand(0);
-            if (h != null) {
+            boolean listed = false; // a held pearl already has its own row
+            if (h != null) for (Row r : rows) for (String id : r.ids) if (id.trim().equals(h[3])) listed = true;
+            if (h != null && !listed) {
                 Row r = row("HELD", h[3], h[3]);
                 Integer v = tally.get(h[3]);
                 r.n = v == null ? 0 : v;

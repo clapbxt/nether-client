@@ -50,7 +50,8 @@ pub fn load(ui: &AppWindow, sh: &Arc<Shared>) {
                     if b.get_pack_src() != 0 { return; }
                     let rows: Vec<Row> = meta.iter().map(|(id, t, s, d, mc, l, icon)| {
                         let img = cached_icon(icon);
-                        Row { id: id.as_str().into(), name: t.as_str().into(), sub: s.as_str().into(), meta: d.as_str().into(), mc: mc.as_str().into(), ver: l.as_str().into(), has_icon: img.is_some(), icon: img.unwrap_or_default(), on: true, ..Default::default() }
+                        let (t, s) = (crate::mods::glyphs(t), crate::mods::glyphs(s));
+                        Row { id: id.as_str().into(), cjk: crate::mods::cjk(&t) || crate::mods::cjk(&s), name: t.into(), sub: s.into(), meta: d.as_str().into(), mc: mc.as_str().into(), ver: l.as_str().into(), has_icon: img.is_some(), icon: img.unwrap_or_default(), on: true, ..Default::default() }
                     }).collect();
                     b.set_pack_loading(false);
                     b.set_pack_rows(ModelRc::new(VecModel::from(rows)));

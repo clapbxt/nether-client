@@ -1,4 +1,7 @@
 [
-  { "id": "obsidian", "name": "Obsidian", "desc": "Black with a racing-red stripe." },
-  { "id": "ice", "name": "Ice", "desc": "Ice grey with a racing-red stripe." }
+  { "id": "duck", "name": "Duck", "desc": "Quack Quack type shi" },
+  { "id": "fortnite_meme", "name": "Fortnite Meme", "desc": "Is that the guy from fortnite???" },
+  { "id": "girl", "name": "Girl ", "desc": "idk what this is but its highly downloaded" },
+  { "id": "snowman", "name": "Snowman", "desc": "winter themed one cuz i felt like it" },
+  { "id": "galaxy", "name": "Galaxy", "desc": "for the rgb nerds" }
 ]

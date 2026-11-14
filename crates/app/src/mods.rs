@@ -164,6 +164,12 @@ pub(crate) fn cjk(s: &str) -> bool {
     s.chars().any(|c| matches!(c as u32, 0x2E80..=0x9FFF | 0xAC00..=0xD7AF | 0xF900..=0xFAFF | 0xFF00..=0xFFEF | 0x20000..=0x2FA1F))
 }
 
+/// Drop emoji and pictographs (no launcher font draws them; they showed as boxes) and tidy the spaces left behind.
+pub(crate) fn glyphs(s: &str) -> String {
+    let t: String = s.chars().filter(|&c| !matches!(c as u32, 0x2190..=0x21FF | 0x2300..=0x23FF | 0x2460..=0x27BF | 0x2B00..=0x2BFF | 0xFE00..=0xFE0F | 0x200D | 0xE000..=0xF8FF | 0x1F000..=0x1FAFF)).collect();
+    t.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 fn to_row(p: &PRow) -> Row {
     let icon = cached_icon(&p.icon);
     Row { has_icon: icon.is_some(), icon: icon.unwrap_or_default(), id: p.id.clone().into(), name: p.name.clone().into(), sub: p.sub.clone().into(), meta: p.meta.clone().into(), ver: p.ver.clone().into(), mc: p.mc.clone().into(), ok: p.ok, on: p.on, upd: p.upd, vid: p.vid.clone().into(), path: p.path.clone().into(), cjk: cjk(&p.name) || cjk(&p.sub), ..Default::default() }

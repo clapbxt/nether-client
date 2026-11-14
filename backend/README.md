@@ -14,7 +14,7 @@ Two parts, both $0:
    (jsDelivr caches ~12 h; purge after a push: `https://purge.jsdelivr.net/gh/<github-user>/nether-content@main/news.json`).
 4. Put it in `nether_core::backend::DEFAULT_CONTENT_URL` (or `config.json` `"content_url"` / env `NETHER_CONTENT_URL` for testing).
 
-Files: `news.json` (newest first), `packs.json` (same schema as `netherpack::NetherPack`), `capes/index.json` + `capes/<id>.png` (64x32 Minecraft cape texture).
+Files: `news.json` (newest first), `packs.json` (same schema as `netherpack::NetherPack`), `capes/index.json` + `capes/<id>.png`. Cape PNG: frames of 64:32 (cape + elytra, Minecraft layout) or 22:17 (cape only; the game keeps its own elytra) at any whole scale (HD up to 2048 px wide); frames stacked vertically = animated, `"frametime"` in index.json = ms per frame (20-2000, default 100). Max 4 MB, 128 frames, 4 Mpx after conversion to 64:32. `node sign.mjs sign` rejects anything else.
 
 ## 2. Cape API (Cloudflare)
 ```

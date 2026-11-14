@@ -1,6 +1,6 @@
 import { Theme } from "theme.slint";
 import { Backend, SkinLib, Cape } from "structs.slint";
-import { Eyebrow, Heading, Btn, Seg, Chip, IconBtn, Ico, Icon, SpinArea, Hatch, Ticks, Slash, SectionHead, Field, PlayButton, LinkBtn, Scrim } from "components.slint";
+import { Eyebrow, Heading, Btn, Seg, Chip, IconBtn, Ico, Icon, SpinArea, GroundShadow, Hatch, Ticks, Slash, SectionHead, Field, PlayButton, LinkBtn, Scrim } from "components.slint";
 
 // one cape card (account or Nether): outside face on a hatch plate, name, "In use"
 component CapeCard inherits Rectangle {
@@ -45,7 +45,7 @@ export component WardrobeScreen inherits Rectangle {
     // preview plate
     Rectangle {
         x: 56px; y: 100px; width: 380px; height: 660px; background: Theme.s1; border-radius: 8px; border-width: 1px; border-color: Theme.ln; clip: true;
-        Rectangle { x: (parent.width - 160px) / 2; y: 520px; width: 160px; height: 16px; border-radius: 8px; background: #000000aa; visible: Backend.skin-ready; }
+        if Backend.skin-ready: GroundShadow { x: (parent.width - self.width) / 2; y: 488px; }
         if Backend.skin-ready: Image { x: 12px; y: 56px; width: parent.width - 24px; height: 490px; source: Backend.skin-frame; image-fit: contain; }
         SpinArea { height: parent.height - 70px; }
         if !Backend.skin-ready: Text { text: "Loading skin…"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }
@@ -86,7 +86,7 @@ export component WardrobeScreen inherits Rectangle {
 
         SectionHead { x: 468px; y: 208px; width: 916px; title: "LIBRARY"; note: SkinLib.skins.length == 1 ? "1 skin" : "\{SkinLib.skins.length} skins"; }
         Flickable {
-            x: 468px; y: 240px; width: 916px; height: parent.height - 240px; content-height: Math.ceil(SkinLib.skins.length / 4) * 252px + 24px;
+            x: 468px; y: 240px; width: 916px; height: parent.height - 240px; content-height: Math.ceil((SkinLib.skins.length + 1) / 4) * 252px + 24px;
             for s[i] in SkinLib.skins: tl := Rectangle {
                 x: mod(i, 4) * 232px; y: floor(i / 4) * 252px; width: 220px; height: 240px;
                 property <bool> on: root.sel == i;
@@ -115,6 +115,17 @@ export component WardrobeScreen inherits Rectangle {
                     }
                 }
                 Rectangle { border-radius: 8px; border-width: tl.on || SkinLib.worn-id == s.id ? 2px : 1px; border-color: tl.on || SkinLib.worn-id == s.id ? Theme.red2 : Theme.ln; }
+            }
+            // add tile after the library: the next step sits where the eye ends up
+            if SkinLib.skins.length > 0: Rectangle {
+                x: mod(SkinLib.skins.length, 4) * 232px; y: floor(SkinLib.skins.length / 4) * 252px; width: 220px; height: 240px; border-radius: 8px;
+                background: adt.has-hover ? Theme.hov : transparent; border-width: 1px; border-color: adt.has-hover ? Theme.mut : Theme.ln2;
+                animate background, border-color { duration: Theme.fast; }
+                Rectangle { x: (parent.width - 48px) / 2; y: 70px; width: 48px; height: 48px; border-radius: 24px; border-width: 1px; border-color: Theme.ln2;
+                    Icon { x: 18px; y: 18px; d: Ico.plus; tint: adt.has-hover ? Theme.tx : Theme.dim; } }
+                Text { y: 132px; width: parent.width; text: "Add a skin"; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; horizontal-alignment: center; }
+                Text { x: 20px; y: 156px; width: parent.width - 40px; text: "Upload a 64×64 PNG, or import one by name above"; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; horizontal-alignment: center; wrap: word-wrap; }
+                adt := TouchArea { mouse-cursor: pointer; clicked => { if !SkinLib.busy { SkinLib.add-file(); } } }
             }
         }
         if SkinLib.loaded && SkinLib.skins.length == 0: Rectangle {
