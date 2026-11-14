@@ -104,7 +104,7 @@ component CosGrid inherits Flickable {
     property <string> worn: Backend.cos-worn[root.slot];
     content-height: 36px + Math.ceil((root.items.length + 1) / 4) * 288px + 24px;
     init => { Backend.load-cos(); }
-    SectionHead { x: 0px; y: 0px; width: 916px; title: root.title; note: root.slot == 3 ? "replaces the shield you hold · seen by every Nether player" : "seen by every Nether player · click again to take off"; }
+    SectionHead { x: 0px; y: 0px; width: 916px; title: root.title; note: "seen by every Nether player · click again to take off"; }
     if Backend.cos-state == 2: Rectangle {
         y: 36px; height: parent.content-height - self.y;
         CosView {
@@ -136,7 +136,7 @@ export component WardrobeScreen inherits Rectangle {
     property <bool> picked: root.page == 0 && root.sel >= 0 && root.sel < SkinLib.skins.length;
     property <bool> signed: Backend.acct-state == 2;
     // the worn cosmetic of the page shown (preview footer)
-    property <[CosCard]> page-items: root.page == 2 ? Backend.cos-hats : root.page == 3 ? Backend.cos-bands : root.page == 4 ? Backend.cos-auras : Backend.cos-shields;
+    property <[CosCard]> page-items: root.page >= 2 ? Backend.cos-items[root.page - 2] : [];
     property <string> page-worn: root.page >= 2 ? Backend.cos-worn[root.page - 2] : "";
     property <string> worn-name: root.page-worn == "" ? "Nothing worn" : root.find-name(root.page-items, root.page-worn);
     pure function find-name(list: [CosCard], id: string) -> string {
@@ -154,7 +154,7 @@ export component WardrobeScreen inherits Rectangle {
     init => { SkinLib.refresh(); }
 
     Heading { x: 56px; y: 28px; text: "WARDROBE"; font-size: 32px; }
-    Seg { x: 1384px - self.width; y: 32px; items: ["SKINS", "CAPES", "HATS", "HEADBANDS", "AURAS", "SHIELDS"]; item-w: 92px; current <=> root.page;
+    Seg { x: 1384px - self.width; y: 32px; items: ["SKINS", "CAPES", "HATS", "HEADBANDS", "MASKS", "BACK", "WINGS", "AURAS", "PETS"]; item-w: 92px; current <=> root.page;
         changed(i) => { Backend.hover-cos(""); } }
 
     // preview plate
@@ -289,11 +289,13 @@ export component WardrobeScreen inherits Rectangle {
         }
     }
 
-    // cosmetics: hats, headbands, auras, shields (our directory; seen by Nether players)
-    if root.page == 2: CosGrid { x: 468px; y: 112px; width: 916px; height: parent.height - 112px; items: Backend.cos-hats; slot: 0; title: "HATS"; kind-label: "Hat"; }
-    if root.page == 3: CosGrid { x: 468px; y: 112px; width: 916px; height: parent.height - 112px; items: Backend.cos-bands; slot: 1; title: "HEADBANDS"; kind-label: "Headband"; }
-    if root.page == 4: CosGrid { x: 468px; y: 112px; width: 916px; height: parent.height - 112px; items: Backend.cos-auras; slot: 2; title: "AURAS"; kind-label: "Aura"; }
-    if root.page == 5: CosGrid { x: 468px; y: 112px; width: 916px; height: parent.height - 112px; items: Backend.cos-shields; slot: 3; title: "SHIELDS"; kind-label: "Shield"; }
+    // cosmetics by slot (our directory; seen by Nether players): pages 2.. = slots 0..
+    property <[string]> cos-titles: ["HATS", "HEADBANDS", "MASKS", "BACK", "WINGS", "AURAS", "PETS"];
+    property <[string]> cos-kinds: ["Hat", "Headband", "Mask", "Back item", "Wings", "Aura", "Pet"];
+    for s[i] in root.cos-titles: Rectangle {
+        x: 468px; y: 112px; width: 916px; height: parent.height - 112px;
+        if root.page == i + 2: CosGrid { width: parent.width; height: parent.height; items: Backend.cos-items[i]; slot: i; title: s; kind-label: root.cos-kinds[i]; }
+    }
 
     // capes: account capes (Minecraft) + Nether capes (our directory; seen by Nether players)
     if root.page == 1: Flickable {

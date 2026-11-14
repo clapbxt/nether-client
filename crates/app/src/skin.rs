@@ -9,7 +9,7 @@ use nether_core::download::client;
 use serde_json::Value;
 use slint::{ComponentHandle, Image, Model, ModelRc, Rgba8Pixel, SharedPixelBuffer, VecModel};
 
-use nether_core::cosmetics::{Kind, Loaded};
+use nether_core::cosmetics::{Kind, Loaded, SLOTS};
 
 use crate::{show_toast, ui_do, AppWindow, Backend, Cape, CosCard, Shared, SkinLib};
 
@@ -47,7 +47,7 @@ thread_local! {
     static NCOS: RefCell<Vec<Rc<Loaded>>> = const { RefCell::new(Vec::new()) };
     static COS_META: RefCell<Vec<nether_core::backend::Cosmetic>> = const { RefCell::new(Vec::new()) };
     static COS_CARDS: RefCell<Vec<(String, RgbaImage)>> = const { RefCell::new(Vec::new()) };
-    static COS_WORN: RefCell<[String; 4]> = RefCell::new(Default::default());
+    static COS_WORN: RefCell<[String; SLOTS]> = RefCell::new(Default::default());
     static COS_HOVER: RefCell<Option<Rc<Loaded>>> = const { RefCell::new(None) };
 }
 
@@ -320,9 +320,13 @@ const CARD_H: u32 = 390;
 /// A cosmetic card picture: the player wearing just that item, framed for its type.
 fn card(skin: &RgbaImage, slim: bool, it: &Loaded) -> RgbaImage {
     use nether_core::preview::{render, Look as PLook, View};
-    let mut items: [Option<&Loaded>; 4] = [None; 4];
+    let mut items: [Option<&Loaded>; SLOTS] = [None; SLOTS];
     items[it.kind.slot()] = Some(it);
-    let view = match it.kind { Kind::Hat | Kind::Headband => View::head(0.42), Kind::Shield => View::arm(0.35), Kind::Aura => View::aura(0.4) };
+    let view = match it.kind {
+        Kind::Hat | Kind::Headband | Kind::Mask => View::head(0.42),
+        Kind::Back | Kind::Wings => View::aura(std::f32::consts::PI + 0.55), // from behind
+        Kind::Aura | Kind::Pet => View::aura(0.4),
+    };
     render(&PLook { skin, slim, cape: None, items }, view, CARD_W, CARD_H, 1.7, 0)
 }
 
@@ -349,13 +353,10 @@ pub fn load_cosmetics(ui: &AppWindow, sh: &Arc<Shared>) {
         ui_do(&weak, move |ui| {
             let b = ui.global::<Backend>();
             if list.is_empty() { b.set_cos_state(3); return; }
-            let mut by: [Vec<CosCard>; 4] = Default::default();
+            let mut by: [Vec<CosCard>; SLOTS] = Default::default();
             for (m, l, img) in &list { by[l.kind.slot()].push(cos_card(m, img)); }
-            let [h, hb, a, s] = by;
-            b.set_cos_hats(ModelRc::new(VecModel::from(h)));
-            b.set_cos_bands(ModelRc::new(VecModel::from(hb)));
-            b.set_cos_auras(ModelRc::new(VecModel::from(a)));
-            b.set_cos_shields(ModelRc::new(VecModel::from(s)));
+            let pages: Vec<ModelRc<CosCard>> = by.into_iter().map(|v| ModelRc::new(VecModel::from(v))).collect();
+            b.set_cos_items(ModelRc::new(VecModel::from(pages)));
             COS_META.with(|v| *v.borrow_mut() = list.iter().map(|(m, _, _)| m.clone()).collect());
             COS_CARDS.with(|v| *v.borrow_mut() = list.iter().map(|(m, _, img)| (m.id.clone(), img.clone())).collect());
             NCOS.with(|v| *v.borrow_mut() = list.into_iter().map(|(_, l, _)| Rc::new(l)).collect());
@@ -366,7 +367,7 @@ pub fn load_cosmetics(ui: &AppWindow, sh: &Arc<Shared>) {
     });
 }
 
-fn set_cos_worn(ui: &AppWindow, worn: [String; 4]) {
+fn set_cos_worn(ui: &AppWindow, worn: [String; SLOTS]) {
     let v: Vec<slint::SharedString> = worn.iter().map(|s| s.as_str().into()).collect();
     ui.global::<Backend>().set_cos_worn(ModelRc::new(VecModel::from(v)));
     COS_WORN.with(|w| *w.borrow_mut() = worn);
@@ -380,7 +381,7 @@ pub fn hover_cosmetic(id: &str) {
     mark_dirty();
 }
 
-/// Wear a cosmetic in slot `slot` (0 hat, 1 headband, 2 aura, 3 shield); the worn one (or "") takes the slot off.
+/// Wear a cosmetic in slot `slot` (`Kind::ALL` order); the worn one (or "") takes the slot off.
 pub fn wear_cosmetic(ui: &AppWindow, sh: &Arc<Shared>, slot: i32, id: &str) {
     let b = ui.global::<Backend>();
     let Some(kind) = Kind::ALL.get(slot.max(0) as usize).copied() else { return };
@@ -435,7 +436,7 @@ pub fn export(ui: &AppWindow, sh: &Shared) {
         if img.save(dir.join(&f)).is_ok() { st["nether"].as_array_mut().unwrap().push(serde_json::json!({ "id": c.id.as_str(), "name": c.name.as_str(), "png": f })); wanted.push(f); }
     }
     let worn = COS_WORN.with(|w| w.borrow().clone());
-    st["cosmetics"] = serde_json::json!({ "hat": worn[0], "headband": worn[1], "aura": worn[2], "shield": worn[3] });
+    st["cosmetics"] = serde_json::Value::Object(Kind::ALL.iter().map(|k| (k.as_str().to_string(), serde_json::json!(worn[k.slot()]))).collect());
     st["items"] = serde_json::json!([]);
     COS_META.with(|meta| COS_CARDS.with(|cards| {
         for m in meta.borrow().iter() {
@@ -574,7 +575,7 @@ fn tick(ui: &AppWindow, dt: f32) -> bool {
 // ---------------- renderer (nether_core::preview) ----------------
 
 /// The cosmetics on the preview: the worn ones, with a hovered card replacing its slot.
-fn shown_items() -> [Option<Rc<Loaded>>; 4] {
+fn shown_items() -> [Option<Rc<Loaded>>; SLOTS] {
     let worn = COS_WORN.with(|w| w.borrow().clone());
     let hover = COS_HOVER.with(|h| h.borrow().clone());
     NCOS.with(|v| {
@@ -595,7 +596,7 @@ pub fn render_at(look: &Look, yaw: f32, fw: u32, fh: u32) -> SharedPixelBuffer<R
     // the depth buffer is reused between frames (a fresh 2 MB zeroed Vec per frame at 30 fps is pure churn)
     let mut depth = DEPTH.with(|d| std::mem::take(&mut *d.borrow_mut()));
     let shown = shown_items();
-    let items: [Option<&Loaded>; 4] = std::array::from_fn(|i| shown[i].as_deref());
+    let items: [Option<&Loaded>; SLOTS] = std::array::from_fn(|i| shown[i].as_deref());
     let t = START.with(|s| s.elapsed());
     let plook = nether_core::preview::Look { skin: &look.skin, slim: look.slim, cape: look.cape.as_deref(), items };
     nether_core::preview::render_into(buf.make_mut_bytes(), fw, fh, &mut depth, &plook, nether_core::preview::View::full(yaw), t.as_secs_f64(), t.as_millis() as u64);

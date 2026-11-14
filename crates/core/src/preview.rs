@@ -1,10 +1,10 @@
 //! Software renderer for the player preview (launcher Home/Wardrobe, cosmetic cards): the player model with skin,
-//! outer layer and cape, plus worn cosmetics (hats, headbands, shields, aura particles). Perspective-correct,
+//! outer layer and cape, plus worn cosmetics (models on their body parts, aura particles). Perspective-correct,
 //! depth-buffered, nearest texel sampling; opaque texels first, then translucent texels and particles blended back to
 //! front over a transparent background. Space: skin pixels, Y up, origin between the feet, the player faces +Z.
 use image::RgbaImage;
 
-use crate::cosmetics::{Kind, Loaded};
+use crate::cosmetics::{Loaded, SLOTS};
 
 type V3 = [f32; 3];
 
@@ -18,12 +18,10 @@ impl View {
     pub fn head(yaw: f32) -> View { View { yaw, tilt: 0.16, center: 29.6, zoom: 1.6 } }
     /// whole body, a little closer (aura cards)
     pub fn aura(yaw: f32) -> View { View { yaw, tilt: 0.1, center: 17.0, zoom: 1.22 } }
-    /// upper body with the left arm (shield cards)
-    pub fn arm(yaw: f32) -> View { View { yaw, tilt: 0.1, center: 16.5, zoom: 1.25 } }
 }
 
 /// What to draw: skin (64x64), model, cape frame (64:32 layout, any scale), worn cosmetics by slot.
-pub struct Look<'a> { pub skin: &'a RgbaImage, pub slim: bool, pub cape: Option<&'a RgbaImage>, pub items: [Option<&'a Loaded>; 4] }
+pub struct Look<'a> { pub skin: &'a RgbaImage, pub slim: bool, pub cape: Option<&'a RgbaImage>, pub items: [Option<&'a Loaded>; SLOTS] }
 
 #[derive(Clone, Copy, PartialEq)]
 enum Mode { Skin, Cut, Cos, Glow }
@@ -83,31 +81,18 @@ fn player<'a>(look: &Look<'a>, out: &mut Vec<Q<'a>>) {
     }
 }
 
-fn cosmetic<'a>(it: &'a Loaded, slim: bool, t: f64, now_ms: u64, out: &mut Vec<Q<'a>>) {
+fn cosmetic<'a>(it: &'a Loaded, t: f64, now_ms: u64, out: &mut Vec<Q<'a>>) {
     let Some(m) = &it.model else { return };
     let frame = if it.frames > 1 { (now_ms / it.ms.max(1) as u64 % it.frames as u64) as f32 } else { 0. };
     let fr = it.frames as f32;
-    // Blockbench pixels -> preview space, then the attachment
-    let aw = if slim { 3. } else { 4. };
-    let place = move |p: V3| -> V3 {
-        let q = [8. - p[0], p[1], 8. - p[2]];
-        match it.kind {
-            Kind::Shield => {
-                // held at the left forearm, face forward, a little outward (over the side of the body)
-                let s = [q[0] + 4. + aw / 2. + 1., q[1] + 16., q[2] + it.z_max - 5.7];
-                let piv = [5., 22., 0.];
-                let a = rot_z(sub(s, piv), 0.06);
-                [a[0] + piv[0], a[1] + piv[1], a[2] + piv[2]]
-            }
-            _ => [q[0], q[1] + 24., q[2]],
-        }
-    };
-    let turn = |n: V3| -> V3 { let q = [-n[0], n[1], -n[2]]; if it.kind == Kind::Shield { rot_z(q, 0.06) } else { q } };
     for q in m.pose(t as f32) {
+        // Blockbench pixels -> preview space at the body part's pivot (same pivots and arm tilt as `player`)
+        let (piv, tilt): (V3, f32) = match q.anchor { 2 => ([-5., 22., 0.], -0.06), 3 => ([5., 22., 0.], 0.06), 4 => ([-1.9, 12., 0.], 0.), 5 => ([1.9, 12., 0.], 0.), _ => ([0., 24., 0.], 0.) };
+        let place = |p: V3| -> V3 { let r = rot_z([8. - p[0], p[1], 8. - p[2]], tilt); [r[0] + piv[0], r[1] + piv[1], r[2] + piv[2]] };
         let uv = q.uv.map(|u| [u[0], (frame + u[1]) / fr]);
         let (mut a, mut b, mut c, mut d) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
         for u in uv { a = a.min(u[0]); b = b.min(u[1]); c = c.max(u[0]); d = d.max(u[1]); }
-        out.push(Q { p: q.p.map(place), uv, clamp: [a, b, c, d], tex: &it.tex, mode: if q.glow { Mode::Glow } else { Mode::Cos }, alpha: 1., n: Some(turn(q.n)) });
+        out.push(Q { p: q.p.map(place), uv, clamp: [a, b, c, d], tex: &it.tex, mode: if q.glow { Mode::Glow } else { Mode::Cos }, alpha: 1., n: Some(rot_z([-q.n[0], q.n[1], -q.n[2]], tilt)) });
     }
 }
 
@@ -141,7 +126,7 @@ pub fn render_into(px: &mut [u8], w: u32, h: u32, depth: &mut Vec<f32>, look: &L
     depth.resize(wu * hu, 0.);
     let mut world = Vec::with_capacity(400);
     player(look, &mut world);
-    for it in look.items.iter().flatten() { cosmetic(it, look.slim, t, now_ms, &mut world); }
+    for it in look.items.iter().flatten() { cosmetic(it, t, now_ms, &mut world); }
     // to camera space; already-camera-space particles join afterwards
     let mut all: Vec<(Q, bool)> = world.into_iter().map(|q| (q, false)).collect();
     for it in look.items.iter().flatten() { aura(it, t, &view, &mut all); }

@@ -226,7 +226,7 @@ pub fn cape_sums_file(c: &Client) -> Option<std::path::PathBuf> {
 
 // ---------------- cosmetics ----------------
 
-/// A Nether cosmetic from `cosmetics/index.json`: a hat, headband, aura or shield (model + texture, see `cosmetics.rs`).
+/// A Nether cosmetic from `cosmetics/index.json`: a hat, headband, mask, back item, wings, aura or pet (model + texture, see `cosmetics.rs`).
 #[derive(Clone, Debug, Deserialize)]
 pub struct Cosmetic {
     pub id: String,
@@ -283,9 +283,9 @@ pub fn cosmetic_sums_file(c: &Client) -> Option<std::path::PathBuf> {
     Some(f)
 }
 
-/// What a Nether player wears: cape and cosmetics by slot (hat, headband, aura, shield); "" = none.
+/// What a Nether player wears: cape and cosmetics by slot (`cosmetics::Kind::ALL` order); "" = none.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct Look { pub cape: String, pub slots: [String; 4] }
+pub struct Look { pub cape: String, pub slots: [String; crate::cosmetics::SLOTS] }
 
 /// Wear a cosmetic in its slot (None = take that slot off).
 pub fn set_cosmetic(c: &Client, s: &Session, kind: crate::cosmetics::Kind, id: Option<&str>) -> Result<()> {
@@ -314,6 +314,9 @@ pub fn players(c: &Client, uuids: &[&str]) -> Result<HashMap<String, String>> {
     Ok(looks(c, uuids)?.into_iter().map(|(u, l)| (u, l.cape)).collect())
 }
 
+/// API look keys per slot (`cosmetics::Kind::ALL` order): hat, headband, mask, back, wings, aura, pet.
+const LOOK_KEYS: [&str; crate::cosmetics::SLOTS] = ["h", "b", "m", "k", "w", "a", "p"];
+
 /// Nether players among these UUIDs -> what they wear (cape + cosmetics), asked the same k-anonymous way as `players`.
 pub fn looks(c: &Client, uuids: &[&str]) -> Result<HashMap<String, Look>> {
     let api = api_url();
@@ -325,7 +328,7 @@ pub fn looks(c: &Client, uuids: &[&str]) -> Result<HashMap<String, Look>> {
     let found: HashMap<String, serde_json::Value> = c.get(format!("{api}/v1/players")).query(&[("v", "2"), ("p", &pre.join(","))]).send()?.error_for_status()?.json()?;
     let s = |v: &serde_json::Value| v.as_str().filter(|x| x.is_empty() || valid_cape_id(x)).unwrap_or_default().to_string();
     Ok(ids.into_iter().filter_map(|(id, h)| found.get(&h).map(|v| (id, if v.is_object() {
-        Look { cape: s(&v["c"]), slots: [s(&v["h"]), s(&v["b"]), s(&v["a"]), s(&v["s"])] }
+        Look { cape: s(&v["c"]), slots: LOOK_KEYS.map(|k| s(&v[k])) }
     } else { Look { cape: s(v), ..Default::default() } }))).collect())
 }
 

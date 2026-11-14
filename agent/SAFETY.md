@@ -7,6 +7,7 @@ check a server's rules before turning them on.
 | Module | Notes |
 |---|---|
 | Zoom, Fullbright, Reach Display (default off) | can be an advantage on some servers |
+| Freelook (default off) | camera only (player rotation untouched); some servers ban it, as with Lunar |
 | Crosshair, Own Nametag | looks only (the crosshair is a texture in the built-in resource pack) |
 | Combo Counter (own clicks and own hurt flash only; default off), Item Counter (own inventory) | own data |
 | FPS, CPS, Ping, Keystrokes, Stopwatch | own data |

@@ -260,7 +260,7 @@ final class Capes {
                 Map<String, String> h = new HashMap<>();
                 java.util.TreeSet<String> pre = new java.util.TreeSet<>();
                 for (String u : batch) { String x = hash(u); h.put(u, x); pre.add(x.substring(0, 4)); }
-                // v=2: {hash: {c: cape, h: hat, b: headband, a: aura, s: shield}}; an older service answers {hash: cape}
+                // v=2: {hash: {c: cape, h: hat, b: headband, m: mask, k: back, w: wings, a: aura, p: pet}}; an older service answers {hash: cape}
                 String body = new String(get(API + "/v1/players?v=2&p=" + String.join(",", pre), MAX_API), StandardCharsets.UTF_8);
                 Object m = Json.parse(body);
                 for (String u : batch) {
@@ -268,9 +268,9 @@ final class Capes {
                     if (v instanceof Map) {
                         Map<?, ?> o = (Map<?, ?>) v;
                         worn.put(u, o.get("c") instanceof String ? (String) o.get("c") : "");
-                        Cosmetics.setLook(u, o.get("h"), o.get("b"), o.get("a"), o.get("s"));
-                    } else if (v instanceof String) { worn.put(u, (String) v); Cosmetics.setLook(u, null, null, null, null); }
-                    else { worn.remove(u); Cosmetics.setLook(u, null, null, null, null); }
+                        Cosmetics.setLook(u, o.get("h"), o.get("b"), o.get("m"), o.get("k"), o.get("w"), o.get("a"), o.get("p"));
+                    } else if (v instanceof String) { worn.put(u, (String) v); Cosmetics.setLook(u); }
+                    else { worn.remove(u); Cosmetics.setLook(u); }
                 }
                 synchronized (queue) { failures = 0; }
             } catch (Throwable t) {
@@ -444,22 +444,27 @@ final class Capes {
         }
     }
 
-    /** The badge image (the pack's icon glyph, resource packs apply), size x size at x, y; false when there is none. */
-    static boolean badge(float x, float y, float size) {
-        int g = Res.gen();
-        if (g != badgeGen || (badgeOk && !Gfx.hasTexture("nether:badge"))) {
-            badgeGen = g;
-            java.awt.image.BufferedImage img = Res.image("assets/nether/textures/font/icon.png");
-            badgeOk = img != null;
-            if (badgeOk) Gfx.texture("nether:badge", img, false);
-        }
-        if (!badgeOk) return false;
-        Gfx.image("nether:badge", x, y, size, size, 0xFFFFFFFF, 0);
+    /** The badge image (the pack's icon glyph, resource packs apply), h tall at x, y; false when there is none. */
+    static boolean badge(float x, float y, float h) {
+        if (badgeWidth(h) == 0) return false;
+        Gfx.image("nether:badge", x, y, h * badgeAspect, h, 0xFFFFFFFF, 0);
         return true;
     }
 
+    /** Width of the badge drawn h tall (keeps the image's proportions); 0 when there is none. */
+    static float badgeWidth(float h) {
+        int g = Res.gen();
+        if (g != badgeGen || (badgeAspect > 0 && !Gfx.hasTexture("nether:badge"))) {
+            badgeGen = g;
+            java.awt.image.BufferedImage img = Res.image("assets/nether/textures/font/icon.png");
+            badgeAspect = img == null ? 0 : (float) img.getWidth() / img.getHeight();
+            if (img != null) Gfx.texture("nether:badge", img, false);
+        }
+        return h * badgeAspect;
+    }
+
     private static int badgeGen = -1;
-    private static boolean badgeOk;
+    private static float badgeAspect;
 
     /**
      * U+E000 in font nether:icon, white so team colours don't tint it; null until that font is loaded. 1.8.9 (no font

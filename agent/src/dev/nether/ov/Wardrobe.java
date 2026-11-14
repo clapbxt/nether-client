@@ -26,12 +26,12 @@ final class Wardrobe {
     private static final List<Cos> cosmetics = new ArrayList<>();
     /** shown category: 0 capes, 1.. = Cosmetics.SLOTS + 1 */
     private static int cat;
-    private static final String[] CATS = {"CAPES", "HATS", "HEADBANDS", "AURAS", "SHIELDS"};
+    private static final String[] CATS = {"CAPES", "HATS", "HEADBANDS", "MASKS", "BACK", "WINGS", "AURAS", "PETS"};
 
     private static final List<Cape> nether = new ArrayList<>(), account = new ArrayList<>();
     private static String netherWorn = "", accountWorn = "", uuid = "";
-    /** worn cosmetics {hat, headband, aura, shield} from the launcher ("" = none) */
-    private static final String[] worn = {"", "", "", ""};
+    /** worn cosmetics by Cosmetics.SLOTS from the launcher ("" = none) */
+    private static final String[] worn = {"", "", "", "", "", "", ""};
     private static boolean slim, loaded;
     private static BufferedImage skin;
     private static long mtime = -1, nextCheck, seq;
@@ -65,7 +65,7 @@ final class Wardrobe {
             netherWorn = str(st.get("netherWorn"));
             accountWorn = str(st.get("accountWorn"));
             Map<?, ?> cw = st.get("cosmetics") instanceof Map ? (Map<?, ?>) st.get("cosmetics") : null;
-            for (int i = 0; i < 4; i++) worn[i] = cw == null ? "" : str(cw.get(Cosmetics.SLOTS[i]));
+            for (int i = 0; i < worn.length; i++) worn[i] = cw == null ? "" : str(cw.get(Cosmetics.SLOTS[i]));
             loadCosmetics(st.get("items"));
             skin = read(f.resolveSibling(str(st.get("skin"))));
             fill(st.get("nether"), nether, false);
@@ -93,9 +93,9 @@ final class Wardrobe {
     static String[] ownLook(String uuidNoDash) {
         reload();
         if (!loaded || uuidNoDash == null || !uuidNoDash.equalsIgnoreCase(uuid.replace("-", ""))) return null;
-        String[] l = new String[4];
+        String[] l = new String[worn.length];
         boolean any = false;
-        for (int i = 0; i < 4; i++) { l[i] = worn[i].isEmpty() ? null : worn[i]; any |= l[i] != null; }
+        for (int i = 0; i < worn.length; i++) { l[i] = worn[i].isEmpty() ? null : worn[i]; any |= l[i] != null; }
         return any ? l : null;
     }
 
@@ -154,7 +154,7 @@ final class Wardrobe {
             Files.write(tmp, Json.write(r).getBytes(StandardCharsets.UTF_8));
             Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING);
             pendingAt = System.currentTimeMillis();
-            for (int i = 0; i < 4; i++) if (Cosmetics.SLOTS[i].equals(slot)) worn[i] = id;
+            for (int i = 0; i < worn.length; i++) if (Cosmetics.SLOTS[i].equals(slot)) worn[i] = id;
         } catch (Throwable t) {
             System.out.println("[nether-agent] wardrobe request failed: " + t);
         }
@@ -248,7 +248,7 @@ final class Wardrobe {
         Gfx.rect(lx, sy, pw, 30, 6, Gfx.a(Th.ov, 0.035f));
         Gfx.ring(lx, sy, pw, 30, 6, 1, Th.ln);
         float bx = lx + 12;
-        if (Capes.badge(bx, sy + 7, 16)) bx += 24;
+        if (Capes.badge(bx, sy + 7, 16)) bx += Capes.badgeWidth(16) + 8;
         Gfx.text(Gfx.SEMI, 10, bx, sy + 15, Th.tx, "NETHER BADGE", false, 1.2f);
         String note = "NAMETAG + CHAT";
         Gfx.text(Gfx.MONO, 9, lx + pw - 12 - Gfx.width(Gfx.MONO, 9, note, 0.8f), sy + 15, Th.mut, note, false, 0.8f);
@@ -257,9 +257,11 @@ final class Wardrobe {
         // ---- right: category tabs, then capes or cosmetic cards
         float gx = lx + pw + 32, gw = px + Menu.PW - 28 - gx, tw = (gw - 3 * 12) / 4, th = 150, gap = 12;
         hover = null;
-        float tx0 = gx;
+        float tx0 = gx, natural = 0;
+        for (String c : CATS) natural += Gfx.width(Gfx.SEMI, 10, c, 1.2f) + 30;
+        float pad = Math.max(10, 24 - Math.max(0, natural - gw) / CATS.length); // tabs tighten to fit the width
         for (int i = 0; i < CATS.length; i++) {
-            float w = Gfx.width(Gfx.SEMI, 10, CATS[i], 1.2f) + 24;
+            float w = Gfx.width(Gfx.SEMI, 10, CATS[i], 1.2f) + pad;
             boolean on = cat == i, hv2 = Menu.in(tx0, top, w, 24);
             float a = Menu.an("wdc" + i, on), hh = Menu.an("wdch" + i, hv2);
             Gfx.rect(tx0, top, w, 24, 12, on ? Gfx.a(Th.ac, 0.2f + 0.05f * hh) : Gfx.a(Th.ov, 0.03f + 0.05f * hh));

@@ -76,8 +76,11 @@ public final class Agent {
      */
     private static final Map<String, String[]> FLOAT_HOOKS = new HashMap<>();
 
-    /** Item-in-hand renderer class -> {method, descriptor}: renderItem starts with `if (Hook.item(...)) return;` (shield cosmetics in first person). */
-    private static final Map<String, String[]> ITEM_HOOKS = new HashMap<>();
+    /**
+     * Freelook (Tier B): class -> {method, descriptor, kind}. "turn" = Entity.turn(DD)V gets its deltas from Hook.look/lookX
+     * (mouse turns go to the free camera), "cam" = Camera.setRotation(FF)V gets Hook.camYaw/camPitch. Vanilla classes only.
+     */
+    private static final Map<String, String[]> LOOK_HOOKS = new HashMap<>();
 
     /** Chat HUD class -> chat component type: each of its add-message methods gets its message from Hook.chat first. */
     private static final Map<String, String> CHAT_HOOKS = new HashMap<>();
@@ -96,16 +99,18 @@ public final class Agent {
         FLOAT_HOOKS.put("net/minecraft/class_757", new String[] {"method_3196", "(Lnet/minecraft/class_4184;F", "fov"}); // Fabric getFov
         FLOAT_HOOKS.put("net/minecraft/client/renderer/GameRenderer", new String[] {"getFov", "(Lnet/minecraft/client/Camera;F", "fov"}); // Forge/NeoForge, 26.x
         FLOAT_HOOKS.put("net/minecraft/class_759", new String[] {"method_22976", "(F", "hand"}); // Fabric renderItem
-        ITEM_HOOKS.put("net/minecraft/class_759", new String[] {"method_3233", "(Lnet/minecraft/class_1309;Lnet/minecraft/class_1799;Lnet/minecraft/class_811;Lnet/minecraft/class_4587;"}); // Fabric renderItem
-        ITEM_HOOKS.put("net/minecraft/client/renderer/ItemInHandRenderer", new String[] {"renderItem", "(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/ItemDisplayContext;Lcom/mojang/blaze3d/vertex/PoseStack;"}); // Forge/NeoForge, 26.x
         FLOAT_HOOKS.put("net/minecraft/client/renderer/ItemInHandRenderer", new String[] {"renderHandsWithItems", "(F", "hand"}); // Forge/NeoForge, 26.x
+        LOOK_HOOKS.put("net/minecraft/class_1297", new String[] {"method_5872", "(DD)V", "turn"}); // Fabric Entity.changeLookDirection
+        LOOK_HOOKS.put("net/minecraft/world/entity/Entity", new String[] {"turn", "(DD)V", "turn"}); // Forge/NeoForge, 26.x
+        LOOK_HOOKS.put("net/minecraft/class_4184", new String[] {"method_19325", "(FF)V", "cam"}); // Fabric Camera.setRotation
+        LOOK_HOOKS.put("net/minecraft/client/Camera", new String[] {"setRotation", "(FF)V", "cam"}); // Forge/NeoForge, 26.x
         String[] a = String.valueOf(System.getProperty("sun.java.command")).split(" ");
         String v = null;
         for (int i = 0; i + 1 < a.length; i++) if (a[i].equals("--version")) v = a[i + 1];
         if (v == null) return;
         if (v.equals("1.8.9")) NAME_HOOKS.put("wn", new String[] {"f_", "()Leu;"}); // vanilla 1.8.9 EntityPlayer.getDisplayName
         try { // obfuscated vanilla with a name table (rows: intermediary, obfuscated, descriptor)
-            String cls = null, m = null, d = null, chat = null, comp = null, lr = null, lm = null, ld = null, ir = null, im = null, id = null;
+            String cls = null, m = null, d = null, chat = null, comp = null, lr = null, lm = null, ld = null, ent = null, turn = null, cam = null, rot = null;
             for (String l : new String(read("/names/" + v + ".txt"), StandardCharsets.UTF_8).split("\\r?\\n")) {
                 String[] r = l.split("\t", -1);
                 if (r.length < 3) continue;
@@ -116,13 +121,16 @@ public final class Agent {
                 else if (r[0].equals("net.minecraft.class_2561")) comp = r[1];
                 else if (r[0].equals("net.minecraft.class_922")) lr = r[1];
                 else if (r[0].equals("method_4055")) { lm = r[1]; ld = r[2]; }
-                else if (r[0].equals("net.minecraft.class_759")) ir = r[1];
-                else if (r[0].equals("method_3233")) { im = r[1]; id = r[2]; }
+                else if (r[0].equals("net.minecraft.class_1297")) ent = r[1];
+                else if (r[0].equals("method_5872")) turn = r[1];
+                else if (r[0].equals("net.minecraft.class_4184")) cam = r[1];
+                else if (r[0].equals("method_19325")) rot = r[1];
             }
             if (chat != null && comp != null) CHAT_HOOKS.put(chat.replace('.', '/'), comp.replace('.', '/'));
             if (cls != null && m != null && !d.isEmpty()) NAME_HOOKS.put(cls.replace('.', '/'), new String[] {m, d});
             if (lr != null && lm != null && ld.length() > 1) LABEL_HOOKS.put(lr.replace('.', '/'), new String[] {lm, ld.substring(0, ld.indexOf(';') + 1)});
-            if (ir != null && im != null && id.length() > 1) ITEM_HOOKS.put(ir.replace('.', '/'), new String[] {im, id});
+            if (ent != null && turn != null) LOOK_HOOKS.put(ent.replace('.', '/'), new String[] {turn, "(DD)V", "turn"});
+            if (cam != null && rot != null) LOOK_HOOKS.put(cam.replace('.', '/'), new String[] {rot, "(FF)V", "cam"});
         } catch (Throwable t) { } // no table for this version
     }
 
@@ -307,12 +315,11 @@ public final class Agent {
             String[] lh = name == null ? null : LABEL_HOOKS.get(name);
             if (lh != null) return label(bytes, lh[0], lh[1]);
             String[] fh = name == null ? null : FLOAT_HOOKS.get(name);
-            String[] ih = name == null ? null : ITEM_HOOKS.get(name);
-            if (fh != null && ih != null) { byte[] b = floatReads(bytes, name, fh[0], fh[1], fh[2]); byte[] c = itemHook(b != null ? b : bytes, ih[0], ih[1]); return c != null ? c : b; }
             if (fh != null) return floatReads(bytes, name, fh[0], fh[1], fh[2]);
-            if (ih != null) return itemHook(bytes, ih[0], ih[1]);
             String ct = name == null ? null : CHAT_HOOKS.get(name);
             if (ct != null) return chat(bytes, ct);
+            String[] lk = name == null ? null : LOOK_HOOKS.get(name);
+            if (lk != null) return look(bytes, lk[0], lk[1], lk[2]);
             if (name == null || !name.startsWith("org/lwjgl/")) return null;
             final boolean glfw = "org/lwjgl/glfw/GLFW".equals(name);
             final boolean display = "org/lwjgl/opengl/Display".equals(name);
@@ -383,48 +390,6 @@ public final class Agent {
             }
         }
 
-        /**
-         * ItemInHandRenderer.renderItem(entity, stack, context, poseStack, collector, light) starts with
-         * `if (Hook.item(...)) return;`: a held vanilla shield is drawn as the player's shield cosmetic in first person.
-         */
-        private static byte[] itemHook(byte[] bytes, final String method, final String descStart) {
-            try {
-                ClassReader cr = new ClassReader(bytes);
-                ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
-                final boolean[] done = {false};
-                cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
-                    @Override
-                    public MethodVisitor visitMethod(int access, String mname, String desc, String sig, String[] ex) {
-                        MethodVisitor mv = super.visitMethod(access, mname, desc, sig, ex);
-                        if (!method.equals(mname) || !desc.startsWith(descStart) || !desc.endsWith("I)V") || (access & Opcodes.ACC_STATIC) != 0) return mv;
-                        Type[] a = Type.getArgumentTypes(desc);
-                        if (a.length != 6) return mv;
-                        done[0] = true;
-                        return new MethodVisitor(Opcodes.ASM9, mv) {
-                            @Override
-                            public void visitCode() {
-                                super.visitCode();
-                                for (int i = 1; i <= 5; i++) super.visitVarInsn(Opcodes.ALOAD, i);
-                                super.visitVarInsn(Opcodes.ILOAD, 6);
-                                super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "item", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;I)Z", false);
-                                dev.nether.shaded.asm.Label go = new dev.nether.shaded.asm.Label();
-                                super.visitJumpInsn(Opcodes.IFEQ, go);
-                                super.visitInsn(Opcodes.RETURN);
-                                super.visitLabel(go);
-                                super.visitFrame(Opcodes.F_SAME, 0, null, 0, null);
-                            }
-                        };
-                    }
-                }, 0);
-                if (!done[0]) return null;
-                System.out.println("[nether-agent] hooked held items (shield cosmetics)");
-                return cw.toByteArray();
-            } catch (Throwable t) {
-                System.out.println("[nether-agent] held item hook failed: " + t);
-                return null;
-            }
-        }
-
         /** In owner.method(descStart...): each read of a float field of owner is passed through Hook.<hook>(F)F. */
         private static byte[] floatReads(byte[] bytes, final String owner, final String method, final String descStart, final String hook) {
             try {
@@ -454,6 +419,58 @@ public final class Agent {
                 return cw.toByteArray();
             } catch (Throwable t) {
                 System.out.println("[nether-agent] " + hook + " hook failed: " + t);
+                return null;
+            }
+        }
+
+        /**
+         * Freelook, at the method's start (no branches, so no stack map frames change): "turn" = Entity.turn(DD)V,
+         * yRot = Hook.look(this, yRot, xRot), xRot = Hook.lookX(xRot); "cam" = Camera.setRotation(FF)V,
+         * yaw = Hook.camYaw(yaw), pitch = Hook.camPitch(pitch).
+         */
+        private static byte[] look(byte[] bytes, final String method, final String mdesc, final String kind) {
+            try {
+                ClassReader cr = new ClassReader(bytes);
+                ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+                final boolean[] done = {false};
+                final boolean turn = kind.equals("turn");
+                cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
+                    @Override
+                    public MethodVisitor visitMethod(int access, String mname, String desc, String sig, String[] ex) {
+                        MethodVisitor mv = super.visitMethod(access, mname, desc, sig, ex);
+                        if (!method.equals(mname) || !mdesc.equals(desc) || (access & (Opcodes.ACC_STATIC | Opcodes.ACC_ABSTRACT)) != 0) return mv;
+                        done[0] = true;
+                        return new MethodVisitor(Opcodes.ASM9, mv) {
+                            @Override
+                            public void visitCode() {
+                                super.visitCode();
+                                if (turn) {
+                                    super.visitVarInsn(Opcodes.ALOAD, 0);
+                                    super.visitVarInsn(Opcodes.DLOAD, 1);
+                                    super.visitVarInsn(Opcodes.DLOAD, 3);
+                                    super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "look", "(Ljava/lang/Object;DD)D", false);
+                                    super.visitVarInsn(Opcodes.DSTORE, 1);
+                                    super.visitVarInsn(Opcodes.DLOAD, 3);
+                                    super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "lookX", "(D)D", false);
+                                    super.visitVarInsn(Opcodes.DSTORE, 3);
+                                } else {
+                                    super.visitVarInsn(Opcodes.FLOAD, 1);
+                                    super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "camYaw", "(F)F", false);
+                                    super.visitVarInsn(Opcodes.FSTORE, 1);
+                                    super.visitVarInsn(Opcodes.FLOAD, 2);
+                                    super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "camPitch", "(F)F", false);
+                                    super.visitVarInsn(Opcodes.FSTORE, 2);
+                                }
+                            }
+                        };
+                    }
+                }, 0);
+                if (!done[0]) { System.out.println("[nether-agent] freelook " + kind + " method not found"); return null; }
+                if (turn) Hook.turnHooked = true; else Hook.camHooked = true;
+                System.out.println("[nether-agent] hooked freelook " + kind);
+                return cw.toByteArray();
+            } catch (Throwable t) {
+                System.out.println("[nether-agent] freelook " + kind + " hook failed: " + t);
                 return null;
             }
         }

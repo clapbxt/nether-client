@@ -42,8 +42,8 @@ your player UUID and nothing else.
 
 ## What we store
 
-The cape service stores, per player who checked in: your UUID, the Nether cape and cosmetics (hat, headband, aura,
-shield) you chose, and when you were last seen. Players unseen for 180 days are deleted automatically.
+The cape service stores, per player who checked in: your UUID, the Nether cape and cosmetics (hat, headband, mask, back, wings, aura,
+pet) you chose, and when you were last seen. Players unseen for 180 days are deleted automatically.
 
 Turning **Nether capes in game** off deletes your entry right away (if you are signed out or offline, at your next
 sign-in).

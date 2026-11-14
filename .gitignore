@@ -1,28 +1,30 @@
 target/
 *.png
-
-
-!backend/content/capes/*.png
-!backend/content/cosmetics/*.png
 !crates/core/res/nether-pack/*.png
-!design/screens/module-icons-*.png
 !docs/screens/*.png
 
-# content signing key must never be committed
+# the public repo is the client only: backend, tools, design work and notes stay on this PC
+backend/
+tools/
+nether.bat
+design/*
+!design/icon/
+!design/module-icons/
+NC Obsidian Vault/
+CLAUDE.md
+.claude/
+# third-party cosmetics kept for format testing only: never commit or publish
+cosmetics_new/
+cosmetics_raw/
+
+# signing keys must never be committed
 .nether-signing/
 *ed25519.key
 *.key
 
-# wrangler local dev state (local D1, bundles)
+# local state and build output
 .wrangler/
-
-# release builds (tools/release.ps1)
+node_modules/
 dist/
-
-
-# Obsidian app state + plugin data (local tokens)
-NC Obsidian Vault/.obsidian/
-# personal / account details (Azure owner, contacts)
-NC Obsidian Vault/Private.md
 .worktrees/
 .overnight/

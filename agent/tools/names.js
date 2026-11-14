@@ -8,7 +8,7 @@ const fs = require("fs"), path = require("path");
 const src = path.join(__dirname, "..", "src", "dev", "nether", "ov"), res = path.join(__dirname, "..", "res", "names");
 const lines = f => fs.readFileSync(f, "utf8").split("\n").map(l => l.replace("\r", ""));
 const dot = s => s.split("/").join(".");
-const used = new Set(["net.minecraft.class_1657", "method_7299", "net.minecraft.class_922", "method_4055", "net.minecraft.class_338", "net.minecraft.class_759", "method_3233"]), usedSrg = new Set(["net.minecraft.client.Minecraft"]); // + the game class (bind), the name and nametag-visibility hooks (Agent)
+const used = new Set(["net.minecraft.class_1657", "method_7299", "net.minecraft.class_922", "method_4055", "net.minecraft.class_338", "net.minecraft.class_1297", "method_5872", "net.minecraft.class_4184", "method_19325"]), usedSrg = new Set(["net.minecraft.client.Minecraft"]); // + the game class (bind), the name, nametag-visibility and freelook hooks (Agent)
 for (const f of fs.readdirSync(src)) {
   if (f === "Names.java") continue;
   const t = fs.readFileSync(path.join(src, f), "utf8");

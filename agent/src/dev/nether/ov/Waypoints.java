@@ -19,6 +19,8 @@ final class Waypoints extends Module {
     Waypoints() {
         super("waypoints", "Waypoints", "Utility", "Mark places and see them on screen with their distance. Saved per server, world and dimension.", false, true, 0, 0);
         add(Setting.key("addKey", "Add waypoint key", 66));
+        add(Setting.key("toggleKey", "Show / hide key", 72).hint("Default H. Hides or shows every marker at once (the list is kept)."));
+        add(Setting.bool("shown", "Show markers", true));
         add(Setting.bool("distance", "Show distance", true));
         add(Setting.bool("edge", "Keep off-screen markers at the edge", true));
         add(Setting.slider("size", "Marker size", 0.6, 2, 0.05, 1));
@@ -125,6 +127,14 @@ final class Waypoints extends Module {
         toastAt = System.currentTimeMillis();
     }
 
+    /** Show / hide key: flips every marker (and the compass ticks) at once. */
+    void flip() {
+        boolean v = !bool("shown");
+        Config.set(id, "shown", v);
+        toast = v ? "Waypoints shown" : "Waypoints hidden";
+        toastAt = System.currentTimeMillis();
+    }
+
     static String str(Map<String, Object> w, String k, String def) { Object o = w.get(k); return o instanceof String ? (String) o : def; }
     static double num(Map<String, Object> w, String k) { Object o = w.get(k); return o instanceof Number ? ((Number) o).doubleValue() : 0; }
     static int col(Map<String, Object> w) {
@@ -138,7 +148,7 @@ final class Waypoints extends Module {
         float prev = Gfx.s;
         Gfx.s = Gfx.base * (float) num("size");
         float W = fbW / Gfx.s, H = fbH / Gfx.s;
-        List<Map<String, Object>> l = list(false);
+        List<Map<String, Object>> l = bool("shown") ? list(false) : null;
         placed = 0;
         if (l != null && !l.isEmpty() && Project.begin(W, H)) {
             double max = num("maxDist");

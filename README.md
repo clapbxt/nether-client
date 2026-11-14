@@ -109,7 +109,7 @@ talk to, and when.
 
 ### Status
 
-Beta, Windows 10/11 64-bit. Public builds ship from `tools/release.ps1` to this repo's
+Beta, Windows 10/11 64-bit. Public builds ship to this repo's
 [releases](https://github.com/clapbxt/nether-client/releases), and installed launchers update themselves.
 
 ### What's in it
@@ -147,11 +147,9 @@ Beta, Windows 10/11 64-bit. Public builds ship from `tools/release.ps1` to this 
 - **Installer** (`crates/installer`): `NetherClientSetup.exe`.
   - A Slint wizard, per-user install, Apps & features entry, shortcuts and uninstall.
   - `--update` applies verified auto-updates.
-- **Backend** (`backend/`), all on free tiers:
-  - `content/` holds news, packs and capes, Ed25519-signed and bundled into the Worker, which serves them at
-    `/content/…`.
-  - `worker/` is a Cloudflare Worker + D1 for capes. Auth uses Mojang's `join`/`hasJoined` handshake, so
-    the Worker never sees a Minecraft token.
+- **Backend** (kept private, not in this repo): a Cloudflare Worker + D1 serving Ed25519-signed content (news, packs,
+  capes, cosmetics) and players' capes and cosmetics. Auth uses Mojang's `join`/`hasJoined` handshake, so it never sees
+  a Minecraft token.
 
 ### Known gaps
 
@@ -177,7 +175,7 @@ LWJGL jars: launch Fabric 1.21.x, 1.8.9 and 26.3 once from the launcher first.
 ### Running
 
 ```powershell
-launch.bat                                 # cargo run -p nether-app --release
+cargo run -p nether-app --release
 ```
 
 Developer switches live behind the `dev` cargo feature, never in shipping builds:
@@ -188,34 +186,15 @@ Developer switches live behind the `dev` cargo feature, never in shipping builds
 | Game without the launcher UI | `$env:NETHER_DEV_OFFLINE=1; cargo run -p nether-core --release --features dev --example launch -- 1.21.11 Player 60 fabric` (`NETHER_SNAPSHOT=<png>`, `NETHER_AGENT=<jar>`, agent dev props via `JAVA_TOOL_OPTIONS`) |
 | Installer screens | `cargo build -p nether-setup --release --features dev`, then `NC_SETUP_SNAP="out.png|<mode>|<step>|<installed>"` |
 | Installer end-to-end | `NC_SETUP_AUTO=install:<dir>` / `uninstall` (with `NC_SETUP_AUTO_OUT=<file>`) |
-| Worker locally | `cd backend\worker; npx wrangler dev --local --var SESSION_KEY:<test>` |
 
-Tests: `cargo test -p nether-core`. Worker checks run against `wrangler dev`.
+Tests: `cargo test -p nether-core` (the content tests need the private backend's content beside the repo).
 
 ### Releasing
 
-```powershell
-powershell -File tools\release.ps1 -Version 0.1.2                       # build + sign into dist\
-powershell -File tools\release.ps1 -Version 0.1.2 -Publish -Notes "…"    # + commit, tag, GitHub release
-```
-
-The script bumps `crates/app/Cargo.toml`, rebuilds agent, launcher and setup, and signs the setup with
-`tools/release-sign.mjs`. It then publishes `NetherClientSetup-<v>.exe` and its `.sig` to this repo's releases.
-
-Installed launchers find the release and download it. They accept it only if GitHub's sha256 matches and the
-signature verifies against `crates/core/res/release-ed25519.pub`, then install it when the launcher closes.
-
-Content changes (news, packs, capes) are released separately:
-
-```powershell
-node backend\content\sign.mjs sign
-```
-
-Then deploy the Worker (`cd backend\worker; npx.cmd wrangler@4 deploy`), which bundles the signed files. The manifest
-expires after 90 days, so re-sign and redeploy before then.
-
-Signing keys live in `%USERPROFILE%\.nether-signing\` and are never committed. **Back them up.** Without the release
-key, installed copies can't verify new versions.
+Releases are built and signed with the maintainer's own tools and published to this repo's releases. Installed
+launchers find the release and download it. They accept it only if GitHub's sha256 matches and the signature verifies
+against `crates/core/res/release-ed25519.pub`, then install it when the launcher closes. Content (news, packs, capes,
+cosmetics) is signed separately and checked against `crates/core/res/content-ed25519.pub`.
 
 ### Project layout
 
@@ -227,10 +206,7 @@ crates/
   installer/    NetherClientSetup.exe (wizard, uninstall, update applier)
 agent/          in-game client (Java agent): src/dev/nether/agent (bootstrap, ASM hooks), src/dev/nether/ov (overlay,
                 modules, menu, HUD editor); build.ps1; tools/names.js (mapping tables); SAFETY.md, NOTICE.md
-backend/        content/ (signed static content) · worker/ (Cloudflare Worker + D1 schema)
-tools/          release.ps1, release-sign.mjs
-design/         mockups and reference screenshots
-NC Obsidian Vault/  decisions only: Rules, Design, Features, Architecture, Todo (read Rules first)
+design/         icon/ (logo sources) · module-icons/ (line icons, built into the agent)
 ```
 
 ### Adding a module

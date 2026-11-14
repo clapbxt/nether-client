@@ -1,2 +1,0 @@
-# signed content: bytes must never be rewritten (line endings) or the manifest hashes stop matching
-* -text

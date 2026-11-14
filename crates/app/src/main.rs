@@ -1438,7 +1438,7 @@ fn main() -> Result<(), slint::PlatformError> {
         let gate: i32 = args.get(i + 6).and_then(|t| t.parse().ok()).unwrap_or(0);
         let det: i32 = args.get(i + 7).and_then(|t| t.parse().ok()).unwrap_or(-1);
         ui.global::<Backend>().set_gate_open(gate == 1);
-        // NC_SNAP_WPAGE=n: Wardrobe page (0 skins, 1 capes, 2 hats, 3 headbands, 4 auras, 5 shields)
+        // NC_SNAP_WPAGE=n: Wardrobe page (0 skins, 1 capes, 2.. cosmetic slots in Kind::ALL order)
         if let Some(n) = std::env::var("NC_SNAP_WPAGE").ok().and_then(|n| n.parse::<i32>().ok()) { ui.set_ward_page(n); }
         // NC_SNAP_STATE: dev-only page states for captures (see host::snap, wardrobe::snap)
         if let Ok(st) = std::env::var("NC_SNAP_STATE") {

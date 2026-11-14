@@ -77,6 +77,31 @@ public final class Hook {
     /** The FOV / held-item reads were hooked (else Zoom falls back to the FOV option and cannot hide the hand). */
     public static volatile boolean fovHooked, handHooked;
 
+    /**
+     * Freelook: while on, mouse turns of {@link #lookOf} (Entity.turn) go to lookYaw/lookPitch instead of the player,
+     * and Camera.setRotation uses them. Set by the overlay; render thread.
+     */
+    public static volatile boolean look, lookInvert;
+    public static volatile Object lookOf;
+    public static volatile float lookYaw, lookPitch;
+    /** Entity.turn / Camera.setRotation were hooked (Freelook needs both). */
+    public static volatile boolean turnHooked, camHooked;
+    private static boolean lookUsed;
+
+    /** Start of Entity.turn(yRot, xRot): consumed by Freelook (returns 0) or passed on. Same scale as vanilla (0.15). */
+    public static double look(Object e, double y, double x) {
+        lookUsed = look && e != null && e == lookOf;
+        if (!lookUsed) return y;
+        lookYaw += (float) (y * 0.15);
+        lookPitch = Math.max(-90f, Math.min(90f, lookPitch + (float) ((lookInvert ? -x : x) * 0.15)));
+        return 0;
+    }
+    /** Entity.turn's xRot after {@link #look}. */
+    public static double lookX(double x) { return lookUsed ? 0 : x; }
+    /** Start of Camera.setRotation(yaw, pitch). */
+    public static float camYaw(float v) { return look ? lookYaw : v; }
+    public static float camPitch(float v) { return look ? lookPitch : v; }
+
     public static float fov(float v) { float d = fovDiv; return d > 1 ? v / d : v; }
     public static float hand(float v) { float s = handShow; return s < 1 ? v * Math.max(0, s) : v; }
 
@@ -99,24 +124,6 @@ public final class Hook {
         } catch (Throwable e) {
             if (layerErrors++ == 0) { System.out.println("[nether-agent] cosmetics layer error: " + e); e.printStackTrace(System.out); }
             if (layerErrors >= 200) { layerDraw = null; System.out.println("[nether-agent] cosmetics layer disabled after repeated errors"); }
-        }
-    }
-
-    /** Draws a replacement for a held item (entity, stack, display context, pose stack, collector, light); true = drawn. */
-    public interface Item { boolean draw(Object entity, Object stack, Object ctx, Object pose, Object sink, int light); }
-    public static volatile Item item;
-    private static int itemErrors;
-
-    /** Start of ItemInHandRenderer.renderItem: true = the overlay drew a cosmetic instead (the game then skips the item). */
-    public static boolean item(Object entity, Object stack, Object ctx, Object pose, Object sink, int light) {
-        Item f = item;
-        if (f == null) return false;
-        try {
-            return f.draw(entity, stack, ctx, pose, sink, light);
-        } catch (Throwable e) {
-            if (itemErrors++ == 0) { System.out.println("[nether-agent] held cosmetic error: " + e); e.printStackTrace(System.out); }
-            if (itemErrors >= 200) item = null;
-            return false;
         }
     }
 

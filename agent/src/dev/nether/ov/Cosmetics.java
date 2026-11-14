@@ -24,8 +24,8 @@ import org.lwjgl.opengl.GL13;
 import dev.nether.agent.Hook;
 
 /**
- * Nether cosmetics in the world: hats and headbands (on the head), shields (replace the vanilla shield a player holds,
- * third and first person) and auras (pixel particles around the player). Drawn
+ * Nether cosmetics in the world: models (hats, headbands, masks, back items, wings, pets, model auras) on the body parts
+ * they name (head, body, arms, legs) and particle auras (pixel particles around the player). Drawn
  * by a render layer we append to the game's player renderers, the way a mod's feature renderer is: 1.21.2+ gets a
  * generated subclass of RenderLayer (Agent.layerClass) that emits our geometry through the game's own buffers
  * (submitCustomGeometry / MultiBufferSource, translucent entity render type), so lighting, shaders (Iris), depth and
@@ -37,7 +37,14 @@ import dev.nether.agent.Hook;
 final class Cosmetics {
     private Cosmetics() {}
 
-    static final String[] SLOTS = {"hat", "headband", "aura", "shield"};
+    static final String[] SLOTS = {"hat", "headband", "mask", "back", "wings", "aura", "pet"};
+    static final int AURA = 5;
+    /** body part fields (CosModel.ANCHORS order; the head comes from getHead): 1.21.2+ intermediary, 1.8.9 {obf, SRG} */
+    private static final String[] PARTS = {null, "field_3391", "field_3401", "field_27433", "field_3392", "field_3397"};
+    private static final String[][] LEGACY_PARTS = {{"e", "field_78116_c"}, {"g", "field_78115_e"}, {"h", "field_178723_h"}, {"i", "field_178724_i"}, {"j", "field_178721_j"}, {"k", "field_178722_k"}};
+
+    /** the body part a model of this type is worn on unless it says: head types on the head, the rest on the body */
+    static int defaultAnchor(String type) { return "hat".equals(type) || "headband".equals(type) || "mask".equals(type) ? 0 : 1; }
     private static final int MAX_MODEL = 512 * 1024, MAX_PNG = 4 * 1024 * 1024;
     private static final long T0 = System.nanoTime();
 
@@ -53,7 +60,6 @@ final class Cosmetics {
         byte[] png;
         java.awt.image.BufferedImage img;
         int w, h, frames = 1, cols = 1, rows = 1;
-        float zMax, zMin, yMax; // shields: back / front / top extent in model pixels
         Object loc, type; // modern: texture location + translucent entity render type
         int gl = -1;      // 1.8.9: GL texture id
         Item(Entry e) { this.e = e; }
@@ -64,7 +70,7 @@ final class Cosmetics {
     private static final Map<String, Long> retryAt = new ConcurrentHashMap<>();
     private static final java.util.Set<String> dead = ConcurrentHashMap.newKeySet();
 
-    /** uuid (no dashes) -> {hat, headband, aura, shield} (null = none), from the player API. */
+    /** uuid (no dashes) -> {hat, headband, aura} (null = none), from the player API. */
     private static final Map<String, String[]> looks = new ConcurrentHashMap<>();
 
     private static Map<String, Entry> catalog() {
@@ -74,7 +80,7 @@ final class Cosmetics {
         try {
             for (String l : java.nio.file.Files.readAllLines(java.nio.file.Paths.get(p), StandardCharsets.UTF_8)) {
                 String[] t = l.trim().split(" ");
-                if (t.length < 4 || !t[0].matches("[a-z0-9_-]{1,32}") || !t[1].matches("hat|headband|aura|shield") || !t[2].matches("[0-9a-f]{64}") || !t[3].matches("[0-9a-f]{64}")) continue;
+                if (t.length < 4 || !t[0].matches("[a-z0-9_-]{1,32}") || !t[1].matches(String.join("|", SLOTS)) || !t[2].matches("[0-9a-f]{64}") || !t[3].matches("[0-9a-f]{64}")) continue;
                 Entry e = new Entry();
                 e.id = t[0]; e.type = t[1]; e.modelSha = t[2]; e.pngSha = t[3];
                 if (t.length > 4 && t[4].matches("\\d{2,4}")) e.ms = Math.max(20, Math.min(2000, Integer.parseInt(t[4])));
@@ -87,11 +93,11 @@ final class Cosmetics {
     private static String[] dev() {
         String d = System.getProperty("nether.cosDev");
         if (d == null) return null;
-        String[] out = new String[4];
+        String[] out = new String[SLOTS.length];
         for (String kv : d.split(",")) {
             int i = kv.indexOf(':');
             if (i < 0) continue;
-            for (int s = 0; s < 4; s++) if (SLOTS[s].equals(kv.substring(0, i))) out[s] = kv.substring(i + 1);
+            for (int s = 0; s < SLOTS.length; s++) if (SLOTS[s].equals(kv.substring(0, i))) out[s] = kv.substring(i + 1);
         }
         return out;
     }
@@ -99,9 +105,11 @@ final class Cosmetics {
     private static String id(Object o) { return o instanceof String && ((String) o).matches("[a-z0-9_-]{1,32}") ? (String) o : null; }
 
     /** From the player API (worker thread): what this Nether player wears. */
-    static void setLook(String uuid, Object hat, Object band, Object aura, Object shield) {
-        String[] l = {id(hat), id(band), id(aura), id(shield)};
-        if (l[0] == null && l[1] == null && l[2] == null && l[3] == null) looks.remove(uuid); else looks.put(uuid, l);
+    static void setLook(String uuid, Object... worn) {
+        String[] l = new String[SLOTS.length];
+        boolean any = false;
+        for (int i = 0; i < l.length && i < worn.length; i++) { l[i] = id(worn[i]); any |= l[i] != null; }
+        if (!any) looks.remove(uuid); else looks.put(uuid, l);
     }
 
     /** The look of a player (dashless uuid): yours from the launcher's wardrobe, else the API's; null = nothing worn. */
@@ -144,22 +152,15 @@ final class Cosmetics {
                     if (x.img == null) throw new IllegalStateException("unreadable PNG");
                     x.w = x.img.getWidth();
                     x.h = x.img.getHeight();
-                    if ("aura".equals(e.type)) {
+                    if ("aura".equals(e.type) && !(json instanceof Map && ((Map<?, ?>) json).get("elements") != null)) {
                         x.aura = new CosAura(json);
                         int cell = x.aura.cell > 0 ? x.aura.cell : x.h;
                         x.cols = Math.max(1, x.w / cell);
                         x.rows = Math.max(1, x.h / cell);
                     } else {
-                        x.model = CosModel.parse(json);
+                        x.model = CosModel.parse(json, defaultAnchor(e.type));
                         int fh = Math.max(1, Math.round(x.w * (float) x.model.th / x.model.tw));
                         x.frames = Math.max(1, Math.min(256, x.h / fh));
-                        float zm = -99, zn = 99;
-                        for (int i = 2; i < x.model.pos.length; i += 3) { zm = Math.max(zm, x.model.pos[i]); zn = Math.min(zn, x.model.pos[i]); }
-                        x.zMax = zm;
-                        x.zMin = zn;
-                        float ym = -99;
-                        for (int i = 1; i < x.model.pos.length; i += 3) ym = Math.max(ym, x.model.pos[i]);
-                        x.yMax = ym;
                     }
                     x.png = png;
                     parsed.put(id, x);
@@ -252,9 +253,6 @@ final class Cosmetics {
             Hook.layerDraw = (l, a) -> {
                 try { draw(l, a); } catch (RuntimeException e) { throw e; } catch (Exception e) { throw new IllegalStateException(e); }
             };
-            Hook.item = (e, s, c, p, k, l) -> {
-                try { return heldItem(e, s, c, p, k, l); } catch (RuntimeException x) { throw x; } catch (Exception x) { throw new IllegalStateException(x); }
-            };
         }
         Object disp = Game.call(Game.mc(), "method_1561");
         Object pr = Game.fld(disp, "field_4687");
@@ -267,7 +265,7 @@ final class Cosmetics {
             for (Object l : layers) if (layerCls.isInstance(l)) has = true;
             if (has) continue;
             Object inst = layerCls.getDeclaredConstructors()[0].newInstance(r);
-            layers.add(0, inst); // first: a held vanilla shield is hidden before the item layer draws it
+            layers.add(0, inst);
             System.out.println("[nether-agent] cosmetics layer added to " + r.getClass().getSimpleName());
         }
     }
@@ -327,32 +325,35 @@ final class Cosmetics {
 
     private static final Map<CosModel, float[][]> scratch = new IdentityHashMap<>();
 
-    /** A worn model at time t, pre-transformed by `x` (3x4). */
-    private static Mesh model(Item it, double t, float[] x, int light) {
+    /** The quads of a worn model on body part `part` (CosModel.ANCHORS) at time t, pre-transformed by `x` (3x4). */
+    private static Mesh model(Item it, double t, float[] x, int light, int part) {
         CosModel m = it.model;
         float[][] s = scratch.get(m);
         if (s == null) scratch.put(m, s = new float[][] {new float[m.quads * 12], new float[m.quads * 3]});
         m.pose((float) t, s[0], s[1]);
         Mesh out = new Mesh(m.quads);
         int frame = it.frames <= 1 ? 0 : (int) ((System.currentTimeMillis() / it.e.ms) % it.frames);
+        int n = 0;
         for (int q = 0; q < m.quads; q++) {
+            if (m.anchor[q] != part) continue;
             for (int i = 0; i < 4; i++) {
-                int o = q * 12 + i * 3;
+                int o = q * 12 + i * 3, d = n * 12 + i * 3;
                 float a = s[0][o], b = s[0][o + 1], c = s[0][o + 2];
-                out.p[o] = x[0] * a + x[1] * b + x[2] * c + x[3];
-                out.p[o + 1] = x[4] * a + x[5] * b + x[6] * c + x[7];
-                out.p[o + 2] = x[8] * a + x[9] * b + x[10] * c + x[11];
-                out.uv[q * 8 + i * 2] = m.uv[q * 8 + i * 2];
-                out.uv[q * 8 + i * 2 + 1] = (frame + m.uv[q * 8 + i * 2 + 1]) / it.frames;
+                out.p[d] = x[0] * a + x[1] * b + x[2] * c + x[3];
+                out.p[d + 1] = x[4] * a + x[5] * b + x[6] * c + x[7];
+                out.p[d + 2] = x[8] * a + x[9] * b + x[10] * c + x[11];
+                out.uv[n * 8 + i * 2] = m.uv[q * 8 + i * 2];
+                out.uv[n * 8 + i * 2 + 1] = (frame + m.uv[q * 8 + i * 2 + 1]) / it.frames;
             }
             float a = s[1][q * 3], b = s[1][q * 3 + 1], c = s[1][q * 3 + 2];
-            out.n[q * 3] = x[0] * a + x[1] * b + x[2] * c;
-            out.n[q * 3 + 1] = x[4] * a + x[5] * b + x[6] * c;
-            out.n[q * 3 + 2] = x[8] * a + x[9] * b + x[10] * c;
-            out.light[q] = m.glow[q] ? 0xF000F0 : light;
-            out.color[q] = 0xFFFFFFFF;
+            out.n[n * 3] = x[0] * a + x[1] * b + x[2] * c;
+            out.n[n * 3 + 1] = x[4] * a + x[5] * b + x[6] * c;
+            out.n[n * 3 + 2] = x[8] * a + x[9] * b + x[10] * c;
+            out.light[n] = m.glow[q] ? 0xF000F0 : light;
+            out.color[n] = 0xFFFFFFFF;
+            n++;
         }
-        out.quads = m.quads;
+        out.quads = n;
         return out;
     }
 
@@ -449,8 +450,6 @@ final class Cosmetics {
 
     // ---------------------------------------------------------------- 1.21.2+ layer
 
-    private static Object shieldItem, left, right;
-    private static boolean shieldTried;
     private static Class<?> collectorCls, geomCls;
     private static Method matGet;
     private static MethodHandle addVertex;
@@ -469,23 +468,25 @@ final class Cosmetics {
         Object model = Game.call(layer, "method_17165");
         if (model == null) return;
         double t = now();
-        // head: hat + headband, hidden under a helmet or a worn head item
+        // models on their body parts; nothing on the head under a helmet or a worn head item
         Object helm = Game.fld(st, "field_55309"), headItem = Game.fld(st, "field_53467");
         boolean covered = (helm != null && Boolean.FALSE.equals(Game.call(helm, "method_7960"))) || (headItem != null && Boolean.FALSE.equals(Game.call(headItem, "method_65606")));
-        for (int s = 0; s < 2 && !covered; s++) {
+        for (int s = 0; s < SLOTS.length; s++) {
             Item it = item(look[s], SLOTS[s]);
-            if (it == null) continue;
-            push(ps);
-            Game.call(Game.call(model, "method_2838"), "method_22703", ps); // getHead().translateAndRotate (= translateToHead, also before 1.21.9)
-            submit(ps, sink, it, model(it, t, ID, light));
-            pop(ps);
+            if (it == null || it.model == null) continue;
+            for (int p = 0; p < CosModel.ANCHORS.length; p++) {
+                if ((it.model.anchors & (1 << p)) == 0 || (p == 0 && covered)) continue;
+                Object part = p == 0 ? Game.call(model, "method_2838") : Game.fld(model, PARTS[p]); // getHead() / body, arms, legs
+                if (part == null) continue;
+                push(ps);
+                Game.call(part, "method_22703", ps); // translateAndRotate (= translateToHead for the head, also before 1.21.9)
+                submit(ps, sink, it, model(it, t, ID, light, p));
+                pop(ps);
+            }
         }
-        // shield: replaces a held vanilla shield (first person: Hook.item)
-        Item sh = item(look[3], "shield");
-        if (sh != null) shield(model, ps, sink, st, sh, t, light);
-        // aura: world-axis particles around the feet
-        Item au = item(look[2], "aura");
-        if (au != null) {
+        // particle aura: world-axis particles around the feet
+        Item au = item(look[AURA], "aura");
+        if (au != null && au.aura != null) {
             Object bx = Game.fld(st, "field_53325"), by = Game.fld(st, "field_53326"), bz = Game.fld(st, "field_53327"), br = Game.fld(st, "field_53446");
             if (bx instanceof Double && by instanceof Double && bz instanceof Double && br instanceof Float) {
                 double fx = (Double) bx, fy = (Double) by, fz = (Double) bz;
@@ -494,114 +495,6 @@ final class Cosmetics {
                 if (camera(r, u)) submit(ps, sink, au, aura(au, uuid, t, fx, fy, fz, unbody((Float) br, 1.501f, 0.9375f), r, u, light));
             }
         }
-    }
-
-    private static void shield(Object model, Object ps, Object sink, Object st, Item sh, double t, int light) throws Exception {
-        shieldLookup();
-        drawShield(model, ps, sink, st, sh, t, light);
-    }
-
-    private static void shieldLookup() {
-        if (!shieldTried) {
-            shieldTried = true;
-            try {
-                shieldItem = Game.field(Game.cls("net.minecraft.class_1802"), "field_8255").get(null);
-                Class<?> arm = Game.cls("net.minecraft.class_1306");
-                left = Game.field(arm, "field_6182").get(null);
-                right = Game.field(arm, "field_6183").get(null);
-            } catch (Throwable e) { System.out.println("[nether-agent] shield hand lookup unavailable: " + e); }
-        }
-    }
-
-    private static void drawShield(Object model, Object ps, Object sink, Object st, Item sh, double t, int light) throws Exception {
-        if (shieldItem == null || right == null) return;
-        for (int h = 0; h < 2; h++) {
-            Object stack = Game.fld(st, h == 0 ? "field_63601" : "field_63602");
-            if (stack == null || Game.call(stack, "method_7909") != shieldItem) continue;
-            Object state = Game.fld(st, h == 0 ? "field_55305" : "field_55307");
-            Object xf = Game.fld(Game.call(state, "method_65610"), "field_56967"); // the vanilla shield's display transform
-            Game.call(state, "method_65605"); // the vanilla shield is not drawn
-            push(ps);
-            Game.call(model, "method_2803", st, h == 0 ? right : left, ps); // translateToHand
-            // ItemInHandLayer: turn the item into the hand
-            mulPose(ps, mul(mul(rxyz(-90, 0, 0), rxyz(0, 180, 0)), tr((h == 1 ? -1 : 1) / 16f, 0.125f, -0.625f)));
-            placeAsShield(ps, xf, h == 1, sh);
-            submit(ps, sink, sh, model(sh, t, ID, light));
-            pop(ps);
-        }
-    }
-
-    /**
-     * The vanilla shield's own placement, then our model on its plate: the item's display transform (read from the game,
-     * so every version and resource pack agrees) and the shield renderer's (1, -1, -1) flip; our
-     * model's back sits on the plate's back (z -1 px) and its top on the plate's top (y -11 px; first person shows the top
-     * part). 1.21.11 bytecode: no -0.5 item offset, plate (-6,-11,-2) 12x22x1.
-     */
-    private static void placeAsShield(Object ps, Object xf, boolean leftHand, Item sh) {
-        if (xf != null) Game.call(xf, "method_23075", leftHand, Game.call(ps, "method_23760"));
-        mulPose(ps, mul(new float[] {1, 0, 0, 0, 0, -1, 0, 0, 0, 0, -1, 0}, tr(0, (sh.yMax - 11) / 16f, -1 / 16f - (sh.zMax - 8) / 16f)));
-    }
-
-    private static java.lang.reflect.Constructor<?> m4;
-
-    /** poseStack.mulPose(3x4 row-major as a JOML Matrix4f) */
-    private static void mulPose(Object ps, float[] x) {
-        try {
-            if (m4 == null) {
-                Class<?> c = Class.forName("org.joml.Matrix4f", true, ps.getClass().getClassLoader());
-                Class<?>[] f = new Class<?>[16];
-                java.util.Arrays.fill(f, float.class);
-                m4 = c.getConstructor(f);
-            }
-            Object m = m4.newInstance(x[0], x[4], x[8], 0f, x[1], x[5], x[9], 0f, x[2], x[6], x[10], 0f, x[3], x[7], x[11], 1f);
-            Game.call(ps, "method_34425", m);
-        } catch (Throwable e) {
-            throw new IllegalStateException("pose matrix", e);
-        }
-    }
-
-    private static float[] tr(float x, float y, float z) { return new float[] {1, 0, 0, x, 0, 1, 0, y, 0, 0, 1, z}; }
-    private static float[] sc(float s) { return new float[] {s, 0, 0, 0, 0, s, 0, 0, 0, 0, s, 0}; }
-
-    /** rotation X then Y then Z applied as JOML rotationXYZ (degrees): R = Rx * Ry * Rz */
-    private static float[] rxyz(float x, float y, float z) {
-        float cx = (float) Math.cos(Math.toRadians(x)), sx = (float) Math.sin(Math.toRadians(x));
-        float cy = (float) Math.cos(Math.toRadians(y)), sy = (float) Math.sin(Math.toRadians(y));
-        float cz = (float) Math.cos(Math.toRadians(z)), sz = (float) Math.sin(Math.toRadians(z));
-        float[] rx = {1, 0, 0, 0, 0, cx, -sx, 0, 0, sx, cx, 0}, ry = {cy, 0, sy, 0, 0, 1, 0, 0, -sy, 0, cy, 0}, rz = {cz, -sz, 0, 0, sz, cz, 0, 0, 0, 0, 1, 0};
-        return mul(mul(rx, ry), rz);
-    }
-
-    private static float[] mul(float[] a, float[] b) {
-        float[] o = new float[12];
-        for (int r = 0; r < 3; r++) for (int c = 0; c < 4; c++) {
-            float v = a[r * 4] * b[c] + a[r * 4 + 1] * b[4 + c] + a[r * 4 + 2] * b[8 + c];
-            if (c == 3) v += a[r * 4 + 3];
-            o[r * 4 + c] = v;
-        }
-        return o;
-    }
-
-    private static Class<?> stateCls;
-
-    /** Hook.item (first person): a held vanilla shield of a player wearing a shield cosmetic is drawn as that cosmetic. */
-    static boolean heldItem(Object entity, Object stack, Object ctx, Object ps, Object sink, int light) throws Exception {
-        shieldLookup();
-        if (shieldItem == null || !(ctx instanceof Enum) || !((Enum<?>) ctx).name().startsWith("FIRST_PERSON")) return false;
-        if (stack == null || Game.call(stack, "method_7909") != shieldItem) return false;
-        Object u = Game.call(entity, "method_5667");
-        String[] look = look(u instanceof UUID ? u.toString().replace("-", "") : null);
-        Item sh = look == null ? null : item(look[3], "shield");
-        if (sh == null) return false;
-        if (stateCls == null) stateCls = Game.cls("net.minecraft.class_10444");
-        Object state = stateCls.getConstructor().newInstance();
-        Game.call(Game.fld(Game.mc(), "field_55226"), "method_65597", state, stack, ctx, entity); // updateForLiving
-        Object xf = Game.fld(Game.call(state, "method_65610"), "field_56967");
-        push(ps);
-        placeAsShield(ps, xf, Boolean.TRUE.equals(Game.call(ctx, "method_67675")), sh);
-        submit(ps, sink, sh, model(sh, now(), ID, light));
-        pop(ps);
-        return true;
     }
 
     private static Object cam;
@@ -726,8 +619,11 @@ final class Cosmetics {
         if (model == null) return;
         double t = now();
         boolean sneak = Boolean.TRUE.equals(Game.call(entity, Game.l("av", "func_70093_af")));
-        Item hat = item(look[0], "hat"), band = item(look[1], "headband"), au = item(look[2], "aura"); // 1.8.9 has no shields to replace
-        if (hat == null && band == null && au == null) return;
+        Item[] worn = new Item[SLOTS.length];
+        boolean any = false;
+        for (int s = 0; s < SLOTS.length; s++) { worn[s] = item(look[s], SLOTS[s]); any |= worn[s] != null; }
+        if (!any) return;
+        Item au = worn[AURA] != null && worn[AURA].aura != null ? worn[AURA] : null;
         int lightUV = 0xF000F0;
         Object br = Game.call(entity, Game.l("b", "func_70070_b"), pt);
         if (br instanceof Integer) lightUV = (Integer) br;
@@ -739,13 +635,18 @@ final class Cosmetics {
             GL11.glEnable(GL11.GL_TEXTURE_2D);
             GL11.glColor4f(1, 1, 1, 1);
             boolean helmet = Game.call(entity, Game.l("q", "func_82169_q"), 3) != null;
-            for (Item it : new Item[] {helmet ? null : hat, helmet ? null : band}) {
-                if (it == null) continue;
-                GL11.glPushMatrix();
-                if (sneak) GL11.glTranslatef(0, 0.2f, 0);
-                Game.call(Game.fld(model, Game.l("e", "field_78116_c")), Game.l("c", "func_78794_c"), 0.0625f);
-                gl(it, model(it, t, ID, 0), lightUV);
-                GL11.glPopMatrix();
+            for (Item it : worn) {
+                if (it == null || it.model == null) continue;
+                for (int p = 0; p < CosModel.ANCHORS.length; p++) {
+                    if ((it.model.anchors & (1 << p)) == 0 || (p == 0 && helmet)) continue;
+                    Object part = Game.fld(model, Game.l(LEGACY_PARTS[p][0], LEGACY_PARTS[p][1]));
+                    if (part == null) continue;
+                    GL11.glPushMatrix();
+                    if (sneak) GL11.glTranslatef(0, 0.2f, 0); // ModelBiped moves the whole model down when sneaking
+                    Game.call(part, Game.l("c", "func_78794_c"), 0.0625f); // postRender
+                    gl(it, model(it, t, ID, 0, p), lightUV);
+                    GL11.glPopMatrix();
+                }
             }
             if (au != null) {
                 double x = lerp(entity, "P", "field_70142_S", "s", "field_70165_t", pt), y = lerp(entity, "Q", "field_70137_T", "t", "field_70163_u", pt), z = lerp(entity, "R", "field_70136_U", "u", "field_70161_v", pt);

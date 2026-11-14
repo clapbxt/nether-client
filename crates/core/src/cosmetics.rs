@@ -1,23 +1,41 @@
-//! Nether cosmetics (hats, headbands, auras, shields): the model and aura formats, the same rules as the agent's
-//! CosModel.java / CosAura.java. Models are Blockbench "Java Block/Item" JSON: units are skin pixels, (8, 0, 8) is the
-//! attachment pivot (hats/headbands: the neck, shields: their centre), the player looks north (-Z); one texture,
-//! vertical frames = animated. Group animations live in `"nether": {"anim": [...]}`. Auras are particle emitters over a
-//! sprite sheet (columns = frames, rows = variants), stateless: every particle is a function of the time.
+//! Nether cosmetics (hats, headbands, masks, back items, wings, auras, pets): the model and aura formats, the same rules
+//! as the agent's CosModel.java / CosAura.java. Models are Blockbench "Java Block/Item" JSON: units are skin pixels,
+//! (8, 0, 8) is the attachment pivot (the body part's pivot: the neck for head and body), the player looks north (-Z);
+//! one texture, vertical frames = animated. Extensions (tools/cosmetics/import.mjs writes them): `"type": "mesh"`
+//! elements (`vertices` [[x, y, z, u, v]], `faces` [[i, j, k(, l)]] counter-clockwise from outside), `"anchor"` on a
+//! group or in `"nether"` (a body part from ANCHORS, else the kind's), group animations in `"nether": {"anim": [...]}`
+//! (keyframe loops with rotation / position / scale). Auras are particle emitters over a sprite sheet (columns = frames,
+//! rows = variants), stateless: every particle is a function of the time; an aura may also be a model (on the body).
 use anyhow::{bail, Result};
 use image::RgbaImage;
 use serde_json::Value;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Kind { Hat, Headband, Aura, Shield }
+pub enum Kind { Hat, Headband, Mask, Back, Wings, Aura, Pet }
+
+/// Number of cosmetic slots in a look.
+pub const SLOTS: usize = 7;
+/// Body parts a model (or one of its groups) is worn on; Bedrock `anchor_<part>` bones map here.
+pub const ANCHORS: [&str; 6] = ["head", "body", "right_arm", "left_arm", "right_leg", "left_leg"];
 
 impl Kind {
     pub fn parse(s: &str) -> Option<Kind> {
-        Some(match s { "hat" => Kind::Hat, "headband" => Kind::Headband, "aura" => Kind::Aura, "shield" => Kind::Shield, _ => return None })
+        Some(match s {
+            "hat" => Kind::Hat, "headband" => Kind::Headband, "mask" => Kind::Mask, "back" => Kind::Back,
+            "wings" => Kind::Wings, "aura" => Kind::Aura, "pet" => Kind::Pet, _ => return None,
+        })
     }
-    pub fn as_str(self) -> &'static str { match self { Kind::Hat => "hat", Kind::Headband => "headband", Kind::Aura => "aura", Kind::Shield => "shield" } }
-    /// Slot index in a look (hat, headband, aura, shield).
-    pub fn slot(self) -> usize { match self { Kind::Hat => 0, Kind::Headband => 1, Kind::Aura => 2, Kind::Shield => 3 } }
-    pub const ALL: [Kind; 4] = [Kind::Hat, Kind::Headband, Kind::Aura, Kind::Shield];
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Kind::Hat => "hat", Kind::Headband => "headband", Kind::Mask => "mask", Kind::Back => "back",
+            Kind::Wings => "wings", Kind::Aura => "aura", Kind::Pet => "pet",
+        }
+    }
+    /// Slot index in a look (the order of ALL).
+    pub fn slot(self) -> usize { self as usize }
+    pub const ALL: [Kind; SLOTS] = [Kind::Hat, Kind::Headband, Kind::Mask, Kind::Back, Kind::Wings, Kind::Aura, Kind::Pet];
+    /// ANCHORS index a model of this kind is worn on when it does not say: head items on the head, the rest on the body.
+    pub fn anchor(self) -> i8 { match self { Kind::Hat | Kind::Headband | Kind::Mask => 0, _ => 1 } }
 }
 
 fn num(v: &Value, d: f32) -> f32 { v.as_f64().map(|x| x as f32).unwrap_or(d) }
@@ -29,10 +47,14 @@ fn vec3(v: &Value, d: f32) -> [f32; 3] {
 
 /// One face: corners TL, BL, BR, TR seen from outside (counter-clockwise), uv per corner (0..1 in a frame), normal.
 #[derive(Clone, Debug)]
-pub struct Quad { pub p: [[f32; 3]; 4], pub uv: [[f32; 2]; 4], pub n: [f32; 3], pub group: i32, pub glow: bool }
+/// `anchor`: ANCHORS index (-1 = the kind's, resolved by `Loaded`). Triangles repeat their last corner.
+pub struct Quad { pub p: [[f32; 3]; 4], pub uv: [[f32; 2]; 4], pub n: [f32; 3], pub group: i32, pub glow: bool, pub anchor: i8 }
+
+/// A keyframe loop: length (s), rotation, position and scale keys [t, x, y, z].
+type Keys = (f32, Vec<[f32; 4]>, Vec<[f32; 4]>, Vec<[f32; 4]>);
 
 #[derive(Clone, Debug, Default)]
-struct Group { o: [f32; 3], rot: [f32; 3], parent: i32, anims: Vec<[f32; 6]>, keys: Vec<(f32, Vec<[f32; 4]>, Vec<[f32; 4]>)> } // rest rotation (deg); anims: kind 0 spin / 1 sway / 2 bob, x, y, z, period, phase
+struct Group { o: [f32; 3], rot: [f32; 3], parent: i32, anchor: i8, anims: Vec<[f32; 6]>, keys: Vec<Keys> } // rest rotation (deg); anims: kind 0 spin / 1 sway / 2 bob, x, y, z, period, phase
 
 #[derive(Clone, Debug)]
 pub struct Model { pub quads: Vec<Quad>, groups: Vec<Group>, pub tw: u32, pub th: u32, moving: bool, posed: bool }
@@ -76,13 +98,16 @@ fn rotate(p: [f32; 3], o: [f32; 3], axis: usize, s: f32, c: f32, k: f32) -> [f32
     [nx + o[0], ny + o[1], nz + o[2]]
 }
 
-fn walk(g: &Value, parent: i32, out: &mut Vec<Group>, names: &mut Vec<(String, usize)>, owner: &mut [i32]) {
+fn anchor_of(v: &Value) -> Option<i8> { v.as_str().and_then(|s| ANCHORS.iter().position(|a| *a == s)).map(|i| i as i8) }
+
+fn walk(g: &Value, parent: i32, anchor: i8, out: &mut Vec<Group>, names: &mut Vec<(String, usize)>, owner: &mut [i32]) {
     if let Some(i) = g.as_u64() { if (i as usize) < owner.len() { owner[i as usize] = parent; } return; }
     if !g.is_object() || out.len() > 512 { return; }
     let id = out.len();
-    out.push(Group { o: vec3(&g["origin"], 8.), rot: vec3(&g["rotation"], 0.), parent, anims: vec![], keys: vec![] });
+    let anchor = anchor_of(&g["anchor"]).unwrap_or(anchor);
+    out.push(Group { o: vec3(&g["origin"], 8.), rot: vec3(&g["rotation"], 0.), parent, anchor, anims: vec![], keys: vec![] });
     if let Some(n) = g["name"].as_str() { if !names.iter().any(|(x, _)| x == n) { names.push((n.to_string(), id)); } }
-    if let Some(ch) = g["children"].as_array() { for c in ch { walk(c, id as i32, out, names, owner); } }
+    if let Some(ch) = g["children"].as_array() { for c in ch { walk(c, id as i32, anchor, out, names, owner); } }
 }
 
 impl Model {
@@ -93,24 +118,25 @@ impl Model {
         let (tw, th) = (ts[0].round().max(1.) as u32, ts[1].round().max(1.) as u32);
         let nether = &m["nether"];
         let all_glow = nether["glow"].as_bool().unwrap_or(false);
+        let model_anchor = anchor_of(&nether["anchor"]).unwrap_or(-1);
         let mut groups = vec![];
         let mut names = vec![];
         let mut owner = vec![-1i32; els.len()];
-        if let Some(gs) = m["groups"].as_array() { for g in gs { walk(g, -1, &mut groups, &mut names, &mut owner); } }
+        if let Some(gs) = m["groups"].as_array() { for g in gs { walk(g, -1, model_anchor, &mut groups, &mut names, &mut owner); } }
         if let Some(anims) = nether["anim"].as_array() {
             for a in anims {
                 let gi = match a["group"].as_str().and_then(|n| names.iter().find(|(x, _)| x == n)) {
                     Some((_, i)) => *i,
                     None => {
                         let gi = groups.len();
-                        groups.push(Group { o: vec3(&a["origin"], 8.), rot: [0.; 3], parent: -1, anims: vec![], keys: vec![] });
+                        groups.push(Group { o: vec3(&a["origin"], 8.), rot: [0.; 3], parent: -1, anchor: model_anchor, anims: vec![], keys: vec![] });
                         for (i, g) in groups.iter_mut().enumerate() { if i != gi && g.parent < 0 { g.parent = gi as i32; } }
                         for o in owner.iter_mut() { if *o < 0 { *o = gi as i32; } }
                         gi
                     }
                 };
                 if !a["length"].is_null() {
-                    groups[gi].keys.push((num(&a["length"], 1.).max(0.05), key_list(&a["rotation"]), key_list(&a["position"])));
+                    groups[gi].keys.push((num(&a["length"], 1.).max(0.05), key_list(&a["rotation"]), key_list(&a["position"]), key_list(&a["scale"])));
                     continue;
                 }
                 let (period, phase) = (num(&a["period"], 2.).max(0.05), num(&a["phase"], 0.));
@@ -121,10 +147,16 @@ impl Model {
         }
         let mut quads = vec![];
         for (ei, e) in els.iter().enumerate() {
+            let anchor = if owner[ei] >= 0 { groups[owner[ei] as usize].anchor } else { model_anchor };
+            let glow = all_glow || num(&e["light_emission"], 0.) > 0.;
+            if e["type"].as_str() == Some("mesh") {
+                mesh(e, owner[ei], glow, anchor, &mut quads);
+                if quads.len() > 32768 { bail!("model too large"); }
+                continue;
+            }
             let (a, b) = (vec3(&e["from"], 0.), vec3(&e["to"], 0.));
             let lo = [a[0].min(b[0]), a[1].min(b[1]), a[2].min(b[2])];
             let hi = [a[0].max(b[0]), a[1].max(b[1]), a[2].max(b[2])];
-            let glow = all_glow || num(&e["light_emission"], 0.) > 0.;
             // Blockbench free rotation: {"x", "y", "z", "origin"} (degrees, Z*Y*X)
             let free = e["rotation"].as_object().filter(|r| r.get("angle").is_none()).and_then(|r| {
                 let g = |k: &str| r.get(k).map_or(0., |v| num(v, 0.));
@@ -145,7 +177,7 @@ impl Model {
                 let c = corners(d, lo, hi);
                 let u = match f["uv"].as_array() { Some(l) => { let mut u = [0f32; 4]; for (i, x) in l.iter().take(4).enumerate() { u[i] = num(x, 0.); } u } None => default_uv(d, lo, hi) };
                 let k = ((num(&f["rotation"], 0.).round() as i32 / 90) % 4 + 4) % 4;
-                let mut q = Quad { p: c, uv: [[0.; 2]; 4], n: NORMALS[d], group: owner[ei], glow };
+                let mut q = Quad { p: c, uv: [[0.; 2]; 4], n: NORMALS[d], group: owner[ei], glow, anchor };
                 for i in 0..4 {
                     if let Some((o, ax, s, co, kk)) = rot { q.p[i] = rotate(c[i], o, ax, s, co, kk); }
                     if let Some(m) = &free { q.p[i] = xf(m, q.p[i], true); }
@@ -168,9 +200,14 @@ impl Model {
     fn mat(&self, i: usize, t: f32, done: &mut [Option<[f32; 12]>]) -> [f32; 12] {
         if let Some(m) = done[i] { return m; }
         let g = &self.groups[i];
-        let (mut r, mut p) = (g.rot, [0f32; 3]);
-        for (len, rk, pk) in &g.keys { let tt = t % len; sample(rk, tt, &mut r); sample(pk, tt, &mut p); }
-        let mut m = if r != [0.; 3] { around(g.o, r[0].to_radians(), r[1].to_radians(), r[2].to_radians()) } else { [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0.] };
+        let (mut r, mut p, mut s) = (g.rot, [0f32; 3], [1f32; 3]);
+        for (len, rk, pk, sk) in &g.keys {
+            let tt = t % len;
+            sample(rk, tt, &mut r);
+            sample(pk, tt, &mut p);
+            if !sk.is_empty() { let mut v = [0f32; 3]; sample(sk, tt, &mut v); for c in 0..3 { s[c] *= v[c]; } }
+        }
+        let mut m = if r != [0.; 3] || s != [1.; 3] { around_s(g.o, r[0].to_radians(), r[1].to_radians(), r[2].to_radians(), s) } else { [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0.] };
         m[3] += p[0]; m[7] += p[1]; m[11] += p[2];
         for a in &g.anims {
             let w = (2. * std::f32::consts::PI * (t / a[4] + a[5])).sin();
@@ -191,7 +228,9 @@ impl Model {
             let Some(m) = (q.group >= 0 && self.posed).then(|| mats[q.group as usize]) else { return q.clone() };
             let mut o = q.clone();
             for i in 0..4 { o.p[i] = xf(&m, q.p[i], true); }
-            o.n = xf(&m, q.n, false);
+            let n = xf(&m, q.n, false);
+            let l = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+            o.n = if l > 1e-6 { [n[0] / l, n[1] / l, n[2] / l] } else { q.n };
             o
         }).collect()
     }
@@ -216,9 +255,35 @@ fn sample(k: &[[f32; 4]], t: f32, out: &mut [f32; 3]) {
     for c in 0..3 { out[c] += k[i][1 + c] + (k[j][1 + c] - k[i][1 + c]) * f; }
 }
 
-fn around(o: [f32; 3], rx: f32, ry: f32, rz: f32) -> [f32; 12] {
+/// Mesh element: `vertices` [[x, y, z, u, v]] (uv 0..16 in a frame), `faces` [[i, j, k(, l)]] counter-clockwise from outside.
+fn mesh(e: &Value, group: i32, glow: bool, anchor: i8, out: &mut Vec<Quad>) {
+    let vs: Vec<[f32; 5]> = e["vertices"].as_array().map(|a| a.iter().take(65536).map(|v| {
+        let mut o = [0f32; 5];
+        if let Some(l) = v.as_array() { for (i, x) in l.iter().take(5).enumerate() { o[i] = num(x, 0.); } }
+        o
+    }).collect()).unwrap_or_default();
+    let Some(fs) = e["faces"].as_array() else { return };
+    for f in fs.iter().take(32768) {
+        let Some(ix) = f.as_array() else { continue };
+        let ids: Vec<usize> = ix.iter().filter_map(|i| i.as_u64().map(|i| i as usize)).filter(|&i| i < vs.len()).collect();
+        if !(3..=4).contains(&ids.len()) || ids.len() != ix.len() { continue; }
+        let c: [[f32; 5]; 4] = std::array::from_fn(|k| vs[ids[k.min(ids.len() - 1)]]);
+        let p = c.map(|v| [v[0], v[1], v[2]]);
+        let (a, b) = ([p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]], [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]]);
+        let n = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+        let l = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+        if l < 1e-9 { continue; }
+        out.push(Quad { p, uv: c.map(|v| [v[3] / 16., v[4] / 16.]), n: [n[0] / l, n[1] / l, n[2] / l], group, glow, anchor });
+    }
+}
+
+fn around(o: [f32; 3], rx: f32, ry: f32, rz: f32) -> [f32; 12] { around_s(o, rx, ry, rz, [1.; 3]) }
+
+/// translate(o) * Rz * Ry * Rx * scale(s) * translate(-o)
+fn around_s(o: [f32; 3], rx: f32, ry: f32, rz: f32, s: [f32; 3]) -> [f32; 12] {
     let (cx, sx, cy, sy, cz, sz) = (rx.cos(), rx.sin(), ry.cos(), ry.sin(), rz.cos(), rz.sin());
     let mut r = [cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx, 0., sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx, 0., -sy, cy * sx, cy * cx, 0.];
+    for row in 0..3 { for c in 0..3 { r[row * 4 + c] *= s[c]; } }
     r[3] = o[0] - (r[0] * o[0] + r[1] * o[1] + r[2] * o[2]);
     r[7] = o[1] - (r[4] * o[0] + r[5] * o[1] + r[6] * o[2]);
     r[11] = o[2] - (r[8] * o[0] + r[9] * o[1] + r[10] * o[2]);
@@ -355,8 +420,6 @@ pub struct Loaded {
     pub cols: u32,
     pub rows: u32,
     pub ms: u32,
-    /// shields: back extent in model pixels
-    pub z_max: f32,
 }
 
 impl Loaded {
@@ -364,18 +427,18 @@ impl Loaded {
         let v: Value = serde_json::from_slice(json)?;
         let tex = image::load_from_memory_with_format(png, image::ImageFormat::Png)?.to_rgba8();
         if tex.width() == 0 || tex.height() == 0 || tex.width() > 4096 || tex.height() > 8192 { bail!("bad texture size"); }
-        let mut l = Loaded { id: id.into(), kind, model: None, aura: None, frames: 1, cols: 1, rows: 1, ms: ms.clamp(20, 2000), z_max: 8., tex };
-        if kind == Kind::Aura {
+        let mut l = Loaded { id: id.into(), kind, model: None, aura: None, frames: 1, cols: 1, rows: 1, ms: ms.clamp(20, 2000), tex };
+        if kind == Kind::Aura && v.get("elements").is_none() {
             let a = Aura::parse(&v)?;
             let cell = if a.cell > 0 { a.cell } else { l.tex.height() };
             l.cols = (l.tex.width() / cell).max(1);
             l.rows = (l.tex.height() / cell).max(1);
             l.aura = Some(a);
         } else {
-            let m = Model::parse(&v)?;
+            let mut m = Model::parse(&v)?;
+            for q in &mut m.quads { if q.anchor < 0 { q.anchor = kind.anchor(); } }
             let fh = ((l.tex.width() as f32 * m.th as f32 / m.tw as f32).round() as u32).max(1);
             l.frames = (l.tex.height() / fh).clamp(1, 256);
-            l.z_max = m.quads.iter().flat_map(|q| q.p.iter().map(|p| p[2])).fold(-99., f32::max);
             l.model = Some(m);
         }
         Ok(l)

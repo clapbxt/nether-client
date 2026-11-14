@@ -54,7 +54,7 @@ final class SelfTag extends Module {
             Gfx.s = (float) (px / 2); // 1 font px = 2 units
             boolean badge = Capes.nether(Game.call(me, "method_5667"));
             boolean vf = Vanilla.font();
-            float tw = vf ? Vanilla.width(n) + 2 : Gfx.width(Gfx.SEMI, 16, n), bw = badge ? 16 + 10 : 0, w = bw + tw;
+            float tw = vf ? Vanilla.width(n) + 2 : Gfx.width(Gfx.SEMI, 16, n), bw = badge ? Capes.badgeWidth(16) + 8 : 0, w = bw + tw;
             float x = ax / Gfx.s - w / 2, y = ay / Gfx.s;
             Gfx.rect(x - 2, y - 2, w + 4, 20, 0, 0x40000000);
             if (badge) Capes.badge(x, y, 16);

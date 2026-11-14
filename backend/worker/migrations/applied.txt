@@ -1,3 +1,0 @@
-# migrations already run on the live database (the studio adds to this after running one)
-0001_player_hash.sql
-0002_cosmetics.sql

@@ -6,9 +6,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A worn cosmetic model (hat, headband, shield): a Blockbench "Java Block/Item" model JSON, the same rule as the
- * launcher's cosmetics.rs. Units are skin pixels, (8, 0, 8) is the attachment pivot (head/back: the neck; shield: its
- * centre), the player looks north (-Z). Elements: from/to, rotation {origin, axis, angle, rescale}, faces {uv (0..16),
+ * A worn cosmetic model: a Blockbench "Java Block/Item" model JSON, the same rule as the launcher's cosmetics.rs. Units
+ * are skin pixels, (8, 0, 8) is the pivot of the body part it is worn on (ANCHORS; the neck for head and body), the
+ * player looks north (-Z). Extensions (tools/cosmetics/import.mjs): "type": "mesh" elements {vertices [[x, y, z, u, v]],
+ * faces [[i, j, k(, l)]] counter-clockwise from outside}, "anchor" on groups or in "nether", keyframe "scale". Elements: from/to, rotation {origin, axis, angle, rescale}, faces {uv (0..16),
  * rotation, texture}, light_emission (> 0 = glows). One texture per model; vertical frames = animated texture.
  * Blockbench free rotation (tools/cosmetics/import.mjs): element "rotation": {"x", "y", "z", "origin"} (degrees, Z*Y*X like
  * Blockbench) and group "rotation": [x, y, z] around the group origin. Groups (Blockbench outliner) can also move: "nether": {"anim": [{group, spin [x,y,z] deg/s, sway [x,y,z] deg, bob [x,y,z] px,
@@ -24,6 +25,10 @@ final class CosModel {
     final float[] nrm;
     final int[] grp;
     final boolean[] glow;
+    /** per quad: ANCHORS index (body part) */
+    final byte[] anchor;
+    /** body parts used (bit per ANCHORS index) */
+    final int anchors;
     final int quads;
     final Group[] groups;
     final boolean moving, posed;
@@ -34,19 +39,24 @@ final class CosModel {
         float ox, oy, oz;
         /** rest rotation (degrees), Blockbench bones */
         float rx, ry, rz;
-        int parent = -1;
+        int parent = -1, anchor = -1;
         final List<float[]> anims = new ArrayList<>(); // {kind 0 spin / 1 sway / 2 bob, x, y, z, period, phase}
-        /** keyframe loops: {length, rotation keys (t, x, y, z)..., position keys...} */
+        /** keyframe loops: {length, rotation keys (t, x, y, z)..., position keys..., scale keys...} */
         final List<float[][]> keys = new ArrayList<>();
     }
 
-    private CosModel(List<float[]> q, List<Integer> g, List<Boolean> gl, Group[] groups, int tw, int th) {
+    /** Body parts a model is worn on (Bedrock anchor_<part> bones). */
+    static final String[] ANCHORS = {"head", "body", "right_arm", "left_arm", "right_leg", "left_leg"};
+
+    private CosModel(List<float[]> q, List<Integer> g, List<Boolean> gl, List<Integer> an, Group[] groups, int tw, int th) {
         quads = q.size();
         pos = new float[quads * 12];
         uv = new float[quads * 8];
         nrm = new float[quads * 3];
         grp = new int[quads];
         glow = new boolean[quads];
+        anchor = new byte[quads];
+        int used = 0;
         for (int i = 0; i < quads; i++) {
             float[] f = q.get(i);
             System.arraycopy(f, 0, pos, i * 12, 12);
@@ -54,7 +64,10 @@ final class CosModel {
             System.arraycopy(f, 20, nrm, i * 3, 3);
             grp[i] = g.get(i);
             glow[i] = gl.get(i);
+            anchor[i] = (byte) (int) an.get(i);
+            used |= 1 << anchor[i];
         }
+        anchors = used;
         this.groups = groups;
         boolean m = false;
         boolean p = false;
@@ -75,8 +88,13 @@ final class CosModel {
 
     private static final String[] DIRS = {"north", "south", "east", "west", "up", "down"};
 
-    /** Parse a model (throws on anything malformed; limits keep a bad file cheap). */
-    static CosModel parse(Object json) {
+    private static int anchorOf(Object o) {
+        for (int i = 0; i < ANCHORS.length; i++) if (ANCHORS[i].equals(o)) return i;
+        return -1;
+    }
+
+    /** Parse a model (throws on anything malformed; limits keep a bad file cheap); `defAnchor`: the kind's body part. */
+    static CosModel parse(Object json, int defAnchor) {
         if (!(json instanceof Map)) throw new IllegalArgumentException("model is not an object");
         Map<?, ?> m = (Map<?, ?>) json;
         Object els = m.get("elements");
@@ -87,12 +105,14 @@ final class CosModel {
         int tw = Math.max(1, Math.round(ts[0])), th = Math.max(1, Math.round(ts[1]));
         Map<?, ?> nether = m.get("nether") instanceof Map ? (Map<?, ?>) m.get("nether") : new HashMap<>();
         boolean allGlow = Boolean.TRUE.equals(nether.get("glow"));
+        int a0 = anchorOf(nether.get("anchor"));
+        int modelAnchor = a0 >= 0 ? a0 : defAnchor;
         // groups (outliner): element index -> innermost group
         List<Group> groups = new ArrayList<>();
         Map<String, Integer> byName = new HashMap<>();
         int[] owner = new int[list.size()];
         java.util.Arrays.fill(owner, -1);
-        if (m.get("groups") instanceof List) for (Object g : (List<?>) m.get("groups")) group(g, -1, groups, byName, owner);
+        if (m.get("groups") instanceof List) for (Object g : (List<?>) m.get("groups")) group(g, -1, modelAnchor, groups, byName, owner);
         if (nether.get("anim") instanceof List) {
             for (Object a : (List<?>) nether.get("anim")) {
                 if (!(a instanceof Map)) continue;
@@ -101,6 +121,7 @@ final class CosModel {
                 Integer gi = gn instanceof String ? byName.get(gn) : null;
                 if (gi == null) { // no group: the whole model moves (a group around everything)
                     Group all = new Group();
+                    all.anchor = modelAnchor;
                     float[] o = vec(am.get("origin"), 8);
                     all.ox = o[0]; all.oy = o[1]; all.oz = o[2];
                     gi = groups.size();
@@ -109,7 +130,7 @@ final class CosModel {
                     for (int i = 0; i < owner.length; i++) if (owner[i] < 0) owner[i] = gi;
                 }
                 if (am.get("length") != null) {
-                    groups.get(gi).keys.add(new float[][] {{Math.max(0.05f, num(am.get("length"), 1))}, keyList(am.get("rotation")), keyList(am.get("position"))});
+                    groups.get(gi).keys.add(new float[][] {{Math.max(0.05f, num(am.get("length"), 1))}, keyList(am.get("rotation")), keyList(am.get("position")), keyList(am.get("scale"))});
                     continue;
                 }
                 float period = Math.max(0.05f, num(am.get("period"), 2)), phase = num(am.get("phase"), 0);
@@ -121,9 +142,19 @@ final class CosModel {
         List<float[]> quads = new ArrayList<>();
         List<Integer> qg = new ArrayList<>();
         List<Boolean> qgl = new ArrayList<>();
+        List<Integer> qan = new ArrayList<>();
         for (int ei = 0; ei < list.size(); ei++) {
             if (!(list.get(ei) instanceof Map)) continue;
             Map<?, ?> e = (Map<?, ?>) list.get(ei);
+            int an = owner[ei] >= 0 ? groups.get(owner[ei]).anchor : modelAnchor;
+            if ("mesh".equals(e.get("type"))) {
+                boolean g = allGlow || num(e.get("light_emission"), 0) > 0;
+                int before = quads.size();
+                mesh(e, quads);
+                for (int i = before; i < quads.size(); i++) { qg.add(owner[ei]); qgl.add(g); qan.add(an); }
+                if (quads.size() > 32768) throw new IllegalArgumentException("model too large");
+                continue;
+            }
             float[] a = vec(e.get("from"), 0), b = vec(e.get("to"), 0);
             float x1 = Math.min(a[0], b[0]), y1 = Math.min(a[1], b[1]), z1 = Math.min(a[2], b[2]);
             float x2 = Math.max(a[0], b[0]), y2 = Math.max(a[1], b[1]), z2 = Math.max(a[2], b[2]);
@@ -134,7 +165,7 @@ final class CosModel {
                 Map<?, ?> r = (Map<?, ?>) e.get("rotation");
                 float[] o = vec(r.get("origin"), 8);
                 float x = num(r.get("x"), 0), y = num(r.get("y"), 0), z = num(r.get("z"), 0);
-                if (x != 0 || y != 0 || z != 0) free = around(o[0], o[1], o[2], (float) Math.toRadians(x), (float) Math.toRadians(y), (float) Math.toRadians(z));
+                if (x != 0 || y != 0 || z != 0) free = around(o[0], o[1], o[2], (float) Math.toRadians(x), (float) Math.toRadians(y), (float) Math.toRadians(z), ONE);
             } else if (e.get("rotation") instanceof Map) {
                 Map<?, ?> r = (Map<?, ?>) e.get("rotation");
                 float ang = (float) Math.toRadians(num(r.get("angle"), 0));
@@ -173,10 +204,49 @@ final class CosModel {
                 quads.add(q);
                 qg.add(owner[ei]);
                 qgl.add(gl);
+                qan.add(an);
             }
         }
         if (quads.isEmpty()) throw new IllegalArgumentException("model has no textured faces");
-        return new CosModel(quads, qg, qgl, groups.toArray(new Group[0]), tw, th);
+        return new CosModel(quads, qg, qgl, qan, groups.toArray(new Group[0]), tw, th);
+    }
+
+    /** mesh element -> quads (triangles repeat their last corner); uv 0..16, faces counter-clockwise from outside */
+    private static void mesh(Map<?, ?> e, List<float[]> out) {
+        if (!(e.get("vertices") instanceof List) || !(e.get("faces") instanceof List)) return;
+        List<?> vl = (List<?>) e.get("vertices");
+        int nv = Math.min(vl.size(), 65536);
+        float[][] v = new float[nv][];
+        for (int i = 0; i < nv; i++) {
+            float[] p = new float[5];
+            if (vl.get(i) instanceof List) { List<?> l = (List<?>) vl.get(i); for (int k = 0; k < 5 && k < l.size(); k++) p[k] = num(l.get(k), 0); }
+            v[i] = p;
+        }
+        int n = 0;
+        for (Object fo : (List<?>) e.get("faces")) {
+            if (!(fo instanceof List) || n++ > 32768) continue;
+            List<?> f = (List<?>) fo;
+            if (f.size() < 3 || f.size() > 4) continue;
+            int[] id = new int[4];
+            boolean ok = true;
+            for (int k = 0; k < 4; k++) {
+                Object o = f.get(Math.min(k, f.size() - 1));
+                int i = o instanceof Number ? ((Number) o).intValue() : -1;
+                if (i < 0 || i >= nv) ok = false; else id[k] = i;
+            }
+            if (!ok) continue;
+            float[] q = new float[23];
+            for (int k = 0; k < 4; k++) {
+                float[] p = v[id[k]];
+                q[k * 3] = p[0]; q[k * 3 + 1] = p[1]; q[k * 3 + 2] = p[2];
+                q[12 + k * 2] = p[3] / 16f; q[13 + k * 2] = p[4] / 16f;
+            }
+            float ax = q[3] - q[0], ay = q[4] - q[1], az = q[5] - q[2], bx = q[6] - q[0], by = q[7] - q[1], bz = q[8] - q[2];
+            float nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx, l = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
+            if (l < 1e-9f) continue;
+            q[20] = nx / l; q[21] = ny / l; q[22] = nz / l;
+            out.add(q);
+        }
     }
 
     /** [[t, x, y, z], ...] -> flat t,x,y,z sorted by time (at most 256 keys) */
@@ -206,7 +276,7 @@ final class CosModel {
         for (int c = 0; c < 3; c++) out[c] += k[i * 4 + 1 + c] + (k[j * 4 + 1 + c] - k[i * 4 + 1 + c]) * f;
     }
 
-    private static void group(Object g, int parent, List<Group> out, Map<String, Integer> byName, int[] owner) {
+    private static void group(Object g, int parent, int anchor, List<Group> out, Map<String, Integer> byName, int[] owner) {
         if (g instanceof Number) { int i = ((Number) g).intValue(); if (i >= 0 && i < owner.length) owner[i] = parent; return; }
         if (!(g instanceof Map) || out.size() > 512) return;
         Map<?, ?> m = (Map<?, ?>) g;
@@ -216,10 +286,12 @@ final class CosModel {
         float[] gr = vec(m.get("rotation"), 0);
         x.rx = gr[0]; x.ry = gr[1]; x.rz = gr[2];
         x.parent = parent;
+        int a = anchorOf(m.get("anchor"));
+        x.anchor = a >= 0 ? a : anchor;
         int id = out.size();
         out.add(x);
         if (m.get("name") instanceof String) byName.putIfAbsent((String) m.get("name"), id);
-        if (m.get("children") instanceof List) for (Object c : (List<?>) m.get("children")) group(c, id, out, byName, owner);
+        if (m.get("children") instanceof List) for (Object c : (List<?>) m.get("children")) group(c, id, x.anchor, out, byName, owner);
     }
 
     private static final float[][] NORMALS = {{0, 0, -1}, {0, 0, 1}, {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}};
@@ -276,10 +348,15 @@ final class CosModel {
     private float[] mat(int i, float t, float[][] done) {
         if (done[i] != null) return done[i];
         Group g = groups[i];
-        float[] r = {g.rx, g.ry, g.rz}, p = {0, 0, 0};
-        for (float[][] k : g.keys) { float tt = t % k[0][0]; sample(k[1], tt, r); sample(k[2], tt, p); }
-        float[] m = r[0] != 0 || r[1] != 0 || r[2] != 0
-            ? around(g.ox, g.oy, g.oz, (float) Math.toRadians(r[0]), (float) Math.toRadians(r[1]), (float) Math.toRadians(r[2]))
+        float[] r = {g.rx, g.ry, g.rz}, p = {0, 0, 0}, s = {1, 1, 1};
+        for (float[][] k : g.keys) {
+            float tt = t % k[0][0];
+            sample(k[1], tt, r);
+            sample(k[2], tt, p);
+            if (k.length > 3 && k[3].length > 0) { float[] v = {0, 0, 0}; sample(k[3], tt, v); s[0] *= v[0]; s[1] *= v[1]; s[2] *= v[2]; }
+        }
+        float[] m = r[0] != 0 || r[1] != 0 || r[2] != 0 || s[0] != 1 || s[1] != 1 || s[2] != 1
+            ? around(g.ox, g.oy, g.oz, (float) Math.toRadians(r[0]), (float) Math.toRadians(r[1]), (float) Math.toRadians(r[2]), s)
             : new float[] {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
         m[3] += p[0]; m[7] += p[1]; m[11] += p[2];
         for (float[] a : g.anims) {
@@ -287,19 +364,21 @@ final class CosModel {
             if (a[0] == 2) { m[3] += a[1] * w; m[7] += a[2] * w; m[11] += a[3] * w; continue; }
             float k = a[0] == 0 ? t : w;
             float rx = (float) Math.toRadians(a[1] * k), ry = (float) Math.toRadians(a[2] * k), rz = (float) Math.toRadians(a[3] * k);
-            m = mul(m, around(g.ox, g.oy, g.oz, rx, ry, rz));
+            m = mul(m, around(g.ox, g.oy, g.oz, rx, ry, rz, ONE));
         }
         if (g.parent >= 0 && g.parent != i) m = mul(mat(g.parent, t, done), m);
         return done[i] = m;
     }
 
-    /** translate(o) * Rz * Ry * Rx * translate(-o) */
-    private static float[] around(float ox, float oy, float oz, float rx, float ry, float rz) {
+    private static final float[] ONE = {1, 1, 1};
+
+    /** translate(o) * Rz * Ry * Rx * scale(s) * translate(-o) */
+    private static float[] around(float ox, float oy, float oz, float rx, float ry, float rz, float[] s) {
         float cx = (float) Math.cos(rx), sx = (float) Math.sin(rx), cy = (float) Math.cos(ry), sy = (float) Math.sin(ry), cz = (float) Math.cos(rz), sz = (float) Math.sin(rz);
         float[] r = {
-            cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx, 0,
-            sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx, 0,
-            -sy, cy * sx, cy * cx, 0};
+            cz * cy * s[0], (cz * sy * sx - sz * cx) * s[1], (cz * sy * cx + sz * sx) * s[2], 0,
+            sz * cy * s[0], (sz * sy * sx + cz * cx) * s[1], (sz * sy * cx - cz * sx) * s[2], 0,
+            -sy * s[0], cy * sx * s[1], cy * cx * s[2], 0};
         r[3] = ox - (r[0] * ox + r[1] * oy + r[2] * oz);
         r[7] = oy - (r[4] * ox + r[5] * oy + r[6] * oz);
         r[11] = oz - (r[8] * ox + r[9] * oy + r[10] * oz);
@@ -338,7 +417,11 @@ final class CosModel {
                 out[o + 2] = (z - 8) / 16f;
             }
             float nx = nrm[q * 3], ny = nrm[q * 3 + 1], nz = nrm[q * 3 + 2];
-            if (m != null) { float ax = m[0] * nx + m[1] * ny + m[2] * nz, ay = m[4] * nx + m[5] * ny + m[6] * nz, az = m[8] * nx + m[9] * ny + m[10] * nz; nx = ax; ny = ay; nz = az; }
+            if (m != null) {
+                float ax = m[0] * nx + m[1] * ny + m[2] * nz, ay = m[4] * nx + m[5] * ny + m[6] * nz, az = m[8] * nx + m[9] * ny + m[10] * nz;
+                float l = (float) Math.sqrt(ax * ax + ay * ay + az * az);
+                if (l > 1e-6f) { nx = ax / l; ny = ay / l; nz = az / l; }
+            }
             outN[q * 3] = -nx;
             outN[q * 3 + 1] = -ny;
             outN[q * 3 + 2] = nz;

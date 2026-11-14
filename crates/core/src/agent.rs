@@ -35,7 +35,7 @@ const PACK_META: &str = r#"{"pack":{"description":"Nether Client icons","pack_fo
 const PACK_FONT: &str = r#"{"providers":[{"type":"bitmap","file":"nether:font/icon.png","ascent":7,"height":8,"chars":[""]}]}"#;
 const PACK_ICON: &[u8] = include_bytes!("../res/nether-pack/icon.png");
 
-/// Unicode page e0 for 1.8.9-1.12.2 (no font providers): 9x9 icon in a 144 px page = one 16-unit cell, drawn 8x8.
+/// Unicode page e0 for 1.8.9-1.12.2 (no font providers): the 17x24 logo in a 384 px page (one 16-unit cell = 24 px).
 const PACK_PAGE: &[u8] = include_bytes!("../res/nether-pack/unicode_page_e0.png");
 
 /// Write the built-in pack into the instance and keep it switched on in options.txt (the agent only shows the
@@ -92,7 +92,7 @@ fn glyph_sizes(jar: &Path) -> Option<Vec<u8>> {
     let mut z = zip::ZipArchive::new(std::fs::File::open(jar).ok()?).ok()?;
     let mut b = Vec::new();
     z.by_name("assets/minecraft/font/glyph_sizes.bin").ok()?.read_to_end(&mut b).ok()?;
-    *b.get_mut(0xE000)? = 0x0F;
+    *b.get_mut(0xE000)? = 0x0B; // columns 0..11 of 16: the logo's 17 of 24 px
     Some(b)
 }
 

@@ -17,7 +17,7 @@ export struct MdBlock { kind: int, text: styled-text, plain: string, img: image,
 // an account cape (id "" = no cape); img = its outside face
 export struct Cape { id: string, name: string, img: image }
 
-// a Nether cosmetic card (hat, headband, aura, shield): picture rendered by the launcher (the player wearing it)
+// a Nether cosmetic card (hat, headband, mask, back, wings, aura, pet): picture rendered by the launcher (the player wearing it)
 export struct CosCard { id: string, name: string, kind: string, rarity: string, desc: string, img: image }
 // a saved Microsoft account (account panel); active = the one Play uses
 export struct Acct { uuid: string, name: string, active: bool }
@@ -295,12 +295,9 @@ export global Backend {
     in-out property <bool> ncape-busy;
     callback load-ncapes();
     callback wear-ncape(string);
-    // Nether cosmetics by slot (0 hat, 1 headband, 2 aura, 3 shield): cards, worn ids, state as for capes
-    in-out property <[CosCard]> cos-hats;
-    in-out property <[CosCard]> cos-bands;
-    in-out property <[CosCard]> cos-auras;
-    in-out property <[CosCard]> cos-shields;
-    in-out property <[string]> cos-worn: ["", "", "", ""];
+    // Nether cosmetics by slot (0 hat, 1 headband, 2 mask, 3 back, 4 wings, 5 aura, 6 pet): cards, worn ids, state as for capes
+    in-out property <[[CosCard]]> cos-items: [[], [], [], [], [], [], []];
+    in-out property <[string]> cos-worn: ["", "", "", "", "", "", ""];
     in-out property <int> cos-state: 0;
     in-out property <bool> cos-busy;
     callback load-cos();

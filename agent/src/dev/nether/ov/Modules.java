@@ -15,6 +15,7 @@ final class Modules {
     // modules the input hooks and HUD loop need every event / frame (no lookups by id there)
     static final Crosshair CROSSHAIR = new Crosshair();
     static final Zoom ZOOM = new Zoom();
+    static final Freelook FREELOOK = new Freelook();
     static final Fullbright FULLBRIGHT = new Fullbright();
     static final Waypoints WAYPOINTS = new Waypoints();
     static final MediaPlayer MEDIA = new MediaPlayer();
@@ -32,6 +33,7 @@ final class Modules {
         all.add(new Memory());
         all.add(CROSSHAIR);
         all.add(ZOOM);
+        all.add(FREELOOK);
         all.add(FULLBRIGHT);
         all.add(new Armor());
         all.add(new Potions());
@@ -362,9 +364,11 @@ final class Modules {
             }
             if (action == 0 && !zm.toggle()) zm.held = false;
         }
+        if (FREELOOK.key(key, action)) return true;
         if (press && !Input.inWorld()) return false;
         Waypoints wp = WAYPOINTS;
         if (action == 1 && wp.enabled() && key == (int) wp.num("addKey")) { wp.addHere(); return true; }
+        if (action == 1 && wp.enabled() && key == (int) wp.num("toggleKey")) { wp.flip(); return true; }
         if (action == 1 && (MEDIA.key(key) || LYRICS.key(key) || STOPWATCH.key(key))) return true;
         return false;
     }
@@ -895,7 +899,7 @@ final class Modules {
 
         /** Waypoint ticks: one per waypoint of this world inside the strip, fading with distance (full within 100 blocks, gone at 1000). */
         private void waypointTicks(float x, float y, float cx, float ppd, float span) {
-            if (!bool("points") || !WAYPOINTS.enabled() || Game.reducedDebug()) return;
+            if (!bool("points") || !WAYPOINTS.enabled() || !WAYPOINTS.bool("shown") || Game.reducedDebug()) return;
             List<java.util.Map<String, Object>> l = WAYPOINTS.list(false);
             if (l == null) return;
             for (java.util.Map<String, Object> w : l) {

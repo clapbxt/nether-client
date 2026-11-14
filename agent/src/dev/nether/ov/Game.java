@@ -498,6 +498,21 @@ final class Game {
         return fp;
     }
 
+    /** Options camera type ordinal (0 first person, 1 third person back, 2 front), -1 when unknown (1.21+ names only). */
+    static int cameraType() {
+        Object c = fabric() ? call(fld(mc, "field_1690"), "method_31044") : null;
+        return c instanceof Enum ? ((Enum<?>) c).ordinal() : -1;
+    }
+
+    static void setCameraType(int i) {
+        Object o = fabric() ? fld(mc, "field_1690") : null, c = call(o, "method_31044");
+        if (!(c instanceof Enum)) return;
+        Object[] v = ((Enum<?>) c).getDeclaringClass().getEnumConstants();
+        if (i < 0 || i >= v.length) return;
+        call(o, "method_31043", v[i]);
+        fpAt = 0;
+    }
+
     /**
      * GLFW keys bound to forward, left, back, right and jump (-1 = not a keyboard key), or false when unknown.
      * 1.21: Options key fields -> KeyMapping.key -> InputConstants.Key (type KEYSYM, code); 1.8.9: GameSettings key fields, KeyBinding.getKeyCode.
