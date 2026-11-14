@@ -18,7 +18,7 @@ const root = join(here, "..", "..");
 const content = join(root, "backend", "content");
 const pub = join(here, "public");
 const TOKEN = randomBytes(24).toString("hex");
-const PORT = Number(process.env.STUDIO_PORT || 47821);
+let PORT = Number(process.env.STUDIO_PORT || 47821);
 const MAX_BODY = 24 * 1024 * 1024;
 const ID = /^[a-z0-9_-]{1,32}$/;
 const KINDS = ["cape", "hat", "headband", "aura", "shield"];
@@ -268,7 +268,14 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, "127.0.0.1", () => {
+// a port in use (another studio, another app): try the next ones
+server.on("error", (e) => {
+  if (e.code === "EADDRINUSE" && PORT < 47840) { PORT++; server.listen(PORT, "127.0.0.1"); return; }
+  console.error(`  Can't start the studio: ${e.message}`);
+  process.exit(1);
+});
+server.listen(PORT, "127.0.0.1");
+server.on("listening", () => {
   const link = `http://127.0.0.1:${PORT}/#${TOKEN}`;
   console.log(`\n  Nether Content Studio\n  ${link}\n\n  (this link is the key: don't share it. Ctrl+C stops the studio.)\n`);
   if (!process.env.STUDIO_NO_OPEN) {
