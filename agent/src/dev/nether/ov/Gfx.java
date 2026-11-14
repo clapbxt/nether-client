@@ -468,6 +468,31 @@ final class Gfx {
         return pen;
     }
 
+    /**
+     * Text at any pixel size and sub-pixel spot (framebuffer px; x = left edge, cy = capital centre): rasterised at the
+     * next whole 8 px and drawn scaled down, so text moving or zooming in the world glides instead of stepping.
+     */
+    static void textFree(int f, float size, float x, float cy, int col, String str) {
+        int px = freePx(size);
+        float k = size / px, top = cy + size * 0.36f - (met(f, px)[0] + 2) * k, pen = -2 * k;
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+            Glyph g = glyph(f, px, c);
+            if (c != ' ') quad(x + pen, top, g.w * k, g.h * k, g.u0, g.v0, g.u1, g.v1, col, col, -1, 0);
+            pen += g.adv * k;
+        }
+    }
+
+    /** Width in framebuffer px of {@link #textFree} text. */
+    static float widthFree(int f, float size, String str) {
+        int px = freePx(size);
+        float w = 0;
+        for (int i = 0; i < str.length(); i++) w += glyph(f, px, str.charAt(i)).adv;
+        return w * size / px;
+    }
+
+    private static int freePx(float size) { return Math.min(248, Math.max(8, (int) Math.ceil(size / 8) * 8)); }
+
     static float textC(int f, float size, float cx, float cy, int col, String str, float spacing) {
         float w = width(f, size, str, spacing) - spacing;
         text(f, size, cx - w / 2, cy, col, str, false, spacing);

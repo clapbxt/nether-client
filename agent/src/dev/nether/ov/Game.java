@@ -530,6 +530,9 @@ final class Game {
      * Camera {x, y, z, yaw, pitch, vertical fov in degrees} of the last rendered frame, or null. 1.21: GameRenderer's
      * Camera (interpolated, third person aware) and its FOV modifier (sprint, speed); 1.8.9: player eye + FOV option.
      */
+    private static double fovS = Double.NaN;
+    private static long fovNs;
+
     static double[] camera() {
         double[] p = player();
         if (p == null) return null;
@@ -540,7 +543,13 @@ final class Game {
             if (x instanceof Double && y instanceof Double && z instanceof Double && yaw instanceof Float && pitch instanceof Float) {
                 cam[0] = (Double) x; cam[1] = (Double) y; cam[2] = (Double) z; cam[3] = (Float) yaw; cam[4] = (Float) pitch;
                 Object fm = fld(fld(mc, "field_1773"), "field_4019");
-                cam[5] = fov() * (fm instanceof Float && (Float) fm > 0.1f ? (Float) fm : 1f);
+                float m = fm instanceof Float && (Float) fm > 0.1f ? (Float) fm : 1f;
+                // the FOV multiplier (sprint, effects) changes 20 times a second; eased per frame as the game does
+                long ns = System.nanoTime();
+                double dt = (ns - fovNs) / 1e9;
+                fovNs = ns;
+                fovS = Double.isNaN(fovS) || dt > 0.5 ? m : fovS + (m - fovS) * (1 - Math.exp(-Math.max(0, dt) * 20));
+                cam[5] = fov() * fovS;
                 return cam;
             }
         }
