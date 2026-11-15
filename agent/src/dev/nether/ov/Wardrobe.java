@@ -13,7 +13,8 @@ import java.util.Map;
 /**
  * WARDROBE tab of the in-game menu: the player (software-rendered with the picked cape and cosmetics, drag to spin), a
  * grid of capes (None, Nether capes, account capes) and of every cosmetic slot. Clicks only pick (the preview shows the
- * picks); APPLY sends the whole look at once, REFRESH asks for new capes / cosmetics. The launcher owns the accounts and
+ * picks); APPLY sends the whole look at once, REFRESH asks for new capes / cosmetics, UPLOAD hands files picked here to the
+ * launcher, which converts and uploads them as a community item (same as its own UPLOAD). The launcher owns the accounts and
  * the services, so this page only talks to it through files in {@code <client>/wardrobe/}: the launcher writes
  * {@code state.json} (+ the skin and cape PNGs, and an "answer" to the last request), a button writes {@code request.json}
  * that the running launcher applies. No token ever reaches the game.
@@ -42,7 +43,10 @@ final class Wardrobe {
     private static long mtime = -1, nextCheck;
     /** the request waiting for the launcher (seq, 0 = none), when it was sent; refresh waits for a new state.json */
     private static double pendingSeq;
-    private static long pendingAt, refreshAt;
+    private static long pendingAt, refreshAt, pendingLimit = 20000;
+    /** UPLOAD: files picked in the dialog (waiting for the rules confirm), the dialog being open */
+    private static volatile List<String> upFiles;
+    private static volatile boolean upPicking;
     private static String note = "";
     private static boolean noteOk;
     private static long noteAt;
@@ -79,7 +83,7 @@ final class Wardrobe {
 
     private static void reload() {
         long now = System.currentTimeMillis();
-        if (pendingSeq != 0 && now - pendingAt > 20000) { pendingSeq = 0; say("The launcher didn't answer. Is it still open?", false); }
+        if (pendingSeq != 0 && now - pendingAt > pendingLimit) { pendingSeq = 0; say("The launcher didn't answer. Is it still open?", false); }
         if (refreshAt != 0 && now - refreshAt > 20000) refreshAt = 0;
         if (now < nextCheck) return;
         nextCheck = now + 500;
@@ -211,7 +215,41 @@ final class Wardrobe {
         double seq = System.currentTimeMillis();
         r.put("seq", seq);
         r.put("look", look);
-        if (request(r)) { pendingSeq = seq; pendingAt = System.currentTimeMillis(); note = ""; }
+        if (request(r)) { pendingSeq = seq; pendingAt = System.currentTimeMillis(); pendingLimit = 20000; note = ""; }
+    }
+
+    /** the shown category as a community type: cape, or the cosmetic slot */
+    private static String catType() { return cat == 0 ? "cape" : Cosmetics.SLOTS[cat - 1]; }
+
+    /** UPLOAD: the file dialog runs on its own thread (it blocks); the picked files then wait for the rules confirm. */
+    private static void pickUpload() {
+        if (upPicking || pendingSeq != 0) return;
+        if (uuid.isEmpty()) { say("Sign in with Microsoft in the launcher to upload", false); return; }
+        upPicking = true;
+        Thread t = new Thread(() -> {
+            try {
+                List<String> f = FilePick.pick("Upload to Nether: model + texture, an image, or a zip");
+                if (f == null) say("No file dialog here: use UPLOAD in the launcher's Wardrobe", false);
+                else if (!f.isEmpty()) upFiles = f.size() > 20 ? new ArrayList<>(f.subList(0, 20)) : f;
+            } finally { upPicking = false; }
+        }, "nether-upload-pick");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** The rules were confirmed: the launcher converts, checks and uploads the files, then answers. */
+    private static void sendUpload() {
+        List<String> f = upFiles;
+        upFiles = null;
+        if (f == null || f.isEmpty()) return;
+        Map<String, Object> up = new LinkedHashMap<>();
+        up.put("type", catType());
+        up.put("files", new ArrayList<Object>(f));
+        Map<String, Object> r = new LinkedHashMap<>();
+        double seq = System.currentTimeMillis();
+        r.put("seq", seq);
+        r.put("upload", up);
+        if (request(r)) { pendingSeq = seq; pendingAt = System.currentTimeMillis(); pendingLimit = 150000; say("Uploading... the launcher is converting and checking it", true); }
     }
 
     private static void refresh() {
@@ -221,9 +259,41 @@ final class Wardrobe {
         if (request(r)) { refreshAt = System.currentTimeMillis(); note = ""; }
     }
 
+    /** An outlined button with an icon and a label (dimmed while off). */
+    private static boolean smallBtn(String id, String icon, String label, float x, float y, float w, boolean on) {
+        boolean hv = on && Menu.in(x, y, w, 30);
+        float t = Menu.an(id, hv);
+        Gfx.rect(x, y, w, 30, 6, Gfx.a(Th.ov, 0.035f + 0.05f * t));
+        Gfx.ring(x, y, w, 30, 6, 1, Gfx.mix(Th.ln, Th.ln2, t));
+        int c = on ? Gfx.mix(Th.dim, Th.tx, t) : Th.mut;
+        float lw = Gfx.width(Gfx.SEMI, 11, label, 1.2f), ix = x + (w - lw - 22) / 2;
+        if (ModIcons.draw(icon, ix, y + 8, 14, c)) Gfx.text(Gfx.SEMI, 11, ix + 22, y + 15, c, label, false, 1.2f);
+        else Gfx.textC(Gfx.SEMI, 11, x + w / 2, y + 15, c, label, 1.2f);
+        return on && Menu.hit(x, y, w, 30);
+    }
+
+    private static final String[] UP_AS = {"A CAPE", "A HAT", "A HEADBAND", "A MASK", "A BACK ITEM", "WINGS", "AN AURA", "A PET"};
+
+    /** The rules card over the player: what is about to go up and the confirm. */
+    private static void confirmUpload(float x, float y, float w, float h) {
+        List<String> f = upFiles;
+        if (f == null) return;
+        Gfx.rect(x, y, w, h, 8, Gfx.a(Th.s1, 0.97f));
+        Gfx.ring(x, y, w, h, 8, 1, Gfx.a(Th.ac2, 0.55f));
+        float tx = x + 16, ty = y + 26, tw = w - 32;
+        Gfx.text(Gfx.SEMI, 12, tx, ty, Th.tx, "UPLOAD AS " + UP_AS[cat], false, 1.2f);
+        String first = new java.io.File(f.get(0)).getName();
+        Gfx.text(Gfx.UI, 11, tx, ty + 22, Th.dim, Menu.fit(f.size() == 1 ? first : f.size() + " files: " + first + ", ...", Gfx.UI, 11, tw, 0));
+        String[] rules = {"Everyone can see and wear it.", "No nudity, hate symbols or gore,", "and only things you may share.", "Breaking the rules removes it and", "can turn uploading off."};
+        for (int i = 0; i < rules.length; i++) Gfx.text(Gfx.UI, 11, tx, ty + 50 + i * 17, Th.mut, rules[i]);
+        float byy = y + h - 46, ow = tw * 0.62f;
+        if (Menu.button("wdupok", "I AGREE, UPLOAD", tx, byy, ow, 30, true)) sendUpload();
+        if (Menu.button("wdupno", "CANCEL", tx + ow + 8, byy, tw - ow - 8, 30, false)) upFiles = null;
+    }
+
     // ---------------------------------------------------------------- the player
 
-    private static final int PW = 200, PH = 290;
+    private static final int PW = 176, PH = 254;
     private static BufferedImage prev;
     private static String prevKey = "";
 
@@ -270,7 +340,7 @@ final class Wardrobe {
         for (int i = 0; i < picked.length; i++) cos[i] = Cosmetics.preview(hoverSlot == i ? hoverCos : picked[i], Cosmetics.SLOTS[i]);
 
         // ---- left: player
-        float pw = 250, ph = 296;
+        float pw = 250, ph = 258;
         boolean dirty = dirty();
         float dt = Menu.an("wddirty", dirty);
         Gfx.rectG(lx, top, pw, ph, 8, Th.s2, Th.s1);
@@ -311,10 +381,10 @@ final class Wardrobe {
         Gfx.text(Gfx.MONO, 9, lx + pw - 12 - Gfx.width(Gfx.MONO, 9, bn, 0.8f), sy + 15, Th.mut, bn, false, 0.8f);
         if (hv) Menu.tip = "Every Nether player gets the badge before their name, above their head and in chat.";
 
-        // APPLY (dimmed while nothing changed) + REFRESH
+        // APPLY (dimmed while nothing changed) + REVERT, then REFRESH + UPLOAD
         boolean busy = pendingSeq != 0, can = dirty && !busy;
-        float ay = sy + 40, rw = 34, vw = can ? 74 : 0, aw = pw - rw - 8 - (can ? vw + 8 : 0);
-        String al = busy ? "APPLYING..." : can ? "APPLY" : "APPLIED";
+        float ay = sy + 40, vw = can ? 74 : 0, aw = pw - (can ? vw + 8 : 0);
+        String al = busy ? (pendingLimit > 20000 ? "UPLOADING..." : "APPLYING...") : can ? "APPLY" : "APPLIED";
         if (can) { if (Menu.button("wdapply", al, lx, ay, aw, 30, true)) apply(); }
         else {
             Gfx.rect(lx, ay, aw, 30, 6, Gfx.a(Th.ac, 0.16f));
@@ -324,16 +394,14 @@ final class Wardrobe {
             if (Menu.button("wdrev", "REVERT", lx + aw + 8, ay, vw, 30, false)) { pickApplied(); say("Changes reverted", true); }
             if (Menu.in(lx + aw + 8, ay, vw, 30)) Menu.tip = "Go back to the look you have on now";
         }
+        float by2 = ay + 38, hw = (pw - 8) / 2;
         boolean refreshing = refreshAt != 0;
-        float rx = lx + aw + 8 + (can ? vw + 8 : 0);
-        boolean rh = Menu.in(rx, ay, rw, 30);
-        float rt = Menu.an("wdref", rh);
-        Gfx.rect(rx, ay, rw, 30, 6, Gfx.a(Th.ov, 0.035f + 0.05f * rt));
-        Gfx.ring(rx, ay, rw, 30, 6, 1, Gfx.mix(Th.ln, Th.ln2, rt));
-        int rc = refreshing ? Th.mut : Gfx.mix(Th.dim, Th.tx, rt);
-        if (!ModIcons.draw("refresh", rx + (rw - 16) / 2, ay + 7, 16, rc)) Gfx.textC(Gfx.SEMI, 11, rx + rw / 2, ay + 15, rc, "R", 0);
-        if (rh) Menu.tip = refreshing ? "Checking for new capes and cosmetics..." : "Check for new capes and cosmetics";
-        if (Menu.hit(rx, ay, rw, 30) && !refreshing) refresh();
+        if (smallBtn("wdref", "refresh", refreshing ? "CHECKING..." : "REFRESH", lx, by2, hw, !refreshing)) refresh();
+        if (Menu.in(lx, by2, hw, 30)) Menu.tip = refreshing ? "Checking for new capes and cosmetics..." : "Check for new capes, cosmetics and your uploads";
+        boolean upBusy = upPicking || busy || upFiles != null;
+        if (smallBtn("wdup", "upload", upPicking ? "CHOOSING..." : "UPLOAD", lx + hw + 8, by2, hw, !upBusy)) pickUpload();
+        if (Menu.in(lx + hw + 8, by2, hw, 30)) Menu.tip = "Upload your own " + (cat == 0 ? "cape" : KINDS[cat - 1].toLowerCase()) + " for everyone: Blockbench, Bedrock, Lunar files, .obj, PNG or a zip";
+        if (upFiles != null) confirmUpload(lx, top, pw, ph);
 
         // ---- right: category tabs, then capes or cosmetic cards
         float gx = lx + pw + 32, gw = px + Menu.PW - 28 - gx, tw = (gw - 3 * 12) / 4, th = 150, gap = 12;

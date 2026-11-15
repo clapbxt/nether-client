@@ -395,10 +395,11 @@ export component AppWindow inherits Window {
             TouchArea { pointer-event(e) => { if e.kind == PointerEventKind.down && e.button == PointerEventButton.left && self.mouse-y < root.top { Backend.win-drag(); } } }
             Image { source: @image-url("assets/nether-logo.svg"); x: 20px; y: 10px; width: 36px; height: 36px; }
             Text { x: 66px; height: root.top; text: "Nether"; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; vertical-alignment: center; }
-            // right: the mark on a flat plate
+            // right: the banner (art/wide_banner.png) on a plate
             Rectangle {
-                x: root.W - 600px; y: root.top; width: 560px; height: root.H - root.top - 40px; background: Theme.s1; border-radius: 8px; border-width: 1px; border-color: Theme.ln;
-                Image { source: @image-url("assets/nether-logo.svg"); x: (parent.width - 300px) / 2; y: (parent.height - 300px) / 2; width: 300px; height: 300px; }
+                x: root.W - 600px; y: root.top; width: 560px; height: root.H - root.top - 40px; background: Theme.s1; border-radius: 8px; clip: true;
+                Image { source: @image-url("assets/banner.jpg"); width: parent.width; height: parent.height; image-fit: cover; }
+                Rectangle { border-radius: 8px; border-width: 1px; border-color: Theme.ln; }
             }
             Heading { x: 96px; y: 216px; text: "NETHER"; font-size: 64px; }
             Heading { x: 96px; y: 296px; text: "CLIENT"; font-size: 64px; color: Theme.red2; }

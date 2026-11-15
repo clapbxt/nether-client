@@ -35,7 +35,9 @@ export component HomeScreen inherits Rectangle {
 
         // player, right side (always turning; drag to spin)
         if Backend.skin-ready: GroundShadow { x: parent.width - 330px + (280px - self.width) / 2; y: parent.height - 44px; }
-        if Backend.skin-ready: Image { x: parent.width - 330px; y: 16px; width: 280px; height: parent.height - 40px; source: Backend.skin-frame; image-fit: contain; }
+        // the frame is 3:2 (room for wings/pets); its height matches the old 280-wide 600:780 box, so the player keeps its size
+        if Backend.skin-ready: Image { height: Math.min(364px, parent.height - 40px); width: self.height * 1.5; x: parent.width - 190px - self.width / 2; y: 16px + (parent.height - 40px - self.height) / 2;
+            source: Backend.skin-frame; image-fit: contain; }
         SpinArea { x: parent.width - 330px; y: 16px; width: 280px; height: parent.height - 40px; }
 
         // welcome + status, top-left

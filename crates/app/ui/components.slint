@@ -605,6 +605,7 @@ export component SpinArea inherits TouchArea {
     mouse-cursor: self.pressed ? MouseCursor.grabbing : MouseCursor.grab;
     changed pressed => { Backend.skin-held = self.pressed; root.last = self.mouse-x; Backend.skin-wake(); }
     moved => { if self.pressed { Backend.skin-drag((self.mouse-x - root.last) / 1px); root.last = self.mouse-x; } }
+    scroll-event(e) => { Backend.skin-zoom(e.delta-y / 1px); accept }
 }
 
 // Settings-style row: title + one-line explanation on the left, a control placed by the caller on the right.

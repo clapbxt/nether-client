@@ -290,6 +290,8 @@ export global Backend {
     in-out property <image> acct-head;
     in-out property <bool> skin-held: false;
     callback skin-drag(float);
+    // scroll over the preview zooms the model
+    callback skin-zoom(float);
     // the preview needs frames again (hover, tab change, new skin)
     callback skin-wake();
     callback equip-cape(int);

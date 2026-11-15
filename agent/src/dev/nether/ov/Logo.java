@@ -28,4 +28,30 @@ final class Logo {
     }
 
     static float width(float h) { return h * W / H; }
+
+    /** brand/logo.png (art/blank_square_logo.png cropped): the fireball over the NETHER CLIENT wordmark; {w, h}, 0 = missing */
+    private static int bw = -1, bh;
+
+    private static boolean brandReady() {
+        if (bw < 0) {
+            bw = 0;
+            try {
+                byte[] b = dev.nether.agent.Hook.file.apply("brand/logo.png");
+                BufferedImage img = b == null ? null : javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(b));
+                if (img != null) { Gfx.texture("nether-brand", img, true); bw = img.getWidth(); bh = img.getHeight(); }
+            } catch (Throwable t) {
+                System.out.println("[nether-agent] brand logo: " + t);
+            }
+        }
+        return bw > 0 && Gfx.hasTexture("nether-brand");
+    }
+
+    /** Width of the brand logo h units tall (the fireball's width when the image is missing). */
+    static float brandWidth(float h) { return brandReady() ? h * bw / bh : width(h); }
+
+    /** The fireball + wordmark, h units tall, top-left at x, y (the fireball alone if the image is missing). */
+    static void brand(float x, float y, float h) {
+        if (brandReady()) Gfx.image("nether-brand", x, y, h * bw / bh, h, 0xFFFFFFFF, 0);
+        else draw(x, y, h);
+    }
 }

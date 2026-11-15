@@ -1,6 +1,4 @@
-<p align="center"><img src="crates/app/ui/assets/nether-icon.png" width="120" alt="Nether Client logo"></p>
-
-<h1 align="center">Nether Client</h1>
+<p align="center"><img src="art/wide_banner.png" alt="Nether Client"></p>
 
 <p align="center"><b>A native Minecraft launcher with a built-in client, for every version from 1.8.9 to 26.x.</b><br>
 Written in Rust (no Electron), with 33 in-game modules and a HUD you lay out yourself.<br>

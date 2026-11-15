@@ -36,7 +36,7 @@ pub struct LauncherPrefs {
 }
 
 impl Default for LauncherPrefs {
-    fn default() -> Self { LauncherPrefs { gpu: true, autostart: false, on_launch: 1, on_close: 0, calm: false, accent: 0, theme: 1, text: 0, capes: true, discord: false, auto_update: true } }
+    fn default() -> Self { LauncherPrefs { gpu: true, autostart: false, on_launch: 1, on_close: 0, calm: false, accent: 0, theme: 1, text: 0, capes: true, discord: true, auto_update: true } }
 }
 
 pub fn load(paths: &Paths) -> LauncherPrefs {

@@ -430,6 +430,59 @@ fn upload_type(ui: &AppWindow, i: i32) {
     });
 }
 
+/// What we just converted is what the service has: no download needed to show it.
+fn keep_upload(it: &Item, out: &cosimport::Imported) {
+    let ready = match out.what {
+        What::Cape => image::load_from_memory_with_format(&out.png, image::ImageFormat::Png).ok().map(|i| crate::skin::cape_frames(&i.to_rgba8())).filter(|f| !f.is_empty())
+            .map(|f| { let (skin, slim) = crate::skin::account_skin(); let card = cape_card(&skin, slim, &f[0]); Ready::Cape(f, out.frame_ms.unwrap_or(100), card) }),
+        What::Item(k) => out.model.as_deref().and_then(|m| Loaded::from_bytes(&it.id, k, m, &out.png, out.frame_ms.unwrap_or(100)).ok())
+            .map(|l| { let (skin, slim) = crate::skin::account_skin(); let card = crate::skin::card(&skin, slim, &l); Ready::Cos(Box::new(l), card) }),
+    };
+    if let Some(r) = ready { store(&it.id, r); }
+}
+
+fn upload_msg(it: &Item, dup: bool) -> String {
+    if dup && !it.mine { return format!("That's already up: “{}” by {}, selected for you", it.name, it.by); }
+    match it.status.as_str() {
+        "live" => format!("Uploaded. Everyone can see “{}” now: select it and APPLY to wear it", it.name),
+        "pending" => "Uploaded. It goes public once the safety check has run".to_string(),
+        _ => format!("Uploaded. {}", it.reason.as_deref().map(|r| { let mut c = r.chars(); c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default() }).unwrap_or_else(|| "Only you can see it".into())),
+    }
+}
+
+/// UPLOAD from the in-game wardrobe: {"type", "files": [paths]} picked in the game (the player confirmed the rules
+/// there); converted and sent like the launcher's own upload, answered through the wardrobe's state.json.
+pub fn upload_from_game(ui: &AppWindow, sh: &Arc<Shared>, seq: u64, req: &Value) {
+    let Some(sess) = session(sh) else { crate::skin::answer_game(ui, sh, seq, false, "Sign in to the launcher with Microsoft first"); return };
+    let paths: Vec<std::path::PathBuf> = req["files"].as_array().map(|a| a.iter().filter_map(|v| v.as_str()).take(20).map(std::path::PathBuf::from).filter(|p| p.is_file()).collect()).unwrap_or_default();
+    if paths.is_empty() { crate::skin::answer_game(ui, sh, seq, false, "Those files couldn't be read"); return; }
+    let asked = req["type"].as_str().and_then(What::parse);
+    let (skin, slim) = crate::skin::account_skin();
+    let (weak, sh) = (ui.as_weak(), sh.clone());
+    std::thread::spawn(move || {
+        let r = (|| -> anyhow::Result<_> {
+            let files = cosimport::Files::from_paths(&paths)?;
+            let what = cosimport::guess(&files).or(asked).unwrap_or(What::Item(Kind::Hat));
+            let (out, _, renders) = convert(&files, what, &skin, slim)?;
+            let mut name: String = out.name.trim().chars().take(32).collect();
+            if name.chars().count() < 2 { name = "My upload".into(); }
+            let (it, dup) = ugc::upload(&client(), &sess, &ugc::Upload { what: out.what, name: &name, frame_ms: out.frame_ms, model: out.model.as_deref(), png: &out.png, previews: &renders })?;
+            Ok((it, dup, out))
+        })();
+        ui_do(&weak, move |ui| match r {
+            Ok((it, dup, out)) => {
+                keep_upload(&it, &out);
+                let msg = upload_msg(&it, dup);
+                show_toast(ui, &sh, &msg);
+                let c = ui.global::<Community>();
+                if c.get_source() == 1 && c.get_page() == page_of(out.what) { load(ui, &sh, c.get_page(), false); }
+                crate::skin::answer_game(ui, &sh, seq, true, &msg);
+            }
+            Err(e) => crate::skin::answer_game(ui, &sh, seq, false, &format!("Couldn't upload: {e:#}")),
+        });
+    });
+}
+
 fn upload_send(ui: &AppWindow, sh: &Arc<Shared>) {
     let c = ui.global::<Community>();
     if c.get_up_state() != 2 || !c.get_up_ready() || !c.get_up_agree() { return; }
@@ -453,20 +506,8 @@ fn upload_send(ui: &AppWindow, sh: &Arc<Shared>) {
                 Ok(((it, dup), out)) => {
                     c.set_up_state(0);
                     if let Ok(mut u) = UP.lock() { *u = None; }
-                    // what we just converted is what the service has: no download needed to show it
-                    let ready = match out.what {
-                        What::Cape => image::load_from_memory_with_format(&out.png, image::ImageFormat::Png).ok().map(|i| crate::skin::cape_frames(&i.to_rgba8())).filter(|f| !f.is_empty())
-                            .map(|f| { let (skin, slim) = crate::skin::account_skin(); let card = cape_card(&skin, slim, &f[0]); Ready::Cape(f, out.frame_ms.unwrap_or(100), card) }),
-                        What::Item(k) => out.model.as_deref().and_then(|m| Loaded::from_bytes(&it.id, k, m, &out.png, out.frame_ms.unwrap_or(100)).ok())
-                            .map(|l| { let (skin, slim) = crate::skin::account_skin(); let card = crate::skin::card(&skin, slim, &l); Ready::Cos(Box::new(l), card) }),
-                    };
-                    if let Some(r) = ready { store(&it.id, r); }
-                    let msg = if dup && !it.mine { format!("That's already up: “{}” by {}, selected for you", it.name, it.by) }
-                        else { match it.status.as_str() {
-                            "live" => format!("Uploaded. Everyone can see “{}” now: select it and APPLY to wear it", it.name),
-                            "pending" => "Uploaded. It goes public once the safety check has run".to_string(),
-                            _ => format!("Uploaded. {}", it.reason.as_deref().map(|r| { let mut c = r.chars(); c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default() }).unwrap_or_else(|| "Only you can see it".into())),
-                        } };
+                    keep_upload(&it, &out);
+                    let msg = upload_msg(&it, dup);
                     show_toast(ui, &sh, &msg);
                     // show it: its page, COMMUNITY, MINE (ALL when it's someone else's), picked
                     let page = page_of(out.what);

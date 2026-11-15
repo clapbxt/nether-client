@@ -439,10 +439,18 @@ fn play_session(sh: &Shared) -> Result<Session, String> {
 fn launch_opts(sh: &Shared, name: &str, version: &str, ram_gb: i32, loader_label: &str, java: u32, shared: bool, session: Session) -> LaunchOpts {
     client::migrate(sh, name);
     let saved = instances::load(&sh.paths).and_then(|l| l.into_iter().find(|d| d.name == name)).unwrap_or_default();
+    let uname = session.name.clone();
     LaunchOpts {
         loader: Loader::from_label(loader_label), version: version.into(), game_dir: sh.paths.instance(name), session, ram_mb: (ram_gb.max(1) * 1024) as u32,
         java_major: (java > 0).then_some(java), client_config: client::instance_file(sh, name, shared), client: true, groups: None,
-        extra_jvm: nether_core::launch::split_args(&saved.jvm_args),
+        extra_jvm: {
+            let mut j = nether_core::launch::split_args(&saved.jvm_args);
+            // the game's agent shows its own Discord status (the launcher steps aside while a game runs)
+            if let Some(id) = discord::game_prop(&sh.paths, prefs::load(&sh.paths).discord) {
+                j.extend([format!("-Dnether.discord={id}"), format!("-Dnether.discordVer={version}"), format!("-Dnether.discordLoader={loader_label}"), format!("-Dnether.discordName={uname}")]);
+            }
+            j
+        },
         window: (saved.width >= 320 && saved.height >= 240).then_some((saved.width, saved.height)),
         fullscreen: saved.fullscreen,
         quick_play: None,
@@ -541,7 +549,7 @@ fn start_launch(weak: slint::Weak<AppWindow>, sh: Arc<Shared>, name: String, ver
             Ok(mut child) => {
                 sh.running.lock().unwrap_or_else(|e| e.into_inner()).insert(name.clone(), child.id());
                 applog::line(&format!("started {name} ({version}, {loader_label}), pid {}", child.id()));
-                discord::activity(&sh.paths, Some(discord::Activity { version: version.clone(), loader: loader_label.clone(), since: now().max(0) as u64 }));
+                discord::idle(&sh.paths, false);
                 let (sh3, n3) = (sh.clone(), name.clone());
                 let text = if offline { format!("{name} started (offline: sign in for multiplayer)") } else { format!("{name} started") };
                 ui_do(&weak, move |ui| {
@@ -584,7 +592,7 @@ fn start_launch(weak: slint::Weak<AppWindow>, sh: Arc<Shared>, name: String, ver
                 ui_do(&weak, move |ui| {
                     let b = ui.global::<Backend>();
                     b.set_running_count((b.get_running_count() - 1).max(0));
-                    if b.get_running_count() == 0 { discord::activity(&sh3.paths, None); }
+                    if b.get_running_count() == 0 { discord::idle(&sh3.paths, true); }
                     // bring the launcher back if it stepped aside for the game
                     if prefs::load(&sh3.paths).on_launch != 0 && b.get_running_count() == 0 { prefs::show(ui); }
                     edit_inst(ui, &sh3, &name, |i| { i.running = false; i.stopping = false; i.secs += rest; i.hours = i.secs / 3600; });
@@ -899,6 +907,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // ---- player preview (3D skin + cape): renders only while it changes or spins under the pointer ----
     if backend.get_acct_state() == 3 { skin::load_cached(ui.as_weak(), shared.clone()); } else { skin::load(ui.as_weak(), shared.clone(), vec![], vec![]); }
     backend.on_skin_drag(skin::drag);
+    backend.on_skin_zoom(skin::zoom);
     skin::init(&ui);
     skin::watch(&ui, shared.clone());
     backend.on_skin_wake(skin::wake);

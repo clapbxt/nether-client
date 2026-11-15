@@ -55,6 +55,7 @@ svg { flex: none; }
 .nav-in { display: flex; align-items: center; gap: 32px; height: 64px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font: 700 24px/1 var(--pixel); letter-spacing: .04em; }
 .brand img { image-rendering: pixelated; }
+.brand img.wordmark { image-rendering: auto; width: auto; height: 12px; }
 .links { display: flex; gap: 4px; margin-right: auto; }
 .links a { font: 400 16px/1 var(--pixel); letter-spacing: .04em; color: var(--dim); text-decoration: none; padding: 10px 12px; border-radius: 6px; transition: color .11s, background .11s; }
 .links a:hover { color: var(--tx); background: rgba(255, 255, 255, .05); }

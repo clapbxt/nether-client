@@ -143,15 +143,16 @@ export component WardrobeScreen inherits Rectangle {
     Rectangle {
         x: 56px; y: 100px; width: 380px; height: 660px; background: Theme.s1; border-radius: 8px; border-width: 1px; border-color: Theme.ln; clip: true;
         if Backend.skin-ready: GroundShadow { x: (parent.width - self.width) / 2; y: 488px; }
-        if Backend.skin-ready: Image { x: 12px; y: 56px; width: parent.width - 24px; height: 490px; source: Backend.skin-frame; image-fit: contain; }
+        // 3:2 frame at the old 356-wide 600:780 box height (same player size); the plate clips the sides
+        if Backend.skin-ready: Image { height: 463px; width: self.height * 1.5; x: (parent.width - self.width) / 2; y: 70px; source: Backend.skin-frame; image-fit: contain; }
         SpinArea { height: parent.height - 70px; }
         if !Backend.skin-ready: Text { text: "Loading skin…"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }
         nm := Text { x: 20px; y: 16px; width: Math.min(self.preferred-width, 250px); height: 32px; overflow: elide;
             text: root.picked ? SkinLib.skins[root.sel].name : (root.signed ? Backend.acct-name : "Player");
             color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; vertical-alignment: center; }
         if root.picked: Chip { x: parent.width - self.width - 16px; y: 21px; text: "Preview"; }
-        if root.page >= 1: IconBtn { x: parent.width - self.width - 14px; y: 16px; size: 32px; d: Ico.refresh;
-            tip: Backend.look-refreshing ? "Checking…" : "Check for new capes and cosmetics"; opacity: Backend.look-refreshing ? 0.5 : 1;
+        if root.page >= 1: Btn { x: parent.width - self.width - 14px; y: 14px; height: 36px; icon: Ico.refresh;
+            text: Backend.look-refreshing ? "CHECKING…" : "REFRESH"; enabled: !Backend.look-refreshing;
             clicked => { Backend.refresh-look(); if Community.source == 1 { Community.load(root.page); } } }
         // signed out: wearing needs the account
         if root.picked && !root.signed: Rectangle {

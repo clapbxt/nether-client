@@ -518,6 +518,12 @@ pub fn export(ui: &AppWindow, sh: &Shared) {
     let _ = nether_core::store::write_atomic(&dir.join("state.json"), &serde_json::to_vec_pretty(&st).unwrap_or_default());
 }
 
+/// Answer an in-game request (the game shows msg) and publish the wardrobe again.
+pub(crate) fn answer_game(ui: &AppWindow, sh: &Shared, seq: u64, ok: bool, msg: &str) {
+    ANSWER.with(|a| *a.borrow_mut() = Some((seq, ok, msg.to_string())));
+    export(ui, sh);
+}
+
 /// Apply what the game asks for (a request.json in the wardrobe folder), polled while the launcher runs.
 pub fn watch(ui: &AppWindow, sh: Arc<Shared>) {
     let weak = ui.as_weak();
@@ -535,10 +541,11 @@ pub fn watch(ui: &AppWindow, sh: Arc<Shared>) {
 }
 
 /// A request from the in-game wardrobe: {"seq", "look": {"nether", "account", "cosmetics": {slot: id}}} (keys present
-/// = wanted, "" = none) or {"seq", "refresh": true}.
+/// = wanted, "" = none), {"seq", "refresh": true} or {"seq", "upload": {"type", "files"}}.
 fn apply_request(ui: &AppWindow, sh: &Arc<Shared>, req: &Value) {
     let seq = req["seq"].as_f64().unwrap_or(0.0) as u64;
     if req["refresh"].as_bool() == Some(true) { refresh(ui, sh); return; }
+    if req["upload"].is_object() { crate::community::upload_from_game(ui, sh, seq, &req["upload"]); return; }
     let l = &req["look"];
     if !l.is_object() { return; }
     let b = ui.global::<Backend>();
@@ -625,7 +632,8 @@ fn tick(ui: &AppWindow, dt: f32) -> bool {
         // pixels actually shown: the tallest preview (Wardrobe, 490 stage px) at the window's stage scale
         let win = ui.window().size();
         let fh = ((490.0 * (win.width as f32 / 1440.0).min(win.height as f32 / 900.0)).round() as u32).clamp(360, H);
-        let dims = (fh * W / H, fh);
+        // wider than the 600:780 card frame so wings, pets and auras have room around the full-size player
+        let dims = (fh * 3 / 2, fh);
         let resized = DIMS.with(|d| d.replace(dims)) != dims;
         if !spin && !dirty && !resized && !anim && look.slim == slim { return; }
         look.slim = slim;
@@ -655,30 +663,22 @@ fn shown_items() -> [Option<Rc<Loaded>>; SLOTS] {
 pub fn render(look: &Look, yaw: f32) -> SharedPixelBuffer<Rgba8Pixel> { render_at(look, yaw, W, H, false) }
 
 thread_local! {
-    /// the live preview's framing, kept until the worn items change (fitting samples seconds of animation)
-    static FIT: RefCell<(String, Option<nether_core::preview::View>)> = RefCell::new((String::new(), None));
+    /// the live preview's zoom (scroll wheel over the model); 1 = the full-body size
+    static ZOOM: std::cell::Cell<f32> = const { std::cell::Cell::new(1.0) };
 }
 
-/// Same frame at another size (keep the 600:780 ratio); the live preview renders only as many pixels as it shows.
-/// `fit` frames the worn cosmetics too (pets, wings, auras) instead of the bare player.
-pub fn render_at(look: &Look, yaw: f32, fw: u32, fh: u32, fit: bool) -> SharedPixelBuffer<Rgba8Pixel> {
+/// Same frame at another size; the live preview renders only as many pixels as it shows.
+/// `live` adds the worn cosmetics (pets, wings, auras) and the scroll zoom; the player keeps its full-body size.
+pub fn render_at(look: &Look, yaw: f32, fw: u32, fh: u32, live: bool) -> SharedPixelBuffer<Rgba8Pixel> {
     use nether_core::preview::View;
     let mut buf = SharedPixelBuffer::<Rgba8Pixel>::new(fw, fh);
     // the depth buffer is reused between frames (a fresh 2 MB zeroed Vec per frame at 30 fps is pure churn)
     let mut depth = DEPTH.with(|d| std::mem::take(&mut *d.borrow_mut()));
-    let shown = if fit { shown_items() } else { Default::default() };
+    let shown = if live { shown_items() } else { Default::default() };
     let items: [Option<&Loaded>; SLOTS] = std::array::from_fn(|i| shown[i].as_deref());
     let t = START.with(|s| s.elapsed());
     let plook = nether_core::preview::Look { skin: &look.skin, slim: look.slim, cape: look.cape.as_deref(), items };
-    let view = if !fit { View::full(yaw) } else {
-        let key: String = shown.iter().map(|s| s.as_ref().map_or("", |l| l.id.as_str())).collect::<Vec<_>>().join(",");
-        let v = FIT.with(|f| {
-            let mut f = f.borrow_mut();
-            if f.0 != key || f.1.is_none() { *f = (key, Some(View::fit_turning(&plook, 0., W, H, 0.9))); }
-            f.1.unwrap()
-        });
-        View { yaw, ..v }
-    };
+    let view = if live { View { zoom: ZOOM.with(|z| z.get()), ..View::full(yaw) } } else { View::full(yaw) };
     nether_core::preview::render_into(buf.make_mut_bytes(), fw, fh, &mut depth, &plook, view, t.as_secs_f64(), t.as_millis() as u64);
     DEPTH.with(|d| *d.borrow_mut() = depth);
     buf
@@ -687,6 +687,12 @@ pub fn render_at(look: &Look, yaw: f32, fw: u32, fh: u32, fit: bool) -> SharedPi
 /// Turn the model by a mouse drag of `dx` logical pixels.
 pub fn drag(dx: f32) {
     YAW.with(|y| *y.borrow_mut() += dx * 0.012);
+    mark_dirty();
+}
+
+/// Zoom the live preview by a scroll of `dy` logical pixels (wheel up = closer).
+pub fn zoom(dy: f32) {
+    ZOOM.with(|z| z.set((z.get() * (dy * 0.0015).exp()).clamp(0.6, 2.2)));
     mark_dirty();
 }
 

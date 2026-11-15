@@ -67,6 +67,8 @@ $ov = Get-ChildItem (Join-Path $cls "dev\nether\ov") -Filter *.class | ForEach-O
 Set-Content (Join-Path $cls "ov.list") $ov -Encoding ascii
 Copy-Item (Join-Path $root "res\fonts") (Join-Path $cls "fonts") -Recurse
 Copy-Item (Join-Path $root "res\names") (Join-Path $cls "names") -Recurse
+# brand art (made from art/ by the launcher's asset step: fireball + NETHER CLIENT wordmark)
+Copy-Item (Join-Path $root "res\brand") (Join-Path $cls "brand") -Recurse
 # module icons (design/module-icons/<id>.svg, read by ov/ModIcons)
 Copy-Item (Join-Path $root "..\design\module-icons") (Join-Path $cls "icons") -Recurse
 # Hook must sit on the bootstrap class path so every loader (incl. Fabric Knot) can see it

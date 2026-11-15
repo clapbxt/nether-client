@@ -29,3 +29,9 @@ node_modules/
 dist/
 .worktrees/
 .overnight/
+
+# brand art (art/) and the assets made from it
+!art/*.png
+!crates/app/ui/assets/*.png
+!site/assets/*.png
+!agent/res/brand/*.png

@@ -373,15 +373,9 @@ final class MainMenu {
             mark(centred ? x - s / 2 : x, y, s);
             sy = y + 70 * sc;
         } else {
-            float s = 46 * sc;
-            mark(centred ? x - s / 2 : x + 2, y, s);
-            if (centred) {
-                Gfx.textC(Gfx.HEAD, 34 * sc, x, y + 80 * sc, Gfx.ICE, "NETHER", 0);
-                Gfx.textC(Gfx.UI, 11 * sc, x, y + 104 * sc, Gfx.DIM, "CLIENT", 0);
-            } else {
-                Gfx.text(Gfx.HEAD, 34 * sc, x, y + 80 * sc, Gfx.ICE, "NETHER");
-                Gfx.text(Gfx.UI, 11 * sc, x + 2, y + 104 * sc, Gfx.DIM, "CLIENT");
-            }
+            // the brand logo (fireball over the NETHER CLIENT wordmark), 116 tall
+            float h = 116 * sc;
+            Logo.brand(centred ? x - Logo.brandWidth(h) / 2 : x, y, h);
             sy = y + 122 * sc;
         }
         if (MODULE.bool("splash") && splash != null) {

@@ -43,6 +43,7 @@ public final class Overlay {
         Config.init();
         Gfx.init();
         inited = true;
+        Discord.start();
         System.out.println("[nether-agent] overlay ready (" + GlBackend.cur.name() + ")");
     }
 
@@ -66,6 +67,7 @@ public final class Overlay {
             Input.ww = Math.max(1, sz[2]);
             Input.wh = Math.max(1, sz[3]);
             Plat.cur.tick();
+            Discord.tick();
 
             // dev: open the menu / HUD editor after -Dnether.menuAt seconds (default at once), so in-world shots come first
             if (menuAt == 0) menuAt = now + Long.getLong("nether.menuAt", 0L) * 1_000_000_000L;

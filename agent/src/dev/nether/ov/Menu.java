@@ -598,11 +598,11 @@ final class Menu {
 
     private static void hub(float e) {
         Gfx.rect(0, 0, W, H, 0, Gfx.a(0xFF000000, Th.light() ? 0.18f : 0.34f));
-        float lh = 120, sq = 52, mw = 232, gap = 8, rw = sq * 2 + mw + gap * 2; // logo 120 = 5 units per sprite pixel (crisp)
+        float lh = 150, sq = 52, mw = 232, gap = 8, rw = sq * 2 + mw + gap * 2; // fireball + NETHER CLIENT wordmark
         float y = (H - (lh + 24 + sq)) / 2 + (1 - e) * 14, x = (W - rw) / 2, by = y + lh + 24;
         float a0 = Gfx.alpha, kl = k(tS, 0, 0.34f), ks = k(tS, 0.12f, 0.3f), km = k(tS, 0.07f, 0.3f);
         Gfx.alpha = a0 * kl;
-        Logo.draw(W / 2 - Logo.width(lh) / 2, y - (1 - kl) * 18, lh);
+        Logo.brand(W / 2 - Logo.brandWidth(lh) / 2, y - (1 - kl) * 18, lh);
         Gfx.alpha = a0 * ks;
         boolean bs = hubBtn("hs", x - (1 - ks) * 16, by + (1 - ks) * 14, sq, sq, "settings", null);
         Gfx.alpha = a0 * km;

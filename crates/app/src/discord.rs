@@ -1,6 +1,8 @@
 //! Discord Rich Presence (opt-in, off by default). Talks only to the Discord app on this PC over its local IPC
-//! pipe; nothing goes over the network from us. Shows "Minecraft <version> · <loader>" and the play time, never the
-//! instance name or a server address. Hidden entirely until a Discord application id is configured.
+//! pipe; nothing goes over the network from us. The launcher shows "In the launcher" while no game runs; while one
+//! runs, the game's own agent (`ov/Discord.java`, started by `-Dnether.discord`, see `main::launch_opts`) shows
+//! "Singleplayer|Multiplayer · <version>", "<ign> · <loader>" and the play time, so either one open works alone and the launcher steps aside
+//! when both are. Never the instance name, world or server address. Hidden until a Discord application id is configured.
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::sync::mpsc::{channel, Sender};
@@ -11,7 +13,7 @@ use serde_json::{json, Value};
 
 /// Nether Client's Discord application id (empty = feature hidden). Override: env NETHER_DISCORD_APP_ID or
 /// config.json {"discord_app_id": "..."}.
-const DEFAULT_APP_ID: &str = "";
+const DEFAULT_APP_ID: &str = "1571524080341876868";
 
 pub fn app_id(paths: &Paths) -> Option<String> {
     let cfg = nether_core::store::config(paths);
@@ -22,10 +24,12 @@ pub fn app_id(paths: &Paths) -> Option<String> {
         .filter(|s| (15..=25).contains(&s.len()) && s.bytes().all(|b| b.is_ascii_digit()))
 }
 
-#[derive(Clone)]
-pub struct Activity { pub version: String, pub loader: String, pub since: u64 }
+enum Msg { Enabled(bool), Idle(bool) }
 
-enum Msg { Enabled(bool), Act(Option<Activity>) }
+fn start_secs() -> u64 {
+    static START: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    *START.get_or_init(|| std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0))
+}
 
 static TX: Mutex<Option<Sender<Msg>>> = Mutex::new(None);
 
@@ -35,15 +39,15 @@ fn send(paths: &Paths, m: Msg) {
         let Some(id) = app_id(paths) else { return };
         let (tx, rx) = channel::<Msg>();
         std::thread::Builder::new().name("discord-rpc".into()).spawn(move || {
-            let (mut on, mut act, mut pipe): (bool, Option<Activity>, Option<File>) = (false, None, None);
+            let (mut on, mut idle, mut pipe): (bool, bool, Option<File>) = (false, true, None);
             while let Ok(m) = rx.recv() {
-                match m { Msg::Enabled(e) => on = e, Msg::Act(a) => act = a }
+                match m { Msg::Enabled(e) => on = e, Msg::Idle(i) => idle = i }
                 if !on { pipe = None; continue; } // dropping the pipe clears our status in Discord
                 // one reconnect attempt per change: Discord may have been restarted since the last one
                 for _ in 0..2 {
                     if pipe.is_none() { pipe = connect(&id); }
                     let Some(p) = pipe.as_mut() else { break };
-                    if set_activity(p, act.as_ref()).is_ok() { break; }
+                    if set_activity(p, idle).is_ok() { break; }
                     pipe = None;
                 }
             }
@@ -55,8 +59,10 @@ fn send(paths: &Paths, m: Msg) {
 
 /// Turn the feature on or off (launcher setting).
 pub fn enable(paths: &Paths, on: bool) { send(paths, Msg::Enabled(on)); }
-/// A game started (Some) or the last one closed (None).
-pub fn activity(paths: &Paths, a: Option<Activity>) { send(paths, Msg::Act(a)); }
+/// A game started (false: its agent owns the status) or the last one closed (true: back to "In the launcher").
+pub fn idle(paths: &Paths, idle: bool) { send(paths, Msg::Idle(idle)); }
+/// Value for `-Dnether.discord`: the application id when the setting is on, so the game shows its own status.
+pub fn game_prop(paths: &Paths, on: bool) -> Option<String> { if on { app_id(paths) } else { None } }
 
 fn frame(p: &mut File, op: u32, body: &Value) -> std::io::Result<Value> {
     let data = body.to_string();
@@ -85,11 +91,11 @@ fn connect(id: &str) -> Option<File> {
     })
 }
 
-fn set_activity(p: &mut File, a: Option<&Activity>) -> std::io::Result<()> {
-    let activity = a.map(|a| json!({
-        "details": format!("Minecraft {}", a.version),
-        "state": format!("{} · Nether Client", a.loader),
-        "timestamps": { "start": a.since },
+fn set_activity(p: &mut File, idle: bool) -> std::io::Result<()> {
+    let activity = idle.then(|| json!({
+        "details": "In the launcher",
+        "state": "Nether Client",
+        "timestamps": { "start": start_secs() },
         "assets": { "large_image": "nether", "large_text": "Nether Client" },
     }));
     let nonce = format!("{:x}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0));
