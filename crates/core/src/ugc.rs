@@ -35,10 +35,9 @@ pub struct Item {
     pub png: String,
     #[serde(default = "ms100")]
     pub ms: u32,
+    /// players wearing it right now
     #[serde(default)]
     pub uses: u64,
-    #[serde(default)]
-    pub favs: u64,
     #[serde(default)]
     pub created: i64,
     /// live (everyone), private (only its uploader: the safety check was unsure), pending (check not run yet), removed
@@ -47,9 +46,6 @@ pub struct Item {
     /// why it is private or removed (own items only)
     #[serde(default)]
     pub reason: Option<String>,
-    /// hearted by the signed-in player
-    #[serde(default)]
-    pub fav: bool,
     /// uploaded by the signed-in player
     #[serde(default)]
     pub mine: bool,
@@ -65,7 +61,7 @@ impl Item {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Filter { All, Mine, Favs }
+pub enum Filter { All, Mine }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Sort { Top, New }
 
@@ -92,14 +88,14 @@ fn api() -> Result<String> {
     Ok(a)
 }
 
-/// Browse the community items of a type: everyone's public ones (`All`), yours (any status), or your hearted ones.
-/// Signed in (`s`) = items come with your hearts.
+/// Browse the community items of a type: everyone's public ones (`All`) or yours (any status).
+/// Signed in (`s`) = your own items say so.
 pub fn browse(c: &Client, s: Option<&Session>, what: What, filter: Filter, sort: Sort, q: &str, page: u32) -> Result<Page> {
     let api = api()?;
-    let f = match filter { Filter::All => "all", Filter::Mine => "mine", Filter::Favs => "favs" };
+    let f = match filter { Filter::All => "all", Filter::Mine => "mine" };
     let query = [("type", what.as_str()), ("filter", f), ("sort", if sort == Sort::New { "new" } else { "top" }), ("q", q.trim()), ("page", &page.to_string())];
     let url = format!("{api}/v1/ugc");
-    // signed in = hearts come back; if the sign-in fails, everyone's list still loads (without them)
+    // if the sign-in fails, everyone's list still loads
     let r = match s {
         Some(s) if filter == Filter::All => authed(c, s, |t| c.get(&url).query(&query).bearer_auth(t)).or_else(|_| Ok::<_, anyhow::Error>(c.get(&url).query(&query).send()?))?,
         Some(s) => authed(c, s, |t| c.get(&url).query(&query).bearer_auth(t))?,
@@ -206,14 +202,6 @@ pub fn delete(c: &Client, s: &Session, id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Heart (or un-heart) an item.
-pub fn favorite(c: &Client, s: &Session, id: &str, on: bool) -> Result<()> {
-    if !is_ugc(id) { bail!("bad id"); }
-    let url = format!("{}/v1/ugc/{id}/fav", api()?);
-    check(authed(c, s, |t| if on { c.put(&url) } else { c.delete(&url) }.bearer_auth(t))?)?;
-    Ok(())
-}
-
 /// Report reasons the service takes.
 pub const REPORT_REASONS: [(&str, &str); 4] = [("sexual", "Nudity or sexual content"), ("hate", "Hate symbol or slur"), ("gore", "Gore"), ("other", "Something else that breaks the rules")];
 
@@ -280,7 +268,7 @@ mod tests {
 
     #[test]
     fn item_json() {
-        let it: Item = serde_json::from_str(r#"{"id":"u-abcdefghij12","type":"hat","name":"Top","by":"Alice","model":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","png":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","ms":100,"uses":3,"favs":1,"created":1,"status":"live"}"#).unwrap();
+        let it: Item = serde_json::from_str(r#"{"id":"u-abcdefghij12","type":"hat","name":"Top","by":"Alice","model":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","png":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","ms":100,"uses":3,"created":1,"status":"live"}"#).unwrap();
         assert!(it.valid() && it.public() && it.what() == Some(What::Item(crate::cosmetics::Kind::Hat)));
         let cape: Item = serde_json::from_str(r#"{"id":"u-abcdefghij13","type":"cape","name":"C","png":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","model":null,"status":"private","mine":true,"reason":"only you can see it"}"#).unwrap();
         assert!(cape.valid() && !cape.public() && cape.mine);

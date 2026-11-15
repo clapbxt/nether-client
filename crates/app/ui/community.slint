@@ -1,18 +1,18 @@
 // Wardrobe COMMUNITY: capes and cosmetics players upload (Rust: community.rs, core ugc.rs + cosimport.rs). One NETHER |
 // COMMUNITY switch for the capes page and every cosmetic page; browse by most used / newest, search names and creators,
-// heart, report; your uploads show whether they are public. Upload converts the files here (Blockbench, Bedrock /
+// report; your uploads show whether they are public. Upload converts the files here (Blockbench, Bedrock /
 // GeckoLib, Lunar .gek, .obj, images, zips) and the service checks every upload before anyone else sees it.
 import { Theme } from "theme.slint";
 import { Backend } from "structs.slint";
 import { Eyebrow, Btn, Seg, IconBtn, Icon, Ico, Hatch, Field, LinkBtn, Scrim, Toggle, Dropdown } from "components.slint";
 
 // status: 0 public, 1 only you (the safety check was unsure), 2 waiting for the check, 3 removed
-export struct CommItem { id: string, name: string, by: string, uses: string, img: image, has-img: bool, fav: bool, mine: bool, status: int, note: string }
+export struct CommItem { id: string, name: string, by: string, uses: string, img: image, has-img: bool, mine: bool, status: int, note: string }
 
 export global Community {
     // 0 = the Nether catalog, 1 = community uploads (one switch for every wardrobe page)
     in-out property <int> source: 0;
-    // 0 every public item, 1 hearted, 2 your uploads · 0 most used, 1 newest
+    // 0 every public item, 1 your uploads · 0 most equipped, 1 newest
     in-out property <int> filter: 0;
     in-out property <int> sort: 0;
     in-out property <string> query;
@@ -27,7 +27,6 @@ export global Community {
     callback load(int);
     callback load-more();
     callback pick(string);
-    callback heart(string, bool);
     callback remove(string);
     callback report(string, string);
     // upload dialog: 0 closed, 1 reading the files, 2 ready to send, 3 sending
@@ -71,12 +70,12 @@ export component CommBar inherits Rectangle {
         sf := Field { x: 0px; y: -3px; width: 360px; search: true; placeholder: "Search by name or creator"; text <=> Community.query;
             edited => { root.typing = true; } accepted => { root.typing = false; Community.load(root.page); } }
         Timer { interval: 450ms; running: root.typing; triggered => { root.typing = false; Community.load(root.page); } }
-        Seg { x: 376px; items: ["ALL", "LIKED", "MINE"]; current: Community.filter; changed(i) => { Community.filter = i; Community.load(root.page); } }
+        Seg { x: 376px; items: ["ALL", "MINE"]; current: Community.filter; changed(i) => { Community.filter = i; Community.load(root.page); } }
         Seg { x: parent.width - self.width; items: ["TOP", "NEW"]; current: Community.sort; changed(i) => { Community.sort = i; Community.load(root.page); } }
     }
 }
 
-// one community card: the player wearing it (cosmetics) or its outside face (capes), name, creator, uses, heart
+// one community card: the player wearing it (cosmetics) or its outside face (capes), name, creator, how many wear it
 component CommCard inherits Rectangle {
     in property <CommItem> item;
     in property <bool> worn;
@@ -87,7 +86,7 @@ component CommCard inherits Rectangle {
     callback hovered(bool);
     width: 220px; height: 276px;
     border-radius: 8px;
-    property <bool> hot: ta.has-hover || hb.hovered || rb.hovered;
+    property <bool> hot: ta.has-hover || rb.hovered;
     background: root.hot ? Theme.s2 : Theme.s1;
     opacity: (root.busy && !root.worn) || root.item.status == 3 ? 0.6 : 1;
     animate background { duration: Theme.fast; }
@@ -116,9 +115,7 @@ component CommCard inherits Rectangle {
             pl := Text { text: root.worn ? (root.applied ? "EQUIPPED" : "SELECTED") : "SELECT"; color: root.worn ? #ffffff : Theme.tx;
                 font-family: Theme.ui; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 0.6px; horizontal-alignment: center; vertical-alignment: center; }
         }
-        // heart (others' public items) / delete (yours) / report, bottom corners of the picture
-        hb := IconBtn { x: 8px; y: parent.height - self.height - 8px; size: 28px; d: Ico.heart; hot: root.item.fav; visible: root.signed && !root.item.mine && (root.hot || root.item.fav);
-            tip: ""; clicked => { Community.heart(root.item.id, !root.item.fav); } }
+        // delete (yours) / report (others'), bottom corner of the picture
         rb := IconBtn { x: parent.width - self.width - 8px; y: parent.height - self.height - 8px; size: 28px; visible: root.signed && root.hot;
             d: root.item.mine ? Ico.trash : "M 2.5 11 L 2.5 1.5 M 2.5 1.8 L 9.8 1.8 L 8 4.4 L 9.8 7 L 2.5 7"; danger: true;
             clicked => {
@@ -140,7 +137,7 @@ export component CommGrid inherits Flickable {
     property <string> sel: root.page == 1 ? Backend.ncape-sel : Backend.cos-sel[root.slot];
     property <string> worn: root.page == 1 ? Backend.ncape-worn : Backend.cos-worn[root.slot];
     // MINE ends in an add tile
-    property <int> tiles: Community.items.length + (Community.filter == 2 && root.signed ? 1 : 0);
+    property <int> tiles: Community.items.length + (Community.filter == 1 && root.signed ? 1 : 0);
     content-height: Math.ceil(root.tiles / 4) * 288px + (Community.more ? 64px : 0px) + 100px;
     init => { if Community.page != root.page || Community.state == 0 { Community.load(root.page); } }
     changed page => { Community.load(root.page); }
@@ -152,7 +149,7 @@ export component CommGrid inherits Flickable {
             clicked => { Community.pick(c.id); }
             hovered(on) => { if root.page >= 2 { Backend.hover-cos(on ? c.id : ""); } }
         }
-        if Community.filter == 2 && root.signed: Rectangle {
+        if Community.filter == 1 && root.signed: Rectangle {
             x: mod(Community.items.length, 4) * 232px; y: floor(Community.items.length / 4) * 288px; width: 220px; height: 276px; border-radius: 8px;
             background: adt.has-hover ? Theme.hov : transparent; border-width: 1px; border-color: adt.has-hover ? Theme.mut : Theme.ln2;
             animate background, border-color { duration: Theme.fast; }
@@ -169,7 +166,7 @@ export component CommGrid inherits Flickable {
         Text { x: 28px; width: parent.width - 56px; vertical-alignment: center; color: Theme.dim; font-family: Theme.ui; font-size: 15px * Theme.ts; wrap: word-wrap;
             text: Community.state == 1 ? "Loading community uploads…" : Community.state == 3 ? Community.message
                 : Community.query != "" ? "Nothing matches “\{Community.query}”."
-                : Community.filter == 1 ? "Nothing liked yet. Heart an item to keep it here." : "No uploads here yet. Be the first: UPLOAD at the top right."; }
+                : "No uploads here yet. Be the first: UPLOAD at the top right."; }
     }
 }
 

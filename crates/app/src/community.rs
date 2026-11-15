@@ -1,4 +1,4 @@
-//! Wardrobe COMMUNITY (ui/community.slint): browse, heart, report, delete and upload community capes and cosmetics
+//! Wardrobe COMMUNITY (ui/community.slint): browse, report, delete and upload community capes and cosmetics
 //! (nether_core::ugc, files converted by nether_core::cosimport), plus the loaded items the preview (skin.rs) and the
 //! in-game wardrobe (skin::export) use. Lists and pictures load off the UI thread; results from an older list are
 //! dropped (GEN).
@@ -51,11 +51,11 @@ fn session(sh: &Shared) -> Option<Session> { sh.session.lock().ok().and_then(|s|
 fn rgba(img: &RgbaImage) -> Image { Image::from_rgba8(SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(img.as_raw(), img.width(), img.height())) }
 
 fn uses_text(n: u64) -> String {
-    if n == 0 { return "no uses yet".into(); }
+    if n == 0 { return "not equipped yet".into(); }
     let s = n.to_string();
     let mut out = String::new();
     for (i, c) in s.chars().enumerate() { if i > 0 && (s.len() - i) % 3 == 0 { out.push(','); } out.push(c); }
-    format!("{out} {}", if n == 1 { "use" } else { "uses" })
+    format!("{out} equipped")
 }
 
 fn status(it: &Item) -> i32 { match it.status.as_str() { "live" => 0, "private" => 1, "pending" => 2, _ => 3 } }
@@ -70,7 +70,7 @@ fn row(it: &Item) -> CommItem {
     };
     CommItem {
         id: it.id.as_str().into(), name: it.name.as_str().into(), by: if it.mine { "you".into() } else { it.by.as_str().into() }, uses: uses_text(it.uses).into(),
-        has_img: card.is_some(), img: card.unwrap_or_default(), fav: it.fav, mine: it.mine, status: status(it), note: note.into(),
+        has_img: card.is_some(), img: card.unwrap_or_default(), mine: it.mine, status: status(it), note: note.into(),
     }
 }
 
@@ -79,7 +79,7 @@ fn set_rows(ui: &AppWindow) {
     ui.global::<Community>().set_items(ModelRc::new(VecModel::from(rows)));
 }
 
-/// Refresh one card in place (its picture arrived, a heart changed).
+/// Refresh one card in place (its picture arrived).
 fn update_row(ui: &AppWindow, id: &str) {
     let Some(it) = ITEMS.with(|v| v.borrow().iter().find(|i| i.id == id).cloned()) else { return };
     let m = ui.global::<Community>().get_items();
@@ -193,7 +193,7 @@ fn fetch(id: &str) {
             let Ok(r) = r else { return };
             store(&it.id, r);
             crate::skin::community_ready();
-            // your own / liked items show in the in-game wardrobe once they have a picture
+            // your own / picked items show in the in-game wardrobe once they have a picture
             if ugc::known(&it.id).is_some() { crate::skin::export(ui, &sh); }
         });
     });
@@ -231,7 +231,7 @@ pub fn export(dir: &std::path::Path, st: &mut Value, wanted: &mut Vec<String>) {
 fn load(ui: &AppWindow, sh: &Arc<Shared>, page: i32, more: bool) {
     let c = ui.global::<Community>();
     let Some(what) = what_of(page) else { return };
-    let filter = match c.get_filter() { 1 => Filter::Favs, 2 => Filter::Mine, _ => Filter::All };
+    let filter = if c.get_filter() == 1 { Filter::Mine } else { Filter::All };
     let sort = if c.get_sort() == 1 { Sort::New } else { Sort::Top };
     let q = c.get_query().to_string();
     let sess = session(sh);
@@ -289,30 +289,6 @@ fn pick(ui: &AppWindow, sh: &Arc<Shared>, id: &str) {
         Some(What::Item(k)) => crate::skin::wear_cosmetic(ui, sh, k.slot() as i32, id),
         None => {}
     }
-}
-
-fn heart(ui: &AppWindow, sh: &Arc<Shared>, id: &str, on: bool) {
-    let Some(sess) = session(sh) else { show_toast(ui, sh, "Sign in with Microsoft to like uploads"); return };
-    let set = |ui: &AppWindow, id: &str, on: bool| {
-        ITEMS.with(|v| if let Some(i) = v.borrow_mut().iter_mut().find(|i| i.id == id) { i.fav = on; i.favs = if on { i.favs + 1 } else { i.favs.saturating_sub(1) }; });
-        update_row(ui, id);
-    };
-    set(ui, id, on);
-    let (weak, sh, id) = (ui.as_weak(), sh.clone(), id.to_string());
-    std::thread::spawn(move || {
-        let r = ugc::favorite(&client(), &sess, &id, on);
-        ui_do(&weak, move |ui| match r {
-            Ok(()) => {
-                if on { if let Some(it) = find(&id) { ugc::remember(&[it]); } }
-                // un-liked in LIKED: it leaves the list
-                if !on && ui.global::<Community>().get_filter() == 1 {
-                    ITEMS.with(|v| v.borrow_mut().retain(|i| i.id != id));
-                    set_rows(ui);
-                }
-            }
-            Err(e) => { set(ui, &id, !on); show_toast(ui, &sh, &format!("Couldn't save that: {e:#}")); }
-        });
-    });
 }
 
 fn remove(ui: &AppWindow, sh: &Arc<Shared>, id: &str) {
@@ -485,18 +461,18 @@ fn upload_send(ui: &AppWindow, sh: &Arc<Shared>) {
                             .map(|l| { let (skin, slim) = crate::skin::account_skin(); let card = crate::skin::card(&skin, slim, &l); Ready::Cos(Box::new(l), card) }),
                     };
                     if let Some(r) = ready { store(&it.id, r); }
-                    let msg = if dup && !it.mine { format!("That's already up (“{}” by {}): it's in your likes now", it.name, it.by) }
+                    let msg = if dup && !it.mine { format!("That's already up: “{}” by {}, selected for you", it.name, it.by) }
                         else { match it.status.as_str() {
                             "live" => format!("Uploaded. Everyone can see “{}” now: select it and APPLY to wear it", it.name),
                             "pending" => "Uploaded. It goes public once the safety check has run".to_string(),
                             _ => format!("Uploaded. {}", it.reason.as_deref().map(|r| { let mut c = r.chars(); c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default() }).unwrap_or_else(|| "Only you can see it".into())),
                         } };
                     show_toast(ui, &sh, &msg);
-                    // show it: its page, COMMUNITY, MINE (or LIKED), picked
+                    // show it: its page, COMMUNITY, MINE (ALL when it's someone else's), picked
                     let page = page_of(out.what);
                     ui.set_ward_page(page);
                     c.set_source(1);
-                    c.set_filter(if dup && !it.mine { 1 } else { 2 });
+                    c.set_filter(if dup && !it.mine { 0 } else { 1 });
                     c.set_query("".into());
                     load(ui, &sh, page, false);
                     let b = ui.global::<Backend>();
@@ -523,7 +499,6 @@ pub fn init(ui: &AppWindow, sh: Arc<Shared>) {
     on!(on_load, |ui, sh, page: i32| load(&ui, sh, page, false));
     on!(on_load_more, |ui, sh| { let p = ui.global::<Community>().get_page(); load(&ui, sh, p, true) });
     on!(on_pick, |ui, sh, id: slint::SharedString| pick(&ui, sh, &id));
-    on!(on_heart, |ui, sh, id: slint::SharedString, on: bool| heart(&ui, sh, &id, on));
     on!(on_remove, |ui, sh, id: slint::SharedString| remove(&ui, sh, &id));
     on!(on_report, |ui, sh, id: slint::SharedString, reason: slint::SharedString| report(&ui, sh, &id, &reason));
     on!(on_upload_pick, |ui, sh| upload_pick(&ui, sh));
@@ -545,7 +520,7 @@ pub fn snap(ui: &AppWindow, state: &str) {
         GEN.set(GEN.get() + 1);
         c.set_page(page);
         c.set_source(1);
-        c.set_filter(if state == "comm-mine" { 2 } else { 0 });
+        c.set_filter(if state == "comm-mine" { 1 } else { 0 });
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let content = root.join("backend/content");
         let (skin, slim) = crate::skin::account_skin();
@@ -553,7 +528,7 @@ pub fn snap(ui: &AppWindow, state: &str) {
         let mut items = vec![];
         let sha = "0".repeat(64);
         let mk = |i: usize, id: &str, kind: &str, name: &str| Item { id: id.into(), kind: kind.into(), name: name.into(), by: by[i % by.len()].into(), model: Some(sha.clone()), png: sha.clone(), ms: 100,
-            uses: [79675u64, 47988, 36798, 30037, 29609, 1204, 312, 9][i % 8], favs: 3, created: 0, status: "live".into(), reason: None, fav: i == 1, mine: false };
+            uses: [79675u64, 47988, 36798, 30037, 29609, 1204, 312, 9][i % 8], created: 0, status: "live".into(), reason: None, mine: false };
         if page == 1 {
             let idx: Vec<Value> = std::fs::read(content.join("capes/index.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
             for (i, e) in idx.iter().enumerate() {
@@ -621,9 +596,9 @@ mod tests {
         assert_eq!(what_of(0), None);
         assert_eq!(what_of(9), None);
         for p in 1..=8 { assert_eq!(page_of(what_of(p).unwrap()), p); }
-        assert_eq!(uses_text(0), "no uses yet");
-        assert_eq!(uses_text(1), "1 use");
-        assert_eq!(uses_text(79675), "79,675 uses");
-        assert_eq!(uses_text(1000000), "1,000,000 uses");
+        assert_eq!(uses_text(0), "not equipped yet");
+        assert_eq!(uses_text(1), "1 equipped");
+        assert_eq!(uses_text(79675), "79,675 equipped");
+        assert_eq!(uses_text(1000000), "1,000,000 equipped");
     }
 }
