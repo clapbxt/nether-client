@@ -97,24 +97,38 @@ fn installed_copy() -> bool {
 /// A downloaded, signature-checked setup waiting to install (when the launcher closes, or RESTART NOW).
 static READY: std::sync::Mutex<Option<nether_core::update::Ready>> = std::sync::Mutex::new(None);
 
-/// Check GitHub for a newer release. Installed copies with auto-update on download and verify it in the background;
-/// it then installs when the launcher closes. `manual` = from CHECK NOW (reports every result as a toast).
+/// UPDATE NOW was pressed before the download finished: install as soon as it is verified.
+static WANT_INSTALL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Install the verified update now and close; Setup relaunches the new version.
+fn install_now(ui: &AppWindow, sh: &Arc<Shared>) {
+    let b = ui.global::<Backend>();
+    b.set_update_gate_busy(true);
+    if apply_pending_update(true) { let _ = slint::quit_event_loop(); return; }
+    b.set_update_gate_busy(false);
+    b.set_update_state(2);
+    show_toast(ui, sh, "Couldn't start the update. Try again");
+}
+
+/// Check GitHub for a newer release. An installed copy on an old version is gated (update now or exit) while the
+/// signed setup downloads and verifies in the background. `manual` = from CHECK NOW / TRY AGAIN (toasts every result).
 /// update-state: 0 checking, 1 up to date, 2 newer (manual download), 3 couldn't check, 4 ready to install, 5 downloading
 pub fn check_updates(ui: &AppWindow, sh: &Arc<Shared>, manual: bool) {
     let b = ui.global::<Backend>();
     if matches!(b.get_update_state(), 4 | 5) && !manual { return; }
     if b.get_update_state() == 4 { return; }
     b.set_update_state(0);
-    let auto = installed_copy() && crate::prefs::load(&sh.paths).auto_update;
+    let installed = installed_copy();
     let (weak, sh) = (ui.as_weak(), sh.clone());
     std::thread::spawn(move || {
         let c = nether_core::download::client();
         let r = nether_core::update::latest(&c, env!("CARGO_PKG_VERSION"));
+        let done = |ui: &AppWindow| { WANT_INSTALL.store(false, std::sync::atomic::Ordering::Relaxed); ui.global::<Backend>().set_update_gate_busy(false); };
         match r {
-            Ok(Some(rel)) if auto => {
+            Ok(Some(rel)) if installed => {
                 let ver = rel.version.clone();
                 let v2 = ver.clone();
-                ui_do(&weak, move |ui| { let b = ui.global::<Backend>(); b.set_update_state(5); b.set_update_ver(v2.as_str().into()); });
+                ui_do(&weak, move |ui| { let b = ui.global::<Backend>(); b.set_update_state(5); b.set_update_ver(v2.as_str().into()); b.set_update_gate(true); });
                 let d = nether_core::update::download(&c, &sh.paths, &rel);
                 ui_do(&weak, move |ui| {
                     let b = ui.global::<Backend>();
@@ -123,12 +137,12 @@ pub fn check_updates(ui: &AppWindow, sh: &Arc<Shared>, manual: bool) {
                         Ok(p) => {
                             *READY.lock().unwrap_or_else(|e| e.into_inner()) = Some(p);
                             b.set_update_state(4);
-                            show_toast(ui, &sh, &format!("Nether Client {ver} is ready. It installs when you close the launcher"));
+                            if WANT_INSTALL.swap(false, std::sync::atomic::Ordering::Relaxed) { install_now(ui, &sh); }
                         }
                         Err(e) => {
                             crate::applog::line(&format!("update {ver}: {e:#}"));
                             b.set_update_state(2);
-                            if manual { show_toast(ui, &sh, &format!("Couldn't download the update: {e:#}")); }
+                            done(ui);
                         }
                     }
                 });
@@ -140,10 +154,13 @@ pub fn check_updates(ui: &AppWindow, sh: &Arc<Shared>, manual: bool) {
                 b.set_update_url(rel.page.as_str().into());
                 show_toast(ui, &sh, &format!("Nether Client {} is available · Settings > Storage & About", rel.version));
             }),
-            Ok(None) => ui_do(&weak, move |ui| { ui.global::<Backend>().set_update_state(1); if manual { show_toast(ui, &sh, "You're on the newest version"); } }),
+            Ok(None) => ui_do(&weak, move |ui| { done(ui); ui.global::<Backend>().set_update_gate(false); ui.global::<Backend>().set_update_state(1); if manual { show_toast(ui, &sh, "You're on the newest version"); } }),
             Err(e) => ui_do(&weak, move |ui| {
                 crate::applog::line(&format!("update check: {e:#}"));
-                ui.global::<Backend>().set_update_state(if manual { 3 } else { 1 });
+                done(ui);
+                // gated and the retry couldn't reach GitHub: stay gated (TRY AGAIN shows)
+                let gated = ui.global::<Backend>().get_update_gate();
+                ui.global::<Backend>().set_update_state(if gated { 2 } else if manual { 3 } else { 1 });
                 if manual { show_toast(ui, &sh, "Couldn't check for updates"); }
             }),
         }
@@ -241,6 +258,19 @@ pub fn init(ui: &AppWindow, sh: Arc<Shared>) {
         let (weak, sh) = (ui.as_weak(), sh.clone());
         b.on_check_updates(move || if let Some(ui) = weak.upgrade() { check_updates(&ui, &sh, true) });
         b.on_update_restart(|| { if apply_pending_update(true) { let _ = slint::quit_event_loop(); } });
+    }
+    {
+        let (weak, sh) = (ui.as_weak(), sh.clone());
+        b.on_update_now(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            let b = ui.global::<Backend>();
+            match b.get_update_state() {
+                4 => install_now(&ui, &sh),
+                5 => { WANT_INSTALL.store(true, std::sync::atomic::Ordering::Relaxed); b.set_update_gate_busy(true); }
+                _ => { WANT_INSTALL.store(true, std::sync::atomic::Ordering::Relaxed); b.set_update_gate_busy(true); check_updates(&ui, &sh, true); }
+            }
+        });
+        b.on_update_exit(|| { let _ = slint::quit_event_loop(); });
     }
 }
 

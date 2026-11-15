@@ -684,6 +684,37 @@ export component AppWindow inherits Window {
             }
         }
 
+        // ---------- update required: an installed copy on an old version can't be used; update now or exit ----------
+        if Backend.update-gate: Rectangle {
+            x: 0px; y: 0px; width: root.W; height: root.H;
+            background: #000000e0;
+            TouchArea { scroll-event(e) => { accept } }
+            // holds focus so no shortcut reaches the launcher underneath
+            gf := FocusScope { init => { gf.focus(); } key-pressed(e) => { accept } }
+            Rectangle {
+                x: (root.W - 620px) / 2; y: (root.H - self.height) / 2 - 24px; width: 620px; height: 330px;
+                background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: 8px; clip: true;
+                TouchArea { }
+                Rectangle { y: 0px; height: 3px; background: Theme.red2; }
+                Eyebrow { x: 36px; y: 34px; text: "UPDATE REQUIRED"; }
+                Text { x: 36px; y: 54px; width: parent.width - 72px; text: "A NEW NETHER IS HERE"; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800; overflow: elide; }
+                Rectangle { x: 36px; y: 108px; width: parent.width - 72px; height: 56px; background: Theme.s1; border-width: 1px; border-color: Theme.ln; border-radius: 8px;
+                    Text { x: 20px; y: 10px; text: "YOU HAVE"; color: Theme.mut; font-family: Theme.ui; font-size: 11px * Theme.ts; font-weight: 600; letter-spacing: 0.8px; }
+                    Text { x: 20px; y: 26px; text: Backend.app-version; color: Theme.dim; font-family: Theme.mono; font-size: 15px * Theme.ts; }
+                    Text { x: 0px; width: parent.width; height: parent.height; text: "→"; color: Theme.mut; font-family: Theme.ui; font-size: 18px; horizontal-alignment: center; vertical-alignment: center; }
+                    Text { x: parent.width - 20px - self.width; y: 10px; text: "NEWEST"; color: Theme.red2; font-family: Theme.ui; font-size: 11px * Theme.ts; font-weight: 600; letter-spacing: 0.8px; }
+                    Text { x: parent.width - 20px - self.width; y: 26px; text: Backend.update-ver; color: Theme.ice; font-family: Theme.mono; font-size: 15px * Theme.ts; font-weight: 600; }
+                }
+                Text { x: 36px; y: 182px; width: parent.width - 72px; wrap: word-wrap; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts;
+                    text: "Nether Client " + Backend.update-ver + " is ready. You need the newest version to play: it takes a few seconds, and Nether reopens on its own."; }
+                if Backend.update-gate-busy: Waiting { x: 36px; y: 236px; width: 400px; text: Backend.update-state == 4 ? "Installing " + Backend.update-ver : "Downloading " + Backend.update-ver; }
+                if !Backend.update-gate-busy && Backend.update-state != 4 && Backend.update-state != 5: Text { x: 36px; y: 236px; width: parent.width - 72px; text: "Couldn't download the update. Check your connection and try again."; color: Theme.redtx; font-family: Theme.ui; font-size: 13px * Theme.ts; overflow: elide; }
+                Btn { x: 36px; y: parent.height - 66px; height: 42px; solid: true; icon: Ico.download; enabled: !Backend.update-gate-busy;
+                    text: Backend.update-gate-busy ? "UPDATING…" : (Backend.update-state == 4 || Backend.update-state == 5 ? "UPDATE NOW" : "TRY AGAIN"); clicked => { Backend.update-now(); } }
+                LinkBtn { x: parent.width - 36px - self.width; y: parent.height - 59px; text: "EXIT"; clicked => { Backend.update-exit(); } }
+            }
+        }
+
         // ---------- toast ----------
         toast := Rectangle {
             property <length> act-w: Backend.toast-action == "" ? 0px : 130px;

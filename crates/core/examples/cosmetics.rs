@@ -24,7 +24,7 @@ fn main() {
             let mut slots: [Option<&Loaded>; SLOTS] = [None; SLOTS];
             slots[it.kind.slot()] = Some(it);
             let look = Look { skin: &skin, slim: false, cape: None, items: slots };
-            let view = match (it.kind, k) { (Kind::Hat | Kind::Headband | Kind::Mask, 0) => View::head(*yaw), _ => View::full(*yaw) };
+            let view = match (it.kind, k) { (Kind::Hat | Kind::Headband | Kind::Mask, 0) => View::head(*yaw), (Kind::Pet, _) => View { zoom: 0.6, center: 22., ..View::full(*yaw) }, _ => View::full(*yaw) };
             let img = render(&look, view, cw, ch, t, (t * 1000.) as u64);
             image::imageops::overlay(&mut sheet, &img, ((n % cols) * cw) as i64, ((n / cols) * ch) as i64);
             n += 1;

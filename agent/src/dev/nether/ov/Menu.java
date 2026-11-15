@@ -52,7 +52,7 @@ final class Menu {
     static boolean editing() { return hudEdit && Input.menuOpen; }
     static boolean capturing() { return capture != null; }
     /** Typed characters go to a text field (search with text or focus, a waypoint name): a letter menu key types there. */
-    static boolean textFocus() { return fieldFocus() || (!hudEdit && !hub && tab < T_WARDROBE && (searchFocus || !search.isEmpty())); }
+    static boolean textFocus() { return WpDialog.open || PackBrowser.open || fieldFocus() || (!hudEdit && !hub && tab < T_WARDROBE && (searchFocus || !search.isEmpty())); }
     /** A waypoint name, a text setting, a slider value, a hex colour or a profile name is being typed into. */
     static boolean fieldFocus() { return editWp >= 0 || editSet != null; }
 
@@ -75,6 +75,8 @@ final class Menu {
         drag = capture = null;
         searchFocus = false;
         hudEdit = false;
+        WpDialog.open = false;
+        PackBrowser.open = false;
         ColorPicker.close();
         HudEditor.reset();
     }
@@ -525,6 +527,18 @@ final class Menu {
         tip = null;
         act = adj = 0;
         boolean shift = Input.keys[340] || Input.keys[344], ctrl = Input.keys[341] || Input.keys[345];
+        if (PackBrowser.open) { // the pack browser takes every key while it is up
+            for (int[] ev : evs) PackBrowser.key(ev[0], ev[1] == 1, shift, ctrl);
+            if (!typed.isEmpty() && PackBrowser.open) PackBrowser.type(typed);
+            evs.clear();
+            typed = "";
+        }
+        if (WpDialog.open) { // the waypoint dialog takes every key while it is up
+            for (int[] ev : evs) WpDialog.key(ev[0], ev[1] == 1, shift, ctrl);
+            if (!typed.isEmpty() && WpDialog.open) WpDialog.type(typed);
+            evs.clear();
+            typed = "";
+        }
         for (int[] ev : evs) key(ev[0], ev[1] == 1, shift, ctrl);
         if (!typed.isEmpty()) { if (fieldFocus()) typeField(typed); else typedSearch(typed); }
 
@@ -542,7 +556,19 @@ final class Menu {
             Gfx.s = sc;
             Gfx.minPx = MIN_PX;
             Gfx.round = true; // rounded panel, rows and controls (HUD modules stay square)
-            try { if (hub) hub(e); else panel(wheel, e); } finally { Gfx.round = false; }
+            try {
+                if (PackBrowser.open) PackBrowser.draw(e, wheel);
+                else if (WpDialog.open) {
+                    if (!WpDialog.fromWorld()) { // opened from the menu: it stays behind the dialog, without clicks
+                        boolean c0 = click, c1 = clickRt;
+                        click = clickRt = false;
+                        if (hub) hub(e); else panel(0, e);
+                        click = c0;
+                        clickRt = c1;
+                    }
+                    WpDialog.draw(e);
+                } else if (hub) hub(e); else panel(wheel, e);
+            } finally { Gfx.round = false; }
             if (click && fieldFocus()) commitEdit(); // clicked somewhere else
             if (click) Hits.press(0); // a click the panel did not use may land on a HUD widget
         }
@@ -1290,7 +1316,7 @@ final class Menu {
         float ww = xr - 176 - 16 - (lx + 96);
         while (wn.length() > 4 && Gfx.width(Gfx.SEMI, 11, wn, 0.8f) > ww) wn = wn.substring(0, wn.length() - 3) + "..";
         Gfx.text(Gfx.SEMI, 11, lx + 96, y + 33, Th.dim, wn, false, 0.8f);
-        if (k != null && Game.player() != null && fbutton("wpadd", "ADD AT MY POSITION", xr - 176, y + 18, 176, 30, true)) w.addHere();
+        if (k != null && Game.player() != null && fbutton("wpadd", "ADD AT MY POSITION", xr - 176, y + 18, 176, 30, true)) w.addHere(false);
         List<Map<String, Object>> l = w.list(false);
         float ry = y + 66;
         Gfx.rect(lx, ry - 1, lw, 1, 0, Th.ln);
@@ -1328,8 +1354,22 @@ final class Menu {
             if (ed && (Config.calm() || (System.currentTimeMillis() / 530) % 2 == 0)) Gfx.rect(nx + tw + 1, cy - 8, 1.5f, 16, 0, Th.ac2);
             if ((hit(nx - 8, cy - 14, nw, 28) || used(f) != 0) && !ed) { commitEdit(); editWp = i; editKind = TXT; editBuf = Waypoints.str(p, "name", ""); }
             // position
-            Gfx.text(Gfx.MONO, 11, lx + 238, cy, Th.dim, String.format(Locale.ROOT, "%d / %d / %d",
+            float pw0 = Gfx.text(Gfx.MONO, 11, lx + 238, cy, Th.dim, String.format(Locale.ROOT, "%d / %d / %d",
                 (long) Waypoints.num(p, "x"), (long) Waypoints.num(p, "y"), (long) Waypoints.num(p, "z")));
+            double[] me = Game.reducedDebug() ? null : Game.player();
+            if (me != null) {
+                double dx = Waypoints.num(p, "x") + 0.5 - me[0], dy = Waypoints.num(p, "y") - me[1], dz = Waypoints.num(p, "z") + 0.5 - me[2];
+                long d = Math.round(Math.sqrt(dx * dx + dy * dy + dz * dz));
+                Gfx.text(Gfx.MONO, 10, lx + 238 + pw0 + 12, cy, Th.mut, d >= 10000 ? (d / 1000) + "k m" : d + " m");
+            }
+            // edit: name, colour and position in the dialog
+            float ex = xr - 36 - 46 - 58;
+            boolean eh = in(ex, cy - 12, 48, 24);
+            float et = an("wpe" + i, eh);
+            Gfx.rect(ex, cy - 12, 48, 24, 6, Gfx.a(Th.ov, 0.035f + 0.05f * et));
+            Gfx.ring(ex, cy - 12, 48, 24, 6, 1, Gfx.mix(Th.ln, Th.ln2, et));
+            Gfx.textC(Gfx.SEMI, 10, ex + 24, cy, Gfx.mix(Th.dim, Th.tx, et), "EDIT", 1.2f);
+            if (hit(ex, cy - 12, 48, 24)) { commitEdit(); WpDialog.edit(p, i); return; }
             // shown on screen
             boolean on = !Boolean.FALSE.equals(p.get("on"));
             sw("wpv" + i, xr - 36 - 40, cy - 10, on);

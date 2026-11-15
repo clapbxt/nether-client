@@ -77,6 +77,9 @@ final class Input {
 
     // ---------------------------------------------------------------- menu open/close
 
+    /** The char event of the key just pressed must not type into what it opened (waypoint dialog). */
+    static void eatChar() { eatCharAt = System.currentTimeMillis(); }
+
     static void setMenu(boolean on) {
         if (on == menuOpen || window == 0) return;
         if (on) {

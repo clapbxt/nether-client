@@ -367,7 +367,7 @@ final class Modules {
         if (FREELOOK.key(key, action)) return true;
         if (press && !Input.inWorld()) return false;
         Waypoints wp = WAYPOINTS;
-        if (action == 1 && wp.enabled() && key == (int) wp.num("addKey")) { wp.addHere(); return true; }
+        if (action == 1 && wp.enabled() && key == (int) wp.num("addKey")) { Input.eatChar(); wp.addHere(true); return true; }
         if (action == 1 && wp.enabled() && key == (int) wp.num("toggleKey")) { wp.flip(); return true; }
         if (action == 1 && (MEDIA.key(key) || LYRICS.key(key) || STOPWATCH.key(key))) return true;
         return false;

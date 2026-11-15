@@ -25,6 +25,7 @@ final class Waypoints extends Module {
         add(Setting.bool("edge", "Keep off-screen markers at the edge", true));
         add(Setting.slider("size", "Marker size", 0.6, 2, 0.05, 1));
         add(Setting.slider("maxDist", "Hide beyond (blocks, 0 = never)", 0, 5000, 50, 0));
+        add(Setting.slider("near", "Fade out closer than (blocks)", 0, 32, 1, 4).hint("Markers fade as you reach them, so they never sit in your face. 0 = always fully shown."));
         add(Setting.bool("death", "Mark where you die", true).hint("Adds a 'Death' waypoint at the spot (the old one is replaced), so you can find your items. It clears when you get there."));
         needs(4);
     }
@@ -103,27 +104,20 @@ final class Waypoints extends Module {
     /** Marks a change to the stored list (debounced save). */
     void changed() { Config.set(id, "points", Config.raw(id, "points")); }
 
-    void addHere() {
+    /** Add key / ADD button: the create dialog at the player's position (world = opened by the key in game). */
+    void addHere(boolean world) {
         if (Game.reducedDebug()) { // the server hides coordinates: a waypoint list would show them
-            toast = "Coordinates are hidden on this server";
-            toastAt = System.currentTimeMillis();
+            note("Coordinates are hidden on this server");
             return;
         }
         key = Game.worldKey();
-        double[] p = Game.player();
-        List<Map<String, Object>> l = list(true);
-        if (p == null || l == null) return;
-        Map<String, Object> w = new LinkedHashMap<>();
-        String name = "Waypoint " + (l.size() + 1);
-        w.put("name", name);
-        w.put("x", Math.floor(p[0]));
-        w.put("y", Math.floor(p[1]));
-        w.put("z", Math.floor(p[2]));
-        w.put("color", PALETTE[1 + l.size() % (PALETTE.length - 1)]);
-        w.put("on", true);
-        l.add(w);
-        changed();
-        toast = "Waypoint added: " + name;
+        if (key == null || Game.player() == null) return;
+        WpDialog.create(this, world);
+    }
+
+    /** Short message under the crosshair (shown when the menu is closed). */
+    void note(String s) {
+        toast = s;
         toastAt = System.currentTimeMillis();
     }
 
@@ -158,6 +152,9 @@ final class Waypoints extends Module {
                 boolean front = Project.to(num(w, "x") + 0.5, num(w, "y") + 1, num(w, "z") + 0.5);
                 double d = Project.dist, nx = Project.nx, ny = Project.ny;
                 if (max > 0 && d > max) continue;
+                double near = num("near");
+                float fade = near <= 0 ? 1 : (float) Math.max(0, Math.min(1, (d - near * 0.5) / (near * 0.5)));
+                if (fade <= 0.01f) continue;
                 boolean off = !front || Math.abs(nx) > 1 || Math.abs(ny) > 1; // behind: pushed to the edge on the side to turn to
                 if (off) {
                     if (!edge) continue;
@@ -168,7 +165,10 @@ final class Waypoints extends Module {
                     nx = nx / k; ny = ny / k;
                     nx = Math.max(-mx, Math.min(mx, nx)); ny = Math.max(bottom, Math.min(top, ny));
                 }
+                float a0 = Gfx.alpha;
+                Gfx.alpha = a0 * fade;
                 marker((float) ((nx + 1) / 2 * W), (float) ((1 - ny) / 2 * H), w, d, dist, off);
+                Gfx.alpha = a0;
             }
         }
         if (toast != null) {

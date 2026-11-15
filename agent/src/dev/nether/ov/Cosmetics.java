@@ -59,6 +59,8 @@ final class Cosmetics {
         CosAura aura;
         byte[] png;
         java.awt.image.BufferedImage img;
+        /** the texture kept for the wardrobe's software preview (img is dropped once uploaded) */
+        java.awt.image.BufferedImage pimg;
         int w, h, frames = 1, cols = 1, rows = 1;
         Object loc, type; // modern: texture location + translucent entity render type
         int gl = -1;      // 1.8.9: GL texture id
@@ -101,6 +103,18 @@ final class Cosmetics {
         }
         return out;
     }
+
+    /** A model cosmetic for the wardrobe preview (any thread that draws the menu): parsed model + pimg, null while it loads or for particle auras. */
+    static Item preview(String id, String type) {
+        if (id == null || id.isEmpty()) return null;
+        Item it = ready.get(id);
+        if (it == null) it = parsed.get(id);
+        if (it == null) { item(id, type); return null; }
+        return type.equals(it.e.type) && it.model != null && it.pimg != null ? it : null;
+    }
+
+    /** seconds for model animation, same clock as the world */
+    static float clock() { return (float) now(); }
 
     private static String id(Object o) { return o instanceof String && ((String) o).matches("[a-z0-9_-]{1,32}") ? (String) o : null; }
 
@@ -163,6 +177,7 @@ final class Cosmetics {
                         x.frames = Math.max(1, Math.min(256, x.h / fh));
                     }
                     x.png = png;
+                    x.pimg = x.img;
                     parsed.put(id, x);
                     retryAt.remove(id);
                 } catch (Throwable t) {

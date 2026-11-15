@@ -75,6 +75,11 @@ fn get_capped(c: &Client, url: &str, max: u64) -> Result<Vec<u8>> {
 }
 
 static LAST_FAIL: Mutex<Option<Instant>> = Mutex::new(None);
+/// Set by [`refresh`]: the next manifest read goes to the network whatever the TTL / last failure says.
+static FORCE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Look for changed content now (Wardrobe refresh): the next content read re-fetches the signed manifest.
+pub fn refresh() { FORCE.store(true, std::sync::atomic::Ordering::Relaxed); }
 
 /// The verified manifest: refreshed from the network when the cached one is older than the TTL (and `c` is given),
 /// otherwise the verified disk copy. None = no trustworthy content (callers fall back to nothing).
@@ -86,7 +91,8 @@ fn manifest(c: Option<&Client>) -> Option<Manifest> {
     let base = content_url();
     let key = hex::decode(CONTENT_KEY_HEX.trim()).ok()?;
     let recently_failed = LAST_FAIL.lock().ok().and_then(|l| *l).is_some_and(|t| t.elapsed() < Duration::from_secs(120));
-    if let Some(c) = c.filter(|_| !base.is_empty() && !recently_failed && age.map_or(true, |a| a >= TTL)) {
+    let force = c.is_some() && FORCE.swap(false, std::sync::atomic::Ordering::Relaxed);
+    if let Some(c) = c.filter(|_| !base.is_empty() && (force || (!recently_failed && age.map_or(true, |a| a >= TTL)))) {
         let got = get_capped(c, &format!("{base}/manifest.json"), 512 * 1024).and_then(|body| {
             let sig = String::from_utf8(get_capped(c, &format!("{base}/manifest.sig"), 1024)?)?;
             let m = verify_manifest(&key, &body, &sig, now_secs(), min)?;
@@ -234,8 +240,6 @@ pub struct Cosmetic {
     #[serde(rename = "type")]
     pub kind: String,
     #[serde(default)]
-    pub rarity: String,
-    #[serde(default)]
     pub desc: String,
     /// Animated textures: milliseconds per frame (20..=2000, default 100).
     #[serde(default)]
@@ -292,6 +296,31 @@ pub fn set_cosmetic(c: &Client, s: &Session, kind: crate::cosmetics::Kind, id: O
     let api = api_url();
     let r = authed(c, s, |t| c.put(format!("{api}/v1/cosmetic")).bearer_auth(t).json(&serde_json::json!({ "slot": kind.as_str(), "id": id })))
         .map_err(|e| if e.chain().any(|c| c.to_string().contains("404")) { anyhow!("the Nether cosmetics service isn't available yet") } else { e })?;
+    if !r.status().is_success() {
+        let msg = r.json::<serde_json::Value>().ok().and_then(|v| v["error"].as_str().map(str::to_string)).unwrap_or_else(|| "request failed".into());
+        bail!("{msg}");
+    }
+    Ok(())
+}
+
+/// Wear a whole look in one request (one rate-limited write): `cape` None = unchanged, Some(None) = take it off;
+/// `slots` = the cosmetic slots that change (None = take off). A Worker without `/v1/look` gets one request per change.
+pub fn set_look(c: &Client, s: &Session, cape: Option<Option<&str>>, slots: &[(crate::cosmetics::Kind, Option<&str>)]) -> Result<()> {
+    if cape.is_none() && slots.is_empty() { return Ok(()); }
+    let api = api_url();
+    let mut body = serde_json::Map::new();
+    if let Some(cp) = cape { body.insert("cape".into(), serde_json::json!(cp)); }
+    if !slots.is_empty() {
+        body.insert("slots".into(), serde_json::Value::Object(slots.iter().map(|(k, id)| (k.as_str().to_string(), serde_json::json!(id))).collect()));
+    }
+    let r = authed(c, s, |t| c.put(format!("{api}/v1/look")).bearer_auth(t).json(&body))
+        .map_err(|e| if e.chain().any(|c| c.to_string().contains("404")) { anyhow!("the Nether look service isn't available yet") } else { e })?;
+    if r.status() == reqwest::StatusCode::NOT_FOUND {
+        if let Some(cp) = cape { set_cape(c, s, cp)?; }
+        for (k, id) in slots { set_cosmetic(c, s, *k, *id)?; }
+        return Ok(());
+    }
+    if r.status() == reqwest::StatusCode::TOO_MANY_REQUESTS { bail!("too many changes in a minute, wait a moment and apply again"); }
     if !r.status().is_success() {
         let msg = r.json::<serde_json::Value>().ok().and_then(|v| v["error"].as_str().map(str::to_string)).unwrap_or_else(|| "request failed".into());
         bail!("{msg}");

@@ -49,6 +49,40 @@ thread_local! {
     static COS_CARDS: RefCell<Vec<(String, RgbaImage)>> = const { RefCell::new(Vec::new()) };
     static COS_WORN: RefCell<[String; SLOTS]> = RefCell::new(Default::default());
     static COS_HOVER: RefCell<Option<Rc<Loaded>>> = const { RefCell::new(None) };
+    // the look being put together (cards clicked, not applied yet): what the preview shows and APPLY sends
+    static SEL: RefCell<Sel> = RefCell::new(Sel::default());
+    // answer to the game's last request (seq, ok, message), published in state.json
+    static ANSWER: RefCell<Option<(u64, bool, String)>> = const { RefCell::new(None) };
+}
+
+/// A whole look: Nether cape id, account cape (index into Backend.capes, 0 = none), cosmetic ids by slot ("" = none).
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct Sel { ncape: String, cape: i32, cos: [String; SLOTS] }
+
+/// What the account wears now (applied at the services).
+fn applied(ui: &AppWindow) -> Sel {
+    let b = ui.global::<Backend>();
+    Sel { ncape: b.get_ncape_worn().to_string(), cape: b.get_cape_idx(), cos: COS_WORN.with(|w| w.borrow().clone()) }
+}
+
+/// Make `s` the look being edited: cards, APPLY state and the preview follow it.
+fn push_sel(ui: &AppWindow, s: Sel) {
+    let b = ui.global::<Backend>();
+    b.set_ncape_sel(s.ncape.as_str().into());
+    b.set_cape_sel(s.cape);
+    b.set_cos_sel(ModelRc::new(VecModel::from(s.cos.iter().map(|x| slint::SharedString::from(x.as_str())).collect::<Vec<_>>())));
+    b.set_look_dirty(s != applied(ui));
+    SEL.with(|v| *v.borrow_mut() = s);
+    set_preview_cape();
+}
+
+/// Drop unapplied picks: back to what the account wears.
+fn sync_sel(ui: &AppWindow) { push_sel(ui, applied(ui)); }
+
+fn edit_sel(ui: &AppWindow, f: impl FnOnce(&mut Sel)) {
+    let mut s = SEL.with(|v| v.borrow().clone());
+    f(&mut s);
+    push_sel(ui, s);
 }
 
 // ---------------- loading ----------------
@@ -196,6 +230,7 @@ pub fn load(weak: slint::Weak<AppWindow>, sh: Arc<Shared>, skins: Vec<Value>, ca
             b.set_cape_names(ModelRc::new(VecModel::from(names)));
             b.set_capes(ModelRc::new(VecModel::from(cards)));
             b.set_cape_idx(active.map(|i| i as i32 + 1).unwrap_or(0));
+            sync_sel(ui);
             b.set_skin_slim(slim);
             b.set_acct_head(LOOK.with(|l| l.borrow().as_ref().map(|l| head(&l.skin))).unwrap_or_default());
             b.set_skin_ready(true);
@@ -208,35 +243,18 @@ pub fn load(weak: slint::Weak<AppWindow>, sh: Arc<Shared>, skins: Vec<Value>, ca
     });
 }
 
-/// Show / hide a cape on the account (index into Backend.capes; 0 = no cape).
-pub fn equip(ui: &AppWindow, sh: &Arc<Shared>, idx: i32) {
-    let b = ui.global::<Backend>();
-    let Some(card) = b.get_capes().row_data(idx.max(0) as usize) else { return };
-    let prev = b.get_cape_idx();
-    set_preview_cape(&card.id);
-    b.set_cape_idx(idx);
-    let Some(session) = sh.session.lock().unwrap().clone().filter(|s| s.user_type == "msa") else {
-        show_toast(ui, sh, "Sign in to change your cape");
-        return;
-    };
-    let (weak, sh, id, name) = (ui.as_weak(), sh.clone(), card.id.to_string(), card.name.to_string());
-    std::thread::spawn(move || {
-        let url = "https://api.minecraftservices.com/minecraft/profile/capes/active";
-        let c = client();
-        let r = if id.is_empty() { c.delete(url).bearer_auth(&session.access_token).send() } else { c.put(url).bearer_auth(&session.access_token).json(&serde_json::json!({"capeId": id})).send() };
-        let ok = r.map(|r| r.status().is_success()).unwrap_or(false);
-        ui_do(&weak, move |ui| {
-            if ok {
-                export(ui, &sh);
-                show_toast(ui, &sh, &if id.is_empty() { "Cape hidden".to_string() } else { format!("{name} equipped") });
-            } else {
-                let b = ui.global::<Backend>();
-                if let Some(p) = b.get_capes().row_data(prev.max(0) as usize) { set_preview_cape(&p.id); }
-                b.set_cape_idx(prev);
-                show_toast(ui, &sh, "Couldn't change your cape, try again");
-            }
-        });
-    });
+/// Pick an account cape (index into Backend.capes; 0 = no cape); APPLY sends it.
+pub fn equip(ui: &AppWindow, _sh: &Arc<Shared>, idx: i32) {
+    if ui.global::<Backend>().get_capes().row_data(idx.max(0) as usize).is_none() { return; }
+    edit_sel(ui, |s| s.cape = idx);
+}
+
+/// Show / hide a cape on the Minecraft account (Minecraft Services); true = done.
+fn mojang_cape(token: &str, id: &str) -> bool {
+    let c = client();
+    let url = "https://api.minecraftservices.com/minecraft/profile/capes/active";
+    let r = if id.is_empty() { c.delete(url).bearer_auth(token).send() } else { c.put(url).bearer_auth(token).json(&serde_json::json!({"capeId": id})).send() };
+    r.map(|r| r.status().is_success()).unwrap_or(false)
 }
 
 /// Account cape id currently selected (for the preview when a Nether cape comes off).
@@ -249,16 +267,19 @@ fn set_worn(ui: &AppWindow, id: &str) {
     let tex = NCAPES.with(|v| v.borrow().iter().find(|c| c.id == id).cloned());
     NWORN.with(|n| *n.borrow_mut() = tex);
     ui.global::<Backend>().set_ncape_worn(id.into());
-    set_preview_cape(&account_cape_id(ui));
 }
 
 fn msa_uuid(sh: &Shared) -> Option<String> { sh.session.lock().ok().and_then(|s| s.clone()).filter(|s| s.user_type == "msa").map(|s| s.uuid) }
 
 /// Load the Nether cape directory (+ textures) and which one the signed-in player wears.
-pub fn load_ncapes(ui: &AppWindow, sh: &Arc<Shared>) {
+pub fn load_ncapes(ui: &AppWindow, sh: &Arc<Shared>) { load_ncapes_as(ui, sh, false) }
+
+/// `again`: re-read even when loaded (Refresh); the cards stay up meanwhile.
+fn load_ncapes_as(ui: &AppWindow, sh: &Arc<Shared>, again: bool) {
     let b = ui.global::<Backend>();
-    if matches!(b.get_ncape_state(), 1 | 2) { return; }
-    b.set_ncape_state(1);
+    let st = b.get_ncape_state();
+    if st == 1 || (st == 2 && !again) { return; }
+    if st != 2 { b.set_ncape_state(1); }
     let uuid = msa_uuid(sh);
     NUUID.with(|u| *u.borrow_mut() = uuid.clone());
     let weak = ui.as_weak();
@@ -279,37 +300,15 @@ pub fn load_ncapes(ui: &AppWindow, sh: &Arc<Shared>) {
             }).collect());
             set_worn(ui, &worn);
             b.set_ncape_state(2);
+            sync_sel(ui);
             export(ui, &sh);
         });
     });
 }
 
-/// Wear a Nether cape, or take it off when it is the one worn.
-pub fn wear_ncape(ui: &AppWindow, sh: &Arc<Shared>, id: &str) {
-    let b = ui.global::<Backend>();
-    if b.get_ncape_busy() { return; }
-    let Some(session) = sh.session.lock().ok().and_then(|s| s.clone()).filter(|s| s.user_type == "msa") else {
-        show_toast(ui, sh, "Sign in with Microsoft to wear Nether capes");
-        return;
-    };
-    let off = b.get_ncape_worn() == id;
-    let name = b.get_ncapes().iter().find(|c| c.id == id).map(|c| c.name.to_string()).unwrap_or_default();
-    b.set_ncape_busy(true);
-    let (weak, sh, id) = (ui.as_weak(), sh.clone(), id.to_string());
-    std::thread::spawn(move || {
-        let r = nether_core::backend::set_cape(&client(), &session, (!off).then_some(id.as_str()));
-        ui_do(&weak, move |ui| {
-            ui.global::<Backend>().set_ncape_busy(false);
-            match r {
-                Ok(()) => {
-                    set_worn(ui, if off { "" } else { &id });
-                    export(ui, &sh);
-                    show_toast(ui, &sh, &if off { format!("{name} taken off") } else { format!("You're now wearing {name}") });
-                }
-                Err(e) => show_toast(ui, &sh, &format!("Couldn't change your Nether cape: {e:#}")),
-            }
-        });
-    });
+/// Pick a Nether cape (the picked one again = none); APPLY sends it.
+pub fn wear_ncape(ui: &AppWindow, _sh: &Arc<Shared>, id: &str) {
+    edit_sel(ui, |s| s.ncape = if s.ncape == id { String::new() } else { id.to_string() });
 }
 
 // ---------------- Nether cosmetics ----------------
@@ -333,15 +332,17 @@ fn card(skin: &RgbaImage, slim: bool, it: &Loaded) -> RgbaImage {
 fn rgba_image(img: &RgbaImage) -> Image { Image::from_rgba8(SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(img.as_raw(), img.width(), img.height())) }
 
 fn cos_card(m: &nether_core::backend::Cosmetic, img: &RgbaImage) -> CosCard {
-    let rarity = if m.rarity.is_empty() { "common".to_string() } else { m.rarity.clone() };
-    CosCard { id: m.id.as_str().into(), name: m.name.as_str().into(), kind: m.kind.as_str().into(), rarity: rarity.into(), desc: m.desc.as_str().into(), img: rgba_image(img) }
+    CosCard { id: m.id.as_str().into(), name: m.name.as_str().into(), kind: m.kind.as_str().into(), desc: m.desc.as_str().into(), img: rgba_image(img) }
 }
 
 /// Load the cosmetics directory (verified models + textures), render the cards and read what the player wears.
-pub fn load_cosmetics(ui: &AppWindow, sh: &Arc<Shared>) {
+pub fn load_cosmetics(ui: &AppWindow, sh: &Arc<Shared>) { load_cosmetics_as(ui, sh, false) }
+
+fn load_cosmetics_as(ui: &AppWindow, sh: &Arc<Shared>, again: bool) {
     let b = ui.global::<Backend>();
-    if matches!(b.get_cos_state(), 1 | 2) { return; }
-    b.set_cos_state(1);
+    let st = b.get_cos_state();
+    if st == 1 || (st == 2 && !again) { return; }
+    if st != 2 { b.set_cos_state(1); }
     let uuid = msa_uuid(sh);
     let (skin, slim) = ACCOUNT.with(|a| a.borrow().clone()).unwrap_or_else(|| (RgbaImage::new(64, 64), false));
     let (weak, sh) = (ui.as_weak(), sh.clone());
@@ -352,7 +353,7 @@ pub fn load_cosmetics(ui: &AppWindow, sh: &Arc<Shared>) {
         let worn = uuid.as_deref().and_then(|u| nether_core::backend::looks(&c, &[u]).ok()).and_then(|m| m.into_values().next()).map(|l| l.slots).unwrap_or_default();
         ui_do(&weak, move |ui| {
             let b = ui.global::<Backend>();
-            if list.is_empty() { b.set_cos_state(3); return; }
+            if list.is_empty() { b.set_cos_state(3); b.set_look_refreshing(false); return; }
             let mut by: [Vec<CosCard>; SLOTS] = Default::default();
             for (m, l, img) in &list { by[l.kind.slot()].push(cos_card(m, img)); }
             let pages: Vec<ModelRc<CosCard>> = by.into_iter().map(|v| ModelRc::new(VecModel::from(v))).collect();
@@ -362,6 +363,8 @@ pub fn load_cosmetics(ui: &AppWindow, sh: &Arc<Shared>) {
             NCOS.with(|v| *v.borrow_mut() = list.into_iter().map(|(_, l, _)| Rc::new(l)).collect());
             set_cos_worn(ui, worn);
             b.set_cos_state(2);
+            sync_sel(ui);
+            b.set_look_refreshing(false);
             export(ui, &sh);
         });
     });
@@ -381,37 +384,76 @@ pub fn hover_cosmetic(id: &str) {
     mark_dirty();
 }
 
-/// Wear a cosmetic in slot `slot` (`Kind::ALL` order); the worn one (or "") takes the slot off.
-pub fn wear_cosmetic(ui: &AppWindow, sh: &Arc<Shared>, slot: i32, id: &str) {
-    let b = ui.global::<Backend>();
+/// Pick a cosmetic in slot `slot` (`Kind::ALL` order); the picked one again (or "") empties the slot. APPLY sends it.
+pub fn wear_cosmetic(ui: &AppWindow, _sh: &Arc<Shared>, slot: i32, id: &str) {
     let Some(kind) = Kind::ALL.get(slot.max(0) as usize).copied() else { return };
-    if b.get_cos_busy() { return; }
+    edit_sel(ui, |s| { let c = &mut s.cos[kind.slot()]; *c = if id.is_empty() || c == id { String::new() } else { id.to_string() }; });
+}
+
+/// Send a look to the services in as few requests as possible: one to Minecraft when the account cape changes, one
+/// to the Nether API for the Nether cape + every changed cosmetic (its write limit is 5 a minute). `game` = the seq of
+/// the in-game request it answers.
+pub fn apply_look(ui: &AppWindow, sh: &Arc<Shared>, target: Sel, game: Option<u64>) {
+    let b = ui.global::<Backend>();
+    let answer = |ui: &AppWindow, ok: bool, msg: &str| if let Some(seq) = game { ANSWER.with(|a| *a.borrow_mut() = Some((seq, ok, msg.to_string()))); export(ui, sh); };
+    if b.get_look_busy() { answer(ui, false, "Still applying the last change"); return; }
+    let cur = applied(ui);
+    if target == cur { answer(ui, true, ""); if game.is_none() { sync_sel(ui); } return; }
     let Some(session) = sh.session.lock().ok().and_then(|s| s.clone()).filter(|s| s.user_type == "msa") else {
-        show_toast(ui, sh, "Sign in with Microsoft to wear Nether cosmetics");
+        show_toast(ui, sh, "Sign in with Microsoft to change your look");
+        answer(ui, false, "Sign in to the launcher with Microsoft first");
         return;
     };
-    let worn = COS_WORN.with(|w| w.borrow()[kind.slot()].clone());
-    let off = id.is_empty() || worn == id;
-    if off && worn.is_empty() { return; }
-    let name = COS_META.with(|v| v.borrow().iter().find(|m| m.id == if off { worn.as_str() } else { id }).map(|m| m.name.clone())).unwrap_or_default();
-    b.set_cos_busy(true);
-    let (weak, sh, id) = (ui.as_weak(), sh.clone(), id.to_string());
+    let cape = (target.cape != cur.cape).then(|| b.get_capes().row_data(target.cape.max(0) as usize).map(|c| c.id.to_string()).unwrap_or_default());
+    let ncape = (target.ncape != cur.ncape).then(|| target.ncape.clone());
+    let cos: Vec<(Kind, String)> = Kind::ALL.iter().filter(|k| target.cos[k.slot()] != cur.cos[k.slot()]).map(|k| (*k, target.cos[k.slot()].clone())).collect();
+    b.set_look_busy(true);
+    let (weak, sh) = (ui.as_weak(), sh.clone());
     std::thread::spawn(move || {
-        let r = nether_core::backend::set_cosmetic(&client(), &session, kind, (!off).then_some(id.as_str()));
+        let c = client();
+        let cape_ok = cape.as_ref().map(|id| mojang_cape(&session.access_token, id));
+        let slots: Vec<(Kind, Option<&str>)> = cos.iter().map(|(k, id)| (*k, (!id.is_empty()).then_some(id.as_str()))).collect();
+        let nether = nether_core::backend::set_look(&c, &session, ncape.as_deref().map(|n| (!n.is_empty()).then_some(n)), &slots);
         ui_do(&weak, move |ui| {
-            ui.global::<Backend>().set_cos_busy(false);
-            match r {
+            let b = ui.global::<Backend>();
+            b.set_look_busy(false);
+            if cape_ok == Some(true) { b.set_cape_idx(target.cape); }
+            let mut err = Vec::new();
+            if cape_ok == Some(false) { err.push("Couldn't change your Minecraft cape".to_string()); }
+            match nether {
                 Ok(()) => {
-                    let mut w = COS_WORN.with(|w| w.borrow().clone());
-                    w[kind.slot()] = if off { String::new() } else { id };
-                    set_cos_worn(ui, w);
-                    export(ui, &sh);
-                    show_toast(ui, &sh, &if off { format!("{name} taken off") } else { format!("You're now wearing {name}") });
+                    if let Some(n) = &ncape { set_worn(ui, n); }
+                    if !cos.is_empty() {
+                        let mut w = COS_WORN.with(|w| w.borrow().clone());
+                        for (k, id) in &cos { w[k.slot()] = id.clone(); }
+                        set_cos_worn(ui, w);
+                    }
                 }
-                Err(e) => show_toast(ui, &sh, &format!("Couldn't change your look: {e:#}")),
+                Err(e) => err.push(format!("Couldn't change your look: {e:#}")),
             }
+            let ok = err.is_empty();
+            let msg = if ok { "Look applied".to_string() } else { err.join(" · ") };
+            // done: the editor shows the account again; failed: the picks stay so APPLY can retry
+            if ok { sync_sel(ui) } else { push_sel(ui, SEL.with(|v| v.borrow().clone())) }
+            if let Some(seq) = game { ANSWER.with(|a| *a.borrow_mut() = Some((seq, ok, msg.clone()))); }
+            export(ui, &sh);
+            show_toast(ui, &sh, &msg);
         });
     });
+}
+
+/// Launcher APPLY.
+pub fn apply(ui: &AppWindow, sh: &Arc<Shared>) { apply_look(ui, sh, SEL.with(|v| v.borrow().clone()), None) }
+
+/// Refresh (launcher or game): re-read the signed content (capes, cosmetics) and what the account wears now.
+pub fn refresh(ui: &AppWindow, sh: &Arc<Shared>) {
+    let b = ui.global::<Backend>();
+    if b.get_look_refreshing() { return; }
+    b.set_look_refreshing(true);
+    nether_core::backend::refresh();
+    load_ncapes_as(ui, sh, true);
+    load_cosmetics_as(ui, sh, true);
+    if b.get_cos_state() != 2 && b.get_cos_state() != 1 { b.set_look_refreshing(false); }
 }
 
 // ---------------- in-game wardrobe bridge ----------------
@@ -426,6 +468,7 @@ pub fn export(ui: &AppWindow, sh: &Shared) {
     let Some((skin, slim)) = ACCOUNT.with(|a| a.borrow().clone()).or_else(|| LOOK.with(|l| l.borrow().as_ref().map(|l| (l.skin.clone(), l.slim)))) else { return };
     let b = ui.global::<Backend>();
     let mut st = serde_json::json!({ "v": 1, "uuid": msa_uuid(sh).unwrap_or_default(), "slim": slim, "skin": "skin.png", "netherWorn": b.get_ncape_worn().to_string(), "nether": [], "account": [] });
+    if let Some((seq, ok, msg)) = ANSWER.with(|a| a.borrow().clone()) { st["answer"] = serde_json::json!({ "seq": seq, "ok": ok, "msg": msg }); }
     let ok = std::fs::create_dir_all(&dir).is_ok() && skin.save(dir.join("skin.png")).is_ok();
     if !ok { return; }
     let mut wanted = vec!["skin.png".to_string(), "state.json".to_string()];
@@ -444,7 +487,7 @@ pub fn export(ui: &AppWindow, sh: &Shared) {
             if !safe_id(&m.id) { continue; }
             let f = format!("c_{}.png", m.id);
             if img.save(dir.join(&f)).is_ok() {
-                st["items"].as_array_mut().unwrap().push(serde_json::json!({ "id": m.id, "name": m.name, "type": m.kind, "rarity": m.rarity, "png": f }));
+                st["items"].as_array_mut().unwrap().push(serde_json::json!({ "id": m.id, "name": m.name, "type": m.kind, "png": f }));
                 wanted.push(f);
             }
         }
@@ -482,26 +525,28 @@ pub fn watch(ui: &AppWindow, sh: Arc<Shared>) {
     });
 }
 
+/// A request from the in-game wardrobe: {"seq", "look": {"nether", "account", "cosmetics": {slot: id}}} (keys present
+/// = wanted, "" = none) or {"seq", "refresh": true}.
 fn apply_request(ui: &AppWindow, sh: &Arc<Shared>, req: &Value) {
+    let seq = req["seq"].as_f64().unwrap_or(0.0) as u64;
+    if req["refresh"].as_bool() == Some(true) { refresh(ui, sh); return; }
+    let l = &req["look"];
+    if !l.is_object() { return; }
     let b = ui.global::<Backend>();
-    if let Some(n) = req["nether"].as_str() {
-        let worn = b.get_ncape_worn().to_string();
-        if n.is_empty() { if !worn.is_empty() { wear_ncape(ui, sh, &worn); } } // wearing the worn one takes it off
-        else if worn != n && b.get_ncapes().iter().any(|c| c.id == n) { wear_ncape(ui, sh, n); }
+    let mut t = applied(ui);
+    if let Some(n) = l["nether"].as_str() { if n.is_empty() || b.get_ncapes().iter().any(|c| c.id == n) { t.ncape = n.to_string(); } }
+    if let Some(a) = l["account"].as_str() { if let Some(i) = b.get_capes().iter().position(|c| c.id == a) { t.cape = i as i32; } }
+    if let Some(m) = l["cosmetics"].as_object() {
+        for (slot, id) in m { if let (Some(k), Some(id)) = (Kind::parse(slot), id.as_str()) { t.cos[k.slot()] = id.to_string(); } }
     }
-    if let (Some(slot), Some(id)) = (req["cosmetic"]["slot"].as_str(), req["cosmetic"]["id"].as_str()) {
-        if let Some(k) = Kind::parse(slot) {
-            let worn = COS_WORN.with(|w| w.borrow()[k.slot()].clone());
-            if id != worn { wear_cosmetic(ui, sh, k.slot() as i32, if id.is_empty() { &worn } else { id }); }
-        }
-    }
-    if let Some(a) = req["account"].as_str() {
-        if let Some(i) = b.get_capes().iter().position(|c| c.id == a) { if b.get_cape_idx() != i as i32 { equip(ui, sh, i as i32); } }
-    }
+    apply_look(ui, sh, t, Some(seq));
 }
 
-fn set_preview_cape(id: &str) {
-    let tex = NWORN.with(|n| n.borrow().clone()).or_else(|| CAPES.with(|v| v.borrow().iter().find(|c| c.id == id).cloned()));
+/// The preview wears the picked cape: the Nether one, else the account one.
+fn set_preview_cape() {
+    let s = SEL.with(|v| v.borrow().clone());
+    let tex = NCAPES.with(|v| v.borrow().iter().find(|c| !s.ncape.is_empty() && c.id == s.ncape).cloned())
+        .or_else(|| if s.cape > 0 { CAPES.with(|v| v.borrow().get(s.cape as usize - 1).cloned()) } else { None });
     ANIM.with(|a| *a.borrow_mut() = tex.as_ref().filter(|t| t.frames.len() > 1).map(|t| (t.frames.clone(), t.ms, 0)));
     LOOK.with(|l| if let Some(l) = l.borrow_mut().as_mut() { l.cape = tex.map(|t| t.img); });
     mark_dirty();
@@ -574,9 +619,9 @@ fn tick(ui: &AppWindow, dt: f32) -> bool {
 
 // ---------------- renderer (nether_core::preview) ----------------
 
-/// The cosmetics on the preview: the worn ones, with a hovered card replacing its slot.
+/// The cosmetics on the preview: the picked ones, with a hovered card replacing its slot.
 fn shown_items() -> [Option<Rc<Loaded>>; SLOTS] {
-    let worn = COS_WORN.with(|w| w.borrow().clone());
+    let worn = SEL.with(|w| w.borrow().cos.clone());
     let hover = COS_HOVER.with(|h| h.borrow().clone());
     NCOS.with(|v| {
         let v = v.borrow();

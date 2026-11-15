@@ -6,7 +6,9 @@ import { Eyebrow, Heading, Btn, Seg, Chip, IconBtn, Ico, Icon, SpinArea, GroundS
 component CapeCard inherits Rectangle {
     in property <Cape> cape;
     in property <bool> none;
+    // worn = picked in the editor; applied = what the account wears now
     in property <bool> worn;
+    in property <bool> applied: true;
     in property <bool> busy;
     callback clicked();
     width: 220px; height: 186px;
@@ -22,36 +24,19 @@ component CapeCard inherits Rectangle {
     }
     Text { x: 14px; y: 136px; width: parent.width - 28px; height: 28px; text: root.cape.name; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; overflow: elide; }
     if root.worn: Icon { x: 14px; y: 168px; d: Ico.check; tint: Theme.redtx; }
-    if root.worn: Text { x: 32px; y: 162px; width: 120px; height: 22px; text: "Equipped"; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 600; vertical-alignment: center; }
-    if !root.worn && ct.has-hover && !root.none: Text { x: 14px; y: 162px; width: 120px; height: 22px; text: "Wear"; color: Theme.tx; font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 600; vertical-alignment: center; }
+    if root.worn: Text { x: 32px; y: 162px; width: 120px; height: 22px; text: root.applied ? "Equipped" : "Selected"; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 600; vertical-alignment: center; }
+    if !root.worn && ct.has-hover && !root.none: Text { x: 14px; y: 162px; width: 120px; height: 22px; text: "Select"; color: Theme.tx; font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 600; vertical-alignment: center; }
     Rectangle { border-radius: 8px; border-width: root.worn ? 2px : 1px; border-color: root.worn ? Theme.red2 : Theme.ln; }
     ct := TouchArea { mouse-cursor: pointer; clicked => { if !root.busy { root.clicked(); } } }
 }
 
-// rarity colours (card label and square)
-global Rarity {
-    public pure function col(r: string) -> color {
-        if r == "legendary" { return #F2A33A; }
-        if r == "epic" { return #B27CFF; }
-        if r == "rare" { return #4F9BFF; }
-        if r == "uncommon" { return #5BD47A; }
-        return #AEB4BD;
-    }
-    public pure function label(r: string) -> string {
-        if r == "legendary" { return "Legendary"; }
-        if r == "epic" { return "Epic"; }
-        if r == "rare" { return "Rare"; }
-        if r == "uncommon" { return "Uncommon"; }
-        return "Common";
-    }
-}
-
-// one cosmetic card: the player wearing it, name, rarity, Equipped / Wear
+// one cosmetic card: the player wearing it, name, description, Equipped / Selected
 component CosView inherits Rectangle {
     in property <CosCard> item;
     in property <string> kind-label;
     in property <bool> none;
     in property <bool> worn;
+    in property <bool> applied: true;
     in property <bool> busy;
     callback clicked();
     callback hovered(bool);
@@ -75,17 +60,12 @@ component CosView inherits Rectangle {
         if root.worn || ta.has-hover: Rectangle {
             x: parent.width - self.width - 8px; y: 8px; height: 22px; width: pl.preferred-width + 18px; border-radius: 11px;
             background: root.worn ? Theme.red : Theme.s3;
-            pl := Text { text: root.worn ? (root.none ? "NOTHING WORN" : "EQUIPPED") : (root.none ? "TAKE OFF" : "WEAR"); color: root.worn ? #ffffff : Theme.tx;
+            pl := Text { text: root.worn ? (root.none ? "NOTHING" : root.applied ? "EQUIPPED" : "SELECTED") : (root.none ? "TAKE OFF" : "SELECT"); color: root.worn ? #ffffff : Theme.tx;
                 font-family: Theme.ui; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 0.6px; horizontal-alignment: center; vertical-alignment: center; }
         }
     }
     Text { x: 14px; y: 210px; width: parent.width - 28px; height: 26px; text: root.none ? "None" : root.item.name; color: Theme.tx; font-family: Theme.disp; font-size: 15px; font-weight: 700; vertical-alignment: center; overflow: elide; }
-    if !root.none: Rectangle {
-        x: 14px; y: 240px; width: parent.width - 28px; height: 20px;
-        Rectangle { x: 0px; y: 6px; width: 8px; height: 8px; border-radius: 2px; background: Rarity.col(root.item.rarity); }
-        rl := Text { x: 14px; height: parent.height; text: Rarity.label(root.item.rarity); color: Rarity.col(root.item.rarity); font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 600; vertical-alignment: center; }
-        Text { x: rl.x + rl.preferred-width + 6px; height: parent.height; text: "·  " + root.kind-label; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; }
-    }
+    if !root.none: Text { x: 14px; y: 240px; width: parent.width - 28px; height: 20px; text: root.item.desc != "" ? root.item.desc : root.kind-label; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; overflow: elide; }
     if root.none: Text { x: 14px; y: 240px; height: 20px; text: "Take this slot off"; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; }
     Rectangle { border-radius: 8px; border-width: root.worn ? 2px : 1px; border-color: root.worn ? Theme.red2 : (ta.has-hover ? Theme.ln2 : Theme.ln); }
     ta := TouchArea {
@@ -101,19 +81,20 @@ component CosGrid inherits Flickable {
     in property <int> slot;
     in property <string> title;
     in property <string> kind-label;
-    property <string> worn: Backend.cos-worn[root.slot];
+    property <string> worn: Backend.cos-sel[root.slot];
+    property <string> applied: Backend.cos-worn[root.slot];
     content-height: 36px + Math.ceil((root.items.length + 1) / 4) * 288px + 24px;
     init => { Backend.load-cos(); }
-    SectionHead { x: 0px; y: 0px; width: 916px; title: root.title; note: "seen by every Nether player · click again to take off"; }
+    SectionHead { x: 0px; y: 0px; width: 916px; title: root.title; note: "seen by every Nether player · pick, then APPLY"; }
     if Backend.cos-state == 2: Rectangle {
         y: 36px; height: parent.content-height - self.y;
         CosView {
-            x: 0px; y: 0px; none: true; worn: root.worn == ""; busy: Backend.cos-busy; kind-label: root.kind-label;
+            x: 0px; y: 0px; none: true; worn: root.worn == ""; applied: root.applied == ""; busy: Backend.look-busy; kind-label: root.kind-label;
             clicked => { if root.worn != "" { Backend.wear-cos(root.slot, ""); } }
         }
         for c[i] in root.items: CosView {
             x: mod(i + 1, 4) * 232px; y: floor((i + 1) / 4) * 288px;
-            item: c; worn: root.worn == c.id; busy: Backend.cos-busy; kind-label: root.kind-label;
+            item: c; worn: root.worn == c.id; applied: root.applied == c.id; busy: Backend.look-busy; kind-label: root.kind-label;
             clicked => { Backend.wear-cos(root.slot, c.id); }
             hovered(on) => { Backend.hover-cos(on ? c.id : ""); }
         }
@@ -137,7 +118,7 @@ export component WardrobeScreen inherits Rectangle {
     property <bool> signed: Backend.acct-state == 2;
     // the worn cosmetic of the page shown (preview footer)
     property <[CosCard]> page-items: root.page >= 2 ? Backend.cos-items[root.page - 2] : [];
-    property <string> page-worn: root.page >= 2 ? Backend.cos-worn[root.page - 2] : "";
+    property <string> page-worn: root.page >= 2 ? Backend.cos-sel[root.page - 2] : "";
     property <string> worn-name: root.page-worn == "" ? "Nothing worn" : root.find-name(root.page-items, root.page-worn);
     pure function find-name(list: [CosCard], id: string) -> string {
         // Slint has no lookup: the footer scans the (short) list
@@ -168,6 +149,9 @@ export component WardrobeScreen inherits Rectangle {
             text: root.picked ? SkinLib.skins[root.sel].name : (root.signed ? Backend.acct-name : "Player");
             color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; vertical-alignment: center; }
         if root.picked: Chip { x: parent.width - self.width - 16px; y: 21px; text: "Preview"; }
+        if root.page >= 1: IconBtn { x: parent.width - self.width - 14px; y: 16px; size: 32px; d: Ico.refresh;
+            tip: Backend.look-refreshing ? "Checking…" : "Check for new capes and cosmetics"; opacity: Backend.look-refreshing ? 0.5 : 1;
+            clicked => { Backend.refresh-look(); } }
         // signed out: wearing needs the account
         if root.picked && !root.signed: Rectangle {
             x: 0px; y: parent.height - 62px - 44px; width: parent.width; height: 44px; background: Theme.s1;
@@ -179,7 +163,14 @@ export component WardrobeScreen inherits Rectangle {
             Rectangle { y: 0px; height: 1px; background: Theme.ln; }
             Seg { x: 14px; y: 14px; items: ["CLASSIC", "SLIM"]; item-w: 84px; current: Backend.skin-slim ? 1 : 0;
                 changed(i) => { Backend.skin-slim = i == 1; if root.picked { SkinLib.set-slim(root.sel, i == 1); } } }
-            if !root.picked: Text { x: 200px; width: parent.width - 214px; horizontal-alignment: right; vertical-alignment: center; text: root.page == 0 ? (root.signed ? "Account skin" : "Default (Steve)") : root.page == 1 ? Backend.capes[Backend.cape-idx].name : root.worn-name; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; overflow: elide; }
+            if !root.picked && root.page == 0: Text { x: 200px; width: parent.width - 214px; horizontal-alignment: right; vertical-alignment: center; text: root.page == 0 ? (root.signed ? "Account skin" : "Default (Steve)") : root.page == 1 ? Backend.capes[Backend.cape-idx].name : root.worn-name; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; overflow: elide; }
+            // capes + cosmetics: picks only show here until APPLY sends them all at once
+            if root.page >= 1: PlayButton {
+                x: parent.width - 14px - 150px - 4px; y: 13px; width: 150px; height: 36px; text-size: 16px; arrow: false;
+                label: Backend.look-busy ? "APPLYING…" : (Backend.look-dirty ? "APPLY" : "APPLIED");
+                enabled: root.signed && Backend.look-dirty && !Backend.look-busy;
+                clicked => { Backend.apply-look(); }
+            }
             if root.picked: PlayButton {
                 x: parent.width - 14px - 150px - 4px; y: 13px; width: 150px; height: 36px; text-size: 16px; arrow: false;
                 property <bool> worn: SkinLib.worn-id == SkinLib.skins[root.sel].id;
@@ -307,15 +298,15 @@ export component WardrobeScreen inherits Rectangle {
         SectionHead { x: 0px; y: 0px; width: 916px; idx: "01"; title: Backend.acct-state == 2 ? "FROM YOUR MICROSOFT ACCOUNT" : "SIGN IN TO SEE YOUR CAPES"; note: "everyone sees these"; }
         for c[i] in Backend.capes: CapeCard {
             x: mod(i, 4) * 232px; y: 36px + floor(i / 4) * 198px;
-            cape: c; none: i == 0; worn: Backend.cape-idx == i;
-            clicked => { if Backend.cape-idx != i { Backend.equip-cape(i); } }
+            cape: c; none: i == 0; worn: Backend.cape-sel == i; applied: Backend.cape-idx == i; busy: Backend.look-busy;
+            clicked => { if Backend.cape-sel != i { Backend.equip-cape(i); } }
         }
-        SectionHead { x: 0px; y: parent.nth-y; width: 916px; idx: "02"; title: "NETHER CAPES"; note: "seen by Nether players · click again to take off"; }
+        SectionHead { x: 0px; y: parent.nth-y; width: 916px; idx: "02"; title: "NETHER CAPES"; note: "seen by Nether players · pick, then APPLY"; }
         if Backend.ncape-state == 2: Rectangle {
             y: parent.nth-y + 36px; height: parent.content-height - self.y;
             for c[i] in Backend.ncapes: CapeCard {
                 x: mod(i, 4) * 232px; y: floor(i / 4) * 198px;
-                cape: c; worn: Backend.ncape-worn == c.id; busy: Backend.ncape-busy;
+                cape: c; worn: Backend.ncape-sel == c.id; applied: Backend.ncape-worn == c.id; busy: Backend.look-busy;
                 clicked => { Backend.wear-ncape(c.id); }
             }
         }

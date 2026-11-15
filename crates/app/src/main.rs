@@ -915,6 +915,10 @@ fn main() -> Result<(), slint::PlatformError> {
         let (weak, sh) = (ui.as_weak(), shared.clone());
         backend.on_wear_cos(move |slot, id| if let Some(ui) = weak.upgrade() { skin::wear_cosmetic(&ui, &sh, slot, &id) });
         backend.on_hover_cos(|id| skin::hover_cosmetic(&id));
+        let (weak, sh) = (ui.as_weak(), shared.clone());
+        backend.on_apply_look(move || if let Some(ui) = weak.upgrade() { skin::apply(&ui, &sh) });
+        let (weak, sh) = (ui.as_weak(), shared.clone());
+        backend.on_refresh_look(move || if let Some(ui) = weak.upgrade() { skin::refresh(&ui, &sh) });
     }
 
     // ---- instances: versions for the create dialog, create/duplicate/delete/export, settings ----
@@ -1075,9 +1079,9 @@ fn main() -> Result<(), slint::PlatformError> {
             else if crash.is_some() { toast_action(&ui, &sh, "Nether Client closed unexpectedly last time. The log says why.", true, "VIEW LOG", |_| { let _ = std::process::Command::new("explorer").arg(applog::file()).spawn(); }); }
         });
         settings_catch_up(&shared);
-        // look for a newer release a moment after start (quiet unless there is one)
+        // look for a newer release right away: an installed copy on an old version is gated until it updates
         let (w, sh) = (ui.as_weak(), shared.clone());
-        slint::Timer::single_shot(std::time::Duration::from_secs(4), move || if let Some(ui) = w.upgrade() { settings::check_updates(&ui, &sh, false) });
+        slint::Timer::single_shot(std::time::Duration::from_millis(200),move || if let Some(ui) = w.upgrade() { settings::check_updates(&ui, &sh, false) });
     }
     wardrobe::init(&ui, shared.clone());
     settings::init(&ui, shared.clone());

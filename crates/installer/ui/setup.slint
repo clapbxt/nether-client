@@ -150,7 +150,7 @@ export component SetupWindow inherits Window {
             Text { x: cx; y: 196px; width: cw; wrap: word-wrap; color: Theme.dim; font-family: Theme.ui; font-size: 15px;
                 text: Setup.mode == 1
                     ? (Setup.wipe-data ? "Nether Client and its data were removed." : "Nether Client was removed. Your instances and worlds are still in " + Setup.data-dir + ".")
-                    : "Nether Client " + Setup.version + " is installed. It keeps itself up to date: new versions install when you close the launcher."; }
+                    : "Nether Client " + Setup.version + " is installed. It checks for a new version every time it starts and updates in a few seconds."; }
             if Setup.mode == 0: Opt { x: cx; y: 290px; width: cw; title: "Open Nether Client now"; sub: "Sign in with your Microsoft account to play."; on <=> Setup.launch; }
             PlayButton { x: cx + cw - 200px; y: parent.height - 100px; width: 200px; height: 56px; label: "FINISH"; arrow: false; text-size: 24px; clicked => { Setup.finish(); } }
         }

@@ -61,7 +61,7 @@ final class MainMenu {
     private static Field fFading, fFadeStart, fSplash;
     private static boolean looked, legacy;
     /** our title screen is drawn this frame (every click on it is ours) */
-    static boolean title, pause;
+    static boolean title, pause, packs;
     private static boolean pressed, click;
     private static long shownAt;
     /** the title screen whose widgets we removed (rebuilt by {@link #restoreVanilla}) and the splash vanilla picked for it */
@@ -98,7 +98,7 @@ final class MainMenu {
     /** Before the in-game menu each frame. */
     static void frame(int fbW, int fbH) {
         boolean was = title;
-        title = pause = false;
+        title = pause = packs = false;
         click = pressed;
         pressed = false;
         nb = 0;
@@ -120,6 +120,12 @@ final class MainMenu {
                 strip(s);
                 stripped = s;
                 drawTitle(fbW, fbH, s);
+            } else if (!Input.menuOpen && packScreen(s)) {
+                // the game's resource pack screen: GET PACKS opens the Modrinth browser
+                packs = true;
+                units(Gfx.base);
+                float cw = chipW("GET PACKS", null, true);
+                if (chip("packs", Gfx.fbW / Gfx.s - cw - 12, 12, 32, "GET PACKS", null, true, false)) PackBrowser.show();
             } else if (cPause != null && cPause.isInstance(s) && !Input.menuOpen && MODULE.bool("pauseButton")) {
                 // F3+Esc pauses without the menu (screenshots): no button either
                 if (legacy || !Boolean.FALSE.equals(Game.fld(s, "field_19319"))) {
@@ -174,6 +180,31 @@ final class MainMenu {
 
     private static String str(Object o) { return o instanceof String && !((String) o).isEmpty() ? (String) o : null; }
 
+    private static final java.util.Map<Class<?>, Boolean> packCache = new java.util.WeakHashMap<>();
+
+    /**
+     * The game's resource pack screen, found without names: a screen holding a translatable text with the key
+     * resourcePack.title (1.16+, any mappings), or Forge 1.8.9-1.12.2's GuiScreenResourcePacks. Answer cached per class.
+     */
+    private static boolean packScreen(Object s) {
+        Class<?> c = s.getClass();
+        Boolean known = packCache.get(c);
+        if (known != null) return known;
+        boolean yes = c.getName().endsWith("GuiScreenResourcePacks");
+        try {
+            for (Class<?> k = c; !yes && k != null && k != Object.class; k = k.getSuperclass()) {
+                for (Field f : k.getDeclaredFields()) {
+                    if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive() || f.getType() == String.class) continue;
+                    f.setAccessible(true);
+                    Object v = f.get(s);
+                    if (v != null && !(v instanceof java.util.Collection) && String.valueOf(v).contains("'resourcePack.title'")) { yes = true; break; }
+                }
+            }
+        } catch (Throwable ignored) { }
+        packCache.put(c, yes);
+        return yes;
+    }
+
     // ---------------------------------------------------------------- input
 
     /** boxes (framebuffer px) of our controls on vanilla's title / pause screen, from the last frame */
@@ -183,7 +214,7 @@ final class MainMenu {
     /** Mouse press from the input chain while no Nether menu is open; true swallows it. */
     static boolean press(int b) {
         if (title) { if (b == 0) pressed = true; return true; }
-        if (pause && b == 0) {
+        if ((pause || packs) && b == 0) {
             float x = fx(), y = fy();
             for (int i = 0; i < nb; i += 4) if (x >= boxes[i] && y >= boxes[i + 1] && x < boxes[i] + boxes[i + 2] && y < boxes[i + 1] + boxes[i + 3]) { pressed = true; return true; }
         }

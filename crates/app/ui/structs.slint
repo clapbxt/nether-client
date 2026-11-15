@@ -18,7 +18,7 @@ export struct MdBlock { kind: int, text: styled-text, plain: string, img: image,
 export struct Cape { id: string, name: string, img: image }
 
 // a Nether cosmetic card (hat, headband, mask, back, wings, aura, pet): picture rendered by the launcher (the player wearing it)
-export struct CosCard { id: string, name: string, kind: string, rarity: string, desc: string, img: image }
+export struct CosCard { id: string, name: string, kind: string, desc: string, img: image }
 // a saved Microsoft account (account panel); active = the one Play uses
 export struct Acct { uuid: string, name: string, active: bool }
 // Settings > Java: one major version, what the launcher will run for it (custom = picked by the user)
@@ -196,12 +196,17 @@ export global Backend {
     in-out property <[Link]> folders;
     callback open-path(string);
     // updates (GitHub releases): 0 checking, 1 up to date, 2 newer version (update-ver, update-url), 3 couldn't check,
-    // 4 downloaded + verified, installs on close (update-restart installs now), 5 downloading
+    // 4 downloaded + verified (update-restart installs now), 5 downloading
     in-out property <int> update-state: 0;
     in-out property <string> update-ver;
     in-out property <string> update-url;
     callback check-updates();
     callback update-restart();
+    // installed copies on an old version are gated on launch: update now (busy while downloading/installing) or exit
+    in-out property <bool> update-gate: false;
+    in-out property <bool> update-gate-busy: false;
+    callback update-now();
+    callback update-exit();
     in-out property <bool> lp-auto-update: true;
     // Settings > Support: launcher log folder, system info to the clipboard
     callback open-logs();
@@ -292,18 +297,26 @@ export global Backend {
     in-out property <[Cape]> ncapes;
     in-out property <int> ncape-state: 0;
     in-out property <string> ncape-worn;
-    in-out property <bool> ncape-busy;
     callback load-ncapes();
     callback wear-ncape(string);
     // Nether cosmetics by slot (0 hat, 1 headband, 2 mask, 3 back, 4 wings, 5 aura, 6 pet): cards, worn ids, state as for capes
     in-out property <[[CosCard]]> cos-items: [[], [], [], [], [], [], []];
     in-out property <[string]> cos-worn: ["", "", "", "", "", "", ""];
     in-out property <int> cos-state: 0;
-    in-out property <bool> cos-busy;
     callback load-cos();
     callback wear-cos(int, string);
     // a hovered card previews its cosmetic on the player ("" = the worn look)
     callback hover-cos(string);
+    // the look being picked (cards clicked, not applied): Nether cape, account cape index, cosmetics by slot;
+    // look-dirty = it differs from what is worn; APPLY sends it in one go, REFRESH re-reads capes + cosmetics
+    in-out property <string> ncape-sel;
+    in-out property <int> cape-sel: 0;
+    in-out property <[string]> cos-sel: ["", "", "", "", "", "", ""];
+    in-out property <bool> look-dirty;
+    in-out property <bool> look-busy;
+    in-out property <bool> look-refreshing;
+    callback apply-look();
+    callback refresh-look();
 
     // Microsoft account (0 signed out, 1 waiting on microsoft.com code, 2 signed in, 3 restoring)
     in-out property <int> acct-state: 0;

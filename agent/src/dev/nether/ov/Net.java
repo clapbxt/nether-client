@@ -179,7 +179,7 @@ final class Net {
 
     private static SSLContext tls12;
 
-    private static HttpURLConnection open(String url) throws Exception {
+    static HttpURLConnection open(String url) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         if (c instanceof HttpsURLConnection && System.getProperty("java.specification.version", "").startsWith("1.")) {
             // Java 8 (1.8.9's runtime) may still offer TLS 1.0/1.1 first; the APIs we use require 1.2+

@@ -100,7 +100,7 @@ export component SettingsScreen inherits Rectangle {
     property <length> py: root.y5 + 216px;
     property <length> sy: root.y6 + 24px + Backend.folders.length * 64px;
     // L2: privacy (what the launcher and client connect to)
-    property <length> y7: root.sy + 5 * 64px + 40px;
+    property <length> y7: root.sy + 4 * 64px + 40px;
     property <length> dy: Backend.discord-ready ? 64px : 0px;
     property <length> pos: -fl.content-y;
     property <length> end: fl.content-height - fl.height - 2px;
@@ -217,16 +217,14 @@ export component SettingsScreen inherits Rectangle {
         SetRow { x: 0px; y: root.sy; width: root.cw; reserve: 140px; title: "Download cache"; sub: Backend.cache-size + " of saved icons and lookups. Safe to clear; it refills as you browse.";
             Btn { x: parent.width - self.width; y: 14px; text: "CLEAR"; clicked => { Backend.clear-cache(); } } }
         SetRow { x: 0px; y: root.sy + 64px; width: root.cw; reserve: 260px; title: "Updates";
-            sub: Backend.update-state == 0 ? "Checking for a newer version…" : (Backend.update-state == 2 ? "Nether Client " + Backend.update-ver + " is out. Get it from the release page." : (Backend.update-state == 3 ? "Couldn't reach GitHub to check. Try again later." : (Backend.update-state == 4 ? "Nether Client " + Backend.update-ver + " is downloaded. It installs when you close the launcher." : (Backend.update-state == 5 ? "Downloading Nether Client " + Backend.update-ver + "…" : "You're on the newest version."))));
+            sub: Backend.update-state == 0 ? "Checking for a newer version…" : (Backend.update-state == 2 ? "Nether Client " + Backend.update-ver + " is out. Get it from the release page." : (Backend.update-state == 3 ? "Couldn't reach GitHub to check. Try again later." : (Backend.update-state == 4 ? "Nether Client " + Backend.update-ver + " is downloaded. Restart to install it." : (Backend.update-state == 5 ? "Downloading Nether Client " + Backend.update-ver + "…" : "You're on the newest version."))));
             if Backend.update-state == 2: Btn { x: parent.width - self.width; y: 14px; text: "GET " + Backend.update-ver; solid: true; icon: Ico.download; clicked => { Backend.open-url(Backend.update-url); } }
             if Backend.update-state == 4: Btn { x: parent.width - self.width; y: 14px; text: "RESTART NOW"; solid: true; icon: Ico.download; clicked => { Backend.update-restart(); } }
             if Backend.update-state != 2 && Backend.update-state != 4: Btn { x: parent.width - self.width; y: 14px; text: "CHECK NOW"; enabled: Backend.update-state != 0 && Backend.update-state != 5; clicked => { Backend.check-updates(); } } }
-        SyncRow { x: 0px; y: root.sy + 128px; width: root.cw; title: "Install updates automatically";
-            sub: "New versions download in the background, are checked against our signing key, and install when you close Nether."; on <=> Backend.lp-auto-update; toggled => { Backend.save-launcher(); } }
-        SetRow { x: 0px; y: root.sy + 192px; width: root.cw; reserve: 420px; title: "Support"; sub: "The launcher's own log, and a summary of this PC for a bug report.";
+        SetRow { x: 0px; y: root.sy + 128px; width: root.cw; reserve: 420px; title: "Support"; sub: "The launcher's own log, and a summary of this PC for a bug report.";
             Btn { x: csi.x - 10px - self.width; y: 14px; text: "LOGS"; icon: Ico.folder; clicked => { Backend.open-logs(); } }
             csi := Btn { x: parent.width - self.width; y: 14px; text: "COPY SYSTEM INFO"; icon: Ico.copy; clicked => { Backend.copy-sysinfo(); } } }
-        SetRow { x: 0px; y: root.sy + 256px; width: root.cw; reserve: 0px; title: "Nether Client " + Backend.app-version; sub: "Beta. No telemetry, no ads. Sign-in tokens stay in Windows Credential Manager."; }
+        SetRow { x: 0px; y: root.sy + 192px; width: root.cw; reserve: 0px; title: "Nether Client " + Backend.app-version; sub: "Beta. No telemetry, no ads. Sign-in tokens stay in Windows Credential Manager."; }
 
         // ---------- 07 privacy (L2): every service the launcher and client talk to, and when ----------
         SectionHead { x: 0px; y: root.y7; width: root.cw; idx: "07"; title: "PRIVACY"; note: "no telemetry, no analytics"; }
