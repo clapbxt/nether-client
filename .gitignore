@@ -2,6 +2,7 @@ target/
 *.png
 !crates/core/res/nether-pack/*.png
 !docs/screens/*.png
+!site/**/*.png
 
 # the public repo is the client only: backend, tools, design work and notes stay on this PC
 backend/
