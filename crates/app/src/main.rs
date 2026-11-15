@@ -24,6 +24,7 @@ mod mods;
 mod host;
 mod deeplink;
 mod wardrobe;
+mod community;
 mod packs;
 mod wizard;
 mod combine;
@@ -919,6 +920,8 @@ fn main() -> Result<(), slint::PlatformError> {
         backend.on_apply_look(move || if let Some(ui) = weak.upgrade() { skin::apply(&ui, &sh) });
         let (weak, sh) = (ui.as_weak(), shared.clone());
         backend.on_refresh_look(move || if let Some(ui) = weak.upgrade() { skin::refresh(&ui, &sh) });
+        let weak = ui.as_weak();
+        backend.on_revert_look(move || if let Some(ui) = weak.upgrade() { skin::revert(&ui) });
     }
 
     // ---- instances: versions for the create dialog, create/duplicate/delete/export, settings ----
@@ -1084,6 +1087,7 @@ fn main() -> Result<(), slint::PlatformError> {
         slint::Timer::single_shot(std::time::Duration::from_millis(200),move || if let Some(ui) = w.upgrade() { settings::check_updates(&ui, &sh, false) });
     }
     wardrobe::init(&ui, shared.clone());
+    community::init(&ui, shared.clone());
     settings::init(&ui, shared.clone());
     {
         let (weak, sh) = (ui.as_weak(), shared.clone());
@@ -1448,6 +1452,7 @@ fn main() -> Result<(), slint::PlatformError> {
         if let Ok(st) = std::env::var("NC_SNAP_STATE") {
             host::snap(&ui, &st);
             wardrobe::snap(&ui, &shared, &st);
+            community::snap(&ui, &st);
             // L1 dialogs with sample rows (captures only)
             if st == "preflight" {
                 use nether_core::crash::{Action, Finding};

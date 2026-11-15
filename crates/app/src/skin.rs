@@ -79,6 +79,9 @@ fn push_sel(ui: &AppWindow, s: Sel) {
 /// Drop unapplied picks: back to what the account wears.
 fn sync_sel(ui: &AppWindow) { push_sel(ui, applied(ui)); }
 
+/// REVERT / DISCARD: drop the unapplied picks.
+pub fn revert(ui: &AppWindow) { COS_HOVER.with(|h| *h.borrow_mut() = None); sync_sel(ui); mark_dirty(); }
+
 fn edit_sel(ui: &AppWindow, f: impl FnOnce(&mut Sel)) {
     let mut s = SEL.with(|v| v.borrow().clone());
     f(&mut s);
@@ -125,7 +128,7 @@ pub fn upgrade_legacy(src: &RgbaImage) -> RgbaImage {
 }
 
 /// A Nether cape PNG as 64:32 frames (stacked frames = animation); 22:17 cape-only art is placed into the 64:32 layout.
-fn cape_frames(img: &RgbaImage) -> Vec<RgbaImage> {
+pub(crate) fn cape_frames(img: &RgbaImage) -> Vec<RgbaImage> {
     let Some(l) = nether_core::backend::CapeLayout::of(img.width(), img.height()) else { return vec![] };
     let (s, w) = (l.scale, img.width());
     let fh = if l.full { 32 * s } else { 17 * s };
@@ -264,7 +267,8 @@ fn account_cape_id(ui: &AppWindow) -> String {
 }
 
 fn set_worn(ui: &AppWindow, id: &str) {
-    let tex = NCAPES.with(|v| v.borrow().iter().find(|c| c.id == id).cloned());
+    let tex = NCAPES.with(|v| v.borrow().iter().find(|c| c.id == id).cloned())
+        .or_else(|| crate::community::cape(id).map(|(frames, ms)| CapeTex { id: id.to_string(), img: frames[0].clone(), frames, ms }));
     NWORN.with(|n| *n.borrow_mut() = tex);
     ui.global::<Backend>().set_ncape_worn(id.into());
 }
@@ -317,16 +321,20 @@ const CARD_W: u32 = 300;
 const CARD_H: u32 = 390;
 
 /// A cosmetic card picture: the player wearing just that item, framed for its type.
-fn card(skin: &RgbaImage, slim: bool, it: &Loaded) -> RgbaImage {
+pub(crate) fn card(skin: &RgbaImage, slim: bool, it: &Loaded) -> RgbaImage {
     use nether_core::preview::{render, Look as PLook, View};
     let mut items: [Option<&Loaded>; SLOTS] = [None; SLOTS];
     items[it.kind.slot()] = Some(it);
+    let look = PLook { skin, slim, cape: None, items };
+    // keep the item whole plus the body part it sits on (the head for headwear, the whole player otherwise)
+    let (y0, y1, r): (f32, f32, f32) = match it.kind { Kind::Hat | Kind::Headband | Kind::Mask => (23.5, 32.5, 4.5), _ => (0., 32.5, 6.) };
+    let focus: Vec<[f32; 3]> = (0..8).map(|i| [if i & 1 == 0 { -r } else { r }, if i & 2 == 0 { y0 } else { y1 }, if i & 4 == 0 { -r.min(4.5) } else { r.min(4.5) }]).collect();
     let view = match it.kind {
-        Kind::Hat | Kind::Headband | Kind::Mask => View::head(0.42),
-        Kind::Back | Kind::Wings => View::aura(std::f32::consts::PI + 0.55), // from behind
-        Kind::Aura | Kind::Pet => View::aura(0.4),
+        Kind::Hat | Kind::Headband | Kind::Mask => View::fit(&look, 0.42, 0.16, &focus, CARD_W, CARD_H, 1.8),
+        Kind::Back | Kind::Wings => View::fit(&look, std::f32::consts::PI + 0.55, 0.1, &focus, CARD_W, CARD_H, 1.25), // from behind
+        Kind::Aura | Kind::Pet => View::fit(&look, 0.4, 0.1, &focus, CARD_W, CARD_H, 1.25),
     };
-    render(&PLook { skin, slim, cape: None, items }, view, CARD_W, CARD_H, 1.7, 0)
+    render(&look, view, CARD_W, CARD_H, 1.7, 0)
 }
 
 fn rgba_image(img: &RgbaImage) -> Image { Image::from_rgba8(SharedPixelBuffer::<Rgba8Pixel>::clone_from_slice(img.as_raw(), img.width(), img.height())) }
@@ -379,7 +387,7 @@ fn set_cos_worn(ui: &AppWindow, worn: [String; SLOTS]) {
 
 /// Show a cosmetic on the preview while its card is hovered ("" = back to what is worn).
 pub fn hover_cosmetic(id: &str) {
-    let it = if id.is_empty() { None } else { NCOS.with(|v| v.borrow().iter().find(|l| l.id == id).cloned()) };
+    let it = if id.is_empty() { None } else { NCOS.with(|v| v.borrow().iter().find(|l| l.id == id).cloned()).or_else(|| crate::community::loaded(id)) };
     COS_HOVER.with(|h| *h.borrow_mut() = it);
     mark_dirty();
 }
@@ -492,6 +500,7 @@ pub fn export(ui: &AppWindow, sh: &Shared) {
             }
         }
     }));
+    crate::community::export(&dir, &mut st, &mut wanted);
     let active = account_cape_id(ui);
     st["accountWorn"] = active.into();
     for c in b.get_capes().iter().filter(|c| !c.id.is_empty()) {
@@ -534,7 +543,7 @@ fn apply_request(ui: &AppWindow, sh: &Arc<Shared>, req: &Value) {
     if !l.is_object() { return; }
     let b = ui.global::<Backend>();
     let mut t = applied(ui);
-    if let Some(n) = l["nether"].as_str() { if n.is_empty() || b.get_ncapes().iter().any(|c| c.id == n) { t.ncape = n.to_string(); } }
+    if let Some(n) = l["nether"].as_str() { if n.is_empty() || b.get_ncapes().iter().any(|c| c.id == n) || nether_core::ugc::is_ugc(n) { t.ncape = n.to_string(); } }
     if let Some(a) = l["account"].as_str() { if let Some(i) = b.get_capes().iter().position(|c| c.id == a) { t.cape = i as i32; } }
     if let Some(m) = l["cosmetics"].as_object() {
         for (slot, id) in m { if let (Some(k), Some(id)) = (Kind::parse(slot), id.as_str()) { t.cos[k.slot()] = id.to_string(); } }
@@ -546,6 +555,7 @@ fn apply_request(ui: &AppWindow, sh: &Arc<Shared>, req: &Value) {
 fn set_preview_cape() {
     let s = SEL.with(|v| v.borrow().clone());
     let tex = NCAPES.with(|v| v.borrow().iter().find(|c| !s.ncape.is_empty() && c.id == s.ncape).cloned())
+        .or_else(|| crate::community::cape(&s.ncape).map(|(frames, ms)| CapeTex { id: s.ncape.clone(), img: frames[0].clone(), frames, ms }))
         .or_else(|| if s.cape > 0 { CAPES.with(|v| v.borrow().get(s.cape as usize - 1).cloned()) } else { None });
     ANIM.with(|a| *a.borrow_mut() = tex.as_ref().filter(|t| t.frames.len() > 1).map(|t| (t.frames.clone(), t.ms, 0)));
     LOOK.with(|l| if let Some(l) = l.borrow_mut().as_mut() { l.cape = tex.map(|t| t.img); });
@@ -563,6 +573,14 @@ thread_local! {
 }
 
 pub fn init(ui: &AppWindow) { UI.with(|u| *u.borrow_mut() = Some(ui.as_weak())); wake(); }
+
+/// The player's skin for cards rendered off the UI thread (community.rs): the account's, else the preview's.
+pub(crate) fn account_skin() -> (RgbaImage, bool) {
+    ACCOUNT.with(|a| a.borrow().clone()).or_else(|| LOOK.with(|l| l.borrow().as_ref().map(|l| (l.skin.clone(), l.slim)))).unwrap_or_else(|| (RgbaImage::new(64, 64), false))
+}
+
+/// A community item finished loading (community.rs): the preview can show it now.
+pub(crate) fn community_ready() { set_preview_cape(); mark_dirty(); }
 
 /// The preview needs frames (hover, drag, tab change, new skin): start the timer if it is stopped.
 pub fn wake() {
@@ -612,7 +630,7 @@ fn tick(ui: &AppWindow, dt: f32) -> bool {
         if !spin && !dirty && !resized && !anim && look.slim == slim { return; }
         look.slim = slim;
         let yaw = YAW.with(|y| *y.borrow());
-        b.set_skin_frame(Image::from_rgba8(render_at(look, yaw, dims.0, dims.1)));
+        b.set_skin_frame(Image::from_rgba8(render_at(look, yaw, dims.0, dims.1, true)));
     });
     spin || anim || b.get_skin_held()
 }
@@ -628,23 +646,40 @@ fn shown_items() -> [Option<Rc<Loaded>>; SLOTS] {
         std::array::from_fn(|i| {
             if let Some(h) = hover.as_ref().filter(|h| h.kind.slot() == i) { return Some(h.clone()); }
             v.iter().find(|l| !worn[i].is_empty() && l.id == worn[i] && l.kind.slot() == i).cloned()
+                .or_else(|| crate::community::loaded(&worn[i]).filter(|l| l.kind.slot() == i))
         })
     })
 }
 
 /// Render the player at `yaw` (radians) into a W x H transparent buffer.
-pub fn render(look: &Look, yaw: f32) -> SharedPixelBuffer<Rgba8Pixel> { render_at(look, yaw, W, H) }
+pub fn render(look: &Look, yaw: f32) -> SharedPixelBuffer<Rgba8Pixel> { render_at(look, yaw, W, H, false) }
+
+thread_local! {
+    /// the live preview's framing, kept until the worn items change (fitting samples seconds of animation)
+    static FIT: RefCell<(String, Option<nether_core::preview::View>)> = RefCell::new((String::new(), None));
+}
 
 /// Same frame at another size (keep the 600:780 ratio); the live preview renders only as many pixels as it shows.
-pub fn render_at(look: &Look, yaw: f32, fw: u32, fh: u32) -> SharedPixelBuffer<Rgba8Pixel> {
+/// `fit` frames the worn cosmetics too (pets, wings, auras) instead of the bare player.
+pub fn render_at(look: &Look, yaw: f32, fw: u32, fh: u32, fit: bool) -> SharedPixelBuffer<Rgba8Pixel> {
+    use nether_core::preview::View;
     let mut buf = SharedPixelBuffer::<Rgba8Pixel>::new(fw, fh);
     // the depth buffer is reused between frames (a fresh 2 MB zeroed Vec per frame at 30 fps is pure churn)
     let mut depth = DEPTH.with(|d| std::mem::take(&mut *d.borrow_mut()));
-    let shown = shown_items();
+    let shown = if fit { shown_items() } else { Default::default() };
     let items: [Option<&Loaded>; SLOTS] = std::array::from_fn(|i| shown[i].as_deref());
     let t = START.with(|s| s.elapsed());
     let plook = nether_core::preview::Look { skin: &look.skin, slim: look.slim, cape: look.cape.as_deref(), items };
-    nether_core::preview::render_into(buf.make_mut_bytes(), fw, fh, &mut depth, &plook, nether_core::preview::View::full(yaw), t.as_secs_f64(), t.as_millis() as u64);
+    let view = if !fit { View::full(yaw) } else {
+        let key: String = shown.iter().map(|s| s.as_ref().map_or("", |l| l.id.as_str())).collect::<Vec<_>>().join(",");
+        let v = FIT.with(|f| {
+            let mut f = f.borrow_mut();
+            if f.0 != key || f.1.is_none() { *f = (key, Some(View::fit_turning(&plook, 0., W, H, 0.9))); }
+            f.1.unwrap()
+        });
+        View { yaw, ..v }
+    };
+    nether_core::preview::render_into(buf.make_mut_bytes(), fw, fh, &mut depth, &plook, view, t.as_secs_f64(), t.as_millis() as u64);
     DEPTH.with(|d| *d.borrow_mut() = depth);
     buf
 }

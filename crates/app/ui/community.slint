@@ -1,0 +1,274 @@
+// Wardrobe COMMUNITY: capes and cosmetics players upload (Rust: community.rs, core ugc.rs + cosimport.rs). One NETHER |
+// COMMUNITY switch for the capes page and every cosmetic page; browse by most used / newest, search names and creators,
+// heart, report; your uploads show whether they are public. Upload converts the files here (Blockbench, Bedrock /
+// GeckoLib, Lunar .gek, .obj, images, zips) and the service checks every upload before anyone else sees it.
+import { Theme } from "theme.slint";
+import { Backend } from "structs.slint";
+import { Eyebrow, Btn, Seg, IconBtn, Icon, Ico, Hatch, Field, LinkBtn, Scrim, Toggle, Dropdown } from "components.slint";
+
+// status: 0 public, 1 only you (the safety check was unsure), 2 waiting for the check, 3 removed
+export struct CommItem { id: string, name: string, by: string, uses: string, img: image, has-img: bool, fav: bool, mine: bool, status: int, note: string }
+
+export global Community {
+    // 0 = the Nether catalog, 1 = community uploads (one switch for every wardrobe page)
+    in-out property <int> source: 0;
+    // 0 every public item, 1 hearted, 2 your uploads · 0 most used, 1 newest
+    in-out property <int> filter: 0;
+    in-out property <int> sort: 0;
+    in-out property <string> query;
+    in-out property <[CommItem]> items;
+    // 0 not loaded, 1 loading, 2 ready, 3 failed (message says why)
+    in-out property <int> state: 0;
+    in-out property <string> message;
+    in-out property <bool> more;
+    in-out property <bool> busy-more;
+    // the wardrobe page the list is for (1 capes, 2.. cosmetics)
+    in-out property <int> page: -1;
+    callback load(int);
+    callback load-more();
+    callback pick(string);
+    callback heart(string, bool);
+    callback remove(string);
+    callback report(string, string);
+    // upload dialog: 0 closed, 1 reading the files, 2 ready to send, 3 sending
+    in-out property <int> up-state: 0;
+    in-out property <image> up-img;
+    in-out property <bool> up-has-img;
+    in-out property <string> up-name;
+    // index into the type list (cape, hat, headband, mask, back item, wings, aura, pet)
+    in-out property <int> up-type: 0;
+    in-out property <string> up-summary;
+    in-out property <string> up-warn;
+    in-out property <string> up-error;
+    in-out property <bool> up-agree;
+    // the files converted fine (UPLOAD can send them)
+    in-out property <bool> up-ready;
+    callback upload-pick();
+    callback upload-type(int);
+    callback upload-send();
+    callback upload-close();
+    // report / delete confirmations ("" = closed)
+    in-out property <string> report-id;
+    in-out property <string> report-name;
+    in-out property <string> delete-id;
+    in-out property <string> delete-name;
+}
+
+// NETHER | COMMUNITY, and in COMMUNITY the search, filter, sort and UPLOAD.
+export component CommBar inherits Rectangle {
+    in property <int> page;
+    in property <bool> signed;
+    property <bool> typing;
+    height: Community.source == 1 ? 80px : 34px;
+    Seg { x: 0px; y: 0px; items: ["NETHER", "COMMUNITY"]; current: Community.source;
+        changed(i) => { Community.source = i; Backend.hover-cos(""); if i == 1 { Community.load(root.page); } } }
+    if Community.source == 1: Text { x: 300px; y: 0px; height: 34px; width: up.x - self.x - 16px; overflow: elide; vertical-alignment: center; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts;
+        text: "Made by players · every upload is checked before anyone else sees it"; }
+    up := Btn { x: parent.width - self.width; y: 0px; height: 34px; visible: Community.source == 1; text: Community.up-state == 3 ? "UPLOADING…" : "UPLOAD"; icon: Ico.export; solid: true;
+        enabled: root.signed && Community.up-state == 0; clicked => { Community.upload-pick(); } }
+    if Community.source == 1: Rectangle {
+        y: 46px; height: 34px;
+        sf := Field { x: 0px; y: -3px; width: 360px; search: true; placeholder: "Search by name or creator"; text <=> Community.query;
+            edited => { root.typing = true; } accepted => { root.typing = false; Community.load(root.page); } }
+        Timer { interval: 450ms; running: root.typing; triggered => { root.typing = false; Community.load(root.page); } }
+        Seg { x: 376px; items: ["ALL", "LIKED", "MINE"]; current: Community.filter; changed(i) => { Community.filter = i; Community.load(root.page); } }
+        Seg { x: parent.width - self.width; items: ["TOP", "NEW"]; current: Community.sort; changed(i) => { Community.sort = i; Community.load(root.page); } }
+    }
+}
+
+// one community card: the player wearing it (cosmetics) or its outside face (capes), name, creator, uses, heart
+component CommCard inherits Rectangle {
+    in property <CommItem> item;
+    in property <bool> worn;
+    in property <bool> applied;
+    in property <bool> busy;
+    in property <bool> signed;
+    callback clicked();
+    callback hovered(bool);
+    width: 220px; height: 276px;
+    border-radius: 8px;
+    property <bool> hot: ta.has-hover || hb.hovered || rb.hovered;
+    background: root.hot ? Theme.s2 : Theme.s1;
+    opacity: (root.busy && !root.worn) || root.item.status == 3 ? 0.6 : 1;
+    animate background { duration: Theme.fast; }
+    ta := TouchArea { mouse-cursor: root.item.status == 3 ? default : pointer;
+        clicked => { if !root.busy && root.item.status != 3 { root.clicked(); } }
+        changed has-hover => { root.hovered(self.has-hover); } }
+    Rectangle {
+        x: 6px; y: 6px; width: parent.width - 12px; height: 196px; background: Theme.bg; border-radius: 6px; clip: true;
+        Hatch { width: parent.width; height: parent.height; }
+        if root.item.has-img: Image {
+            y: root.hot ? 0px : 4px; height: parent.height - 4px; width: parent.width; source: root.item.img; image-fit: contain;
+            animate y { duration: Theme.mid; easing: ease-out; }
+        }
+        if !root.item.has-img: Text { text: root.item.status == 3 ? "REMOVED" : "LOADING"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; horizontal-alignment: center; vertical-alignment: center; }
+        // your upload that isn't public: why, always shown
+        if root.item.mine && root.item.status != 0: Rectangle {
+            x: 8px; y: 8px; height: 22px; width: sp.preferred-width + 18px; border-radius: 11px;
+            background: root.item.status == 3 ? Theme.red.with-alpha(0.25) : Theme.s3;
+            sp := Text { text: root.item.status == 1 ? "ONLY YOU" : root.item.status == 2 ? "CHECKING" : "REMOVED"; color: root.item.status == 3 ? Theme.redtx : Theme.tx;
+                font-family: Theme.ui; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 0.6px; horizontal-alignment: center; vertical-alignment: center; }
+        }
+        // selection pill (same as the Nether cards)
+        if root.item.status != 3 && (root.worn || ta.has-hover): Rectangle {
+            x: parent.width - self.width - 8px; y: 8px; height: 22px; width: pl.preferred-width + 18px; border-radius: 11px;
+            background: root.worn ? Theme.red : Theme.s3;
+            pl := Text { text: root.worn ? (root.applied ? "EQUIPPED" : "SELECTED") : "SELECT"; color: root.worn ? #ffffff : Theme.tx;
+                font-family: Theme.ui; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 0.6px; horizontal-alignment: center; vertical-alignment: center; }
+        }
+        // heart (others' public items) / delete (yours) / report, bottom corners of the picture
+        hb := IconBtn { x: 8px; y: parent.height - self.height - 8px; size: 28px; d: Ico.heart; hot: root.item.fav; visible: root.signed && !root.item.mine && (root.hot || root.item.fav);
+            tip: ""; clicked => { Community.heart(root.item.id, !root.item.fav); } }
+        rb := IconBtn { x: parent.width - self.width - 8px; y: parent.height - self.height - 8px; size: 28px; visible: root.signed && root.hot;
+            d: root.item.mine ? Ico.trash : "M 2.5 11 L 2.5 1.5 M 2.5 1.8 L 9.8 1.8 L 8 4.4 L 9.8 7 L 2.5 7"; danger: true;
+            clicked => {
+                if root.item.mine { Community.delete-id = root.item.id; Community.delete-name = root.item.name; }
+                else { Community.report-id = root.item.id; Community.report-name = root.item.name; }
+            } }
+    }
+    Text { x: 14px; y: 210px; width: parent.width - 28px; height: 26px; text: root.item.name; color: Theme.tx; font-family: Theme.disp; font-size: 15px; font-weight: 700; vertical-alignment: center; overflow: elide; }
+    Text { x: 14px; y: 240px; width: parent.width - 28px; height: 20px; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; overflow: elide;
+        text: root.item.mine && root.item.note != "" ? root.item.note : (root.item.by == "" ? root.item.uses : "by \{root.item.by} · \{root.item.uses}"); }
+    Rectangle { border-radius: 8px; border-width: root.worn ? 2px : 1px; border-color: root.worn ? Theme.red2 : (root.hot ? Theme.ln2 : Theme.ln); }
+}
+
+// the community grid of one wardrobe page (1 capes, 2.. cosmetic slots)
+export component CommGrid inherits Flickable {
+    in property <int> page;
+    in property <bool> signed;
+    property <int> slot: root.page - 2;
+    property <string> sel: root.page == 1 ? Backend.ncape-sel : Backend.cos-sel[root.slot];
+    property <string> worn: root.page == 1 ? Backend.ncape-worn : Backend.cos-worn[root.slot];
+    // MINE ends in an add tile
+    property <int> tiles: Community.items.length + (Community.filter == 2 && root.signed ? 1 : 0);
+    content-height: Math.ceil(root.tiles / 4) * 288px + (Community.more ? 64px : 0px) + 100px;
+    init => { if Community.page != root.page || Community.state == 0 { Community.load(root.page); } }
+    changed page => { Community.load(root.page); }
+    if Community.state == 2 || (Community.state == 1 && Community.items.length > 0): Rectangle {
+        height: parent.content-height;
+        for c[i] in Community.items: CommCard {
+            x: mod(i, 4) * 232px; y: floor(i / 4) * 288px;
+            item: c; worn: root.sel == c.id; applied: root.worn == c.id; busy: Backend.look-busy; signed: root.signed;
+            clicked => { Community.pick(c.id); }
+            hovered(on) => { if root.page >= 2 { Backend.hover-cos(on ? c.id : ""); } }
+        }
+        if Community.filter == 2 && root.signed: Rectangle {
+            x: mod(Community.items.length, 4) * 232px; y: floor(Community.items.length / 4) * 288px; width: 220px; height: 276px; border-radius: 8px;
+            background: adt.has-hover ? Theme.hov : transparent; border-width: 1px; border-color: adt.has-hover ? Theme.mut : Theme.ln2;
+            animate background, border-color { duration: Theme.fast; }
+            Rectangle { x: (parent.width - 48px) / 2; y: 86px; width: 48px; height: 48px; border-radius: 24px; border-width: 1px; border-color: Theme.ln2;
+                Icon { x: 18px; y: 18px; d: Ico.plus; tint: adt.has-hover ? Theme.tx : Theme.dim; } }
+            Text { y: 148px; width: parent.width; text: "Upload yours"; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; horizontal-alignment: center; }
+            Text { x: 20px; y: 172px; width: parent.width - 40px; text: "Blockbench, Bedrock / GeckoLib, Lunar files, .obj, PNG, or a zip of them"; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; horizontal-alignment: center; wrap: word-wrap; }
+            adt := TouchArea { mouse-cursor: pointer; clicked => { if Community.up-state == 0 { Community.upload-pick(); } } }
+        }
+        if Community.more: Btn { x: (916px - self.width) / 2; y: Math.ceil(root.tiles / 4) * 288px + 8px; text: Community.busy-more ? "LOADING…" : "LOAD MORE"; enabled: !Community.busy-more; clicked => { Community.load-more(); } }
+    }
+    if (Community.state != 2 && !(Community.state == 1 && Community.items.length > 0)) || (Community.state == 2 && root.tiles == 0): Rectangle {
+        y: 0px; width: 916px; height: 110px; background: Theme.s1; border-radius: 8px; border-width: 1px; border-color: Theme.ln;
+        Text { x: 28px; width: parent.width - 56px; vertical-alignment: center; color: Theme.dim; font-family: Theme.ui; font-size: 15px * Theme.ts; wrap: word-wrap;
+            text: Community.state == 1 ? "Loading community uploads…" : Community.state == 3 ? Community.message
+                : Community.query != "" ? "Nothing matches “\{Community.query}”."
+                : Community.filter == 1 ? "Nothing liked yet. Heart an item to keep it here." : "No uploads here yet. Be the first: UPLOAD at the top right."; }
+    }
+}
+
+// upload: preview, name, type, rules, send
+export component UploadDialog inherits Rectangle {
+    property <[string]> types: ["Cape", "Hat", "Headband", "Mask", "Back item", "Wings", "Aura", "Pet"];
+    Scrim {
+        dismiss => { if Community.up-state != 3 { Community.upload-close(); } }
+        Rectangle {
+            x: (parent.width - 820px) / 2; y: Math.max(20px, (parent.height - 600px) / 2); width: 820px; height: 600px;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
+            TouchArea { }
+            Eyebrow { x: 28px; y: 24px; text: "UPLOAD TO THE COMMUNITY"; }
+            // preview plate
+            Rectangle {
+                x: 28px; y: 52px; width: 300px; height: 390px; background: Theme.bg; border-radius: 6px; clip: true;
+                Hatch { width: parent.width; height: parent.height; }
+                if Community.up-has-img: Image { width: parent.width; height: parent.height; source: Community.up-img; image-fit: contain; }
+                if !Community.up-has-img: Text { text: Community.up-state == 1 ? "READING FILES…" : "NO PREVIEW"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; horizontal-alignment: center; vertical-alignment: center; }
+            }
+            Text { x: 28px; y: 452px; width: 300px; text: Community.up-summary; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; }
+            LinkBtn { x: 28px; y: parent.height - 60px; text: "CHOOSE OTHER FILES"; clicked => { if Community.up-state != 1 && Community.up-state != 3 { Community.upload-pick(); } } }
+
+            // right column
+            property <length> rx: 356px;
+            property <length> rw: self.width - self.rx - 28px;
+            Eyebrow { x: parent.rx; y: 52px; text: "NAME"; font-size: 12px * Theme.ts; }
+            nf := Field { x: parent.rx; y: 72px; width: parent.rw; text <=> Community.up-name; placeholder: "What is it called?"; }
+            Eyebrow { x: parent.rx; y: 128px; text: "WHAT IT IS"; font-size: 12px * Theme.ts; }
+            Dropdown { x: parent.rx; y: 148px; width: 220px; items: root.types; current: Community.up-type;
+                changed(i) => { if i != Community.up-type && Community.up-state == 2 { Community.upload-type(i); } } }
+            Text { x: parent.rx + 236px; y: 148px; width: parent.rw - 236px; height: 40px; vertical-alignment: center; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap;
+                text: "Guessed from the files: change it if it's wrong."; }
+            if Community.up-warn != "": Text { x: parent.rx; y: 198px; width: parent.rw; height: 48px; color: Theme.dim; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; overflow: elide; text: Community.up-warn; }
+            // the rules
+            Rectangle {
+                x: parent.rx; y: 254px; width: parent.rw; height: 150px; background: Theme.s1; border-radius: 6px; border-width: 1px; border-color: Theme.ln;
+                Eyebrow { x: 16px; y: 12px; text: "THE RULES"; font-size: 12px * Theme.ts; }
+                Text { x: 16px; y: 34px; width: parent.width - 32px; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap;
+                    text: "Every Nether player can see what you upload. No nudity or sexual content, no hate symbols or slurs, no gore. Each upload is checked automatically before anyone else sees it: anything unclear stays visible only to you, and uploads that break the rules count as strikes (three end uploading). Players can report too."; }
+            }
+            Toggle { x: parent.rx; y: 422px; on <=> Community.up-agree; }
+            Text { x: parent.rx + 48px; y: 414px; width: parent.rw - 48px; height: 36px; vertical-alignment: center; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap;
+                text: "I made this, or I'm allowed to share it, and it follows the rules."; }
+            if Community.up-error != "": Text { x: parent.rx; y: 462px; width: parent.rw; height: 52px; color: Theme.redtx; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; overflow: elide; text: Community.up-error; }
+            if Community.up-state == 3: Text { x: parent.rx; y: 462px; width: parent.rw; height: 52px; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap;
+                text: "Checking and uploading… this takes a few seconds."; }
+            sb := Btn { x: parent.width - 28px - self.width; y: parent.height - 64px; solid: true; icon: Ico.export;
+                text: Community.up-state == 3 ? "UPLOADING…" : "UPLOAD";
+                enabled: Community.up-state == 2 && Community.up-ready && Community.up-agree && Community.up-name != "";
+                clicked => { Community.upload-send(); } }
+            Btn { x: sb.x - self.width - 10px; y: parent.height - 64px; text: "CANCEL"; enabled: Community.up-state != 3; clicked => { Community.upload-close(); } }
+        }
+    }
+}
+
+// report someone's upload
+export component ReportDialog inherits Rectangle {
+    property <[string]> keys: ["sexual", "hate", "gore", "other"];
+    property <[string]> labels: ["Nudity or sexual content", "A hate symbol or slur", "Gore", "Something else that breaks the rules"];
+    property <int> pick: -1;
+    Scrim {
+        dismiss => { Community.report-id = ""; }
+        Rectangle {
+            x: (parent.width - 520px) / 2; y: 200px; width: 520px; height: 360px;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
+            TouchArea { }
+            Eyebrow { x: 28px; y: 28px; text: "REPORT"; color: Theme.redtx; }
+            Text { x: 28px; y: 48px; width: parent.width - 56px; text: Community.report-name; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 800; overflow: elide; }
+            Text { x: 28px; y: 84px; width: parent.width - 56px; text: "What's wrong with it? Enough reports take it down for everyone."; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
+            for l[i] in root.labels: Rectangle {
+                x: 28px; y: 118px + i * 40px; width: parent.width - 56px; height: 36px; border-radius: 6px;
+                background: root.pick == i ? Theme.s3 : (rt.has-hover ? Theme.hov : transparent);
+                Rectangle { x: 12px; y: 11px; width: 14px; height: 14px; border-radius: 7px; border-width: 1px; border-color: root.pick == i ? Theme.red : Theme.ln2;
+                    if root.pick == i: Rectangle { x: 3px; y: 3px; width: 8px; height: 8px; border-radius: 4px; background: Theme.red; } }
+                Text { x: 38px; height: parent.height; vertical-alignment: center; text: l; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; }
+                rt := TouchArea { mouse-cursor: pointer; clicked => { root.pick = i; } }
+            }
+            db := Btn { x: parent.width - 28px - self.width; y: parent.height - 64px; text: "REPORT"; danger: true; solid: true; enabled: root.pick >= 0;
+                clicked => { Community.report(Community.report-id, root.keys[root.pick]); Community.report-id = ""; } }
+            Btn { x: db.x - self.width - 10px; y: parent.height - 64px; text: "CANCEL"; clicked => { Community.report-id = ""; } }
+        }
+    }
+}
+
+// delete one of your uploads
+export component DeleteUploadDialog inherits Rectangle {
+    Scrim {
+        dismiss => { Community.delete-id = ""; }
+        Rectangle {
+            x: (parent.width - 500px) / 2; y: 230px; width: 500px; height: 232px;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
+            TouchArea { }
+            Eyebrow { x: 28px; y: 28px; text: "DELETE UPLOAD"; color: Theme.redtx; }
+            Text { x: 28px; y: 48px; width: parent.width - 56px; text: Community.delete-name; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800; overflow: elide; }
+            Text { x: 28px; y: 98px; width: parent.width - 56px; text: "It's removed for everyone, and players wearing it see nothing in its place."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
+            db := Btn { x: parent.width - 28px - self.width; y: parent.height - 64px; text: "DELETE"; danger: true; solid: true; icon: Ico.trash;
+                clicked => { Community.remove(Community.delete-id); Community.delete-id = ""; } }
+            Btn { x: db.x - self.width - 10px; y: parent.height - 64px; text: "KEEP IT"; clicked => { Community.delete-id = ""; } }
+        }
+    }
+}

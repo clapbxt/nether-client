@@ -48,7 +48,7 @@ final class Capes {
     private static final Map<String, Long> retryAt = new ConcurrentHashMap<>();
     private static final int MAX_PNG = 4 * 1024 * 1024, MAX_API = 256 * 1024;
     /** ms per animation frame by cape id (from the sums file; default 100) */
-    private static final Map<String, Integer> MS = new HashMap<>();
+    private static final Map<String, Integer> MS = new ConcurrentHashMap<>();
     /** verified cape sha256s from the launcher (-Dnether.capeSums: "id sha256 ms" lines, from the signed content manifest) */
     private static final Map<String, String> SUMS = sums();
     /** every cape texture we registered (identity: 1.8.9 takes ours off by spotting it) */
@@ -292,12 +292,21 @@ final class Capes {
         Object[] b = png.get(id);
         if (b == null) {
             Long r = retryAt.get(id);
-            if (SUMS.get(id) == null && DEV == null) { retryAt.put(id, System.currentTimeMillis() + 3_600_000L); return null; } // not in the signed manifest
+            String sum = SUMS.get(id);
+            boolean ugc = Ugc.is(id);
+            // not in the signed manifest (nor a community cape: the API says what those are)
+            if (sum == null && DEV == null && !(ugc && API != null)) { retryAt.put(id, System.currentTimeMillis() + 3_600_000L); return null; }
             if ((r == null || System.currentTimeMillis() >= r) && id.matches("[a-z0-9_-]+") && fetching.putIfAbsent(id, true) == null)
                 worker(() -> {
                     try {
-                        byte[] d = get(CONTENT + "/capes/" + id + ".png", MAX_PNG);
-                        String want = SUMS.get(id);
+                        String want = sum;
+                        if (ugc && want == null) {
+                            String[] m = Ugc.meta(id);
+                            if (m == null || !"cape".equals(m[0])) { retryAt.put(id, System.currentTimeMillis() + 3_600_000L); return; }
+                            want = m[2];
+                            MS.put(id, Integer.parseInt(m[3]));
+                        }
+                        byte[] d = ugc ? Ugc.blob(want, MAX_PNG) : get(CONTENT + "/capes/" + id + ".png", MAX_PNG);
                         if (want != null && !want.equals(sha256(d))) throw new IllegalStateException("hash mismatch");
                         if (!pngSane(d)) throw new IllegalStateException("bad cape size");
                         if (d.length < 8 || (d[0] & 255) != 0x89 || d[1] != 'P' || d[2] != 'N' || d[3] != 'G') throw new IllegalStateException("not a PNG");

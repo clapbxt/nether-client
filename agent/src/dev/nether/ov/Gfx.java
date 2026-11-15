@@ -215,7 +215,8 @@ final class Gfx {
     /** Pixel-art image (n x n ARGB) drawn as crisp colour runs, no texture needed. size in logical units. */
     static void icon(int[] px, float x, float y, float size) {
         int n = (int) Math.round(Math.sqrt(px.length));
-        float x0 = Math.round(x * s), y0 = Math.round(y * s), sz = Math.max(n, Math.round(size * s));
+        float x0 = Math.round(x * s), y0 = Math.round(y * s), sz = Math.max(1, Math.round(size * s));
+        if (n > sz) { px = shrink(px, n, (int) sz); n = (int) sz; } // HD pack textures keep the asked size
         for (int r = 0; r < n; r++) {
             float ya = y0 + Math.round(r * sz / n), yb = y0 + Math.round((r + 1) * sz / n);
             for (int c = 0; c < n; ) {
@@ -228,6 +229,21 @@ final class Gfx {
                 c = e;
             }
         }
+    }
+
+    /** n x n ARGB box-averaged down to m x m (alpha-weighted, so transparent edges don't darken). */
+    private static int[] shrink(int[] px, int n, int m) {
+        int[] out = new int[m * m];
+        for (int oy = 0; oy < m; oy++) for (int ox = 0; ox < m; ox++) {
+            int ya = oy * n / m, yb = Math.max(ya + 1, (oy + 1) * n / m), xa = ox * n / m, xb = Math.max(xa + 1, (ox + 1) * n / m);
+            long a = 0, r = 0, g = 0, b = 0, cnt = 0;
+            for (int yy = ya; yy < yb; yy++) for (int xx = xa; xx < xb; xx++) {
+                int p = px[yy * n + xx], pa = p >>> 24;
+                a += pa; r += (p >> 16 & 255) * pa; g += (p >> 8 & 255) * pa; b += (p & 255) * pa; cnt++;
+            }
+            out[oy * m + ox] = a == 0 ? 0 : (int) (a / cnt) << 24 | (int) (r / a) << 16 | (int) (g / a) << 8 | (int) (b / a);
+        }
+        return out;
     }
 
     // ---------------------------------------------------------------- images (RGBA textures: our own GL objects only)

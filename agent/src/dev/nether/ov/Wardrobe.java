@@ -58,6 +58,15 @@ final class Wardrobe {
         return false;
     }
 
+    private static boolean capeDirty() { return !pNether.equals(netherWorn) || !pAccount.equals(accountWorn); }
+
+    /** picks that differ from what is applied (the cape counts once) */
+    private static int changes() {
+        int n = capeDirty() ? 1 : 0;
+        for (int i = 0; i < worn.length; i++) if (!picked[i].equals(worn[i])) n++;
+        return n;
+    }
+
     private static void pickApplied() {
         pNether = netherWorn;
         pAccount = accountWorn;
@@ -262,8 +271,10 @@ final class Wardrobe {
 
         // ---- left: player
         float pw = 250, ph = 296;
-        Gfx.rect(lx, top, pw, ph, 8, Th.s1);
-        Gfx.ring(lx, top, pw, ph, 8, 1, Th.ln2);
+        boolean dirty = dirty();
+        float dt = Menu.an("wddirty", dirty);
+        Gfx.rectG(lx, top, pw, ph, 8, Th.s2, Th.s1);
+        Gfx.ring(lx, top, pw, ph, 8, 1, Gfx.mix(Th.ln2, Gfx.a(Th.ac2, 0.55f), dt));
         boolean over = Menu.in(lx, top, pw, ph);
         if (over && Input.btn[0] && !dragging) { dragging = true; dragX = Menu.L; }
         if (!Input.btn[0]) dragging = false;
@@ -273,7 +284,14 @@ final class Wardrobe {
             renderPlayer(shownCape, cos);
             if (Gfx.hasTexture("wd.player")) Gfx.image("wd.player", lx + (pw - PW) / 2f, top + (ph - PH) / 2f, PW, PH, 0xFFFFFFFF, 0);
         } else Gfx.textC(Gfx.SEMI, 11, lx + pw / 2, top + ph / 2, Th.mut, "SKIN NOT SHARED YET", 1.2f);
-        Gfx.text(Gfx.MONO, 9, lx + 12, top + 16, Th.mut, dirty() ? "PREVIEW · NOT APPLIED" : "DRAG TO SPIN", false, 1.4f);
+        if (dirty) {
+            int n = changes();
+            String u = n + (n == 1 ? " UNSAVED CHANGE" : " UNSAVED CHANGES");
+            float uw = Gfx.width(Gfx.MONO, 9, u, 1.4f) + 24;
+            Gfx.rect(lx + 10, top + 8, uw, 18, 9, Gfx.a(Th.ac, 0.22f));
+            Gfx.rect(lx + 17, top + 15, 4, 4, 2, Th.ac2);
+            Gfx.text(Gfx.MONO, 9, lx + 26, top + 17, Th.ac2, u, false, 1.4f);
+        } else Gfx.text(Gfx.MONO, 9, lx + 12, top + 16, Th.mut, "DRAG TO SPIN", false, 1.4f);
         long age = System.currentTimeMillis() - noteAt;
         if (!note.isEmpty() && age < 5000) {
             float a = Config.calm() ? 1 : Math.min(1, (5000 - age) / 400f);
@@ -294,16 +312,20 @@ final class Wardrobe {
         if (hv) Menu.tip = "Every Nether player gets the badge before their name, above their head and in chat.";
 
         // APPLY (dimmed while nothing changed) + REFRESH
-        float ay = sy + 40, rw = 34, aw = pw - rw - 8;
-        boolean busy = pendingSeq != 0, can = dirty() && !busy;
+        boolean busy = pendingSeq != 0, can = dirty && !busy;
+        float ay = sy + 40, rw = 34, vw = can ? 74 : 0, aw = pw - rw - 8 - (can ? vw + 8 : 0);
         String al = busy ? "APPLYING..." : can ? "APPLY" : "APPLIED";
         if (can) { if (Menu.button("wdapply", al, lx, ay, aw, 30, true)) apply(); }
         else {
             Gfx.rect(lx, ay, aw, 30, 6, Gfx.a(Th.ac, 0.16f));
             Gfx.textC(Gfx.SEMI, 11, lx + aw / 2, ay + 15, Gfx.a(0xFFFFFFFF, 0.45f), al, 1.2f);
         }
+        if (can) {
+            if (Menu.button("wdrev", "REVERT", lx + aw + 8, ay, vw, 30, false)) { pickApplied(); say("Changes reverted", true); }
+            if (Menu.in(lx + aw + 8, ay, vw, 30)) Menu.tip = "Go back to the look you have on now";
+        }
         boolean refreshing = refreshAt != 0;
-        float rx = lx + aw + 8;
+        float rx = lx + aw + 8 + (can ? vw + 8 : 0);
         boolean rh = Menu.in(rx, ay, rw, 30);
         float rt = Menu.an("wdref", rh);
         Gfx.rect(rx, ay, rw, 30, 6, Gfx.a(Th.ov, 0.035f + 0.05f * rt));
@@ -327,6 +349,7 @@ final class Wardrobe {
             Gfx.rect(tx0, top, w, 24, 12, on ? Gfx.a(Th.ac, 0.2f + 0.05f * hh) : Gfx.a(Th.ov, 0.03f + 0.05f * hh));
             if (on) Gfx.ring(tx0, top, w, 24, 12, 1, Gfx.a(Th.ac2, 0.6f));
             Gfx.textC(Gfx.SEMI, 10, tx0 + w / 2, top + 12, Gfx.mix(Gfx.mix(Th.mut, Th.tx, hh), Th.ac2, a), CATS[i], 1.2f);
+            if (i == 0 ? capeDirty() : !picked[i - 1].equals(worn[i - 1])) Gfx.rect(tx0 + w - 9, top + 4, 5, 5, 2.5f, Th.ac2); // unsaved pick here
             if (Menu.hit(tx0, top, w, 24) && cat != i) { cat = i; gridScrollT = gridScroll = 0; }
             tx0 += w + 6;
         }
@@ -451,6 +474,53 @@ final class Wardrobe {
             Gfx.rect(x + w - 18.2f, y + 13.6f, 1.6f, 5, 0.8f, 0xFFFFFFFF);
         }
         if (Menu.hit(x, y, w, h)) choose(c);
+    }
+
+    // ---------------------------------------------------------------- leaving with unsaved picks
+
+    /** the "unsaved changes" dialog is up; then = what leaving would have done */
+    static boolean ask;
+    private static Runnable then;
+    private static float askT;
+
+    /** Leaving the Wardrobe (back, close, menu key): true = held for the dialog, which runs leave once answered. */
+    static boolean guard(Runnable leave) {
+        if (!loaded || pendingSeq != 0 || !dirty()) return false;
+        ask = true;
+        then = leave;
+        askT = 0;
+        return true;
+    }
+
+    private static void leave() {
+        ask = false;
+        Runnable r = then;
+        then = null;
+        if (r != null) r.run();
+    }
+
+    static void askDraw(float e) {
+        askT = Config.calm() ? 1 : Math.min(1, askT + Math.min(Gfx.dt, 0.1f) * 6);
+        float k = 1 - (float) Math.pow(1 - askT, 3);
+        Gfx.rect(0, 0, Menu.W, Menu.H, 0, Gfx.a(0xFF000000, 0.45f * e));
+        float w = 420, h = 168, x = (Menu.W - w) / 2, y = (Menu.H - h) / 2 + 12 * (1 - k);
+        float a0 = Gfx.alpha;
+        Gfx.alpha = a0 * k;
+        Gfx.rect(x, y + 4, w, h, 10, Gfx.a(0xFF000000, 0.35f));
+        Gfx.rect(x, y, w, h, 10, Th.s1);
+        Gfx.ring(x, y, w, h, 10, 1, Th.ln2);
+        Gfx.rect(x + 20, y + 22, 3, 14, 1.5f, Th.ac);
+        Gfx.text(Gfx.SEMI, 13, x + 30, y + 29, Th.tx, "UNSAVED CHANGES", false, 1.4f);
+        String hint = "ESC KEEPS EDITING";
+        Gfx.text(Gfx.MONO, 9, x + w - 20 - Gfx.width(Gfx.MONO, 9, hint, 1.2f), y + 29, Th.mut, hint, false, 1.2f);
+        int n = changes();
+        Gfx.text(Gfx.UI, 12, x + 20, y + 66, Th.tx, n == 1 ? "You have a change that isn't applied yet." : "You have " + n + " changes that aren't applied yet.");
+        Gfx.text(Gfx.UI, 12, x + 20, y + 86, Th.dim, "Close without applying and they're lost.");
+        float by = y + h - 50, bw = (w - 40 - 16) / 3;
+        if (Menu.button("wdaskk", "KEEP EDITING", x + 20, by, bw, 30, false)) ask = false;
+        else if (Menu.button("wdaskd", "DISCARD", x + 20 + bw + 8, by, bw, 30, false)) { pickApplied(); leave(); }
+        else if (Menu.button("wdaska", "APPLY & CLOSE", x + 20 + 2 * (bw + 8), by, bw, 30, true)) { apply(); leave(); }
+        Gfx.alpha = a0;
     }
 
     private static void choose(Cape c) {

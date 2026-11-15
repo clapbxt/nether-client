@@ -8,16 +8,78 @@ use crate::cosmetics::{Loaded, SLOTS};
 
 type V3 = [f32; 3];
 
-/// Camera: model turn (radians), downward tilt, the model height looked at, zoom.
+/// Camera: model turn (radians), downward tilt, the model height looked at, zoom, sideways pan (model px).
 #[derive(Clone, Copy, Debug)]
-pub struct View { pub yaw: f32, pub tilt: f32, pub center: f32, pub zoom: f32 }
+pub struct View { pub yaw: f32, pub tilt: f32, pub center: f32, pub zoom: f32, pub pan: f32 }
+
+const DIST: f32 = 90.;
+/// share of the frame's half size the fitted content may fill
+const FILL: f32 = 0.9;
 
 impl View {
-    pub fn full(yaw: f32) -> View { View { yaw, tilt: 0.12, center: 16.5, zoom: 1. } }
+    pub fn full(yaw: f32) -> View { View { yaw, tilt: 0.12, center: 16.5, zoom: 1., pan: 0. } }
     /// head and shoulders (hat / headband cards)
-    pub fn head(yaw: f32) -> View { View { yaw, tilt: 0.16, center: 29.6, zoom: 1.6 } }
+    pub fn head(yaw: f32) -> View { View { yaw, tilt: 0.16, center: 29.6, zoom: 1.6, pan: 0. } }
     /// whole body, a little closer (aura cards)
-    pub fn aura(yaw: f32) -> View { View { yaw, tilt: 0.1, center: 17.0, zoom: 1.22 } }
+    pub fn aura(yaw: f32) -> View { View { yaw, tilt: 0.1, center: 17.0, zoom: 1.22, pan: 0. } }
+
+    /// The turning preview: everything the look draws (over a few seconds of animation) stays in a `w` x `h` frame from
+    /// every side; never closer than `max_zoom`.
+    pub fn fit_turning(look: &Look, yaw: f32, w: u32, h: u32, max_zoom: f32) -> View {
+        let pts = points(look, None);
+        let (mut r, mut y0, mut y1) = (0f32, f32::MAX, f32::MIN);
+        for p in &pts { r = r.max(p[0].hypot(p[2])); y0 = y0.min(p[1]); y1 = y1.max(p[1]); }
+        let tilt = 0.12f32;
+        let half_h = (y1 - y0) / 2. + r * tilt.sin();
+        let m = DIST / (DIST - r);
+        View { yaw, tilt, center: (y0 + y1) / 2., zoom: zoom_for(half_h * m, r * m, w, h).min(max_zoom), pan: 0. }
+    }
+
+    /// A still card from `yaw`: frames the worn items plus `focus` (model-space corners of the body part to keep in
+    /// view, e.g. the head); never closer than `max_zoom`.
+    pub fn fit(look: &Look, yaw: f32, tilt: f32, focus: &[V3], w: u32, h: u32, max_zoom: f32) -> View {
+        let mut pts = points(look, Some(focus));
+        pts.extend_from_slice(focus);
+        let (mut x0, mut x1, mut y0, mut y1, mut z1) = (f32::MAX, f32::MIN, f32::MAX, f32::MIN, f32::MIN);
+        for p in &pts {
+            let c = rot_x(rot_y(*p, yaw), tilt);
+            x0 = x0.min(c[0]); x1 = x1.max(c[0]); y0 = y0.min(c[1]); y1 = y1.max(c[1]); z1 = z1.max(c[2]);
+        }
+        let m = DIST / (DIST - z1.max(0.));
+        let zoom = zoom_for((y1 - y0) / 2. * m, (x1 - x0) / 2. * m, w, h).min(max_zoom);
+        View { yaw, tilt, center: (y0 + y1) / 2. / tilt.cos(), zoom, pan: (x0 + x1) / 2. }
+    }
+}
+
+/// The largest zoom showing half extents `hh` x `hw` (model px, perspective included) inside `w` x `h`.
+fn zoom_for(hh: f32, hw: f32, w: u32, h: u32) -> f32 {
+    let base = h as f32 * 0.86 / 34.; // screen px per model px at zoom 1
+    let zh = FILL * h as f32 / 2. / (hh.max(1.) * base);
+    let zw = FILL * w as f32 / 2. / (hw.max(1.) * base);
+    zh.min(zw)
+}
+
+/// Model-space points the look draws, sampled over a few seconds of animation (poses, aura particles). With `focus`,
+/// the player's own boxes are left out (only the items count).
+fn points(look: &Look, focus: Option<&[V3]>) -> Vec<V3> {
+    let mut out = vec![];
+    let mut world = vec![];
+    if focus.is_none() { player(look, &mut world); }
+    for it in look.items.iter().flatten() {
+        for i in 0..16 {
+            let t = i as f64 * 0.25;
+            cosmetic(it, t, (t * 1000.) as u64, &mut world);
+            if let Some(a) = &it.aura {
+                for p in a.eval(t) {
+                    if p.alpha <= 0.01 || p.size <= 0. { continue; }
+                    let s = p.size / 2.;
+                    out.extend([[p.p[0] - s, p.p[1] - s, p.p[2]], [p.p[0] + s, p.p[1] + s, p.p[2]], [p.p[0], p.p[1], p.p[2] - s], [p.p[0], p.p[1], p.p[2] + s]]);
+                }
+            }
+        }
+    }
+    for q in &world { out.extend(q.p); }
+    out
 }
 
 /// What to draw: skin (64x64), model, cape frame (64:32 layout, any scale), worn cosmetics by slot.
@@ -115,7 +177,7 @@ fn aura<'a>(it: &'a Loaded, t: f64, view: &View, out: &mut Vec<(Q<'a>, bool)>) {
     }
 }
 
-fn cam(p: V3, v: &View) -> V3 { rot_x(rot_y([p[0], p[1] - v.center, p[2]], v.yaw), v.tilt) }
+fn cam(p: V3, v: &View) -> V3 { let c = rot_x(rot_y([p[0], p[1] - v.center, p[2]], v.yaw), v.tilt); [c[0] - v.pan, c[1], c[2]] }
 
 /// Render into an RGBA buffer of w x h (cleared to transparent). `depth` is scratch reused between frames.
 #[allow(clippy::too_many_arguments)]
@@ -131,7 +193,7 @@ pub fn render_into(px: &mut [u8], w: u32, h: u32, depth: &mut Vec<f32>, look: &L
     let mut all: Vec<(Q, bool)> = world.into_iter().map(|q| (q, false)).collect();
     for it in look.items.iter().flatten() { aura(it, t, &view, &mut all); }
     let light = { let l = [-0.45f32, 0.6, 0.75]; let n = (l[0] * l[0] + l[1] * l[1] + l[2] * l[2]).sqrt(); [l[0] / n, l[1] / n, l[2] / n] };
-    let dist = 90f32;
+    let dist = DIST;
     let k = h as f32 * 0.86 / 34. * view.zoom;
     let (cx, cy) = (w as f32 / 2., h as f32 / 2.);
     struct P<'b> { s: [(f32, f32, f32); 4], q: &'b Q<'b>, shade: f32, z: f32 }

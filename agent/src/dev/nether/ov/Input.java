@@ -119,7 +119,7 @@ final class Input {
             boolean printable = key >= 32 && key <= 162;
             // a letter menu key types into the search box / waypoint name instead of closing the menu
             if (menuOpen ? !(printable && Menu.textFocus()) : !typing(key)) {
-                setMenu(!menuOpen);
+                if (!menuOpen || Menu.leaveOk(() -> setMenu(false))) setMenu(!menuOpen);
                 if (printable) eatCharAt = System.currentTimeMillis();
                 return true;
             }

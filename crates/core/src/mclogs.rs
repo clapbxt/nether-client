@@ -104,8 +104,9 @@ mod tests {
             let mut f = z.by_index(i).unwrap();
             let mut s = String::new();
             f.read_to_string(&mut s).unwrap();
-            assert!(!s.contains("Bob") && !s.contains("SECRET"), "{}: {s}", f.name());
-            names.push(f.name().to_string());
+            let n = f.name().unwrap().to_string();
+            assert!(!s.contains("Bob") && !s.contains("SECRET"), "{n}: {s}");
+            names.push(n);
         }
         assert_eq!(names, ["summary.txt", "mods.txt", "logs/latest.log"]);
         let _ = std::fs::remove_dir_all(root);

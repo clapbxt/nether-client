@@ -87,6 +87,18 @@ final class Icons {
      * from a server favicon, a resource pack, album art) is refused (null) before anything is allocated.
      */
     static BufferedImage decode(InputStream in, long maxPx) throws java.io.IOException {
+        if (!in.markSupported()) in = new java.io.BufferedInputStream(in);
+        in.mark(16);
+        byte[] head = new byte[12];
+        int got = 0;
+        for (int n; got < 12 && (n = in.read(head, got, 12 - got)) > 0; ) got += n;
+        in.reset();
+        if (got == 12 && WebP.is(head)) { // ImageIO has no WebP: lossless ones decode here
+            java.io.ByteArrayOutputStream all = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[1 << 16];
+            for (int n; (n = in.read(buf)) > 0; ) { all.write(buf, 0, n); if (all.size() > 64 << 20) return null; }
+            return WebP.decode(all.toByteArray(), maxPx);
+        }
         try (javax.imageio.stream.ImageInputStream iis = new javax.imageio.stream.MemoryCacheImageInputStream(in)) {
             java.util.Iterator<javax.imageio.ImageReader> it = ImageIO.getImageReaders(iis);
             if (!it.hasNext()) return null;

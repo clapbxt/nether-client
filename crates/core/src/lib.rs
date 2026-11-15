@@ -5,6 +5,7 @@ pub mod art;
 pub mod auth;
 pub mod backend;
 pub mod combine;
+pub mod cosimport;
 pub mod cosmetics;
 pub mod gamesettings;
 pub mod download;
@@ -33,6 +34,7 @@ pub mod snapshot;
 pub mod store;
 pub mod trash;
 pub mod tunnel;
+pub mod ugc;
 pub mod update;
 
 use std::sync::Arc;

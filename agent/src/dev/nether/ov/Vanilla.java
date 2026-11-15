@@ -10,22 +10,29 @@ import java.awt.image.BufferedImage;
 final class Vanilla {
     private Vanilla() {}
 
-    private static final String HOT = "van:hotbar", FONT = "van:font";
+    private static final String HOT = "van:hotbar", FONT = "van:font", BTN = "van:btn", BTNH = "van:btnh";
     private static int gen = -1;
-    private static boolean hot, font, sprite;
+    private static boolean hot, font, sprite, btn, btnSprite;
     private static int cell = 8;
     private static final int[] adv = new int[256];
 
     /** (Re)loads both textures when the packs changed or the texture cache dropped them. Render thread, in a frame. */
     private static void load() {
         int g = Res.gen();
-        if (g == gen && (!hot || Gfx.hasTexture(HOT)) && (!font || Gfx.hasTexture(FONT))) return;
+        if (g == gen && (!hot || Gfx.hasTexture(HOT)) && (!font || Gfx.hasTexture(FONT)) && (!btn || Gfx.hasTexture(BTN))) return;
         gen = g;
         BufferedImage h = Res.image("assets/minecraft/textures/gui/sprites/hud/hotbar.png");
         sprite = h != null;
         if (h == null) h = Res.image("assets/minecraft/textures/gui/widgets.png");
         hot = h != null && h.getWidth() > 0;
         if (hot) Gfx.texture(HOT, h, false);
+        BufferedImage b = Res.image("assets/minecraft/textures/gui/sprites/widget/button.png");
+        BufferedImage bh = Res.image("assets/minecraft/textures/gui/sprites/widget/button_highlighted.png");
+        btnSprite = b != null && bh != null;
+        if (!btnSprite) b = Res.image("assets/minecraft/textures/gui/widgets.png");
+        btn = b != null && b.getWidth() > 0;
+        if (btn) Gfx.texture(BTN, b, false);
+        if (btnSprite) Gfx.texture(BTNH, bh, false);
         BufferedImage f = Res.image("assets/minecraft/textures/font/ascii.png");
         font = f != null && f.getWidth() >= 16 && f.getHeight() >= f.getWidth();
         if (!font) return;
@@ -71,6 +78,21 @@ final class Vanilla {
     private static void cols(float x, float y, int c0, int c1) {
         float uw = sprite ? 182 : 256, vh = sprite ? 1 : 22 / 256f;
         Gfx.image(HOT, x, y, (c1 - c0) * 2, 44, c0 / uw, 0, c1 / uw, vh, 0xFFFFFFFF, 0);
+    }
+
+    /**
+     * The game's button (1.20.2+ sprites widget/button(_highlighted), before gui/widgets) at w x 40 units, drawn the
+     * way old vanilla did: left half from the texture's left, right half from its right. False when there is no texture.
+     */
+    static boolean button(float x, float y, float w, boolean hover) {
+        load();
+        if (!btn) return false;
+        float half = Math.min(w / 2, 400) / 2; // GUI px per half (texture is 200 px wide)
+        float uw = btnSprite ? 1 / 200f : 1 / 256f, v0 = btnSprite ? 0 : (hover ? 86 : 66) / 256f, v1 = btnSprite ? 1 : v0 + 20 / 256f;
+        String key = btnSprite && hover ? BTNH : BTN;
+        Gfx.image(key, x, y, w / 2, 40, 0, v0, half * uw, v1, 0xFFFFFFFF, 0);
+        Gfx.image(key, x + w / 2, y, w / 2, 40, (200 - half) * uw, v0, 200 * uw, v1, 0xFFFFFFFF, 0);
+        return true;
     }
 
     /** Width in units of s in the game font. */

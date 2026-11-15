@@ -150,15 +150,24 @@ final class Cosmetics {
         Item it = ready.get(id);
         if (it != null) return type.equals(it.e.type) ? it : null;
         if (dead.contains(id) || parsed.containsKey(id)) return null; // parsed: its texture is made at the next frame end (tick)
-        Entry e = CAT.get(id);
-        if (e == null || Capes.CONTENT == null) return null;
+        Entry cat = CAT.get(id);
+        // community items (Ugc): yours come with hashes from the launcher, others' are looked up at the player API
+        boolean ugc = Ugc.is(id);
+        if (ugc ? Capes.API == null : cat == null || Capes.CONTENT == null) return null;
         Long r = retryAt.get(id);
         if ((r == null || System.currentTimeMillis() >= r) && fetching.putIfAbsent(id, true) == null) {
             Capes.worker(() -> {
                 try {
-                    byte[] js = Capes.get(Capes.CONTENT + "/cosmetics/" + id + ".json", MAX_MODEL);
+                    Entry e = cat;
+                    if (e == null) {
+                        String[] m = Ugc.meta(id);
+                        if (m == null || m[1] == null || !type.equals(m[0])) { retryAt.put(id, System.currentTimeMillis() + 3_600_000L); return; }
+                        e = new Entry();
+                        e.id = id; e.type = m[0]; e.modelSha = m[1]; e.pngSha = m[2]; e.ms = Integer.parseInt(m[3]);
+                    }
+                    byte[] js = ugc ? Ugc.blob(e.modelSha, MAX_MODEL) : Capes.get(Capes.CONTENT + "/cosmetics/" + id + ".json", MAX_MODEL);
                     if (!e.modelSha.equals(sha256(js))) throw new IllegalStateException("model hash mismatch");
-                    byte[] png = Capes.get(Capes.CONTENT + "/cosmetics/" + id + ".png", MAX_PNG);
+                    byte[] png = ugc ? Ugc.blob(e.pngSha, MAX_PNG) : Capes.get(Capes.CONTENT + "/cosmetics/" + id + ".png", MAX_PNG);
                     if (!e.pngSha.equals(sha256(png))) throw new IllegalStateException("texture hash mismatch");
                     Item x = new Item(e);
                     Object json = Json.parse(new String(js, StandardCharsets.UTF_8));
@@ -229,7 +238,7 @@ final class Cosmetics {
 
     /** Overlay frame: keep our layer on the player renderers (they are rebuilt on resource reload), map entity ids. */
     static void tick() {
-        if (off || CAT.isEmpty() && DEV == null) return;
+        if (off || CAT.isEmpty() && DEV == null && Capes.API == null) return;
         long t = System.currentTimeMillis();
         try {
             boolean legacy = Game.legacy();

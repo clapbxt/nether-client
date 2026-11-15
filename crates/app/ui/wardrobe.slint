@@ -1,6 +1,7 @@
 import { Theme } from "theme.slint";
 import { Backend, SkinLib, Cape, CosCard } from "structs.slint";
 import { Eyebrow, Heading, Btn, Seg, Chip, IconBtn, Ico, Icon, SpinArea, GroundShadow, Hatch, Ticks, Slash, SectionHead, Field, PlayButton, LinkBtn, Scrim } from "components.slint";
+import { Community, CommBar, CommGrid, UploadDialog, ReportDialog, DeleteUploadDialog } from "community.slint";
 
 // one cape card (account or Nether): outside face on a hatch plate, name, "In use"
 component CapeCard inherits Rectangle {
@@ -83,7 +84,7 @@ component CosGrid inherits Flickable {
     in property <string> kind-label;
     property <string> worn: Backend.cos-sel[root.slot];
     property <string> applied: Backend.cos-worn[root.slot];
-    content-height: 36px + Math.ceil((root.items.length + 1) / 4) * 288px + 24px;
+    content-height: 36px + Math.ceil((root.items.length + 1) / 4) * 288px + 100px;
     init => { Backend.load-cos(); }
     SectionHead { x: 0px; y: 0px; width: 916px; title: root.title; note: "seen by every Nether player · pick, then APPLY"; }
     if Backend.cos-state == 2: Rectangle {
@@ -151,7 +152,7 @@ export component WardrobeScreen inherits Rectangle {
         if root.picked: Chip { x: parent.width - self.width - 16px; y: 21px; text: "Preview"; }
         if root.page >= 1: IconBtn { x: parent.width - self.width - 14px; y: 16px; size: 32px; d: Ico.refresh;
             tip: Backend.look-refreshing ? "Checking…" : "Check for new capes and cosmetics"; opacity: Backend.look-refreshing ? 0.5 : 1;
-            clicked => { Backend.refresh-look(); } }
+            clicked => { Backend.refresh-look(); if Community.source == 1 { Community.load(root.page); } } }
         // signed out: wearing needs the account
         if root.picked && !root.signed: Rectangle {
             x: 0px; y: parent.height - 62px - 44px; width: parent.width; height: 44px; background: Theme.s1;
@@ -163,14 +164,7 @@ export component WardrobeScreen inherits Rectangle {
             Rectangle { y: 0px; height: 1px; background: Theme.ln; }
             Seg { x: 14px; y: 14px; items: ["CLASSIC", "SLIM"]; item-w: 84px; current: Backend.skin-slim ? 1 : 0;
                 changed(i) => { Backend.skin-slim = i == 1; if root.picked { SkinLib.set-slim(root.sel, i == 1); } } }
-            if !root.picked && root.page == 0: Text { x: 200px; width: parent.width - 214px; horizontal-alignment: right; vertical-alignment: center; text: root.page == 0 ? (root.signed ? "Account skin" : "Default (Steve)") : root.page == 1 ? Backend.capes[Backend.cape-idx].name : root.worn-name; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; overflow: elide; }
-            // capes + cosmetics: picks only show here until APPLY sends them all at once
-            if root.page >= 1: PlayButton {
-                x: parent.width - 14px - 150px - 4px; y: 13px; width: 150px; height: 36px; text-size: 16px; arrow: false;
-                label: Backend.look-busy ? "APPLYING…" : (Backend.look-dirty ? "APPLY" : "APPLIED");
-                enabled: root.signed && Backend.look-dirty && !Backend.look-busy;
-                clicked => { Backend.apply-look(); }
-            }
+            if !root.picked: Text { x: 200px; width: parent.width - 214px; horizontal-alignment: right; vertical-alignment: center; text: root.page == 0 ? (root.signed ? "Account skin" : "Default (Steve)") : root.page == 1 ? (Backend.ncape-sel != "" ? "Nether cape" : Backend.capes[Backend.cape-sel].name) : root.worn-name; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; overflow: elide; }
             if root.picked: PlayButton {
                 x: parent.width - 14px - 150px - 4px; y: 13px; width: 150px; height: 36px; text-size: 16px; arrow: false;
                 property <bool> worn: SkinLib.worn-id == SkinLib.skins[root.sel].id;
@@ -192,7 +186,7 @@ export component WardrobeScreen inherits Rectangle {
 
         SectionHead { x: 468px; y: 208px; width: 916px; title: "LIBRARY"; note: SkinLib.skins.length == 1 ? "1 skin" : "\{SkinLib.skins.length} skins"; }
         Flickable {
-            x: 468px; y: 240px; width: 916px; height: parent.height - 240px; content-height: Math.ceil((SkinLib.skins.length + 1) / 4) * 252px + 24px;
+            x: 468px; y: 240px; width: 916px; height: parent.height - 240px; content-height: Math.ceil((SkinLib.skins.length + 1) / 4) * 252px + 100px;
             for s[i] in SkinLib.skins: tl := Rectangle {
                 x: mod(i, 4) * 232px; y: floor(i / 4) * 252px; width: 220px; height: 240px;
                 property <bool> on: root.sel == i;
@@ -283,17 +277,20 @@ export component WardrobeScreen inherits Rectangle {
     // cosmetics by slot (our directory; seen by Nether players): pages 2.. = slots 0..
     property <[string]> cos-titles: ["HATS", "HEADBANDS", "MASKS", "BACK", "WINGS", "AURAS", "PETS"];
     property <[string]> cos-kinds: ["Hat", "Headband", "Mask", "Back item", "Wings", "Aura", "Pet"];
+    // capes + cosmetics: NETHER (signed catalog) or COMMUNITY (player uploads, community.slint)
+    if root.page >= 1: CommBar { x: 468px; y: 100px; width: 916px; page: root.page; signed: root.signed; }
+    if root.page >= 1 && Community.source == 1: CommGrid { x: 468px; y: 196px; width: 916px; height: parent.height - 196px; page: root.page; signed: root.signed; }
     for s[i] in root.cos-titles: Rectangle {
-        x: 468px; y: 112px; width: 916px; height: parent.height - 112px;
-        if root.page == i + 2: CosGrid { width: parent.width; height: parent.height; items: Backend.cos-items[i]; slot: i; title: s; kind-label: root.cos-kinds[i]; }
+        x: 468px; y: 150px; width: 916px; height: parent.height - 150px;
+        if root.page == i + 2 && Community.source == 0: CosGrid { width: parent.width; height: parent.height; items: Backend.cos-items[i]; slot: i; title: s; kind-label: root.cos-kinds[i]; }
     }
 
     // capes: account capes (Minecraft) + Nether capes (our directory; seen by Nether players)
-    if root.page == 1: Flickable {
-        x: 468px; y: 112px; width: 916px; height: parent.height - 112px;
+    if root.page == 1 && Community.source == 0: Flickable {
+        x: 468px; y: 150px; width: 916px; height: parent.height - 150px;
         property <length> acct-h: Math.ceil(Backend.capes.length / 4) * 198px;
         property <length> nth-y: 36px + self.acct-h + 18px;
-        content-height: self.nth-y + 36px + (Backend.ncape-state == 2 ? Math.ceil(Backend.ncapes.length / 4) * 198px : 120px) + 24px;
+        content-height: self.nth-y + 36px + (Backend.ncape-state == 2 ? Math.ceil(Backend.ncapes.length / 4) * 198px : 120px) + 100px;
         init => { Backend.load-ncapes(); }
         SectionHead { x: 0px; y: 0px; width: 916px; idx: "01"; title: Backend.acct-state == 2 ? "FROM YOUR MICROSOFT ACCOUNT" : "SIGN IN TO SEE YOUR CAPES"; note: "everyone sees these"; }
         for c[i] in Backend.capes: CapeCard {
@@ -317,4 +314,38 @@ export component WardrobeScreen inherits Rectangle {
                 text: Backend.ncape-state == 3 ? "The Nether cape directory isn't reachable right now. Check your connection and open this page again." : "Loading Nether capes…"; }
         }
     }
+
+    // unapplied picks (capes + cosmetics): one save bar on every page, slides up over the bottom of the grid
+    property <int> changes: (Backend.cape-sel != Backend.cape-idx ? 1 : 0) + (Backend.ncape-sel != Backend.ncape-worn ? 1 : 0)
+        + (Backend.cos-sel[0] != Backend.cos-worn[0] ? 1 : 0) + (Backend.cos-sel[1] != Backend.cos-worn[1] ? 1 : 0) + (Backend.cos-sel[2] != Backend.cos-worn[2] ? 1 : 0)
+        + (Backend.cos-sel[3] != Backend.cos-worn[3] ? 1 : 0) + (Backend.cos-sel[4] != Backend.cos-worn[4] ? 1 : 0) + (Backend.cos-sel[5] != Backend.cos-worn[5] ? 1 : 0)
+        + (Backend.cos-sel[6] != Backend.cos-worn[6] ? 1 : 0);
+    property <bool> bar-on: Backend.look-dirty || Backend.look-busy;
+    Rectangle {
+        x: 468px; width: 916px; height: 64px;
+        y: root.bar-on ? root.height - 84px : root.height + 12px;
+        opacity: root.bar-on ? 1 : 0;
+        animate y { duration: Theme.mid; easing: ease-out; }
+        animate opacity { duration: Theme.fast; }
+        background: Theme.s2; border-radius: 8px; border-width: 1px; border-color: Theme.red2;
+        drop-shadow-blur: 24px; drop-shadow-color: #000000aa;
+        TouchArea { }
+        Rectangle { x: 20px; y: (parent.height - 8px) / 2; width: 8px; height: 8px; border-radius: 4px; background: Theme.red; }
+        Text { x: 40px; y: 12px; height: 22px; vertical-alignment: center; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600;
+            text: Backend.look-busy ? "Applying your look…" : root.changes == 1 ? "1 unapplied change" : "\{Math.max(1, root.changes)} unapplied changes"; }
+        Text { x: 40px; y: 33px; height: 18px; vertical-alignment: center; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts;
+            text: root.signed ? "Only you see it until you apply. Leaving asks first." : "Sign in with your Microsoft account to apply."; }
+        rv := Btn { x: ap.x - self.width - 10px; y: 12px; height: 40px; text: "REVERT"; enabled: !Backend.look-busy; clicked => { Backend.revert-look(); } }
+        ap := PlayButton {
+            x: parent.width - 12px - 150px; y: 12px; width: 150px; height: 40px; text-size: 16px; arrow: false;
+            label: Backend.look-busy ? "APPLYING…" : "APPLY";
+            enabled: root.signed && Backend.look-dirty && !Backend.look-busy;
+            clicked => { Backend.apply-look(); }
+        }
+    }
+
+    // community dialogs
+    if Community.up-state != 0: UploadDialog { }
+    if Community.report-id != "": ReportDialog { }
+    if Community.delete-id != "": DeleteUploadDialog { }
 }

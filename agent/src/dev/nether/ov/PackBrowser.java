@@ -23,6 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * resource packs made for this game version, shows them with icon, author and downloads, and downloads the chosen one
  * (newest file, SHA-1 checked) straight into {@code resourcepacks/}. The game's pack screen picks new files up by
  * itself (1.16+); then they are turned on there like any other pack. Search results and icons go through {@link Net}.
+ * Clicking a result opens its page (like the launcher's mod page): stats, gallery, description, versions.
  */
 final class PackBrowser {
     private PackBrowser() {}
@@ -58,6 +59,7 @@ final class PackBrowser {
 
     static void close() {
         open = false;
+        sel = null;
         Input.setMenu(false);
     }
 
@@ -73,7 +75,8 @@ final class PackBrowser {
     static void key(int k, boolean press, boolean shift, boolean ctrl) {
         if (k == 259) { if (!query.isEmpty()) { query = ctrl ? "" : query.substring(0, query.length() - 1); searchAt = System.currentTimeMillis() + 350; } return; }
         if (!press) return;
-        if (k == 256) close();
+        if (k == 256) { if (zoom >= 0) zoom = -1; else if (sel != null) sel = null; else close(); }
+        else if (sel != null) { if (k == 266) dScrollT -= 300; else if (k == 267) dScrollT += 300; }
         else if (k == 257 || k == 335) searchAt = 1;
         else if (k == 86 && ctrl) type(Plat.cur.clipboard());
         else if (k == 266) scrollT -= 300;
@@ -220,13 +223,13 @@ final class PackBrowser {
         BufferedImage b = icons.get(h.id);
         if (b != null || h.icon.isEmpty()) return b;
         Net.Req r = iconReq.get(h.id);
-        if (r == null) { if (iconReq.size() > 400) iconReq.clear(); iconReq.put(h.id, Net.get(h.icon, 7L * 24 * 3600_000, 1 << 20)); return null; }
+        if (r == null) { if (iconReq.size() > 400) iconReq.clear(); iconReq.put(h.id, Net.get(h.icon, 7L * 24 * 3600_000, 4 << 20)); return null; }
         if (!r.done()) return null;
         if (r.ok()) try {
             BufferedImage img = Icons.decode(new java.io.ByteArrayInputStream(r.body), 1024 * 1024);
             if (img != null) { icons.put(h.id, img); Gfx.texture("pb:" + h.id, img, true); return img; }
         } catch (Throwable ignored) { }
-        h.icon = ""; // webp / gif / broken: the letter tile stays
+        h.icon = ""; // lossy WebP / broken: the letter tile stays
         return null;
     }
 
@@ -256,6 +259,8 @@ final class PackBrowser {
         Gfx.rect(x + w - 44, y + 18, 28, 28, 6, Gfx.a(Th.ov, 0.05f * ct));
         Menu.drawX(x + w - 30, y + 32, 5, Gfx.mix(Th.mut, Th.tx, ct));
         if (Menu.hit(x + w - 44, y + 18, 28, 28)) { close(); Gfx.alpha = a0; return; }
+
+        if (sel != null) { page(x, y, w, h, wheel); Gfx.alpha = a0; return; }
 
         // search + filters
         float sy = y + 62, sx = x + 24, sw = w - 48 - 170;
@@ -318,6 +323,18 @@ final class PackBrowser {
         Gfx.alpha = a0;
     }
 
+    private static void dlButton(Hit hit, String id, float bx, float by, float bw) {
+        Dl d = dls.get(hit.id);
+        if (d != null && d.done) {
+            Gfx.rect(bx, by, bw, 30, 6, Gfx.a(Th.ac, 0.18f));
+            Gfx.textC(Gfx.SEMI, 11, bx + bw / 2, by + 15, Th.ac2, "DOWNLOADED", 1.2f);
+        } else if (d != null && d.err == null) {
+            Gfx.rect(bx, by, bw, 30, 6, Gfx.a(Th.ov, 0.05f));
+            Gfx.rect(bx, by, bw * Math.max(0.04f, d.p), 30, 6, Gfx.a(Th.ac, 0.45f));
+            Gfx.textC(Gfx.SEMI, 11, bx + bw / 2, by + 15, Th.tx, Math.round(d.p * 100) + "%", 1.2f);
+        } else if (Menu.button(id, d != null ? "RETRY" : "DOWNLOAD", bx, by, bw, 30, true)) download(hit);
+    }
+
     private static void row(Hit hit, float x, float y, float w, float h, int i) {
         boolean hv = Menu.in(x, y + 2, w, h - 4);
         float t = Menu.an("pbr" + i, hv);
@@ -349,5 +366,272 @@ final class PackBrowser {
             Gfx.rect(bx, by, bw * Math.max(0.04f, d.p), 30, 6, Gfx.a(Th.ac, 0.45f));
             Gfx.textC(Gfx.SEMI, 11, bx + bw / 2, by + 15, Th.tx, Math.round(d.p * 100) + "%", 1.2f);
         } else if (Menu.button("pbd" + i, d != null ? "RETRY" : "DOWNLOAD", bx, by, bw, 30, !installed(hit))) download(hit);
+        if (Menu.hit(x, y + 2, w, h - 4)) openPage(hit); // anywhere but the button
+    }
+
+    // ---------------------------------------------------------------- a pack's page
+
+    private static final class Page {
+        String slug = "", summary = "", updated = "", license = "";
+        long followers;
+        final List<String> gallery = new ArrayList<>();
+        /** {kind, text}: 0 paragraph, 1 heading, 2 bullet */
+        final List<String[]> blocks = new ArrayList<>();
+        String[] versions = new String[0];
+    }
+
+    private static Hit sel;
+    private static Page pg;
+    private static Net.Req pReq;
+    private static float dScroll, dScrollT;
+    private static int zoom = -1;
+    private static final Map<String, BufferedImage> shots = new ConcurrentHashMap<>();
+    private static final Map<String, Net.Req> shotReq = new LinkedHashMap<>();
+    private static final java.util.Set<String> shotBad = java.util.Collections.newSetFromMap(new ConcurrentHashMap<>());
+    /** wrapped description for one width: {kind, line} */
+    private static List<String[]> laid;
+    private static float laidW;
+
+    private static void openPage(Hit h) {
+        sel = h;
+        pg = null;
+        laid = null;
+        zoom = -1;
+        dScroll = dScrollT = 0;
+        pReq = Net.get(API + "project/" + h.id, 30 * 60_000L, 2 << 20);
+    }
+
+    private static void collectPage() {
+        if (pReq == null || !pReq.done()) return;
+        Net.Req r = pReq;
+        pReq = null;
+        Page p = new Page();
+        if (r.ok()) try {
+            Map<?, ?> m = (Map<?, ?>) Json.parse(r.text());
+            p.slug = str(m.get("slug"));
+            p.summary = str(m.get("description"));
+            p.updated = str(m.get("updated"));
+            if (p.updated.length() >= 10) p.updated = p.updated.substring(0, 10);
+            p.followers = m.get("followers") instanceof Number ? ((Number) m.get("followers")).longValue() : 0;
+            if (m.get("license") instanceof Map) p.license = str(((Map<?, ?>) m.get("license")).get("id"));
+            if (m.get("gallery") instanceof List) {
+                List<Map<?, ?>> g = new ArrayList<>();
+                for (Object o : (List<?>) m.get("gallery")) if (o instanceof Map) g.add((Map<?, ?>) o);
+                g.sort((a, b) -> Boolean.compare(Boolean.TRUE.equals(b.get("featured")), Boolean.TRUE.equals(a.get("featured"))));
+                for (Map<?, ?> o : g) { String u = str(o.get("url")); if (u.startsWith("https://") && p.gallery.size() < 8) p.gallery.add(u); }
+            }
+            if (m.get("game_versions") instanceof List) {
+                List<?> l = (List<?>) m.get("game_versions");
+                List<String> rel = new ArrayList<>();
+                for (Object o : l) { String v = String.valueOf(o); if (v.matches("\\d+(\\.\\d+)+")) rel.add(v); } // releases only
+                java.util.Collections.reverse(rel);
+                p.versions = rel.toArray(new String[0]);
+            }
+            blocks(str(m.get("body")), p.blocks);
+        } catch (Throwable e) {
+            p.blocks.clear();
+        }
+        if (p.blocks.isEmpty() && p.summary.isEmpty()) p.summary = r.ok() ? "" : "Modrinth isn't reachable right now.";
+        pg = p;
+    }
+
+    /** Markdown / HTML body -> plain blocks (headings, bullets, paragraphs); images, links and tags reduced to text. */
+    private static void blocks(String md, List<String[]> out) {
+        String s = md.replace("\r", "")
+            .replaceAll("(?s)<!--.*?-->", "")
+            .replaceAll("(?is)<br\\s*/?>|</p>|</h\\d>|</li>|</div>", "\n")
+            .replaceAll("(?is)<h\\d[^>]*>", "\n# ")
+            .replaceAll("(?is)<li[^>]*>", "\n- ")
+            .replaceAll("(?s)<[^>]+>", "")
+            .replaceAll("!\\[[^\\]]*\\]\\([^)]*\\)", "")
+            .replaceAll("\\[([^\\]]*)\\]\\([^)]*\\)", "$1")
+            .replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'");
+        StringBuilder para = new StringBuilder();
+        boolean fence = false;
+        for (String raw : s.split("\n")) {
+            String l = raw.trim();
+            if (l.startsWith("```")) { fence = !fence; continue; }
+            if (fence) continue;
+            if (l.matches("[-*_=|: ]{3,}")) l = ""; // rules, table separators
+            l = l.replace("|", "  ").replaceAll("\\*\\*|__|~~|`", "").replaceAll("(^|\\s)[*_](\\S)", "$1$2").replaceAll("(\\S)[*_](\\s|$)", "$1$2").trim();
+            if (l.startsWith(">")) l = l.substring(1).trim();
+            String kind = null;
+            if (l.matches("#{1,6}\\s*.*")) { kind = "1"; l = l.replaceFirst("#{1,6}\\s*", ""); }
+            else if (l.matches("[-*+•]\\s+.*")) { kind = "2"; l = l.substring(1).trim(); }
+            else if (l.matches("\\d{1,3}[.)]\\s+.*")) kind = "2";
+            if (l.isEmpty() || kind != null) {
+                if (para.length() > 0) { out.add(new String[] {"0", para.toString()}); para.setLength(0); }
+                if (!l.isEmpty()) out.add(new String[] {kind, l});
+                continue;
+            }
+            if (para.length() > 0) para.append(' ');
+            para.append(l);
+            if (out.size() > 400) break;
+        }
+        if (para.length() > 0) out.add(new String[] {"0", para.toString()});
+    }
+
+    private static BufferedImage shot(String url) {
+        BufferedImage b = shots.get(url);
+        if (b != null || shotBad.contains(url)) return b;
+        Net.Req r = shotReq.get(url);
+        if (r == null) { if (shotReq.size() > 200) shotReq.clear(); shotReq.put(url, Net.get(url, 24L * 3600_000, 8 << 20)); return null; }
+        if (!r.done()) return null;
+        try {
+            BufferedImage img = r.ok() ? Icons.decode(new java.io.ByteArrayInputStream(r.body), 4L << 20) : null;
+            if (img != null) { shots.put(url, img); return img; }
+        } catch (Throwable ignored) { }
+        shotBad.add(url); // lossy WebP / broken: left out
+        return null;
+    }
+
+    /** Draws a gallery picture fitted in (x, y, w, h); false while it isn't loaded. */
+    private static boolean picture(String url, float x, float y, float w, float h) {
+        BufferedImage img = shot(url);
+        if (img == null) return false;
+        String key = "pbg:" + url.hashCode();
+        if (!Gfx.hasTexture(key)) Gfx.texture(key, img, true);
+        float k = Math.min(w / img.getWidth(), h / img.getHeight()), iw = img.getWidth() * k, ih = img.getHeight() * k;
+        Gfx.image(key, x + (w - iw) / 2, y + (h - ih) / 2, iw, ih, 0xFFFFFFFF, 6);
+        return true;
+    }
+
+    private static void browse(String url) {
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        String[] cmd = os.contains("win") ? new String[] {"rundll32", "url.dll,FileProtocolHandler", url}
+            : os.contains("mac") ? new String[] {"open", url} : new String[] {"xdg-open", url};
+        try { new ProcessBuilder(cmd).start(); say("Opened in your browser"); } catch (Throwable e) { say("Couldn't open the browser"); }
+    }
+
+    private static void page(float x, float y, float w, float h, float wheel) {
+        collectPage();
+        boolean held = zoom >= 0 && Menu.click; // the big picture takes the click, not what is under it
+        if (zoom >= 0) Menu.click = false;
+        Hit hit = sel;
+        Page p = pg;
+        float lx = x + 24, lw = w - 48;
+        // back + actions
+        float ty = y + 62;
+        if (Menu.button("pbback", "BACK", lx, ty, 74, 30, false)) { sel = null; return; }
+        float bw = 130, bx = x + w - 24 - bw;
+        dlButton(hit, "pbpd", bx, ty, bw);
+        boolean slug = p != null && p.slug.matches("[a-z0-9_-]{1,64}");
+        float mx = bx - 8 - 120;
+        if (Menu.button("pbweb", "MODRINTH", mx, ty, 120, 30, false)) browse("https://modrinth.com/resourcepack/" + (slug ? p.slug : hit.id));
+        if (Menu.in(mx, ty, 120, 30)) Menu.tip = "Open this pack's page in your browser";
+
+        // icon, title, author, summary, stats
+        float hy = ty + 46, is = 72;
+        BufferedImage img = icon(hit);
+        if (img != null && Gfx.hasTexture("pb:" + hit.id)) Gfx.image("pb:" + hit.id, lx, hy, is, is, 0xFFFFFFFF, 10);
+        else {
+            Gfx.rect(lx, hy, is, is, 10, Th.s3);
+            Gfx.textC(Gfx.SEMI, 26, lx + is / 2, hy + is / 2, Th.dim, hit.title.isEmpty() ? "?" : hit.title.substring(0, 1).toUpperCase(Locale.ROOT), 0);
+        }
+        float tx = lx + is + 18, tw = lw - is - 18;
+        float nw = Gfx.text(Gfx.SEMI, 18, tx, hy + 14, Th.tx, Menu.fit(hit.title, Gfx.SEMI, 18, tw * 0.75f, 0));
+        Gfx.text(Gfx.UI, 12, tx + nw + 10, hy + 15, Th.mut, Menu.fit("by " + hit.author, Gfx.UI, 12, tw - nw - 10, 0));
+        String sum = p != null && !p.summary.isEmpty() ? p.summary : hit.desc;
+        List<String> sl = Menu.wrap(sum, Gfx.UI, 12, tw);
+        for (int i = 0; i < Math.min(2, sl.size()); i++)
+            Gfx.text(Gfx.UI, 12, tx, hy + 38 + i * 17, Th.dim, Menu.fit(i == 1 && sl.size() > 2 ? sl.get(1) + " ..." : sl.get(i), Gfx.UI, 12, tw, 0));
+        StringBuilder st = new StringBuilder(count(hit.downloads)).append(" DOWNLOADS");
+        if (p != null) {
+            st.append("  ·  ").append(count(p.followers)).append(" FOLLOWERS");
+            if (!p.updated.isEmpty()) st.append("  ·  UPDATED ").append(p.updated);
+            if (!p.license.isEmpty()) st.append("  ·  ").append(p.license.toUpperCase(Locale.ROOT));
+        }
+        Gfx.text(Gfx.MONO, 9, tx, hy + 80, Th.mut, Menu.fit(st.toString(), Gfx.MONO, 9, tw, 1.2f), false, 1.2f);
+
+        // body: gallery, description, versions
+        float top = hy + is + 28, bottom = y + h - 40, viewH = bottom - top;
+        Gfx.rect(x, top - 10, w, 1, 0, Th.ln);
+        if (p == null) {
+            Gfx.textC(Gfx.UI, 12, x + w / 2, top + 50, Th.dim, "Loading...", 0);
+            return;
+        }
+        if (laid == null || laidW != lw) {
+            laidW = lw;
+            laid = new ArrayList<>();
+            for (String[] b : p.blocks) {
+                int f = b[0].equals("1") ? Gfx.SEMI : Gfx.UI;
+                float sz = b[0].equals("1") ? 14 : 12, ind = b[0].equals("2") ? 16 : 0;
+                List<String> ls = Menu.wrap(b[1], f, sz, lw - ind);
+                for (int i = 0; i < ls.size(); i++) laid.add(new String[] {b[0], ls.get(i), i == 0 ? "1" : "0"});
+                laid.add(new String[] {"gap", ""});
+            }
+        }
+        List<String> pics = new ArrayList<>();
+        for (String u : p.gallery) if (!shotBad.contains(u)) pics.add(u);
+        float gh = pics.isEmpty() ? 0 : 128, gap = 10;
+        float contentH = (gh > 0 ? gh + 26 : 0) + 22;
+        for (String[] l : laid) contentH += l[0].equals("gap") ? 8 : l[0].equals("1") ? 24 : 18;
+        if (p.versions.length > 0) contentH += 40 + ((p.versions.length + 9) / 10) * 30;
+        float maxS = Math.max(0, contentH - viewH);
+        if (zoom < 0) dScrollT = Math.max(0, Math.min(maxS, dScrollT - wheel * 60));
+        dScroll = Config.calm() ? dScrollT : dScroll + (dScrollT - dScroll) * Math.min(1, Gfx.dt * 16);
+        Menu.beginClip(x + 12, top, w - 24, viewH);
+        float cy = top - dScroll;
+        if (gh > 0) {
+            Gfx.text(Gfx.MONO, 9, lx, cy + 6, Th.mut, "GALLERY", false, 1.6f);
+            cy += 20;
+            int n = Math.min(pics.size(), 4);
+            float pw = (lw - gap * (n - 1)) / Math.max(n, 3);
+            for (int i = 0; i < n; i++) {
+                float px = lx + i * (pw + gap);
+                boolean hv = Menu.in(px, cy, pw, gh);
+                float t = Menu.an("pbg" + i, hv);
+                Gfx.rect(px, cy, pw, gh, 8, Gfx.a(Th.ov, 0.04f + 0.04f * t));
+                if (!picture(pics.get(i), px + 4, cy + 4, pw - 8, gh - 8)) Gfx.textC(Gfx.MONO, 9, px + pw / 2, cy + gh / 2, Th.mut, "LOADING", 1.2f);
+                Gfx.ring(px, cy, pw, gh, 8, 1, Gfx.mix(Th.ln, Th.ln2, t));
+                if (Menu.hit(px, cy, pw, gh) && zoom < 0) zoom = p.gallery.indexOf(pics.get(i));
+            }
+            cy += gh + 26;
+        }
+        Gfx.text(Gfx.MONO, 9, lx, cy, Th.mut, "DESCRIPTION", false, 1.6f);
+        cy += 22;
+        if (laid.isEmpty()) { Gfx.text(Gfx.UI, 12, lx, cy, Th.dim, "No description."); cy += 18; }
+        for (String[] l : laid) {
+            if (l[0].equals("gap")) { cy += 8; continue; }
+            boolean head = l[0].equals("1"), bul = l[0].equals("2");
+            float lh = head ? 24 : 18;
+            if (cy + lh > top - 20 && cy < bottom + 20) {
+                if (bul && l[2].equals("1")) Gfx.rect(lx + 4, cy - 2, 4, 4, 2, Th.ac2);
+                Gfx.text(head ? Gfx.SEMI : Gfx.UI, head ? 14 : 12, lx + (bul ? 16 : 0), cy + (head ? 4 : 0), head ? Th.tx : 0xFFC5CBD4,
+                    Menu.fit(l[1], head ? Gfx.SEMI : Gfx.UI, head ? 14 : 12, lw - (bul ? 16 : 0), 0));
+            }
+            cy += lh;
+        }
+        if (p.versions.length > 0) {
+            cy += 18;
+            Gfx.text(Gfx.MONO, 9, lx, cy, Th.mut, "GAME VERSIONS", false, 1.6f);
+            cy += 14;
+            String mine = version();
+            float cw = (lw - 9 * 6) / 10;
+            for (int i = 0; i < p.versions.length; i++) {
+                float vx = lx + (i % 10) * (cw + 6), vy = cy + (i / 10) * 30;
+                boolean me = p.versions[i].equals(mine);
+                Gfx.rect(vx, vy, cw, 24, 6, me ? Gfx.a(Th.ac, 0.22f) : Gfx.a(Th.ov, 0.04f));
+                Gfx.textC(Gfx.MONO, 10, vx + cw / 2, vy + 12, me ? Th.ac2 : Th.tx, p.versions[i], 0.4f);
+            }
+        }
+        Menu.endClip();
+        if (maxS > 0) {
+            float bh = Math.max(30, viewH * viewH / contentH);
+            Gfx.rect(x + w - 14, top + (viewH - bh) * (dScroll / maxS), 3, bh, 1.5f, Gfx.a(Th.ov, 0.16f));
+        }
+        // footer note
+        long now = System.currentTimeMillis();
+        boolean fresh = note != null && now - noteAt < 6000;
+        Gfx.rect(x, bottom + 4, w, 1, 0, Th.ln);
+        Gfx.text(Gfx.UI, 11, lx, bottom + 20, fresh ? Th.tx : Th.mut, Menu.fit(fresh ? note : "Downloads go to your resourcepacks folder. Esc goes back to the list.", Gfx.UI, 11, lw, 0));
+
+        // a gallery picture, large (click or Esc closes)
+        if (held) Menu.click = true;
+        if (zoom >= 0 && zoom < p.gallery.size()) {
+            Gfx.rect(x, y, w, h, 10, Gfx.a(0xFF000000, 0.86f));
+            if (!picture(p.gallery.get(zoom), x + 20, y + 20, w - 40, h - 40)) Gfx.textC(Gfx.UI, 12, x + w / 2, y + h / 2, Th.dim, "Loading...", 0);
+            if (Menu.hit(x, y, w, h)) zoom = -1;
+        } else zoom = -1;
     }
 }

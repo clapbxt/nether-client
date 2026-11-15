@@ -214,16 +214,21 @@ pub fn capes(c: &Client) -> Vec<Cape> { content::<Cape>(c, "capes/index.json").i
 
 /// Hand the game agent the verified cape hashes (`<id> <sha256> <ms per frame>` per line); it only accepts a cape PNG that matches.
 /// Returns the file path, None when there is no verified manifest (the agent then shows no capes).
+/// Community capes this player has (own uploads, hearts) are added from `ugc::known_all`.
 pub fn cape_sums_file(c: &Client) -> Option<std::path::PathBuf> {
-    let m = manifest(Some(c))?;
-    let dir = capes(c);
+    let m = manifest(Some(c));
     let mut out = String::new();
-    for (path, e) in &m.files {
-        if let Some(id) = path.strip_prefix("capes/").and_then(|p| p.strip_suffix(".png")) {
-            let ms = dir.iter().find(|x| x.id == id).map_or(100, Cape::frame_ms);
-            if valid_cape_id(id) { out.push_str(&format!("{id} {} {ms}\n", e.sha256)); }
+    if let Some(m) = &m {
+        let dir = capes(c);
+        for (path, e) in &m.files {
+            if let Some(id) = path.strip_prefix("capes/").and_then(|p| p.strip_suffix(".png")) {
+                let ms = dir.iter().find(|x| x.id == id).map_or(100, Cape::frame_ms);
+                if valid_cape_id(id) { out.push_str(&format!("{id} {} {ms}\n", e.sha256)); }
+            }
         }
     }
+    for it in crate::ugc::known_all().into_iter().filter(|i| i.what() == Some(crate::cosimport::What::Cape)) { out.push_str(&format!("{} {} {}\n", it.id, it.png, it.frame_ms())); }
+    if m.is_none() && out.is_empty() { return None; }
     let f = cache_dir().join("cape-sums.txt");
     std::fs::create_dir_all(cache_dir()).ok()?;
     crate::store::write_atomic(&f, out.as_bytes()).ok()?;
@@ -273,12 +278,17 @@ pub fn cosmetics(c: &Client) -> Vec<Cosmetic> {
 
 /// Hand the agent the verified cosmetics (`<id> <type> <model sha256> <png sha256> <ms per frame>` per line); it only
 /// accepts files that match. None when there is no verified manifest (the agent then draws no cosmetics).
+/// Community cosmetics this player has (own uploads, hearts) are added from `ugc::known_all`.
 pub fn cosmetic_sums_file(c: &Client) -> Option<std::path::PathBuf> {
-    let m = manifest(Some(c))?;
     let mut out = String::new();
-    for x in cosmetics(c) {
-        let (Some(js), Some(png)) = (m.files.get(&format!("cosmetics/{}.json", x.id)), m.files.get(&format!("cosmetics/{}.png", x.id))) else { continue };
-        out.push_str(&format!("{} {} {} {} {}\n", x.id, x.kind, js.sha256, png.sha256, x.frame_ms()));
+    if let Some(m) = manifest(Some(c)) {
+        for x in cosmetics(c) {
+            let (Some(js), Some(png)) = (m.files.get(&format!("cosmetics/{}.json", x.id)), m.files.get(&format!("cosmetics/{}.png", x.id))) else { continue };
+            out.push_str(&format!("{} {} {} {} {}\n", x.id, x.kind, js.sha256, png.sha256, x.frame_ms()));
+        }
+    }
+    for it in crate::ugc::known_all() {
+        if let (Some(crate::cosimport::What::Item(k)), Some(model)) = (it.what(), it.model.as_deref()) { out.push_str(&format!("{} {} {model} {} {}\n", it.id, k.as_str(), it.png, it.frame_ms())); }
     }
     if out.is_empty() { return None; }
     let f = cache_dir().join("cosmetic-sums.txt");

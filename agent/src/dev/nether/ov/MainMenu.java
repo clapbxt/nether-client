@@ -121,11 +121,10 @@ final class MainMenu {
                 stripped = s;
                 drawTitle(fbW, fbH, s);
             } else if (!Input.menuOpen && packScreen(s)) {
-                // the game's resource pack screen: GET PACKS opens the Modrinth browser
+                // the game's resource pack screen: a vanilla-style GET PACKS button in the footer row opens the Modrinth browser
                 packs = true;
                 units(Gfx.base);
-                float cw = chipW("GET PACKS", null, true);
-                if (chip("packs", Gfx.fbW / Gfx.s - cw - 12, 12, 32, "GET PACKS", null, true, false)) PackBrowser.show();
+                if (packButton()) PackBrowser.show();
             } else if (cPause != null && cPause.isInstance(s) && !Input.menuOpen && MODULE.bool("pauseButton")) {
                 // F3+Esc pauses without the menu (screenshots): no button either
                 if (legacy || !Boolean.FALSE.equals(Game.fld(s, "field_19319"))) {
@@ -139,6 +138,50 @@ final class MainMenu {
             Gfx.round = r0;
             Gfx.s = Gfx.base;
         }
+    }
+
+    private static int footerVer = -1;
+
+    /** The pack screen puts its buttons in a 33 px footer layout (1.20.5+ / 26.x) rather than at height - 48. */
+    private static boolean footerLayout() {
+        if (legacy) return false;
+        if (footerVer < 0) {
+            footerVer = 1;
+            String v = Game.version();
+            java.util.regex.Matcher m = v == null ? null : java.util.regex.Pattern.compile("^1\\.(\\d+)(?:\\.(\\d+))?").matcher(v);
+            if (m != null && m.find()) {
+                int mi = Integer.parseInt(m.group(1)), pa = m.group(2) == null ? 0 : Integer.parseInt(m.group(2));
+                footerVer = mi > 20 || (mi == 20 && pa >= 5) ? 1 : 0;
+            }
+        }
+        return footerVer == 1;
+    }
+
+    /**
+     * GET PACKS beside vanilla's Open Pack Folder / Done (150 px each, 8 px apart, centred) in the game's own button
+     * texture, fireball mark left of the label; top right when the row has no room. Units: 2 per GUI px.
+     */
+    private static boolean packButton() {
+        int gs = Math.max(1, Math.round(Gfx.base * 2));
+        int gw = (int) Math.ceil(Gfx.fbW / (double) gs), gh = (int) Math.ceil(Gfx.fbH / (double) gs);
+        String label = "Get Packs";
+        boolean vf = Vanilla.font();
+        float tw = vf ? Vanilla.width(label) : Gfx.width(Gfx.SEMI, 11, label);
+        float w = Math.max(160, tw + 16 + 8 + 32), h = 40;
+        float x = (gw / 2 + 162) * 2, y = (gh - (footerLayout() ? 27 : 48)) * 2;
+        if (x + w > gw * 2 - 8) { x = gw * 2 - w - 8; y = 8; }
+        boolean hov = over(x, y, w, h);
+        if (!Vanilla.button(x, y, w, hov)) {
+            Gfx.rect(x, y, w, h, 0, hov ? 0xFF6F6F6F : 0xFF4A4A4A);
+            Gfx.ring(x, y, w, h, 0, 2, hov ? 0xFFFFFFFF : 0xFF000000);
+        }
+        float cx = x + (w - (16 + 8 + tw)) / 2;
+        mark(cx, y + (h - 18.9f) / 2, 16);
+        int col = legacy && hov ? 0xFFFFFFA0 : 0xFFFFFFFF;
+        if (vf) Vanilla.text(label, cx + 24, y + 12, col, true);
+        else Gfx.text(Gfx.SEMI, 11, cx + 24, y + h / 2, col, label);
+        box(x, y, w, h);
+        return hit(x, y, w, h);
     }
 
     /** Overlay death: re-open the title screen we stripped, so vanilla rebuilds its buttons and splash. */

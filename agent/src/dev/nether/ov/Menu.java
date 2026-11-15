@@ -77,6 +77,7 @@ final class Menu {
         hudEdit = false;
         WpDialog.open = false;
         PackBrowser.open = false;
+        Wardrobe.ask = false;
         ColorPicker.close();
         HudEditor.reset();
     }
@@ -293,6 +294,7 @@ final class Menu {
 
     /** Esc steps back one level: typing -> layout editor selection -> layout editor -> colour picker -> search -> page -> hub -> close. */
     private static void esc() {
+        if (Wardrobe.ask) { Wardrobe.ask = false; return; }
         if (fieldFocus()) { editWp = -1; editSet = null; return; }
         if (hudEdit) { if (!HudEditor.esc()) { hudEdit = false; HudEditor.reset(); } return; }
         if (ColorPicker.id != null) { ColorPicker.close(); return; }
@@ -567,6 +569,17 @@ final class Menu {
                         clickRt = c1;
                     }
                     WpDialog.draw(e);
+                } else if (Wardrobe.ask && !hub && tab == T_WARDROBE) { // unsaved-changes dialog over the Wardrobe, which gets no clicks
+                    boolean c0 = click, c1 = clickRt;
+                    float l0 = L, t0 = T;
+                    click = clickRt = false;
+                    L = T = -1e6f; // no hover either
+                    panel(0, e);
+                    L = l0;
+                    T = t0;
+                    click = c0;
+                    clickRt = c1;
+                    Wardrobe.askDraw(e);
                 } else if (hub) hub(e); else panel(wheel, e);
             } finally { Gfx.round = false; }
             if (click && fieldFocus()) commitEdit(); // clicked somewhere else
@@ -616,7 +629,11 @@ final class Menu {
     }
 
     /** Back to the hub, focusing the button of the screen just left. */
+    /** Leaving the current screen is fine now (false: the Wardrobe holds it for its unsaved-changes dialog, then runs r). */
+    static boolean leaveOk(Runnable r) { return hub || tab != T_WARDROBE || !Wardrobe.guard(r); }
+
     private static void toHub() {
+        if (!leaveOk(Menu::toHub)) return;
         commitEdit();
         ColorPicker.close();
         page = null;
@@ -779,7 +796,7 @@ final class Menu {
         float xt = an("close", in(cx, cy - 14, 28, 28));
         Gfx.rect(cx, cy - 14, 28, 28, 4, Gfx.a(Th.ov, 0.07f * xt));
         drawX(cx + 14, cy, 4.2f, Gfx.mix(Th.mut, Th.tx, xt));
-        if (hit(cx, cy - 14, 28, 28)) Input.setMenu(false);
+        if (hit(cx, cy - 14, 28, 28) && leaveOk(() -> Input.setMenu(false))) Input.setMenu(false);
         Gfx.rect(sx, sy + TOP, pw, 1, 0, Th.ln);
         return tx + tw + 12;
     }

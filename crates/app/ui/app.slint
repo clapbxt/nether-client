@@ -17,6 +17,8 @@ import { InstancesScreen } from "instances.slint";
 import { DiscoverScreen } from "discover.slint";
 import { HostScreen } from "host.slint";
 import { WardrobeScreen } from "wardrobe.slint";
+import { Community, CommItem } from "community.slint";
+export { Community, CommItem }
 import { SettingsScreen } from "settings.slint";
 
 // Top-bar square button (settings cog) with keyboard focus and a hover label below it.
@@ -111,7 +113,27 @@ export component AppWindow inherits Window {
     // a returning player keeps their face and name in the chip while the saved sign-in refreshes (no flicker)
     property <bool> acct-known: Backend.acct-state == 2 || (Backend.acct-state == 3 && Backend.acct-name != "");
     // the player preview asks for frames again when its tab opens or the model changes
-    changed tab => { Backend.skin-wake(); }
+    // leaving the Wardrobe with unapplied picks asks first (the tab bounces back until answered)
+    property <int> ward-prev: 0;
+    in-out property <int> ward-leave: -1;
+    property <bool> ward-ok: false;
+    changed tab => {
+        if root.tab != 5 && root.ward-prev == 5 && Backend.look-dirty && !Backend.look-busy && !root.ward-ok {
+            root.ward-leave = root.tab;
+            root.tab = 5;
+        } else {
+            root.ward-ok = false;
+            root.ward-prev = root.tab;
+            Backend.skin-wake();
+        }
+    }
+    function ward-go(apply: bool) {
+        if apply { Backend.apply-look(); } else { Backend.revert-look(); }
+        root.ward-ok = true;
+        root.open-idx = -1;
+        root.tab = root.ward-leave;
+        root.ward-leave = -1;
+    }
     property <bool> slim: Backend.skin-slim;
     changed slim => { Backend.skin-wake(); }
     // keyboard shortcuts (every key nothing else took): Ctrl+K command palette, Ctrl+1-5 tabs, Ctrl+, settings, Ctrl+N new instance,
@@ -601,6 +623,23 @@ export component AppWindow inherits Window {
                 at := Text { x: 32px; y: 72px; width: 456px; text: Backend.ask-text; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
                 Btn { x: 32px; y: parent.height - 62px; text: Backend.ask-yes; solid: !Backend.ask-danger; danger: Backend.ask-danger; clicked => { Backend.ask-answer(true); } }
                 LinkBtn { x: parent.width - 32px - self.width; y: parent.height - 56px; text: "CANCEL"; clicked => { Backend.ask-answer(false); } }
+            }
+        }
+
+        // ---------- leaving the Wardrobe with unapplied picks ----------
+        if root.ward-leave >= 0: Scrim {
+            x: 0px; y: 0px; width: root.W; height: root.H;
+            dismiss => { root.ward-leave = -1; }
+            Rectangle {
+                x: (root.W - 520px) / 2; y: 260px; width: 520px; height: 196px;
+                background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
+                TouchArea { }
+                Rectangle { x: 0px; width: 4px; background: Theme.red2; }
+                Text { x: 32px; y: 28px; width: 456px; text: "Apply your new look?"; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; overflow: elide; }
+                Text { x: 32px; y: 72px; width: 456px; text: "You picked capes or cosmetics in the Wardrobe that aren't applied yet. Nobody sees them until you apply."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
+                ab := Btn { x: 32px; y: parent.height - 62px; text: "APPLY & LEAVE"; solid: true; icon: Ico.check; enabled: Backend.acct-state == 2; clicked => { root.ward-go(true); } }
+                Btn { x: ab.x + ab.width + 10px; y: parent.height - 62px; text: "DISCARD"; clicked => { root.ward-go(false); } }
+                LinkBtn { x: parent.width - 32px - self.width; y: parent.height - 56px; text: "KEEP EDITING"; clicked => { root.ward-leave = -1; } }
             }
         }
 

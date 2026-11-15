@@ -317,6 +317,8 @@ export global Backend {
     in-out property <bool> look-refreshing;
     callback apply-look();
     callback refresh-look();
+    // drop the unapplied picks (back to what is worn)
+    callback revert-look();
 
     // Microsoft account (0 signed out, 1 waiting on microsoft.com code, 2 signed in, 3 restoring)
     in-out property <int> acct-state: 0;
