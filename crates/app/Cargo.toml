@@ -1,4 +1,4 @@
-﻿[package]
+[package]
 name = "nether-app"
 version = "0.3.4"
 edition = "2021"
@@ -28,5 +28,5 @@ winresource = "0.1"
 
 
 [dev-dependencies]
-resvg = "0.48"
+resvg = "0.50"
 image = { version = "0.25", default-features = false, features = ["png", "ico"] }
