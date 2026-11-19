@@ -159,10 +159,10 @@ final class ColorPicker {
         Gfx.image("cp:sv", x, top, sw, sh, 0xFFFFFFFF, 0);
         Gfx.ring(x, top, sw, sh, 0, 1, 0x33FFFFFF);
         float mx = x + sat * sw, my = top + (1 - val) * sh;
-        Gfx.round = true;
+        Gfx.round = Th.round();
         Gfx.ring(mx - 7, my - 7, 14, 14, 7, 1, 0x99000000);
         Gfx.ring(mx - 6, my - 6, 12, 12, 6, 2, 0xFFFFFFFF);
-        Gfx.round = true; // the menu draws rounded
+        Gfx.round = Th.round(); // the menu draws rounded
         // hue, alpha
         Gfx.image("cp:hue", hx, top, 14, sh, 0xFFFFFFFF, 0);
         marker(hx, top + hue * sh, 14);

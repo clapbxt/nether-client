@@ -205,7 +205,9 @@ pub fn install_file(c: &Client, paths: &Paths, mrpack: &Path, name: Option<&str>
         progress("Copying overrides", 0.92);
         extract_prefix(&mut zip, "overrides/", &dir)?;
         extract_prefix(&mut zip, "client-overrides/", &dir)?;
-        let data = new_instance(paths, &name, &mc, loader, &lv)?;
+        let mut data = new_instance(paths, &name, &mc, loader, &lv)?;
+        data.pack = idx.name.trim().chars().take(64).collect();
+        if data.pack.is_empty() { data.pack = "Modpack".into(); }
         progress("Modpack installed", 1.0);
         Ok(data)
     })();

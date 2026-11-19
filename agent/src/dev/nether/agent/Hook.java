@@ -96,6 +96,15 @@ public final class Hook {
         lookPitch = Math.max(-90f, Math.min(90f, lookPitch + (float) ((lookInvert ? -x : x) * 0.15)));
         return 0;
     }
+    /** 1.8.9 / 1.12.2 Entity.setAngles(yaw, pitch): same 0.15 scale, but the game subtracts the pitch delta. */
+    public static float lookL(Object e, float y, float x) {
+        lookUsed = look && e != null && e == lookOf;
+        if (!lookUsed) return y;
+        lookYaw += y * 0.15f;
+        lookPitch = Math.max(-90f, Math.min(90f, lookPitch - (lookInvert ? -x : x) * 0.15f));
+        return 0;
+    }
+    public static float lookLX(float x) { return lookUsed ? 0 : x; }
     /** Entity.turn's xRot after {@link #look}. */
     public static double lookX(double x) { return lookUsed ? 0 : x; }
     /** Start of Camera.setRotation(yaw, pitch). */
@@ -104,6 +113,119 @@ public final class Hook {
 
     public static float fov(float v) { float d = fovDiv; return d > 1 ? v / d : v; }
     public static float hand(float v) { float s = handShow; return s < 1 ? v * Math.max(0, s) : v; }
+
+    // ---------------------------------------------------------------- view editors (Shield / Fire / Ride, Tier B)
+
+    /** PoseStack and item access for the view editors; set by the overlay (it owns the game's names). */
+    public interface Pose {
+        void push(Object ps);
+        void pop(Object ps);
+        void move(Object ps, float dy);
+        boolean shield(Object stack);
+    }
+    public static volatile Pose pose;
+    /** ItemInHandRenderer arm / ScreenEffectRenderer fire / entity renderers were hooked (each module needs its own). */
+    public static volatile boolean shieldHooked, fireHooked, mountHooked;
+    /** Shield: held shield moved up/down by this (0 = vanilla). Fire: overlay moved by fireDy, alpha fireAlpha (-1 = vanilla). */
+    public static volatile float shieldDy, fireDy, fireAlpha = -1;
+    private static boolean firePushed;
+    private static Object firePose, mountArg;
+    /** Ride: the entity you ride while its opacity is below 255 (else null), and that alpha. */
+    public static volatile Object mountOf;
+    public static volatile int mountAlpha = 255;
+    /** Identifier -> the game's translucent entity render type (armour and saddle layers of the mount). */
+    public static volatile java.util.function.Function<Object, Object> translucent;
+    private static Object mountState, mountId;
+    private static boolean mountNow;
+    private static int viewErrors;
+
+    /** Right after the arm's first pushPose: a held shield moves by shieldDy. */
+    public static void shield(Object ps, Object stack) {
+        float d = shieldDy;
+        Pose p = pose;
+        if (d == 0 || p == null) return;
+        try { if (p.shield(stack)) p.move(ps, d); } catch (Throwable t) { viewFail(t); }
+    }
+
+    /** Start / each return of the fire overlay method: its own pose level moved by fireDy. */
+    public static void fireIn(Object ps) {
+        firePushed = false;
+        firePose = ps;
+        float d = fireDy;
+        Pose p = pose;
+        if (d == 0 || p == null) return;
+        try { p.push(ps); firePushed = true; p.move(ps, d); } catch (Throwable t) { viewFail(t); }
+    }
+    public static void fireOut() {
+        Object ps = firePose;
+        firePose = null;
+        if (!firePushed) return;
+        firePushed = false;
+        Pose p = pose;
+        try { if (p != null && ps != null) p.pop(ps); } catch (Throwable t) { viewFail(t); }
+    }
+    /** The fire quads' alpha (float colour, or packed ARGB on 26.x). */
+    public static float fireA(float a) { float f = fireAlpha; return f < 0 ? a : f; }
+    public static int fireArgb(int c) { float f = fireAlpha; return f < 0 ? c : (c & 0xFFFFFF) | (Math.round(Math.max(0, Math.min(1, f)) * 255) << 24); }
+
+    /** EntityRenderer.createRenderState(entity, partial): its entity at the start, its result at the return (remembers the ridden entity's state). */
+    public static void mountArg(Object entity) { mountArg = entity; }
+    public static void mountTag(Object state) { Object e = mountArg; mountArg = null; if (e != null && e == mountOf) mountState = state; }
+    /** LivingEntityRenderer.submit's translucent flag for getRenderType: forced on for the faded mount. */
+    public static boolean mountTranslucent(boolean t, Object state) {
+        Object m = mountOf; // 1.21.2+ passes the render state, 1.21.1 the entity itself
+        mountNow = state != null && m != null && (state == mountState || state == m) && mountAlpha < 255;
+        return t || mountNow;
+    }
+    /** The model / equipment layer colour of the mount: alpha scaled by mountAlpha. */
+    /** 1.15-1.20: the translucent model alpha (vanilla 0.15F for the invisible) for the faded mount. */
+    public static float mountA(float a) { return mountNow ? mountAlpha / 255f : a; }
+    public static int mountColor(int c) { return mountNow ? (c & 0xFFFFFF) | ((((c >>> 24) * mountAlpha) / 255) << 24) : c; }
+    /** Equipment layer: the texture id of the next render type, then that render type (translucent for the mount). */
+    public static void mountId(Object id) { mountId = id; }
+    public static Object mountType(Object rt) {
+        java.util.function.Function<Object, Object> f = translucent;
+        if (!mountNow || f == null || mountId == null) return rt;
+        try { Object r = f.apply(mountId); return r == null ? rt : r; } catch (Throwable t) { viewFail(t); return rt; }
+    }
+
+    /** 1.8.9 fire overlay: its translate y (-0.3) moved by fireDy. */
+    public static float fireY(float y) { return y + fireDy; }
+
+    /** 1.8.9 mount fade: GL blend + colour alpha around RendererLivingEntity.doRender of the ridden mob (overlay side). */
+    public interface Tint {
+        void begin(float alpha);
+        void end();
+        /** 1.12.2: inside renderItemInFirstPerson's matrix, a held shield moves up/down by dy. */
+        void shield(Object stack, float dy);
+    }
+    public static volatile Tint tint;
+    private static boolean tinted;
+    public static void tintIn(Object e) {
+        tinted = false;
+        Tint t = tint;
+        Object m = mountOf;
+        if (t == null || m == null || e != m) return;
+        try { t.begin(mountAlpha / 255f); tinted = true; } catch (Throwable x) { viewFail(x); }
+    }
+    public static void lshield(Object stack) {
+        float d = shieldDy;
+        Tint t = tint;
+        if (d == 0 || t == null) return;
+        try { t.shield(stack, d); } catch (Throwable x) { viewFail(x); }
+    }
+    public static void tintOut() {
+        if (!tinted) return;
+        tinted = false;
+        Tint t = tint;
+        try { if (t != null) t.end(); } catch (Throwable x) { viewFail(x); }
+    }
+
+    /** A view hook threw: logged once; one that keeps failing switches the view editors off (the game draws vanilla). */
+    private static synchronized void viewFail(Throwable e) {
+        if (viewErrors++ == 0) { System.out.println("[nether-agent] view hook error: " + e); e.printStackTrace(System.out); }
+        if (viewErrors >= 50) { System.out.println("[nether-agent] view hooks disabled after repeated errors"); pose = null; translucent = null; tint = null; }
+    }
 
     /**
      * (super class, game loader) -> a generated subclass of the game's render layer whose one abstract draw method

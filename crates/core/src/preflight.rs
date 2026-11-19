@@ -391,6 +391,8 @@ pub fn check(paths: &Paths, t: &Target) -> Vec<Finding> {
 
     // missing required mods
     let mut have: HashSet<String> = BUILTIN.iter().map(|s| s.to_string()).collect();
+    // MixinExtras ships inside Fabric Loader 0.15+ (we always install a newer one), Quilt Loader and NeoForge
+    if matches!(t.loader, Loader::Fabric | Loader::Quilt | Loader::LegacyFabric | Loader::NeoForge) { have.insert("mixinextras".into()); }
     for (_, m) in active.iter().filter(|(p, _)| !gone.contains(p.as_path())) { have.extend(m.ids.iter().cloned()); have.extend(m.provides.iter().cloned()); }
     let fapi = have.contains("fabric-api") || have.contains("fabric");
     let mut missing: Vec<(String, Vec<String>)> = vec![];
@@ -492,6 +494,7 @@ mod tests {
         let inner = nested(&[("fabric.mod.json", br#"{"id":"fabric-rendering-v1"}"#)]);
         jar(&mods, "fabric-api.jar", &[("fabric.mod.json", br#"{"id":"fabric-api","provides":["fabric"],"jars":[{"file":"META-INF/jars/r.jar"}]}"#), ("META-INF/jars/r.jar", &inner)]);
         jar(&mods, "sodium.jar", &[("fabric.mod.json", b"{\"id\":\"sodium\",\"name\":\"Sodium\",\"description\":\"two\nlines\",\"depends\":{\"minecraft\":\">=1.21 <1.22\",\"fabric-rendering-v1\":\"*\",\"fabricloader\":\">=0.15\",\"fabric\":\"*\"}}")]);
+        jar(&mods, "lithium.jar", &[("fabric.mod.json", br#"{"id":"lithium","name":"Lithium","depends":{"mixinextras":">=0.3"}}"#)]); // bundled in the loader
         assert!(check(&paths, &tgt(0)).is_empty(), "{:?}", check(&paths, &tgt(0)));
 
         // duplicate, missing dependency, wrong loader, wrong minecraft, old Java

@@ -35,6 +35,9 @@ final class Modules {
         all.add(ZOOM);
         all.add(FREELOOK);
         all.add(FULLBRIGHT);
+        all.add(new Views.Shield());
+        all.add(new Views.Fire());
+        all.add(new Views.Ride());
         all.add(new Armor());
         all.add(new Potions());
         all.add(new Ping());
@@ -79,6 +82,7 @@ final class Modules {
     /** Overlay death: options back (the game must keep no value we set for it). */
     static void release() {
         restoreOptions();
+        Hook.shieldDy = 0; Hook.fireDy = 0; Hook.fireAlpha = -1; Hook.mountOf = null; // view editors back to vanilla
     }
 
     // ---------------------------------------------------------------- sensitivity: Zoom keeps one saved base
@@ -281,7 +285,7 @@ final class Modules {
         }
         float prev = Gfx.s;
         boolean r0 = Gfx.round;
-        Gfx.round = true; // v6: rounded panels, bars and chips over the world too
+        Gfx.round = Th.round(); // v6: rounded panels, bars and chips over the world too
         try { hud(fbW, fbH, chat); } finally { Gfx.round = r0; Gfx.s = prev; }
     }
 
@@ -568,7 +572,8 @@ final class Modules {
             int tc = Gfx.mix(color(), Gfx.BG, a);
             float cy = y + kh / 2 - (sub != null ? 4.5f : 0);
             float ls = label.length() > 1 ? (label.length() > 5 && kw <= C ? 7 : 10) : 12;
-            Gfx.textC(Gfx.SEMI, ls, x + kw / 2, cy, tc, label, 0);
+            while (ls > 6 && Gfx.width(Gfx.SEMI, ls, label) > kw - 6) ls -= 0.5f; // a long key name (NUM ENTER, MOUSE 5) stays in its cell
+            Gfx.textC(Gfx.SEMI, ls, x + kw / 2, cy, tc, Gfx.width(Gfx.SEMI, ls, label) > kw - 4 ? Menu.fit(label, Gfx.SEMI, ls, kw - 4, 0) : label, 0);
             if (sub != null) Gfx.textC(Gfx.MONO, 9, x + kw / 2, y + kh / 2 + 7.5f, Gfx.mix(Gfx.DIM, Gfx.BG, a), sub, 0);
         }
 

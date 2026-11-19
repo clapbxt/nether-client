@@ -14,8 +14,8 @@ import java.util.function.ToDoubleFunction;
 /**
  * Read-only game state through reflection, no class patching. The Minecraft instance is found by scanning the render
  * thread's stack (we run inside glfwSwapBuffers) for a class with a static field of its own type. Player access needs
- * names: Fabric intermediary (net.minecraft.class_310), unobfuscated Mojang names (26.x) and vanilla 1.8.9 (notch names,
- * fixed table in bindLegacy) are supported; vanilla obfuscated 1.21.x is "not available" (would need the Mojang mapping file).
+ * names: Fabric/Quilt intermediary, Forge/NeoForge SRG or Mojang names, per-release vanilla obfuscated tables, and
+ * vanilla 1.8.9 (notch names, fixed table in bindLegacy).
  */
 final class Game {
     private Game() {}
@@ -101,10 +101,14 @@ final class Game {
         }
     }
 
-    private static boolean official, obf;
+    /** lf: Legacy Fabric 1.8.9, the code's notch names mapped to Legacy intermediary (classes here, members by owner in own / find). */
+    private static boolean official, obf, lf;
 
     /** The runtime's name for a Fabric intermediary name (Mojang names on Forge/NeoForge/unobfuscated versions, obfuscated ones on vanilla). */
-    static String n(String name) { return official ? Names.official(name) : obf ? Names.obf(name) : name; }
+    static String n(String name) { return lf ? dev.nether.agent.Tiny.cls(name).replace('/', '.') : official ? Names.official(name) : obf ? Names.obf(name) : name; }
+
+    /** Whether runtime member `real` is the code's member `name` (Legacy Fabric: real is intermediary, name notch). */
+    private static boolean is(String real, String name) { return lf ? name.equals(dev.nether.agent.Tiny.off(real)) : real.equals(n(name)); }
 
     /** JVM descriptor of a type / method (obfuscated members are matched on it: their names overload freely). */
     private static String desc(Class<?> c) {
@@ -130,7 +134,8 @@ final class Game {
     /** Declared field `name` (intermediary or raw) of k only, type-checked on obfuscated vanilla; null when absent. */
     private static Field own(Class<?> k, String name) {
         try {
-            Field d = k.getDeclaredField(n(name));
+            String o = lf ? dev.nether.agent.Tiny.rev(k.getName()) : null;
+            Field d = k.getDeclaredField(lf ? (o == null ? name : dev.nether.agent.Tiny.field(o, name)) : n(name));
             String want = obf ? Names.obfDesc(name) : null;
             return want == null || want.equals(desc(d.getType())) ? d : null;
         } catch (Throwable e) {
@@ -160,17 +165,24 @@ final class Game {
         Sig[] sigs = byName.get(name);
         if (sigs != null) for (Sig s : sigs) if (s.fits(a)) return s.m;
         Object m = NONE;
-        String real = n(name), want = obf ? Names.obfDesc(name) : null;
+        String want = obf ? Names.obfDesc(name) : null;
         outer:
         for (Class<?> k = c; k != null; k = k.getSuperclass())
             for (Method d : k.getDeclaredMethods())
-                if (d.getName().equals(real) && (want != null ? want.equals(desc(d)) : fits(d, a))) { open(d); m = d; break outer; }
+                if (is(d.getName(), name) && (want != null ? want.equals(desc(d)) : fits(d, a))) { open(d); m = d; break outer; }
         if (m == NONE) for (Method d : c.getMethods())
-            if (d.getName().equals(real) && (want != null ? want.equals(desc(d)) : fits(d, a))) { open(d); m = d; }
+            if (is(d.getName(), name) && (want != null ? want.equals(desc(d)) : fits(d, a))) { open(d); m = d; }
         Sig[] grown = sigs == null ? new Sig[1] : java.util.Arrays.copyOf(sigs, sigs.length + 1);
         grown[grown.length - 1] = new Sig(a, m);
         byName.put(name, grown);
         return m;
+    }
+
+    /** Class.getMethod with the code's name (Legacy Fabric: matched through the intermediary table). */
+    static Method method(Class<?> c, String name, Class<?>... p) throws NoSuchMethodException {
+        if (!lf) return c.getMethod(name, p);
+        for (Method d : c.getMethods()) if (is(d.getName(), name) && java.util.Arrays.equals(d.getParameterTypes(), p)) return d;
+        throw new NoSuchMethodException(c.getName() + "." + name);
     }
 
     /** Calls a method by name and arg count; null when anything is missing (never throws). */
@@ -458,8 +470,14 @@ final class Game {
             dim = di == -1 ? "minecraft:the_nether" : di == 1 ? "minecraft:the_end" : "minecraft:overworld";
         } else {
             Object srv = call(mc, "method_1576");
-            w = srv != null ? "sp:" + call(call(srv, "method_27728"), "method_150") : "mp:" + sv;
+            Object lvl = srv == null ? null : call(call(srv, "method_27728"), "method_150"); // 1.16+: save properties level name
+            if (srv != null && lvl == null) lvl = call(srv, "method_3865"); // 1.14-1.15: getLevelIdName
+            w = srv != null ? "sp:" + lvl : "mp:" + sv;
             Object id = call(call(world(), "method_27983"), "method_29177");
+            if (id == null) { // 1.14-1.15: level.dimension.getType(), whose toString is its id
+                Object t = call(fld(world(), "field_9247"), "method_12460");
+                id = t == null ? null : String.valueOf(t).contains(":") ? t : "minecraft:" + t;
+            }
             dim = id == null ? "minecraft:overworld" : String.valueOf(id);
         }
         return w + "|" + dim;
@@ -492,21 +510,33 @@ final class Game {
             Object v = fld(fld(mc, l("t", "field_71474_y")), l("aB", "field_74320_O"));
             fp = !(v instanceof Integer) || (Integer) v == 0;
         } else if (fabric()) {
-            Object c = call(fld(mc, "field_1690"), "method_31044");
-            fp = !(c instanceof Enum) || ((Enum<?>) c).ordinal() == 0;
+            fp = cameraType() <= 0;
         } else fp = true;
         return fp;
     }
 
-    /** Options camera type ordinal (0 first person, 1 third person back, 2 front), -1 when unknown (1.21+ names only). */
+    /** Options camera type ordinal (0 first person, 1 third person back, 2 front), -1 when unknown. 1.16.2+: CameraType enum, before: thirdPersonView int. */
     static int cameraType() {
-        Object c = fabric() ? call(fld(mc, "field_1690"), "method_31044") : null;
-        return c instanceof Enum ? ((Enum<?>) c).ordinal() : -1;
+        if (legacy()) { Object v = fld(fld(mc, l("t", "field_71474_y")), l("aB", "field_74320_O")); return v instanceof Integer ? (Integer) v : -1; } // thirdPersonView
+        Object o = fabric() ? fld(mc, "field_1690") : null, c = call(o, "method_31044");
+        if (c instanceof Enum) return ((Enum<?>) c).ordinal();
+        Object v = fld(o, "field_1850");
+        return v instanceof Integer ? (Integer) v : -1;
     }
 
     static void setCameraType(int i) {
+        if (legacy()) {
+            Object gs = fld(mc, l("t", "field_71474_y"));
+            Field f = gs == null ? null : field(gs.getClass(), l("aB", "field_74320_O"));
+            try { if (f != null && i >= 0 && i <= 2) { f.setInt(gs, i); fpAt = 0; } } catch (Throwable t) { }
+            return;
+        }
         Object o = fabric() ? fld(mc, "field_1690") : null, c = call(o, "method_31044");
-        if (!(c instanceof Enum)) return;
+        if (!(c instanceof Enum)) {
+            Field f = o == null ? null : field(o.getClass(), "field_1850");
+            try { if (f != null && i >= 0 && i <= 2) { f.setInt(o, i); fpAt = 0; } } catch (Throwable t) { }
+            return;
+        }
         Object[] v = ((Enum<?>) c).getDeclaringClass().getEnumConstants();
         if (i < 0 || i >= v.length) return;
         call(o, "method_31043", v[i]);
@@ -533,7 +563,7 @@ final class Game {
             } else {
                 Object key = fld(kb, "field_1655"), type = call(key, "method_1442"), c = call(key, "method_1444");
                 if (!(type instanceof Enum) || !(c instanceof Integer)) return false;
-                out[i] = ((Enum<?>) type).ordinal() == 0 ? (Integer) c : -1;
+                out[i] = ((Enum<?>) type).ordinal() == 0 ? Keys.fromGame((Integer) c) : -1;
             }
         }
         return true;
@@ -596,7 +626,7 @@ final class Game {
             }
             if (!legacy && w != null && devStep == 60 && me() == null && !quickPlay()) {
                 // before 1.20 (no quick play): start the integrated server from the game's task queue, not inside this frame
-                final Object scr = fld(mc, "field_1755");
+                final Object scr = screen();
                 call(mc, "execute", (Runnable) () -> {
                     if (call(mc, "method_29606", w) == null) // 1.16-1.18 startIntegratedServer(name); 1.19 IntegratedServerLoader.start(parent, name, safeMode, backupPrompt)
                         call(call(mc, "method_41735"), "method_41899", scr, w, false, false);
@@ -628,14 +658,39 @@ final class Game {
     }
 
     private static Field fScreen;
+    /** what holds the open screen: Minecraft, or its Gui on 26.3+ (screen / setScreen moved there) */
+    private static Object screenOwner;
     private static boolean screenTried;
+
+    private static void bindScreen() {
+        if (!resolved || screenTried) return;
+        screenTried = true;
+        screenOwner = mc;
+        fScreen = field(mc.getClass(), legacy ? l("m", "field_71462_r") : "field_1755");
+        if (fScreen == null && !legacy) {
+            Object g = fld(mc, "field_1705");
+            Field f = g == null ? null : field(g.getClass(), "field_1755");
+            if (f != null) { fScreen = f; screenOwner = g; }
+        }
+    }
 
     /** A game screen (inventory, chat, pause) is open; falls back to the cursor mode when the field is unknown. */
     static boolean screenOpen() {
-        if (resolved && !screenTried) { screenTried = true; fScreen = field(mc.getClass(), legacy ? l("m", "field_71462_r") : "field_1755"); }
-        try { if (fScreen != null) return fScreen.get(mc) != null; } catch (Throwable t) { }
+        bindScreen();
+        try { if (fScreen != null) return fScreen.get(screenOwner) != null; } catch (Throwable t) { }
         return Input.gameMode != Input.DISABLED;
     }
+
+    /** Opens a game screen (null closes it), on Minecraft or, on 26.3+, its Gui. */
+    static void setScreen(Object s) {
+        if (!resolved) return;
+        bindScreen();
+        call(screenOwner != null ? screenOwner : mc, legacy ? l("a", "func_147108_a") : "method_1507", s);
+    }
+
+    /** The open-screen field and its holder (Keybind reads it without names). */
+    static Field screenField() { bindScreen(); return fScreen; }
+    static Object screenOwner() { bindScreen(); return screenOwner; }
 
     /** In a world with no screen up (cursor mode when the names are unknown). */
     static boolean playing() { return resolved ? player0() != null && !screenOpen() : Input.gameMode == Input.DISABLED; }
@@ -644,7 +699,7 @@ final class Game {
     static Object screen() {
         if (!supported() || !resolved) return null;
         screenOpen();
-        try { return fScreen != null ? fScreen.get(mc) : null; } catch (Throwable t) { return null; }
+        try { return fScreen != null ? fScreen.get(screenOwner) : null; } catch (Throwable t) { return null; }
     }
 
     // ---------------------------------------------------------------- vanilla HUD layout (so ours never covers it)
@@ -665,6 +720,7 @@ final class Game {
                 if (g instanceof Integer) v = autoScale(fbW, fbH, (Integer) g);
             } else {
                 if (window == null) window = call(mc, "method_22683");
+                if (window == null) window = fld(mc, "field_1704"); // 1.14: the window field
                 Object r = call(window, "method_4495");
                 if (r instanceof Number) v = (int) Math.round(((Number) r).doubleValue());
             }
@@ -690,6 +746,7 @@ final class Game {
             }
             if (Boolean.TRUE.equals(fld(fld(mc, "field_1690"), "field_1842"))) return true;
             if (debug == null) debug = call(mc, "method_53526");
+            if (debug == null) return Boolean.TRUE.equals(fld(fld(mc, "field_1690"), "field_1866")); // before 1.20.2: options.renderDebug
             return Boolean.TRUE.equals(call(debug, "method_53536"));
         } catch (Throwable t) { return false; }
     }
@@ -810,7 +867,7 @@ final class Game {
                 if (n.startsWith("java.") || n.startsWith("jdk.") || n.startsWith("sun.") || n.startsWith("org.lwjgl") || n.startsWith("dev.nether") || !seen.add(n)) continue;
                 // mod loaders have singletons of their own on the stack: only Minecraft itself counts
                 // (known names, or a package-less obfuscated vanilla class)
-                if (n.indexOf('.') >= 0 && !n.equals("net.minecraft.class_310") && !n.equals("net.minecraft.client.Minecraft")) continue;
+                if (n.indexOf('.') >= 0 && !n.equals("net.minecraft.class_310") && !n.equals("net.minecraft.client.Minecraft") && !n.equals("net.minecraft.class_1600")) continue; // class_1600: Legacy Fabric 1.8.9
                 for (ClassLoader cl : loaders) {
                     Class<?> c;
                     try { c = Class.forName(n, false, cl); } catch (Throwable t) { continue; }
@@ -833,7 +890,13 @@ final class Game {
     }
 
     /** Game version: the client jar's version.json (1.14+), else the --version launch argument. */
+    private static String verCache;
     static String version() {
+        if (verCache == null) verCache = version0();
+        return verCache;
+    }
+
+    private static String version0() {
         try (java.io.InputStream in = loader().getResourceAsStream("version.json")) {
             if (in != null) {
                 java.util.Scanner s = new java.util.Scanner(in, "UTF-8").useDelimiter("\\A");
@@ -852,6 +915,7 @@ final class Game {
         if (lw2) {
             if (n.equals("net.minecraft.client.Minecraft")) lmode = 1; // Forge 1.8.9 / 1.12.2: SRG names
             else if (n.equals("ave")) lmode = 0; // vanilla 1.8.9: notch names written in the code
+            else if (n.equals("net.minecraft.class_1600") && dev.nether.agent.Tiny.on()) { lmode = 3; lf = true; } // Legacy Fabric 1.8.9: the same names through the intermediary table
             else {
                 String v = version();
                 if (Names.load(v) && n.equals(Names.obf("net.minecraft.client.Minecraft"))) { lmode = 2; obf = true; } // vanilla 1.12.2: SRG -> notch table
@@ -860,18 +924,27 @@ final class Game {
             bindLegacy(c);
             return;
         }
-        String ver = null;
-        if (n.equals("net.minecraft.class_310") || n.equals("net.minecraft.client.Minecraft")) official = !n.equals("net.minecraft.class_310");
-        else if (Names.load(ver = version()) && n.equals(Names.obf("net.minecraft.class_310"))) obf = true; // vanilla with a table for its version (members are descriptor-checked)
+        String ver = version();
+        if (n.equals("net.minecraft.class_310")) {
+            // Fabric and Quilt already expose intermediary names; no release-specific obfuscation table is needed.
+            official = false;
+            obf = false;
+        } else if (n.equals("net.minecraft.client.Minecraft")) {
+            official = true;
+            // Forge 1.14-1.20.4 / NeoForge 1.20.2-1.20.4: Mojang/MCP class names but SRG members -> intermediary->SRG table
+            if (own(c, "field_1724") == null && Names.load((ver = version()) + "-srg")) { official = false; obf = true; }
+            // Forge/NeoForge 1.20.5-1.21.10: Mojang names, but that version's own (Names.java holds 1.21.11's)
+            else if (Names.load((ver = version()) + "-moj")) { official = false; obf = true; }
+        } else if (Names.load(ver) && n.equals(Names.obf("net.minecraft.class_310"))) obf = true; // vanilla with a table for its version (members are descriptor-checked)
         else { obfuscated(n, ver); return; }
         try {
             fPlayer = own(c, "field_1724");
             if (fPlayer == null) throw new NoSuchFieldException("player");
             fPlayer.setAccessible(true);
             Class<?> pc = fPlayer.getType();
-            lX = num(pc, "method_23317", null);
-            lY = num(pc, "method_23318", null);
-            lZ = num(pc, "method_23321", null);
+            lX = num(pc, "method_23317", "field_5987"); // getX() 1.15+, the x field in 1.14
+            lY = num(pc, "method_23318", "field_6010");
+            lZ = num(pc, "method_23321", "field_6035");
             lYaw = num(pc, "method_36454", "field_6031"); // getYaw() 1.17+, the yaw field before
             lPitch = num(pc, "method_36455", "field_5965");
             resolved = true;
@@ -889,11 +962,11 @@ final class Game {
      * Vanilla 1.8.9 (notch names): Minecraft ave (field h = thePlayer bew, t = gameSettings avh), Entity pk (s/t/u = posX/Y/Z,
      * y = rotationYaw, z = rotationPitch), avh (a = mouseSensitivity, aI = fovSetting, aJ = gammaSetting). Verified with javap.
      */
-    /** 0 = vanilla 1.8.9 (notch names in the code), 1 = Forge (SRG names at runtime), 2 = vanilla 1.12.2 (SRG -> notch table). */
+    /** 0 = vanilla 1.8.9 (notch names in the code), 1 = Forge (SRG names at runtime), 2 = vanilla 1.12.2 (SRG -> notch table), 3 = Legacy Fabric 1.8.9 (notch -> Legacy intermediary, Tiny). */
     private static int lmode;
 
     /** LWJGL2-era name: the vanilla 1.8.9 notch name or the SRG/MCP name (Forge's deobfuscation_data; mapped to notch by the table on vanilla 1.12.2). */
-    static String l(String notch, String srgName) { return lmode == 0 ? notch : srgName; }
+    static String l(String notch, String srgName) { return lmode == 0 || lmode == 3 ? notch : srgName; }
 
     private static void obfuscated(String n, String v) {
         unsupported = true;
@@ -915,7 +988,7 @@ final class Game {
             legacy = true;
             resolved = true;
             status = "ok";
-            System.out.println("[nether-agent] game state bound (legacy " + (lmode == 1 ? "Forge" : lmode == 2 ? "vanilla " + version() : "1.8.9 " + c.getName()) + ")");
+            System.out.println("[nether-agent] game state bound (legacy " + (lmode == 1 ? "Forge" : lmode == 2 ? "vanilla " + version() : (lmode == 3 ? "Legacy Fabric 1.8.9 " : "1.8.9 ") + c.getName()) + ")");
         } catch (Throwable t) {
             unsupported = true;
             status = "bind failed " + t;

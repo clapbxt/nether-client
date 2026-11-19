@@ -85,7 +85,7 @@ component CommCard inherits Rectangle {
     callback clicked();
     callback hovered(bool);
     width: 220px; height: 276px;
-    border-radius: 8px;
+    border-radius: Theme.r2;
     property <bool> hot: ta.has-hover || rb.hovered;
     background: root.hot ? Theme.s2 : Theme.s1;
     opacity: (root.busy && !root.worn) || root.item.status == 3 ? 0.6 : 1;
@@ -94,7 +94,7 @@ component CommCard inherits Rectangle {
         clicked => { if !root.busy && root.item.status != 3 { root.clicked(); } }
         changed has-hover => { root.hovered(self.has-hover); } }
     Rectangle {
-        x: 6px; y: 6px; width: parent.width - 12px; height: 196px; background: Theme.bg; border-radius: 6px; clip: true;
+        x: 6px; y: 6px; width: parent.width - 12px; height: 196px; background: Theme.bg; border-radius: Theme.r1; clip: true;
         Hatch { width: parent.width; height: parent.height; }
         if root.item.has-img: Image {
             y: root.hot ? 0px : 4px; height: parent.height - 4px; width: parent.width; source: root.item.img; image-fit: contain;
@@ -103,14 +103,14 @@ component CommCard inherits Rectangle {
         if !root.item.has-img: Text { text: root.item.status == 3 ? "REMOVED" : "LOADING"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; horizontal-alignment: center; vertical-alignment: center; }
         // your upload that isn't public: why, always shown
         if root.item.mine && root.item.status != 0: Rectangle {
-            x: 8px; y: 8px; height: 22px; width: sp.preferred-width + 18px; border-radius: 11px;
+            x: 8px; y: 8px; height: 22px; width: sp.preferred-width + 18px; border-radius: Theme.r3;
             background: root.item.status == 3 ? Theme.red.with-alpha(0.25) : Theme.s3;
             sp := Text { text: root.item.status == 1 ? "ONLY YOU" : root.item.status == 2 ? "CHECKING" : "REMOVED"; color: root.item.status == 3 ? Theme.redtx : Theme.tx;
                 font-family: Theme.ui; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 0.6px; horizontal-alignment: center; vertical-alignment: center; }
         }
         // selection pill (same as the Nether cards)
         if root.item.status != 3 && (root.worn || ta.has-hover): Rectangle {
-            x: parent.width - self.width - 8px; y: 8px; height: 22px; width: pl.preferred-width + 18px; border-radius: 11px;
+            x: parent.width - self.width - 8px; y: 8px; height: 22px; width: pl.preferred-width + 18px; border-radius: Theme.r3;
             background: root.worn ? Theme.red : Theme.s3;
             pl := Text { text: root.worn ? (root.applied ? "EQUIPPED" : "SELECTED") : "SELECT"; color: root.worn ? #ffffff : Theme.tx;
                 font-family: Theme.ui; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 0.6px; horizontal-alignment: center; vertical-alignment: center; }
@@ -126,7 +126,7 @@ component CommCard inherits Rectangle {
     Text { x: 14px; y: 210px; width: parent.width - 28px; height: 26px; text: root.item.name; color: Theme.tx; font-family: Theme.disp; font-size: 15px; font-weight: 700; vertical-alignment: center; overflow: elide; }
     Text { x: 14px; y: 240px; width: parent.width - 28px; height: 20px; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; overflow: elide;
         text: root.item.mine && root.item.note != "" ? root.item.note : (root.item.by == "" ? root.item.uses : "by \{root.item.by} · \{root.item.uses}"); }
-    Rectangle { border-radius: 8px; border-width: root.worn ? 2px : 1px; border-color: root.worn ? Theme.red2 : (root.hot ? Theme.ln2 : Theme.ln); }
+    Rectangle { border-radius: Theme.r2; border-width: root.worn ? 2px : 1px; border-color: root.worn ? Theme.red2 : (root.hot ? Theme.ln2 : Theme.ln); }
 }
 
 // the community grid of one wardrobe page (1 capes, 2.. cosmetic slots)
@@ -150,7 +150,7 @@ export component CommGrid inherits Flickable {
             hovered(on) => { if root.page >= 2 { Backend.hover-cos(on ? c.id : ""); } }
         }
         if Community.filter == 1 && root.signed: Rectangle {
-            x: mod(Community.items.length, 4) * 232px; y: floor(Community.items.length / 4) * 288px; width: 220px; height: 276px; border-radius: 8px;
+            x: mod(Community.items.length, 4) * 232px; y: floor(Community.items.length / 4) * 288px; width: 220px; height: 276px; border-radius: Theme.r2;
             background: adt.has-hover ? Theme.hov : transparent; border-width: 1px; border-color: adt.has-hover ? Theme.mut : Theme.ln2;
             animate background, border-color { duration: Theme.fast; }
             Rectangle { x: (parent.width - 48px) / 2; y: 86px; width: 48px; height: 48px; border-radius: 24px; border-width: 1px; border-color: Theme.ln2;
@@ -162,7 +162,7 @@ export component CommGrid inherits Flickable {
         if Community.more: Btn { x: (916px - self.width) / 2; y: Math.ceil(root.tiles / 4) * 288px + 8px; text: Community.busy-more ? "LOADING…" : "LOAD MORE"; enabled: !Community.busy-more; clicked => { Community.load-more(); } }
     }
     if (Community.state != 2 && !(Community.state == 1 && Community.items.length > 0)) || (Community.state == 2 && root.tiles == 0): Rectangle {
-        y: 0px; width: 916px; height: 110px; background: Theme.s1; border-radius: 8px; border-width: 1px; border-color: Theme.ln;
+        y: 0px; width: 916px; height: 110px; background: Theme.s1; border-radius: Theme.r2; border-width: 1px; border-color: Theme.ln;
         Text { x: 28px; width: parent.width - 56px; vertical-alignment: center; color: Theme.dim; font-family: Theme.ui; font-size: 15px * Theme.ts; wrap: word-wrap;
             text: Community.state == 1 ? "Loading community uploads…" : Community.state == 3 ? Community.message
                 : Community.query != "" ? "Nothing matches “\{Community.query}”."
@@ -177,12 +177,12 @@ export component UploadDialog inherits Rectangle {
         dismiss => { if Community.up-state != 3 { Community.upload-close(); } }
         Rectangle {
             x: (parent.width - 820px) / 2; y: Math.max(20px, (parent.height - 600px) / 2); width: 820px; height: 600px;
-            background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
             TouchArea { }
             Eyebrow { x: 28px; y: 24px; text: "UPLOAD TO THE COMMUNITY"; }
             // preview plate
             Rectangle {
-                x: 28px; y: 52px; width: 300px; height: 390px; background: Theme.bg; border-radius: 6px; clip: true;
+                x: 28px; y: 52px; width: 300px; height: 390px; background: Theme.bg; border-radius: Theme.r1; clip: true;
                 Hatch { width: parent.width; height: parent.height; }
                 if Community.up-has-img: Image { width: parent.width; height: parent.height; source: Community.up-img; image-fit: contain; }
                 if !Community.up-has-img: Text { text: Community.up-state == 1 ? "READING FILES…" : "NO PREVIEW"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; horizontal-alignment: center; vertical-alignment: center; }
@@ -203,7 +203,7 @@ export component UploadDialog inherits Rectangle {
             if Community.up-warn != "": Text { x: parent.rx; y: 198px; width: parent.rw; height: 48px; color: Theme.dim; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; overflow: elide; text: Community.up-warn; }
             // the rules
             Rectangle {
-                x: parent.rx; y: 254px; width: parent.rw; height: 150px; background: Theme.s1; border-radius: 6px; border-width: 1px; border-color: Theme.ln;
+                x: parent.rx; y: 254px; width: parent.rw; height: 150px; background: Theme.s1; border-radius: Theme.r1; border-width: 1px; border-color: Theme.ln;
                 Eyebrow { x: 16px; y: 12px; text: "THE RULES"; font-size: 12px * Theme.ts; }
                 Text { x: 16px; y: 34px; width: parent.width - 32px; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap;
                     text: "Every Nether player can see what you upload. No nudity or sexual content, no hate symbols or slurs, no gore. Each upload is checked automatically before anyone else sees it: anything unclear stays visible only to you, and uploads that break the rules count as strikes (three end uploading). Players can report too."; }
@@ -232,16 +232,16 @@ export component ReportDialog inherits Rectangle {
         dismiss => { Community.report-id = ""; }
         Rectangle {
             x: (parent.width - 520px) / 2; y: 200px; width: 520px; height: 360px;
-            background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
             TouchArea { }
             Eyebrow { x: 28px; y: 28px; text: "REPORT"; color: Theme.redtx; }
             Text { x: 28px; y: 48px; width: parent.width - 56px; text: Community.report-name; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 800; overflow: elide; }
             Text { x: 28px; y: 84px; width: parent.width - 56px; text: "What's wrong with it? Enough reports take it down for everyone."; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
             for l[i] in root.labels: Rectangle {
-                x: 28px; y: 118px + i * 40px; width: parent.width - 56px; height: 36px; border-radius: 6px;
+                x: 28px; y: 118px + i * 40px; width: parent.width - 56px; height: 36px; border-radius: Theme.r1;
                 background: root.pick == i ? Theme.s3 : (rt.has-hover ? Theme.hov : transparent);
-                Rectangle { x: 12px; y: 11px; width: 14px; height: 14px; border-radius: 7px; border-width: 1px; border-color: root.pick == i ? Theme.red : Theme.ln2;
-                    if root.pick == i: Rectangle { x: 3px; y: 3px; width: 8px; height: 8px; border-radius: 4px; background: Theme.red; } }
+                Rectangle { x: 12px; y: 11px; width: 14px; height: 14px; border-radius: Theme.r1; border-width: 1px; border-color: root.pick == i ? Theme.red : Theme.ln2;
+                    if root.pick == i: Rectangle { x: 3px; y: 3px; width: 8px; height: 8px; border-radius: Theme.r1; background: Theme.red; } }
                 Text { x: 38px; height: parent.height; vertical-alignment: center; text: l; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; }
                 rt := TouchArea { mouse-cursor: pointer; clicked => { root.pick = i; } }
             }
@@ -258,7 +258,7 @@ export component DeleteUploadDialog inherits Rectangle {
         dismiss => { Community.delete-id = ""; }
         Rectangle {
             x: (parent.width - 500px) / 2; y: 230px; width: 500px; height: 232px;
-            background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: 8px;
+            background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
             TouchArea { }
             Eyebrow { x: 28px; y: 28px; text: "DELETE UPLOAD"; color: Theme.redtx; }
             Text { x: 28px; y: 48px; width: parent.width - 56px; text: Community.delete-name; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800; overflow: elide; }

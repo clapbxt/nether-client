@@ -48,6 +48,9 @@ final class Gfx {
     private static final int FLOATS = 14, ATLAS = 2048;
     private static FloatBuffer buf = BufferUtils.createFloatBuffer(FLOATS * 6 * 3000);
     private static int verts, penX, penY, rowH;
+    private static final Font[] faces = new Font[8]; // 0-3 Nether Pixel, 4-7 Barlow
+    /** Nether Pixel (Minecraft themes) or Barlow (Glass themes); set by {@link #face}. */
+    static boolean pixel = true;
     private static final Font[] fonts = new Font[5]; // 4 = fallback for characters our fonts lack (accents, Cyrillic, CJK)
     private static final Glyph[][] fast = new Glyph[4 * 256][]; // ASCII glyphs per (font, pixel size): no boxing per char
     private static final Map<Long, Font> derived = new HashMap<>();
@@ -66,17 +69,19 @@ final class Gfx {
     static void init() {
         GlBackend.cur.init(ATLAS);
 
-        // Nether Pixel everywhere (8 px per em; sizes snap to whole multiples in pxSize): bold for heads and labels, regular for text and data
-        String[] names = {"NetherPixel-Bold", "NetherPixel-Bold", "NetherPixel-Regular", "NetherPixel-Regular"};
+        // two faces (Th picks one): Nether Pixel (Minecraft themes; 8 px per em, sizes snap to whole multiples in pxSize)
+        // and Barlow (Glass themes, any size); bold/semibold for heads and labels, regular/medium for text and data
+        String[] names = {"NetherPixel-Bold", "NetherPixel-Bold", "NetherPixel-Regular", "NetherPixel-Regular", "Barlow-SemiBold", "Barlow-SemiBold", "Barlow-Medium", "Barlow-Medium"};
         for (int i = 0; i < names.length; i++) {
             try {
                 byte[] b = Hook.res.get("fonts/" + names[i] + ".ttf");
-                fonts[i] = Font.createFont(Font.TRUETYPE_FONT, new ByteArrayInputStream(b));
+                faces[i] = Font.createFont(Font.TRUETYPE_FONT, new ByteArrayInputStream(b));
             } catch (Throwable t) {
                 System.out.println("[nether-agent] font " + names[i] + " unavailable, using fallback: " + t);
-                fonts[i] = new Font(i == 3 ? Font.MONOSPACED : Font.SANS_SERIF, Font.PLAIN, 12);
+                faces[i] = new Font((i & 3) == 3 ? Font.MONOSPACED : Font.SANS_SERIF, Font.PLAIN, 12);
             }
         }
+        System.arraycopy(faces, pixel ? 0 : 4, fonts, 0, 4);
         fonts[4] = new Font(Font.DIALOG, Font.PLAIN, 12);
         scratch = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
         g2 = scratch.createGraphics();
@@ -445,8 +450,24 @@ final class Gfx {
         quad(Math.round(x * s) - 1, Math.round(y * s) - 1, g.w, g.h, g.u0, g.v0, g.u1, g.v1, col, col, -1, 0);
     }
 
-    /** Nether Pixel is drawn at whole multiples of 8 px (one font pixel = a whole number of screen pixels). */
-    private static int pxSize(float size) { return Math.max(8, Math.round(Math.max(Math.max(5, minPx), size * s) / 8f) * 8); }
+    /** Nether Pixel is drawn at whole multiples of 8 px (one font pixel = a whole number of screen pixels); Barlow at any whole size. */
+    private static int pxSize(float size) {
+        float px = Math.max(Math.max(5, minPx), size * s);
+        return pixel ? Math.max(8, Math.round(px / 8f) * 8) : Math.max(7, Math.round(px));
+    }
+
+    /** Switch the type face (theme change): drops every cached glyph so the atlas refills with the new face. */
+    static void face(boolean px) {
+        if (px == pixel) return;
+        pixel = px;
+        if (faces[0] != null) System.arraycopy(faces, px ? 0 : 4, fonts, 0, 4);
+        derived.clear();
+        metrics.clear();
+        glyphs.clear();
+        masks.clear();
+        java.util.Arrays.fill(fast, null);
+        penX = penY = rowH = 0;
+    }
 
     /** Width in logical units. spacing is extra logical units per glyph. */
     static float width(int f, float size, String str, float spacing) {

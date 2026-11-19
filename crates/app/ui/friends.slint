@@ -1,0 +1,229 @@
+// Friends drawer (top bar): add by name, friends with live status (JOIN / INVITE / ASK TO JOIN), requests, blocked,
+// your status and sharing settings. Rust side: crates/app/src/friends.rs. No chat.
+import { Theme } from "theme.slint";
+import { Btn, IconBtn, Icon, Ico, Field, Toggle, UTabs, Eyebrow } from "components.slint";
+
+// section: -1 header line (name = title), 0 friend, 1 incoming request, 2 sent request, 3 asks to join you, 4 blocked
+export struct FriendRow {
+    uuid: string, name: string, head: image, has-head: bool,
+    // 0 offline, 1 online, 2 away, 3 do not disturb
+    status: int,
+    activity: string, detail: string,
+    can-join: bool, can-invite: bool, can-ask: bool, star: bool, section: int,
+}
+
+export global Friends {
+    in-out property <bool> open;
+    // signed in with Microsoft (Friends needs the Nether sign-in)
+    in-out property <bool> ready;
+    in-out property <bool> loaded;
+    in-out property <bool> busy;
+    in-out property <string> msg;
+    in-out property <int> tab;
+    in-out property <[FriendRow]> friends;
+    in-out property <[FriendRow]> requests;
+    in-out property <[FriendRow]> blocked;
+    in-out property <int> total;
+    in-out property <int> online;
+    // Nether players online now, everyone ("1,234"; "" = unknown, hidden)
+    in-out property <string> everyone;
+    // incoming requests + asks to join (top-bar badge)
+    in-out property <int> badge;
+    in-out property <int> pending;
+    // my status: 0 invisible, 1 online, 2 away, 3 do not disturb
+    in-out property <int> status: 1;
+    in-out property <bool> share: true;
+    in-out property <bool> open-requests: true;
+    in-out property <bool> notify: true;
+    in-out property <bool> settings;
+    in-out property <string> add-text;
+    callback add(string);
+    // accept deny cancel remove block unblock ask dismiss star join invite copy
+    callback act(string, string);
+    callback set-status(int);
+    callback set-share(bool);
+    callback set-open(bool);
+    callback set-notify(bool);
+    callback search(string);
+    callback refresh();
+}
+
+export global FIco {
+    out property <string> users: "M 4.2 5.6 C 3 5.6 2.2 4.7 2.2 3.5 C 2.2 2.3 3 1.5 4.2 1.5 C 5.4 1.5 6.2 2.3 6.2 3.5 C 6.2 4.7 5.4 5.6 4.2 5.6 Z M 0.6 10.5 C 0.9 8.3 2.3 7.2 4.2 7.2 C 6.1 7.2 7.5 8.3 7.8 10.5 M 8 1.7 C 9.1 1.9 9.8 2.6 9.8 3.6 C 9.8 4.6 9.1 5.4 8 5.5 M 9 7.4 C 10.4 7.7 11.2 8.8 11.4 10.5";
+    out property <string> star: "M 6 1 L 7.5 4.3 L 11 4.6 L 8.3 6.9 L 9.1 10.5 L 6 8.6 L 2.9 10.5 L 3.7 6.9 L 1 4.6 L 4.5 4.3 Z";
+    out property <string> more: "M 2 6 L 2.1 6 M 6 6 L 6.1 6 M 10 6 L 10.1 6";
+    out property <string> gear: "M 6 4 A 2 2 0 1 1 5.99 4 Z M 6 0.8 L 6 2.2 M 6 9.8 L 6 11.2 M 0.8 6 L 2.2 6 M 9.8 6 L 11.2 6 M 2.3 2.3 L 3.3 3.3 M 8.7 8.7 L 9.7 9.7 M 2.3 9.7 L 3.3 8.7 M 8.7 3.3 L 9.7 2.3";
+    out property <string> add-user: "M 5 5.6 C 3.8 5.6 3 4.7 3 3.5 C 3 2.3 3.8 1.5 5 1.5 C 6.2 1.5 7 2.3 7 3.5 C 7 4.7 6.2 5.6 5 5.6 Z M 1 10.5 C 1.3 8.3 2.8 7.2 5 7.2 C 6 7.2 6.8 7.4 7.4 7.9 M 9.5 7 L 9.5 11 M 7.5 9 L 11.5 9";
+}
+
+// status colours are semantic (not the accent): online green, away amber, do not disturb red, offline grey
+export global FColor {
+    out property <[color]> dot: [Theme.mut, #3FB950, #E3B341, #F2545B];
+    out property <[string]> label: ["Invisible", "Online", "Away", "Do not disturb"];
+}
+
+component Head inherits Rectangle {
+    in property <image> img;
+    in property <bool> has-img;
+    in property <int> status: -1;
+    width: 36px; height: 36px;
+    Rectangle { width: 36px; height: 36px; border-radius: Theme.r1; background: Theme.s3; clip: true;
+        if root.has-img: Image { width: 36px; height: 36px; source: root.img; image-rendering: pixelated; }
+        if !root.has-img: Icon { x: 12px; y: 12px; d: Ico.user; tint: Theme.mut; }
+        opacity: root.status == 0 ? 0.55 : 1;
+    }
+    if root.status >= 0: Rectangle {
+        x: 26px; y: 26px; width: 13px; height: 13px; border-radius: 6.5px; background: Theme.s2;
+        Rectangle { width: 9px; height: 9px; border-radius: 4.5px; background: FColor.dot[root.status]; }
+    }
+}
+
+// a friend's "more" menu: star, copy name, remove, block
+component MoreMenu inherits Rectangle {
+    in property <FriendRow> r;
+    width: 200px; height: 4 * 34px + 12px;
+    background: Theme.s3; border-radius: Theme.r1; border-width: 1px; border-color: Theme.ln2;
+    TouchArea { }
+    VerticalLayout {
+        padding: 6px;
+        for it[i] in [r.star ? "Unpin" : "Pin to top", "Copy name", "Remove friend", "Block"]: Rectangle {
+            height: 34px; border-radius: Theme.r1; background: mt.has-hover ? Theme.hov : transparent;
+            Text { x: 12px; height: parent.height; vertical-alignment: center; text: it; color: i >= 2 && mt.has-hover ? Theme.redtx : Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 500; }
+            mt := TouchArea { mouse-cursor: pointer; clicked => {
+                Friends.act(i == 0 ? "star" : (i == 1 ? "copy" : (i == 2 ? "remove" : "block")), r.uuid);
+            } }
+        }
+    }
+}
+
+// one row: friend, request, ask or blocked player
+component Row inherits Rectangle {
+    in property <FriendRow> r;
+    property <bool> hot: ta.has-hover;
+    height: r.section == -1 ? 30px : 56px;
+    border-radius: Theme.r1;
+    background: r.section != -1 && root.hot ? Theme.hov : transparent;
+    animate background { duration: Theme.fast; }
+    ta := TouchArea { }
+    pm := PopupWindow {
+        x: root.width - 210px; y: 50px; width: 200px; height: 4 * 34px + 12px;
+        MoreMenu { r: root.r; }
+    }
+    if r.section == -1: Eyebrow { x: 10px; y: 10px; text: r.name; }
+    if r.section != -1: Rectangle {
+        Head { x: 10px; y: 10px; img: r.head; has-img: r.has-head; status: r.section == 0 ? r.status : -1; }
+        property <length> right: act.width + 14px;
+        nt := Text { x: 58px; y: 9px; width: Math.min(self.preferred-width, parent.width - 58px - (root.hot || r.section != 0 ? parent.right : 8px) - (r.star ? 18px : 0px)); text: r.name; color: r.section == 4 ? Theme.dim : Theme.tx;
+            font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; overflow: elide; }
+        if r.star: Icon { x: nt.x + nt.width + 6px; y: 13px; width: 10px; height: 10px; viewbox-width: 12; viewbox-height: 12; d: FIco.star; solid: true; tint: #E3B341; }
+        Text { x: 58px; y: 29px; width: parent.width - 58px - (root.hot || r.section != 0 ? parent.right : 8px); text: r.activity + (r.detail != "" ? " · " + r.detail : "");
+            color: r.section == 0 && r.status > 0 ? Theme.dim : Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
+        act := HorizontalLayout {
+            // explicit width: an unsized layout fills the row, which pushed the name and status text to zero width
+            x: parent.width - self.width - 10px; y: 12px; width: self.preferred-width; height: 32px; spacing: 6px;
+            visible: root.hot || r.section != 0;
+            if r.section == 0 && r.can-join: Btn { height: 32px; text: "JOIN"; solid: true; clicked => { Friends.act("join", r.uuid); } }
+            if r.section == 0 && r.can-invite: Btn { height: 32px; text: "INVITE"; clicked => { Friends.act("invite", r.uuid); } }
+            if r.section == 0 && r.can-ask && !r.can-join: Btn { height: 32px; text: "ASK"; clicked => { Friends.act("ask", r.uuid); } }
+            if r.section == 0: IconBtn { d: FIco.more; tip: "More"; clicked => { pm.show(); } }
+            if r.section == 1: Btn { height: 32px; text: "ACCEPT"; solid: true; clicked => { Friends.act("accept", r.uuid); } }
+            if r.section == 1: IconBtn { d: Ico.close; tip: "Deny"; clicked => { Friends.act("deny", r.uuid); } }
+            if r.section == 2: Btn { height: 32px; text: "CANCEL"; clicked => { Friends.act("cancel", r.uuid); } }
+            if r.section == 3: Btn { height: 32px; text: "INVITE"; solid: true; clicked => { Friends.act("invite", r.uuid); } }
+            if r.section == 3: IconBtn { d: Ico.close; tip: "Not now"; clicked => { Friends.act("dismiss", r.uuid); } }
+            if r.section == 4: Btn { height: 32px; text: "UNBLOCK"; clicked => { Friends.act("unblock", r.uuid); } }
+        }
+    }
+}
+
+export component FriendsPanel inherits Rectangle {
+    width: 400px;
+    background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
+    clip: true;
+    TouchArea { }
+
+    // header: title + online count, status picker, settings
+    Text { x: 22px; y: 16px; text: "FRIENDS"; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; }
+    Text { x: 22px; y: 46px; text: !Friends.ready ? "Sign in to use Friends" : (Friends.total == 0 ? "No friends yet" : "\{Friends.online} of \{Friends.total} online");
+        color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
+    gear := IconBtn { x: parent.width - 22px - 32px; y: 20px; d: FIco.gear; tip: "Friends settings"; solid: false; clicked => { Friends.settings = !Friends.settings; } }
+    st := Rectangle {
+        x: gear.x - 8px - self.width; y: 20px; height: 32px; width: sl.preferred-width + 46px; border-radius: Theme.r1;
+        background: sta.has-hover ? Theme.s3 : Theme.s1; border-width: 1px; border-color: Theme.ln2;
+        Rectangle { x: 12px; y: 12px; width: 8px; height: 8px; border-radius: 4px; background: FColor.dot[Friends.status]; }
+        sl := Text { x: 26px; height: parent.height; vertical-alignment: center; text: FColor.label[Friends.status]; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; }
+        Icon { x: parent.width - 18px; y: 10px; width: 10px; height: 10px; d: Ico.down; tint: Theme.mut; }
+        sta := TouchArea { mouse-cursor: pointer; clicked => { sp.show(); } }
+    }
+
+    if Friends.settings: Rectangle {
+        y: 76px; height: parent.height - 76px;
+        Rectangle { x: 22px; width: parent.width - 44px; height: 1px; y: 0px; background: Theme.ln; }
+        VerticalLayout {
+            x: 22px; y: 16px; width: parent.width - 44px; spacing: 20px; alignment: start;
+            for it[i] in [
+                { t: "Share server", d: "Friends see the server or world you're in and can join you. Off: they see only that you're playing.", on: Friends.share },
+                { t: "Accept friend requests", d: "Off: nobody can send you a request.", on: Friends.open-requests },
+                { t: "Notifications", d: "Pop-ups when a friend comes online, sends a request or asks to join (in game too). Do not disturb mutes them.", on: Friends.notify },
+            ]: Rectangle {
+                height: sd.preferred-height + 26px;
+                Text { x: 0px; y: 0px; text: it.t; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; }
+                sd := Text { x: 0px; y: 24px; width: parent.width - 60px; text: it.d; color: Theme.dim; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; }
+                Toggle { x: parent.width - self.width; y: 2px; on: it.on;
+                    toggled(v) => { if i == 0 { Friends.set-share(v); } else if i == 1 { Friends.set-open(v); } else { Friends.set-notify(v); } } }
+            }
+            Rectangle { height: 1px; background: Theme.ln; }
+            Text { wrap: word-wrap; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts;
+                text: "Nether stores who your friends are and your status, never your name or messages. There's no chat. Invisible hides you completely."; }
+        }
+        Btn { x: 22px; y: parent.height - 58px; text: "DONE"; clicked => { Friends.settings = false; } }
+    }
+
+    if !Friends.settings: body := Rectangle {
+        y: 76px; height: parent.height - 76px;
+        // add by name
+        add := Field { x: 22px; y: 0px; width: parent.width - 44px - 44px; height: 38px; placeholder: "Add a friend by Minecraft name"; text <=> Friends.add-text;
+            accepted => { Friends.add(Friends.add-text); } }
+        IconBtn { x: parent.width - 22px - 38px; y: 0px; size: 38px; d: FIco.add-user; tip: "Send request"; clicked => { Friends.add(Friends.add-text); } }
+        if Friends.msg != "": Text { x: 22px; y: 44px; width: parent.width - 44px; text: Friends.msg; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
+        tabs := UTabs { x: 22px; y: Friends.msg != "" ? 64px : 50px; width: parent.width - 44px;
+            items: ["FRIENDS", Friends.pending > 0 ? "REQUESTS \{Friends.pending}" : "REQUESTS", "BLOCKED"]; current <=> Friends.tab; }
+        if Friends.tab == 0 && Friends.total > 6: Field { x: 22px; y: tabs.y + 48px; width: parent.width - 44px; height: 34px; search: true; text-size: 13px; placeholder: "Search friends";
+            edited => { Friends.search(self.text); } }
+        property <length> top: tabs.y + 46px + (Friends.tab == 0 && Friends.total > 6 ? 42px : 0px);
+        property <[FriendRow]> rows: Friends.tab == 0 ? Friends.friends : (Friends.tab == 1 ? Friends.requests : Friends.blocked);
+        fl := Flickable {
+            x: 12px; y: body.top; width: parent.width - 24px; height: parent.height - body.top - 8px;
+            content-height: vl.preferred-height;
+            vl := VerticalLayout {
+                width: fl.width; spacing: 2px; alignment: start;
+                for r in body.rows: Row { r: r; }
+            }
+        }
+        // empty states
+        if body.rows.length == 0: Text {
+            x: 32px; y: body.top + 18px; width: parent.width - 64px; wrap: word-wrap; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts;
+            text: !Friends.ready ? "Sign in with your Microsoft account to add friends."
+                : (!Friends.loaded ? "Loading…"
+                : (Friends.tab == 0 ? "Add someone by their Minecraft name above. They need Nether Client too: they'll see your request in their launcher or in game."
+                : (Friends.tab == 1 ? "No requests. Friends who ask to join your world show up here too." : "You haven't blocked anyone. Blocked players can't send you requests or invites, and aren't told.")));
+        }
+    }
+
+    // status picker
+    sp := PopupWindow {
+        x: st.x; y: st.y + st.height + 6px; width: 200px; height: 4 * 34px + 12px;
+        Rectangle { background: Theme.s3; border-radius: Theme.r1; border-width: 1px; border-color: Theme.ln2;
+        TouchArea { }
+        VerticalLayout {
+            padding: 6px;
+            for i in [1, 2, 3, 0]: Rectangle {
+                height: 34px; border-radius: Theme.r1; background: sm.has-hover || Friends.status == i ? Theme.hov : transparent;
+                Rectangle { x: 12px; y: 13px; width: 8px; height: 8px; border-radius: 4px; background: FColor.dot[i]; }
+                Text { x: 28px; height: parent.height; vertical-alignment: center; text: FColor.label[i]; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 500; }
+                if Friends.status == i: Icon { x: parent.width - 24px; y: 11px; d: Ico.check; tint: Theme.tx; }
+                sm := TouchArea { mouse-cursor: pointer; clicked => { Friends.set-status(i); } }
+            }
+        }
+    } }
+}

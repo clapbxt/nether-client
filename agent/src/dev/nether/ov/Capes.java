@@ -204,12 +204,12 @@ final class Capes {
                 viewed = true;
                 if (legacy) {
                     Game.call(me, Game.l("cb", "func_71004_bE")); // respawn if the test world left you dead
-                    mc.getClass().getMethod(Game.l("a", "func_147108_a"), Game.cls(Game.l("axu", "net.minecraft.client.gui.GuiScreen"))).invoke(mc, (Object) null);
+                    Game.method(mc.getClass(), Game.l("a", "func_147108_a"), Game.cls(Game.l("axu", "net.minecraft.client.gui.GuiScreen"))).invoke(mc, (Object) null);
                     Object gs = Game.fld(mc, Game.l("t", "field_71474_y"));
                     Game.field(gs.getClass(), Game.l("aB", "field_74320_O")).setInt(gs, 1); // third person (behind)
                 } else {
                     Game.call(me, "method_7331"); // respawn if the test world left you dead
-                    Game.call(mc, "method_1507", (Object) null);
+                    Game.setScreen(null);
                     Object back = Game.field(Game.cls("net.minecraft.class_5498"), "2".equals(System.getProperty("nether.capeView")) ? "field_26666" : "field_26665").get(null); // dev: 2 = front view
                     Game.call(Game.fld(mc, "field_1690"), "method_31043", back);
                 }
@@ -359,6 +359,37 @@ final class Capes {
     }
 
     /** ResourceLocation/Identifier (namespace, path): the 1.21+ factory, else the constructor. */
+    private static final Map<String, java.awt.image.BufferedImage> preview = new ConcurrentHashMap<>();
+    private static final Map<String, Boolean> previewAsked = new ConcurrentHashMap<>();
+
+    /**
+     * A Nether cape's first frame in the 64:32 layout, for lobby / preview models (downloaded on the worker and checked
+     * against the signed manifest like worn capes); null while it loads or when it isn't a catalog cape.
+     */
+    static java.awt.image.BufferedImage previewImage(String id) {
+        if (id == null || !id.matches("[a-z0-9_-]{1,32}")) return null;
+        java.awt.image.BufferedImage b = preview.get(id);
+        if (b != null) return b;
+        String sum = SUMS.get(id);
+        if (sum == null || CONTENT == null || previewAsked.putIfAbsent(id, true) != null) return null;
+        worker(() -> {
+            try {
+                byte[] d = get(CONTENT + "/capes/" + id + ".png", MAX_PNG);
+                if (!sum.equals(sha256(d))) return;
+                java.awt.image.BufferedImage img = Icons.decode(new ByteArrayInputStream(d));
+                int[] l = img == null ? null : layout(img.getWidth(), img.getHeight());
+                if (l == null) return;
+                int s = l[0], fh = s * (l[2] == 1 ? 32 : 17);
+                java.awt.image.BufferedImage f = new java.awt.image.BufferedImage(64 * s, 32 * s, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                java.awt.Graphics2D g = f.createGraphics();
+                g.drawImage(img.getSubimage(0, 0, img.getWidth(), Math.min(fh, img.getHeight())), 0, 0, null);
+                g.dispose();
+                preview.put(id, f);
+            } catch (Throwable t) { previewAsked.remove(id); }
+        });
+        return null;
+    }
+
     static Object loc(String ns, String path) throws Exception {
         Class<?> c;
         try { c = Game.cls("net.minecraft.class_2960"); }
@@ -438,10 +469,11 @@ final class Capes {
             if (legacy) {
                 Object out = Game.cls(Game.l("fa", "net.minecraft.util.ChatComponentText")).getConstructor(String.class).newInstance(ic);
                 Class<?> chat = Game.cls(Game.l("eu", "net.minecraft.util.IChatComponent"));
-                Object r = out.getClass().getMethod(Game.l("a", "func_150257_a"), chat).invoke(out, comp);
+                Object r = Game.method(out.getClass(), Game.l("a", "func_150257_a"), chat).invoke(out, comp);
                 return chat.isInstance(r) ? r : comp;
             }
             Object out = Game.stat(Game.cls("net.minecraft.class_2561"), "method_43473");
+            if (out == null) out = literal(""); // before 1.19: new TextComponent("")
             Game.call(out, "method_10852", ic);
             Game.call(out, "method_27693", " ");
             Game.call(out, "method_10852", comp);
@@ -493,8 +525,10 @@ final class Capes {
         try { font = ctor(Game.cls("net.minecraft.class_11719$class_11721"), 1, false).newInstance(loc); } // 1.21.9+ FontDescription
         catch (ClassNotFoundException e) { font = loc; }
         Object empty = Game.field(Game.cls("net.minecraft.class_2583"), "field_24360").get(null);
-        Object style = Game.call(Game.call(empty, "method_27704", font), "method_36139", 0xFFFFFF);
+        Object fs = Game.call(empty, "method_27704", font), style = Game.call(fs, "method_36139", 0xFFFFFF); // withColor(int) 1.17+
+        if (style == null) style = fs;
         Object lit = Game.stat(Game.cls("net.minecraft.class_2561"), "method_43470", String.valueOf((char) 0xE000));
+        if (lit == null) lit = literal(String.valueOf((char) 0xE000));
         icon = Game.call(lit, "method_10862", style);
         return icon;
     }
@@ -513,10 +547,32 @@ final class Capes {
     }
 
     private static Field skinField;
+    /** 1.16-1.18 TextComponent(String) (1.19+ has Component.literal). */
+    private static Object literal(String s) throws Exception { return Game.cls("net.minecraft.class_2585").getConstructor(String.class).newInstance(s); }
+
+    private static Field mapField;
+    private static boolean noSkin;
+    private static Object capeType;
+    /** 1.14-1.20.1: PlayerInfo.textureLocations (MinecraftProfileTexture.Type -> location) CAPE = ours, re-set every pass like 1.8.9. */
+    @SuppressWarnings("unchecked")
+    private static boolean mapCape(Object pi, Object cape) throws Exception {
+        if (mapField == null) mapField = Game.field(pi.getClass(), "field_3742");
+        if (mapField == null) return false;
+        if (capeType == null) capeType = Enum.valueOf((Class) Class.forName("com.mojang.authlib.minecraft.MinecraftProfileTexture$Type", true, Game.loader()), "CAPE");
+        Object m = mapField.get(pi);
+        if (!(m instanceof Map)) return false;
+        Map<Object, Object> map = (Map<Object, Object>) m;
+        Object cur = map.get(capeType), loc = frame(cape);
+        if (loc != null) { if (cur != loc) map.put(capeType, loc); }
+        else if (cur != null && ours.contains(cur)) map.remove(capeType);
+        return true;
+    }
+
     /** Put `cape` (null = take ours off) into the player's skin supplier. */
     @SuppressWarnings("unchecked")
     private static void wrap(Object pi, Object cape) throws Exception {
-        if (skinField == null) skinField = Game.field(pi.getClass(), "field_45607");
+        if (skinField == null && !noSkin) noSkin = (skinField = Game.field(pi.getClass(), "field_45607")) == null; // 1.20.2+ skin supplier
+        if (skinField == null && mapCape(pi, cape)) return;
         if (skinField == null) throw new IllegalStateException("PlayerInfo.skinLookup missing");
         Object cur = skinField.get(pi);
         if (cur instanceof Skin) {

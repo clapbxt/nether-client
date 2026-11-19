@@ -20,24 +20,33 @@ const ACCENTS: [[u32; 6]; 5] = [
     [0x1F6FEB, 0x4C8DFF, 0x123F86, 0x8AB4FF, 0x1A5DC7, 0x0A2148], // cobalt
     [0x8B3DFF, 0xA66BFF, 0x4F1F99, 0xC4A1FF, 0x7330D9, 0x26104A], // violet
 ];
-/// Themes: bg, s1, s2, s3, hairline, hairline2, text, dim, mut, ink (text on primary fills), primary fill, glass, glass hairline, hover (ARGB).
-const THEMES: [[u32; 14]; 4] = [
-    [0xFF000000, 0xFF0B0B0D, 0xFF141418, 0xFF1D1D23, 0x14FFFFFF, 0x29FFFFFF, 0xFFF1F2F5, 0xFFA3A8B3, 0xFF6B707B, 0xFF09090C, 0xFFF1F2F5, 0xA80B0B0D, 0x1AFFFFFF, 0x0FFFFFFF], // OLED
-    [0xFF14151A, 0xFF1B1D23, 0xFF23262E, 0xFF2D313B, 0x12FFFFFF, 0x24FFFFFF, 0xFFE9ECF1, 0xFFA0A7B4, 0xFF6D7584, 0xFF0E0F13, 0xFFE9ECF1, 0xA81B1D23, 0x1AFFFFFF, 0x0FFFFFFF], // Obsidian
-    [0xFF1A2130, 0xFF202839, 0xFF283245, 0xFF334057, 0x14BED2FF, 0x29BED2FF, 0xFFE6ECF7, 0xFF9EABC2, 0xFF6C7A93, 0xFF121823, 0xFFE6ECF7, 0xA8202839, 0x1ABED2FF, 0x10BED2FF], // Slate
-    [0xFFEEF1F5, 0xFFFFFFFF, 0xFFF4F6F9, 0xFFE4E8EE, 0x17141E32, 0x2E141E32, 0xFF171A21, 0xFF545C6B, 0xFF8790A0, 0xFFF1F2F5, 0xFF171A21, 0xB8FFFFFF, 0x24141E32, 0x0F141E32], // Ice (light)
+/// Themes: bg, s1, s2, s3, hairline, hairline2, text, dim, mut, ink (text on primary fills), primary fill, glass, glass hairline,
+/// hover, backdrop top tint, glass sheen (ARGB). Glass themes are rounded with Barlow display type; Minecraft themes are square + Nether Pixel.
+const THEMES: [[u32; 16]; 4] = [
+    [0xFF0D1015, 0xE6161A21, 0xFF1C222B, 0xFF252C37, 0x12FFFFFF, 0x26FFFFFF, 0xFFE9EDF3, 0xFF9BA5B4, 0xFF677183, 0xFF0D1015, 0xFFE9EDF3, 0xB0161A21, 0x1CFFFFFF, 0x0FFFFFFF, 0xFF161C26, 0x0DFFFFFF], // NetherGlass Dark
+    [0xFFE8ECF2, 0xD9FFFFFF, 0xFFF6F8FB, 0xFFE3E8EF, 0x14141E32, 0x29141E32, 0xFF151922, 0xFF4F5868, 0xFF8590A2, 0xFFF4F6F9, 0xFF151922, 0xB8FFFFFF, 0x24141E32, 0x0F141E32, 0xFFF7F9FC, 0x99FFFFFF], // NetherGlass Light
+    [0xFF161616, 0xFF222222, 0xFF2C2C2C, 0xFF383838, 0x1AFFFFFF, 0x33FFFFFF, 0xFFFFFFFF, 0xFFB0B0B0, 0xFF7A7A7A, 0xFF161616, 0xFFFFFFFF, 0xC0222222, 0x26FFFFFF, 0x12FFFFFF, 0xFF161616, 0x00000000], // NetherMinecraft Dark
+    [0xFFB4B4B4, 0xFFC6C6C6, 0xFFD0D0D0, 0xFFA8A8A8, 0x2E000000, 0x59000000, 0xFF1E1E1E, 0xFF3F3F3F, 0xFF666666, 0xFFE8E8E8, 0xFF1E1E1E, 0xD0C6C6C6, 0x33000000, 0x12000000, 0xFFB4B4B4, 0x00000000], // NetherMinecraft Light
 ];
-pub const THEME_NAMES: [&str; 4] = ["OLED", "Obsidian", "Slate", "Ice"];
+/// Names written to client.json for the in-game menu (`Th.NAMES`, same order).
+pub const THEME_NAMES: [&str; 4] = ["NetherGlass Dark", "NetherGlass Light", "NetherMinecraft Dark", "NetherMinecraft Light"];
 
 fn argb(c: u32) -> Color { Color::from_argb_u8((c >> 24) as u8, (c >> 16) as u8, (c >> 8) as u8, c as u8) }
 
-/// Push the theme surfaces into the Theme global.
+/// Push the theme surfaces, shape and display face into the Theme global.
 pub fn apply_theme(ui: &AppWindow, theme: i32) {
-    let c = THEMES[theme.clamp(0, THEMES.len() as i32 - 1) as usize];
+    let i = theme.clamp(0, THEMES.len() as i32 - 1) as usize;
+    let c = THEMES[i];
+    let (square, light) = (i >= 2, i % 2 == 1);
     let t = ui.global::<Theme>();
     t.set_bg(argb(c[0])); t.set_s1(argb(c[1])); t.set_s2(argb(c[2])); t.set_s3(argb(c[3])); t.set_ln(argb(c[4])); t.set_ln2(argb(c[5]));
     t.set_tx(argb(c[6])); t.set_dim(argb(c[7])); t.set_mut(argb(c[8])); t.set_ink(argb(c[9])); t.set_ice(argb(c[10]));
-    t.set_glass(argb(c[11])); t.set_glass_ln(argb(c[12])); t.set_hov(argb(c[13]));
+    t.set_glass(argb(c[11])); t.set_glass_ln(argb(c[12])); t.set_hov(argb(c[13])); t.set_bg_top(argb(c[14])); t.set_sheen(argb(c[15]));
+    t.set_aura(if square { 0.0 } else if light { 0.08 } else { 0.10 });
+    let r = if square { [0.0, 0.0, 0.0] } else { [8.0, 12.0, 16.0] };
+    t.set_r1(r[0]); t.set_r2(r[1]); t.set_r3(r[2]);
+    t.set_square(square); t.set_light(light);
+    t.set_disp(if square { "Nether Pixel" } else { "Barlow" }.into());
 }
 
 /// Accent pair (base, bright) as "#RRGGBB" for the in-game menu.

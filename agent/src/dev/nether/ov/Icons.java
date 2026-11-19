@@ -10,7 +10,7 @@ import javax.imageio.ImageIO;
 /**
  * Item icons without the game's renderer: the item's own texture is read through {@link Res} (enabled resource packs
  * first, then the client jar / mod jars) and drawn by {@link Gfx#icon} as plain colour quads.
- * Items without a flat texture (blocks, heads) have no icon; callers fall back to text.
+ * Items without a flat texture have no icon (callers fall back to text); heads use the skin's face ({@link #of}).
  */
 final class Icons {
     private Icons() {}
@@ -43,6 +43,76 @@ final class Icons {
             return px;
         }
         return px == NONE ? null : px;
+    }
+
+    /**
+     * Icon of a worn / held stack ({@link Data#stack}): dyed leather in its own colour, a player head as its owner's face
+     * ({@link Heads}), mob heads as the mob's face; everything else as {@link #get}.
+     */
+    static int[] of(String[] p) {
+        if (p == null || p.length < 4) return null;
+        String id = p[3], x = p.length > 5 && p[5] != null ? p[5] : "";
+        if (id.startsWith("minecraft:leather_")) {
+            int c = dye(x);
+            return get(c < 0 ? id : id + "#" + Integer.toHexString(c & 0xFFFFFF));
+        }
+        if (id.equals("minecraft:player_head") || id.equals("minecraft:skull") && x.startsWith("meta:3")) {
+            int[] f = Heads.face(x);
+            return f != null ? f : get("head:steve");
+        }
+        if (id.equals("minecraft:skull")) {
+            String[] mob = {"skeleton", "wither", "zombie", "steve", "creeper"};
+            int m = x.length() > 5 ? x.charAt(5) - '0' : 0;
+            return get("head:" + mob[m >= 0 && m < 5 ? m : 0]);
+        }
+        switch (id) {
+            case "minecraft:skeleton_skull": return get("head:skeleton");
+            case "minecraft:wither_skeleton_skull": return get("head:wither");
+            case "minecraft:zombie_head": return get("head:zombie");
+            case "minecraft:creeper_head": return get("head:creeper");
+            case "minecraft:piglin_head": return get("head:piglin");
+            default: return get(id);
+        }
+    }
+
+    /** Dye colour (RGB) in a stack's data text: 1.20.5+ "minecraft:dyed_color" component, older NBT display.color; -1 = none. */
+    static int dye(String x) {
+        if (x == null || x.isEmpty()) return -1;
+        java.util.regex.Matcher m;
+        int k = x.indexOf("minecraft:dyed_color");
+        if (k >= 0) m = java.util.regex.Pattern.compile("-?\\d+").matcher(x.substring(k + 20));
+        else { m = java.util.regex.Pattern.compile("display:\\{[^{}]*?color:(-?\\d+)").matcher(x); }
+        if (!m.find()) return -1;
+        try { return Integer.parseInt(m.groupCount() > 0 ? m.group(1) : m.group()) & 0xFFFFFF; } catch (NumberFormatException e) { return -1; }
+    }
+
+    /** 8x8 face (with its overlay layer) of a skin-layout texture at (fx, fy) / (hx, hy) in 64-wide units, or null. */
+    static int[] face(BufferedImage img, int fx, int fy, int fw, int hx, int hy) {
+        if (img == null || img.getWidth() < 64) return null;
+        int u = img.getWidth() / 64, n = Math.min(8 * u, MAX);
+        int[] px = new int[n * n];
+        for (int y = 0; y < n; y++) for (int x = 0; x < n; x++) {
+            int sx = x * 8 * u / n, sy = y * 8 * u / n;
+            int c = img.getRGB(fx * u + sx * fw / 8, fy * u + sy);
+            if (hx >= 0 && (hy + 8) * u <= img.getHeight()) { int h = img.getRGB(hx * u + sx, hy * u + sy); if ((h >>> 24) > 127) c = h; }
+            px[y * n + x] = c | 0xFF000000;
+        }
+        return px;
+    }
+
+    /** Mob / default player head faces from the entity textures (resource packs apply). */
+    private static int[] head(String mob) {
+        switch (mob) {
+            case "skeleton": return face(image("assets/minecraft/textures/entity/skeleton/skeleton.png"), 8, 8, 8, -1, 0);
+            case "wither": return face(image("assets/minecraft/textures/entity/skeleton/wither_skeleton.png"), 8, 8, 8, -1, 0);
+            case "zombie": return face(image("assets/minecraft/textures/entity/zombie/zombie.png"), 8, 8, 8, 40, 8);
+            case "creeper": return face(image("assets/minecraft/textures/entity/creeper/creeper.png"), 8, 8, 8, -1, 0);
+            case "piglin": return face(image("assets/minecraft/textures/entity/piglin/piglin.png"), 8, 8, 10, -1, 0); // 10 px wide snout face
+            default: {
+                BufferedImage img = image("assets/minecraft/textures/entity/player/wide/steve.png"); // 1.19.3+
+                return face(img != null ? img : image("assets/minecraft/textures/entity/steve.png"), 8, 8, 8, 40, 8);
+            }
+        }
     }
 
     /** Status effect icon (n*n ARGB) for a key from {@link Game#effects}: "mob_effect:<ns>:<path>" (1.20.2+) or "inv:<index>" (1.8.9 inventory sheet). */
@@ -124,6 +194,9 @@ final class Icons {
     }
 
     private static int[] load(String id) throws Exception {
+        if (id.startsWith("head:")) return head(id.substring(5));
+        int tint = LEATHER, hash = id.indexOf('#');
+        if (hash > 0) { tint = Integer.parseInt(id.substring(hash + 1), 16); id = id.substring(0, hash); }
         int c = id.indexOf(':');
         String ns = c < 0 ? "minecraft" : id.substring(0, c), path = c < 0 ? id : id.substring(c + 1);
         if (!path.matches("[a-z0-9_./-]+") || !ns.matches("[a-z0-9_.-]+")) return null;
@@ -132,8 +205,8 @@ final class Icons {
         if (ns.equals("minecraft") && path.startsWith("leather_")) {
             for (int i = 0; i < px.length; i++) {
                 int p = px[i];
-                px[i] = (p & 0xFF000000) | (((p >> 16 & 255) * (LEATHER >> 16 & 255) / 255) << 16) | (((p >> 8 & 255) * (LEATHER >> 8 & 255) / 255) << 8)
-                    | ((p & 255) * (LEATHER & 255) / 255);
+                px[i] = (p & 0xFF000000) | (((p >> 16 & 255) * (tint >> 16 & 255) / 255) << 16) | (((p >> 8 & 255) * (tint >> 8 & 255) / 255) << 8)
+                    | ((p & 255) * (tint & 255) / 255);
             }
             int[] ov = read(ns, path + "_overlay");
             if (ov != null && ov.length == px.length) for (int i = 0; i < px.length; i++) if ((ov[i] >>> 24) > 127) px[i] = ov[i];

@@ -11,7 +11,7 @@ import dev.nether.agent.Hook;
 final class SelfTag extends Module {
     SelfTag() {
         super("selftag", "Own Nametag", "Visual", "See your own nametag above your head in third person, as other players see it.", false, false, 0, 0);
-        needs(2);
+        needs(4); // 1.8.9 / 1.12.2: canRenderName hooked (Agent LABEL_HOOKS)
     }
 
     private String name;

@@ -80,9 +80,15 @@ final class Input {
     /** The char event of the key just pressed must not type into what it opened (waypoint dialog). */
     static void eatChar() { eatCharAt = System.currentTimeMillis(); }
 
+    /** a modifier menu key is down / something else was pressed meanwhile / its press was kept from the game */
+    private static boolean modHeld, modUsed, modEaten;
+
     static void setMenu(boolean on) {
         if (on == menuOpen || window == 0) return;
         if (on) {
+            // If focus changed while Escape was held, some window systems never deliver its release. A fresh menu
+            // session must not inherit that stale latch or every Escape press in the new session is swallowed.
+            escHeld = false;
             menuOpen = true;
             Plat.cur.opened();
             Menu.opened();
@@ -111,10 +117,25 @@ final class Input {
             if (key >= 32 && key <= 162) eatCharAt = System.currentTimeMillis();
             return true;
         }
+        // the party lobby's chat field / key capture on our title screen
+        if (!menuOpen && (MainMenu.title || Party.capturing()) && Party.key(key, action)) return true;
         // Esc with nothing left to step back from closes the menu here, like the menu key (not a frame later, so the
         // game never sees its repeats or release and the cursor is handed back at once)
         if (key == 256 && escHeld) { if (action == RELEASE) escHeld = false; return true; }
         if (key == 256 && action == PRESS && menuOpen && Menu.escCloses()) { setMenu(false); escHeld = true; return true; }
+        // a Shift / Ctrl / Alt menu key (R-Shift by default) is also a modifier: it toggles on release when tapped on its
+        // own, and the game still sees it, so capitals in chat, signs and shift-clicks never open or close the menu
+        if (key == Config.menuKey() && key >= 340 && key <= 347 && !Keybind.listening()) {
+            if (action == PRESS) { modHeld = true; modUsed = false; modEaten = menuOpen; return modEaten; }
+            if (action == RELEASE && modHeld) {
+                modHeld = false;
+                boolean eaten = modEaten;
+                if (!modUsed && !(menuOpen && Menu.capturing())) { if (!menuOpen || Menu.leaveOk(() -> setMenu(false))) setMenu(!menuOpen); }
+                return eaten; // the game gets the release of a press it saw
+            }
+            return menuOpen;
+        }
+        if (action == PRESS && modHeld) modUsed = true; // Shift+letter: a chord, not a tap
         if (action == PRESS && key == Config.menuKey() && !Keybind.listening()) {
             boolean printable = key >= 32 && key <= 162;
             // a letter menu key types into the search box / waypoint name instead of closing the menu
@@ -140,8 +161,10 @@ final class Input {
         if (dead) return false;
         if (b < 0 || b >= btn.length) return menuOpen;
         btn[b] = action == PRESS;
+        if (action == PRESS && modHeld) modUsed = true; // shift-click
         // middle / side buttons bind like keys (code 400 + button); left and right stay the menu's own clicks
         if (b >= 2 && action == PRESS && Menu.capturing()) { Menu.capture(MOUSE + b); return true; }
+        if (action == PRESS && !menuOpen && Party.button(b)) return true;
         if (menuOpen) {
             if (action == PRESS) {
                 if (b == 0) clickL = true;
@@ -166,6 +189,7 @@ final class Input {
     static boolean onScroll(double y) {
         if (dead) return false;
         if (menuOpen) { scrollY += y; return true; }
+        if (MainMenu.title) { Party.wheel += (float) y; return true; }
         return Modules.onScroll(y);
     }
 
@@ -176,7 +200,10 @@ final class Input {
             eatCharAt = 0;
             if (eat) return true;
         }
-        if (!menuOpen) return false;
+        if (!menuOpen) {
+            if (Party.typing && MainMenu.title) { if (cp >= 32 && cp <= 0xFFFF && !Character.isSurrogate((char) cp)) Party.chars(String.valueOf((char) cp)); return true; }
+            return false;
+        }
         // any language: printable BMP characters (no controls, no surrogate halves: the glyph atlas is per char)
         if (cp >= 32 && cp <= 0xFFFF && !(cp >= 127 && cp < 160) && !Character.isSurrogate((char) cp)) chars.append((char) cp);
         return true;

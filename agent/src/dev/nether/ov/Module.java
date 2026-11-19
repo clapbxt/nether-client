@@ -118,7 +118,11 @@ abstract class Module {
     boolean available() { return needs == 0 || (needs == 1 || needs == 3 ? Game.supported() : needs == 4 ? Game.fabric() || Game.legacy() : Game.fabric()); }
     boolean locked() { return !available(); }
     /** why the module is greyed out, or null */
-    String lockNote() { return !available() ? "NOT AVAILABLE ON THIS VERSION" : null; }
+    String lockNote() {
+        if (available()) return null;
+        String v = Game.version();
+        return "NOT AVAILABLE ON " + (v != null ? "MINECRAFT " + v : "THIS VERSION");
+    }
     /** Starred in the menu: pinned on top of every tab and listed under FAVOURITES. */
     boolean fav() { return Config.bool(id, "fav", false); }
 

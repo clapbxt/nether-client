@@ -28,6 +28,7 @@ final class BackgroundReload extends Module {
     }
 
     @Override boolean available() { return Game.mc() != null && !Game.legacy(); }
+    @Override String lockNote() { return Game.legacy() ? "NOT POSSIBLE BEFORE 1.14: PACKS RELOAD ON THE GAME THREAD" : super.lockNote(); }
 
     @Override void tick() {
         if (held != null) { poll(); return; } // finish a taken reload even if switched off meanwhile

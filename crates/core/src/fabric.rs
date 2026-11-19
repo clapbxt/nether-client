@@ -57,8 +57,17 @@ pub fn apply_flavor(c: &Client, flavor: Flavor, mut v: VersionJson, mc: &str, lo
         base.game.extend(extra.game);
     }
     let libs: Vec<Library> = serde_json::from_value(p["libraries"].clone())?;
+    // the loader's own build of a library replaces the game's (Legacy Fabric ships its LWJGL 2): never both on the classpath
+    let ids: std::collections::HashSet<String> = libs.iter().map(|l| lib_id(&l.name)).collect();
+    v.libraries.retain(|l| !ids.contains(&lib_id(&l.name)));
     v.libraries.extend(libs);
     Ok((v, lv))
+}
+
+/// `group:artifact[:classifier]` of a `group:artifact:version[:classifier]` name.
+fn lib_id(name: &str) -> String {
+    let p: Vec<&str> = name.split(':').collect();
+    match p.as_slice() { [g, a, _, c, ..] => format!("{g}:{a}:{c}"), [g, a, ..] => format!("{g}:{a}"), _ => name.to_string() }
 }
 
 /// Merge the Fabric profile for `mc` (+ optional pinned loader) into `v`. Returns the merged version and loader version.
@@ -70,6 +79,12 @@ pub fn apply(c: &Client, v: VersionJson, mc: &str, loader: Option<&str>) -> Resu
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn library_ids_ignore_versions() {
+        assert_eq!(lib_id("org.lwjgl.lwjgl:lwjgl:2.9.4-nightly-20150209"), lib_id("org.lwjgl.lwjgl:lwjgl:2.9.4+legacyfabric.17"));
+        assert_ne!(lib_id("org.lwjgl:lwjgl:3.3.3"), lib_id("org.lwjgl:lwjgl:3.3.3:natives-windows"));
+    }
 
     #[test]
     fn picks_stable_then_non_prerelease() {

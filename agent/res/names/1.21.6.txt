@@ -1,0 +1,239 @@
+field_1329	a	Lfis;
+field_1350	f	D
+field_1351	e	D
+field_1352	d	D
+field_1655	o	Lfmz$a;
+field_1656	k	Ljava/util/Map;
+field_1668	a	Lfmz$b;
+field_1687	s	Lgrj;
+field_1690	n	Lfuh;
+field_1704	T	Lfnh;
+field_1705	m	Lfwz;
+field_1708	av	Lgal;
+field_1724	t	Lgwh;
+field_1755	z	Lges;
+field_1765	w	Lfiq;
+field_1773	j	Lgxa;
+field_17772	v	J
+field_18222	u	Z
+field_1826	bY	Lfug;
+field_1838	bc	Lfug;
+field_1839	W	[Lfub;
+field_1840	cn	Lfug;
+field_1842	Y	Z
+field_1843	aq	Lfug;
+field_1849	y	Lfub;
+field_18712	i	Lfis;
+field_18717	n	F
+field_18718	o	F
+field_1881	x	Lfub;
+field_1894	v	Lfub;
+field_1903	z	Lfub;
+field_1908	aZ	Lfug;
+field_1913	w	Lfub;
+field_1915	ba	Lfug;
+field_19319	G	Z
+field_2021	ah	Lfxo;
+field_2064	l	Ljava/util/List;
+field_21444	d	I
+field_2259	h	Ljava/util/Map;
+field_24360	a	Lyl;
+field_2586	e	Lfyt;
+field_26665	b	Lftm;
+field_26666	c	Lftm;
+field_27433	s	Lgqm;
+field_33816	u	Ljava/util/List;
+field_3391	q	Lgqm;
+field_3392	t	Lgqm;
+field_3397	u	Lgqm;
+field_3401	r	Lgqm;
+field_34801	v	Lgiv;
+field_3752	a	Ljava/lang/String;
+field_3761	b	Ljava/lang/String;
+field_37868	k	Ljava/lang/Object;
+field_4019	r	F
+field_44666	f	Ljava/lang/String;
+field_45607	b	Ljava/util/function/Supplier;
+field_4687	i	Ljava/util/Map;
+field_4738	j	Ljava/util/List;
+field_5330	c	Ljava/util/Map;
+field_53325	s	D
+field_53326	t	D
+field_53327	u	D
+field_53333	A	Z
+field_53446	ac	F
+field_53467	av	Lhog;
+field_53528	aJ	I
+field_53542	m	Z
+field_55309	Y	Ldcv;
+field_5918	l	Ljl;
+field_5965	aZ	F
+field_5969	Z	D
+field_6014	X	D
+field_6031	aY	F
+field_6036	Y	D
+field_6169	f	Lbzw;
+field_6220	bs	F
+field_6235	bj	I
+field_6283	br	F
+field_7477	d	Z
+field_7503	cT	Lcup;
+field_7514	cQ	Lcus;
+field_8255	wV	Ldcr;
+method_10517	a	()Lud;
+method_10851	b	()Lxp;
+method_10852	b	(Lxo;)Lyc;
+method_10862	b	(Lyl;)Lyc;
+method_11022	b	()Ljava/lang/String;
+method_1422	b	(Lfmz$a;)V
+method_1426	d	()V
+method_1442	a	()Lfmz$b;
+method_1444	b	()I
+method_1447	a	(I)Lfmz$a;
+method_150	e	()Ljava/lang/String;
+method_1507	a	(Lges;)V
+method_1531	ab	()Lhrs;
+method_1548	Y	()Lfup;
+method_1555	aA	()Z
+method_1558	T	()Lgry;
+method_1561	ar	()Lheb;
+method_1562	M	()Lgrk;
+method_1576	W	()Lhwd;
+method_1592	q	()V
+method_1676	c	()Ljava/lang/String;
+method_17165	d	()Lgng;
+method_1743	e	()Lfxo;
+method_17783	d	()Lfiq$a;
+method_1812	a	(Lxo;)V
+method_18456	A	()Ljava/util/List;
+method_19325	a	(FF)V
+method_19418	l	()Lftl;
+method_22683	aP	()Lfnh;
+method_22703	a	(Lfoc;)V
+method_22903	a	()V
+method_22904	a	(DDD)V
+method_22909	b	()V
+method_22976	a	(FLfoc;Lgxm$a;Lgwh;I)V
+method_23070	a	(Lfoc;Lgxm;)V
+method_23317	dC	()D
+method_23318	dE	()D
+method_23321	dI	()D
+method_23500	a	(Lame;)Lgxy;
+method_23580	j	(Lame;)Lgxy;
+method_23760	c	()Lfoc$a;
+method_23761	a	()Lorg/joml/Matrix4f;
+method_23767	h	()Lorg/joml/Quaternionf;
+method_23919	a	(FFFIFFIIFFF)V
+method_25448	a	(Lame;)Lgxy;
+method_27693	f	(Ljava/lang/String;)Lyc;
+method_27704	a	(Lame;)Lyl;
+method_27728	aZ	()Lfdd;
+method_27983	aj	()Lamd;
+method_2838	b	()Lgqm;
+method_2871	a	(Ljava/util/UUID;)Lgrv;
+method_2880	o	()Ljava/util/Collection;
+method_29177	a	()Lame;
+method_2950	a	(Ljava/lang/String;)Lgtb;
+method_2959	f	()I
+method_2966	a	()Lcom/mojang/authlib/GameProfile;
+method_31043	a	(Lftm;)V
+method_31044	aH	()Lftm;
+method_31548	gs	()Lcus;
+method_31549	gt	()Lcup;
+method_3196	a	(Lftl;FZ)F
+method_3228	a	(Lgwe;FFLbxi;FLdcv;FLfoc;Lgxm;I)V
+method_36139	a	(I)Lyl;
+method_36454	dP	()F
+method_36455	dR	()F
+method_36877	a	(Lges;Lfud;Lgtb;Lgry;ZLgsc;)V
+method_37067	q	()V
+method_3734	aG	()Lel;
+method_3739	aH	()Lek;
+method_3865	j	()Ljava/lang/String;
+method_4054	a	(Lhlp;Lfoc;Lgxm;I)V
+method_4055	a	(Lcam;D)Z
+method_41735	x	()Lgkx;
+method_4309	a	(Ljava/io/InputStream;)Lfne;
+method_43470	b	(Ljava/lang/String;)Lyc;
+method_43473	i	()Lyc;
+method_44252	a	(Lek;Ljava/lang/String;)V
+method_44382	a	(D)V
+method_44717	b	()Ljava/util/UUID;
+method_4495	s	()I
+method_4616	a	(Lame;Lhra;)V
+method_46416	a	(FFF)V
+method_48559	b	()Z
+method_53526	aR	()Lfxv;
+method_53536	d	()Z
+method_5438	a	(I)Ldcv;
+method_5439	b	()I
+method_5476	Q_	()Lxo;
+method_5477	aj	()Lxo;
+method_5578	e	()I
+method_5584	d	()I
+method_5586	j	()Ljava/lang/String;
+method_5591	f	()Z
+method_5628	ar	()I
+method_5667	cK	()Ljava/util/UUID;
+method_5767	cs	()Z
+method_5854	dm	()Lbzm;
+method_5864	ap	()Lbzv;
+method_5872	b	(DD)V
+method_5890	a	(Lbzv;)Lame;
+method_6026	eI	()Ljava/util/Collection;
+method_6032	eL	()F
+method_6059	d	(Ljl;)Z
+method_60655	a	(Ljava/lang/String;Ljava/lang/String;)Lame;
+method_6118	a	(Lbzw;)Ldcv;
+method_62425	b	(Lbzm;F)Lhkm;
+method_65606	g	()Z
+method_7299	a	(Lyc;)Lyc;
+method_7325	am	()Z
+method_7331	gp	()V
+method_7334	gr	()Lcom/mojang/authlib/GameProfile;
+method_7909	h	()Ldcr;
+method_7919	o	()I
+method_7936	p	()I
+method_7947	M	()I
+method_7960	f	()Z
+method_7963	m	()Z
+method_7964	y	()Lxo;
+method_8532	af	()J
+method_9249	a	(Lcom/mojang/brigadier/ParseResults;Ljava/lang/String;)V
+net.minecraft.class_1011	fne	
+net.minecraft.class_10197	hid	
+net.minecraft.class_1043	hrd	
+net.minecraft.class_1294	bys	
+net.minecraft.class_1297	bzm	
+net.minecraft.class_1299	bzv	
+net.minecraft.class_1304	bzw	
+net.minecraft.class_1657	cut	
+net.minecraft.class_1802	dcz	
+net.minecraft.class_1921	gxy	
+net.minecraft.class_2477	ud	
+net.minecraft.class_2561	xo	
+net.minecraft.class_2583	yl	
+net.minecraft.class_2960	ame	
+net.minecraft.class_310	fud	
+net.minecraft.class_338	fxo	
+net.minecraft.class_3675$class_307	fmz$b	
+net.minecraft.class_3887	his	
+net.minecraft.class_408	gdo	
+net.minecraft.class_412	gdr	
+net.minecraft.class_4184	ftl	
+net.minecraft.class_429	gio	
+net.minecraft.class_433	gen	
+net.minecraft.class_442	geu	
+net.minecraft.class_4587	foc	
+net.minecraft.class_4603	gya	
+net.minecraft.class_4608	hrg	
+net.minecraft.class_500	gic	
+net.minecraft.class_526	gks	
+net.minecraft.class_5498	ftm	
+net.minecraft.class_639	gtb	
+net.minecraft.class_642	gry	
+net.minecraft.class_6599	giw	
+net.minecraft.class_757	gxa	
+net.minecraft.class_759	gxe	
+net.minecraft.class_897	hec	
+net.minecraft.class_922	hff	

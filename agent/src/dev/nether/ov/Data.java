@@ -34,7 +34,43 @@ final class Data {
 
     // ---------------------------------------------------------------- items
 
-    /** Item stack as {name, damage, maxDamage, item id, count} (damage/max -1 = no durability); null for an empty stack. */
+    /** Items whose icon depends on the stack's own data: dyed leather, player heads. */
+    private static boolean wantsExtra(String id) { return id.startsWith("minecraft:leather_") || id.equals("minecraft:player_head"); }
+
+    private static final java.util.Map<Class<?>, Field[]> dataFields = new java.util.HashMap<>();
+
+    /**
+     * The stack's own data as text: its component patch (1.20.5+) or NBT tag (older), whichever fields of the stack print
+     * as "{...}". Found by type, not by name, so it needs no name table and works on every version and loader; read by
+     * {@link Icons#of} for the dye colour and the head's owner. "" when there is none.
+     */
+    static String extra(Object st) {
+        try {
+            Field[] fs = dataFields.get(st.getClass());
+            if (fs == null) {
+                List<Field> l = new java.util.ArrayList<>();
+                for (Class<?> c = st.getClass(); c != null && c != Object.class; c = c.getSuperclass())
+                    for (Field f : c.getDeclaredFields()) {
+                        Class<?> t = f.getType();
+                        if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || t.isPrimitive() || t == String.class || t.isArray()) continue;
+                        try { f.setAccessible(true); l.add(f); } catch (Throwable ignored) { }
+                    }
+                dataFields.put(st.getClass(), fs = l.toArray(new Field[0]));
+            }
+            StringBuilder b = new StringBuilder();
+            for (Field f : fs) {
+                Object v = f.get(st);
+                if (v == null || v == st) continue;
+                String t = String.valueOf(v);
+                if (t.startsWith("{") && t.length() > 2) b.append(t.length() > 16384 ? t.substring(0, 16384) : t).append(' ');
+            }
+            return b.toString();
+        } catch (Throwable t) {
+            return "";
+        }
+    }
+
+    /** Item stack as {name, damage, maxDamage, item id, count, data text ({@link #extra}, "" unless the icon needs it)} (damage/max -1 = no durability); null for an empty stack. */
     static String[] stack(Object st) {
         if (st == null) return null;
         try {
@@ -46,14 +82,18 @@ final class Data {
                 Field reg = Game.field(item.getClass(), l("e", "field_150901_e"));
                 Object id = reg == null ? null : call(reg.get(null), l("c", "func_177774_c"), item);
                 Object n = fld(st, l("b", "field_77994_a"));
-                return new String[] {String.valueOf(call(st, l("q", "func_82833_r"))), String.valueOf(dmg), String.valueOf(max), String.valueOf(id), String.valueOf(n instanceof Integer ? n : 1)};
+                String sid = String.valueOf(id);
+                // 1.8.9 / 1.12 skulls are one item; the metadata says which (0 skeleton .. 3 player, 4 creeper)
+                String x = sid.equals("minecraft:skull") ? "meta:" + call(st, l("h", "func_77952_i")) + " " + extra(st) : wantsExtra(sid) ? extra(st) : "";
+                return new String[] {String.valueOf(call(st, l("q", "func_82833_r"))), String.valueOf(dmg), String.valueOf(max), sid, String.valueOf(n instanceof Integer ? n : 1), x};
             }
             if (Boolean.TRUE.equals(call(st, "method_7960"))) return null;
             Object nm = call(call(st, "method_7964"), "getString");
             boolean dur = Boolean.TRUE.equals(call(st, "method_7963"));
             int max = dur ? ((Number) call(st, "method_7936")).intValue() : -1, dmg = dur ? ((Number) call(st, "method_7919")).intValue() : -1;
             Object n = call(st, "method_7947");
-            return new String[] {String.valueOf(nm), String.valueOf(dmg), String.valueOf(max), String.valueOf(call(st, "method_7909")), String.valueOf(n instanceof Integer ? n : 1)};
+            String sid = String.valueOf(call(st, "method_7909"));
+            return new String[] {String.valueOf(nm), String.valueOf(dmg), String.valueOf(max), sid, String.valueOf(n instanceof Integer ? n : 1), wantsExtra(sid) ? extra(st) : ""};
         } catch (Throwable t) {
             return null;
         }
@@ -104,6 +144,7 @@ final class Data {
                 return main instanceof Object[] ? (Object[]) main : null;
             }
             Object inv = call(Game.me(), "method_31548");
+            if (inv == null) inv = Game.fld(Game.me(), "field_7514"); // before 1.17: the inventory field
             Object size = call(inv, "method_5439");
             if (!(size instanceof Integer)) return null;
             Object[] out = new Object[(Integer) size];

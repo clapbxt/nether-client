@@ -24,6 +24,7 @@ final class Names {
         "field_1668", "KEYSYM",
         "field_1687", "level",
         "field_1690", "options",
+        "field_1704", "window",
         "field_1705", "gui",
         "field_1708", "fontManager",
         "field_1724", "player",
@@ -82,9 +83,20 @@ final class Names {
         "field_53528", "id",
         "field_53542", "isSpectator",
         "field_55309", "headEquipment",
+        "field_5918", "FIRE_RESISTANCE",
         "field_5965", "xRot",
+        "field_5969", "zo",
+        "field_6014", "xo",
         "field_6031", "yRot",
+        "field_6036", "yo",
+        "field_6169", "HEAD",
+        "field_6220", "yBodyRotO",
         "field_6235", "hurtTime",
+        "field_6283", "yBodyRot",
+        "field_7477", "instabuild",
+        "field_7503", "abilities",
+        "field_7514", "inventory",
+        "field_8255", "SHIELD",
         "method_10517", "getInstance",
         "method_10851", "getContents",
         "method_10852", "append",
@@ -111,11 +123,15 @@ final class Names {
         "method_17783", "getType",
         "method_1812", "addMessage",
         "method_18456", "players",
+        "method_19325", "setRotation",
         "method_19418", "getMainCamera",
         "method_22683", "getWindow",
         "method_22703", "translateAndRotate",
         "method_22903", "pushPose",
+        "method_22904", "translate",
         "method_22909", "popPose",
+        "method_22976", "renderHandsWithItems",
+        "method_23070", "renderFire",
         "method_23317", "getX",
         "method_23318", "getY",
         "method_23321", "getZ",
@@ -138,6 +154,9 @@ final class Names {
         "method_31043", "setCameraType",
         "method_31044", "getCameraType",
         "method_31548", "getInventory",
+        "method_31549", "getAbilities",
+        "method_3196", "getFov",
+        "method_3228", "renderArmWithItem",
         "method_36139", "withColor",
         "method_36454", "getYRot",
         "method_36455", "getXRot",
@@ -145,6 +164,8 @@ final class Names {
         "method_37067", "clearWidgets",
         "method_3734", "getCommands",
         "method_3739", "createCommandSourceStack",
+        "method_3865", "getLevelIdName",
+        "method_4054", "submit",
         "method_4055", "shouldShowName",
         "method_41735", "createWorldOpenFlows",
         "method_4309", "read",
@@ -155,6 +176,7 @@ final class Names {
         "method_44717", "getProfileId",
         "method_4495", "getGuiScale",
         "method_4616", "register",
+        "method_46416", "translate",
         "method_48559", "isInfiniteDuration",
         "method_53526", "getDebugOverlay",
         "method_53536", "showDebugScreen",
@@ -168,17 +190,26 @@ final class Names {
         "method_5591", "isAmbient",
         "method_5628", "getId",
         "method_5667", "getUUID",
+        "method_5767", "isInvisible",
+        "method_5854", "getVehicle",
+        "method_5864", "getType",
+        "method_5872", "turn",
+        "method_5890", "getKey",
         "method_6026", "getActiveEffects",
         "method_6032", "getHealth",
+        "method_6059", "hasEffect",
         "method_60655", "fromNamespaceAndPath",
         "method_6118", "getItemBySlot",
+        "method_62425", "createRenderState",
         "method_65606", "isEmpty",
         "method_7299", "decorateDisplayNameComponent",
+        "method_7325", "isSpectator",
         "method_7331", "respawn",
         "method_7334", "getGameProfile",
         "method_73477", "getBuffer",
         "method_73483", "submitCustomGeometry",
         "method_74698", "register",
+        "method_75966", "armorCutoutNoCull",
         "method_76000", "entityTranslucent",
         "method_7909", "getItem",
         "method_7919", "getDamageValue",
@@ -190,14 +221,19 @@ final class Names {
         "method_8532", "getDayTime",
         "method_9249", "performCommand",
         "net.minecraft.class_1011", "com.mojang.blaze3d.platform.NativeImage",
+        "net.minecraft.class_10197", "net.minecraft.client.renderer.entity.layers.EquipmentLayerRenderer",
         "net.minecraft.class_1043", "net.minecraft.client.renderer.texture.DynamicTexture",
         "net.minecraft.class_11659", "net.minecraft.client.renderer.SubmitNodeCollector",
         "net.minecraft.class_11659$class_11660", "net.minecraft.client.renderer.SubmitNodeCollector$CustomGeometryRenderer",
         "net.minecraft.class_11719$class_11721", "net.minecraft.network.chat.FontDescription$Resource",
         "net.minecraft.class_12079$class_10726", "net.minecraft.core.ClientAsset$ResourceTexture",
         "net.minecraft.class_12249", "net.minecraft.client.renderer.rendertype.RenderTypes",
+        "net.minecraft.class_1294", "net.minecraft.world.effect.MobEffects",
+        "net.minecraft.class_1297", "net.minecraft.world.entity.Entity",
+        "net.minecraft.class_1299", "net.minecraft.world.entity.EntityType",
         "net.minecraft.class_1304", "net.minecraft.world.entity.EquipmentSlot",
         "net.minecraft.class_1657", "net.minecraft.world.entity.player.Player",
+        "net.minecraft.class_1802", "net.minecraft.world.item.Items",
         "net.minecraft.class_1921", "net.minecraft.client.renderer.rendertype.RenderType",
         "net.minecraft.class_2477", "net.minecraft.locale.Language",
         "net.minecraft.class_2561", "net.minecraft.network.chat.Component",
@@ -210,9 +246,12 @@ final class Names {
         "net.minecraft.class_3887", "net.minecraft.client.renderer.entity.layers.RenderLayer",
         "net.minecraft.class_408", "net.minecraft.client.gui.screens.ChatScreen",
         "net.minecraft.class_412", "net.minecraft.client.gui.screens.ConnectScreen",
+        "net.minecraft.class_4184", "net.minecraft.client.Camera",
         "net.minecraft.class_429", "net.minecraft.client.gui.screens.options.OptionsScreen",
         "net.minecraft.class_433", "net.minecraft.client.gui.screens.PauseScreen",
         "net.minecraft.class_442", "net.minecraft.client.gui.screens.TitleScreen",
+        "net.minecraft.class_4587", "com.mojang.blaze3d.vertex.PoseStack",
+        "net.minecraft.class_4603", "net.minecraft.client.renderer.ScreenEffectRenderer",
         "net.minecraft.class_4608", "net.minecraft.client.renderer.texture.OverlayTexture",
         "net.minecraft.class_500", "net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen",
         "net.minecraft.class_526", "net.minecraft.client.gui.screens.worldselection.SelectWorldScreen",
@@ -220,6 +259,9 @@ final class Names {
         "net.minecraft.class_639", "net.minecraft.client.multiplayer.resolver.ServerAddress",
         "net.minecraft.class_642", "net.minecraft.client.multiplayer.ServerData",
         "net.minecraft.class_6599", "net.minecraft.client.gui.screens.options.controls.KeyBindsScreen",
+        "net.minecraft.class_757", "net.minecraft.client.renderer.GameRenderer",
+        "net.minecraft.class_759", "net.minecraft.client.renderer.ItemInHandRenderer",
+        "net.minecraft.class_897", "net.minecraft.client.renderer.entity.EntityRenderer",
         "net.minecraft.class_922", "net.minecraft.client.renderer.entity.LivingEntityRenderer",
     };
     private static final Map<String, String> M = new HashMap<>(), OB = new HashMap<>(), OD = new HashMap<>();
@@ -233,16 +275,35 @@ final class Names {
         byte[] b = version == null ? null : dev.nether.agent.Hook.file.apply("names/" + version + ".txt");
         if (b == null) return false;
         try (BufferedReader r = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(b), StandardCharsets.UTF_8))) {
+            Map<String, String> names = new HashMap<>(), descs = new HashMap<>();
             for (String l; (l = r.readLine()) != null; ) {
                 String[] p = l.split("\t", -1);
                 if (p.length < 3) continue;
-                OB.put(p[0], p[1]);
-                OD.put(p[0], p[2]);
+                names.put(p[0], p[1]);
+                descs.put(p[0], p[2]);
             }
+            // Don't claim support based on a stale or partial mapping file. The legacy 1.12.2 table
+            // uses SRG keys; modern tables use intermediary keys and need every value read by Game.
+            if ("1.12.2".equals(version)) {
+                if (!names.containsKey("net.minecraft.client.Minecraft") || !names.containsKey("field_71439_g")) return false;
+            } else if (!names.containsKey("net.minecraft.class_310") || !names.containsKey("field_1724")
+                    || !hasAny(names, "method_23317", "field_5987")
+                    || !hasAny(names, "method_23318", "field_6010")
+                    || !hasAny(names, "method_23321", "field_6035")
+                    || !hasAny(names, "method_36454", "field_6031")
+                    || !hasAny(names, "method_36455", "field_5965")) return false;
+            OB.clear();
+            OD.clear();
+            OB.putAll(names);
+            OD.putAll(descs);
             return true;
         } catch (Exception e) {
             return false;
         }
+    }
+
+    private static boolean hasAny(Map<String, String> names, String a, String b) {
+        return names.containsKey(a) || names.containsKey(b);
     }
 
     /** Mojang name for an intermediary one; unknown names pass through. */

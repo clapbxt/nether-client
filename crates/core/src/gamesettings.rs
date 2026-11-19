@@ -75,8 +75,11 @@ pub fn global_file(paths: &Paths) -> PathBuf { paths.root.join("global").join("o
 const NEVER: &[&str] = &[
     "version", "resourcePacks", "incompatibleResourcePacks", "lastServer", "tutorialStep", "joinedFirstServer",
     "skipMultiplayerWarning", "skipRealms32bitWarning", "onboardAccessibility", "hasShownTrialsHint",
-    "overrideWidth", "overrideHeight", "fullscreenResolution",
+    "overrideWidth", "overrideHeight", "fullscreenResolution", DATA_VERSION,
 ];
+
+/// Shared-file key holding the data version of the game the shared values were last taken from (1.13+ only).
+const DATA_VERSION: &str = "ncDataVersion";
 
 #[derive(PartialEq)]
 enum Cat { Controls, Video, Audio, Other }
@@ -172,8 +175,7 @@ fn key_to_legacy(v: &str) -> String {
 fn canonical(k: &str, v: &str, legacy: bool) -> String {
     if legacy && k.starts_with("key_") { return key_from_legacy(v); }
     if k == "lang" { return v.to_lowercase(); }
-    // 1.8-1.12 store FOV in degrees (70-110), newer versions as (degrees - 70) / 40
-    if legacy && k == "fov" { if let Ok(d) = v.trim().parse::<f32>() { return ((d - 70.0) / 40.0).to_string(); } }
+    if k == "fov" { return fov(v); }
     v.to_string()
 }
 
@@ -183,16 +185,34 @@ fn for_instance(k: &str, v: &str, legacy: bool, forge: bool) -> String {
         if legacy { return key_to_legacy(v); }
         if !forge { return v.split(':').next().unwrap_or(v).to_string(); }
     }
-    if legacy && k == "fov" { if let Ok(n) = v.trim().parse::<f32>() { return (70.0 + 40.0 * n).to_string(); } }
+    if k == "fov" { return fov(v); }
     if k == "lang" && legacy {
         if let Some((a, b)) = v.split_once('_') { return format!("{a}_{}", b.to_uppercase()); }
     }
     v.to_string()
 }
 
+/// Every version (1.8 included) stores FOV as (degrees - 70) / 40, between -1 and 1. Older builds of this file
+/// converted 1.8-1.12 values as if they were degrees, which left values like -1.725 or 110 (4470 degrees in game);
+/// those are walked back to the setting they came from.
+fn fov(v: &str) -> String {
+    let Ok(mut n) = v.trim().parse::<f64>() else { return v.to_string() };
+    if (-1.0..=1.0).contains(&n) { return v.to_string(); }
+    for _ in 0..4 {
+        if (-1.0..=1.0).contains(&n) { return n.to_string(); }
+        if (30.0..=110.0).contains(&n) { return ((n - 70.0) / 40.0).to_string(); }
+        n = if n > 110.0 { (n - 70.0) / 40.0 } else if n < -1.0 { 70.0 + 40.0 * n } else { break };
+    }
+    n.clamp(-1.0, 1.0).to_string()
+}
+
 fn capture(global: &mut Vec<(String, String)>, from: &[(String, String)], legacy: bool, prefs: &SyncPrefs) {
     for (k, v) in from {
         if allowed(prefs, k) { set(global, k, canonical(k, v, legacy)); }
+    }
+    // remember which game version wrote these values, so a new instance can say so (see before_launch)
+    if !legacy {
+        if let Some((_, v)) = from.iter().find(|(k, v)| k == "version" && v.trim().parse::<u32>().is_ok()) { set(global, DATA_VERSION, v.trim().to_string()); }
     }
 }
 
@@ -237,6 +257,13 @@ pub fn before_launch(paths: &Paths, game_dir: &Path, version: &str, loader_label
     let forge = loader_label.to_lowercase().contains("forge");
     for (k, v) in &global {
         if allowed(&prefs, k) { set(&mut inst, k, for_instance(k, v, legacy, forge)); }
+    }
+    // A new instance has no options.txt, and Minecraft data-fixes a file without "version" from version 0, running
+    // every options fix since 1.12 (key codes, AO, blur…) over values that are already current. Say which version wrote
+    // the values (1519 = 1.13, the first with these key names, for shared files from before this was recorded).
+    if !legacy && !inst.iter().any(|(k, _)| k == "version") {
+        let dv = global.iter().find(|(k, _)| k == DATA_VERSION).map(|(_, v)| v.clone()).unwrap_or_else(|| "1519".into());
+        inst.insert(0, ("version".into(), dv));
     }
     write(&file, &inst)
 }
@@ -335,11 +362,32 @@ mod tests {
         let paths = tmp("legacy");
         write(&global_file(&paths), &kv(&[("fov", "0.5"), ("key_key.forward", "key.keyboard.w")])).unwrap();
         let game = paths.root.join("old");
-        write(&game.join("options.txt"), &kv(&[("fov", "70.0")])).unwrap();
+        write(&game.join("options.txt"), &kv(&[("fov", "1.0")])).unwrap();
         before_launch(&paths, &game, "1.8.9", "Vanilla").unwrap();
         let i = read(&game.join("options.txt"));
-        assert!(i.contains(&("fov".into(), "90".into())) && i.contains(&("key_key.forward".into(), "17".into())));
-        assert_eq!(canonical("fov", "90", true), "0.5");
+        // 1.8.9 stores FOV normalized like every other version; no "version" line before 1.13
+        assert!(i.contains(&("fov".into(), "0.5".into())) && i.contains(&("key_key.forward".into(), "17".into())));
+        assert!(!i.iter().any(|(k, _)| k == "version"));
+        // values left by the old degrees conversion come back to the setting they were
+        assert_eq!(fov("-1.725"), "1");
+        assert_eq!(fov("110"), "1");
+        assert_eq!(fov("4470"), "1");
+        assert_eq!(fov("90"), "0.5");
+        assert_eq!(fov("0.25"), "0.25");
+        let _ = std::fs::remove_dir_all(&paths.root);
+    }
+
+    #[test]
+    fn new_instance_gets_data_version() {
+        let paths = tmp("dv");
+        let (a, b) = (paths.root.join("a"), paths.root.join("b"));
+        write(&a.join("options.txt"), &kv(&[("version", "4671"), ("key_key.forward", "key.keyboard.w")])).unwrap();
+        after_exit(&paths, &a, "1.21.11").unwrap();
+        assert!(read(&global_file(&paths)).contains(&(DATA_VERSION.into(), "4671".into())));
+        before_launch(&paths, &b, "26.3", "Fabric").unwrap();
+        let i = read(&b.join("options.txt"));
+        assert_eq!(i[0], ("version".into(), "4671".into()));
+        assert!(!i.iter().any(|(k, _)| k == DATA_VERSION));
         let _ = std::fs::remove_dir_all(&paths.root);
     }
 }

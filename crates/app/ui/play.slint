@@ -1,0 +1,158 @@
+import { Theme } from "theme.slint";
+import { Backend, Inst, Card } from "structs.slint";
+import { Btn, LinkBtn, Icon, Ico, Chip, Dropdown, PlayButton, Pulse, IconBtn } from "components.slint";
+
+// Play > Nether (Lunar's system in our look, 2026-11-19): only our ready-made versions. Every supported version family
+// is a card; pick one, then a version and how to play on the right panel, then PLAY. The first PLAY of a version makes
+// its profile (an ordinary instance: add or remove mods any time), later ones just play it. Profiles you make yourself
+// list under Modpacks, like Lunar.
+export component CardGrid inherits Rectangle {
+    // a card was picked (the right panel shows it)
+    callback picked();
+    in property <bool> card-on: true;
+    property <int> cols: 4;
+    property <length> gap: 12px;
+    property <length> cw: (root.width - (root.cols - 1) * root.gap) / root.cols;
+    property <length> ch: Math.max(176px, root.cw * 0.62);
+    property <int> rows: Math.ceil(Backend.cards.length / root.cols);
+    Flickable {
+        content-height: Backend.cards.length == 0 ? 2 * (root.ch + root.gap) : root.rows * (root.ch + root.gap);
+        // the version list is still loading: quiet placeholders where the cards will be
+        if Backend.cards.length == 0: Rectangle {
+            for k in 8: Rectangle {
+                x: mod(k, root.cols) * (root.cw + root.gap); y: floor(k / root.cols) * (root.ch + root.gap);
+                width: root.cw; height: root.ch; border-radius: Theme.r2; background: Theme.s1; border-width: 1px; border-color: Theme.ln;
+                Rectangle { x: 16px; y: parent.height - 62px; width: 64px; height: 26px; border-radius: 4px; background: Theme.s3; }
+                Rectangle { x: 16px; y: parent.height - 28px; width: parent.width * 0.45; height: 10px; border-radius: 3px; background: Theme.s2; }
+            }
+        }
+        for c[i] in Backend.cards: cd := Rectangle {
+            property <bool> on: root.card-on && Backend.card-fam == c.fam;
+            property <bool> lit: cd.on || ta.has-hover;
+            x: mod(i, root.cols) * (root.cw + root.gap); y: floor(i / root.cols) * (root.ch + root.gap);
+            width: root.cw; height: root.ch;
+            border-radius: Theme.r2; clip: true;
+            background: Theme.s2;
+            // the update's official key art, full bleed (Lunar's cards); it leans in on hover
+            if c.has-pano: Image {
+                property <float> zoom: cd.lit ? 1.06 : 1.0;
+                animate zoom { duration: Theme.slow; easing: ease-out; }
+                width: parent.width * self.zoom; height: parent.height * self.zoom;
+                x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
+                source: c.pano; image-fit: cover;
+            }
+            Rectangle { background: @linear-gradient(180deg, #00000000 35%, #000000b8 72%, #000000eb 100%); }
+            if !cd.lit: Rectangle { background: #00000033; }
+            Text { x: 16px; y: parent.height - 74px; height: 42px; text: c.fam; color: #FFFFFF; font-family: Theme.disp; font-size: 40px; font-weight: 800; vertical-alignment: center; }
+            Text { x: 16px; y: parent.height - 32px; width: parent.width - 32px; height: 18px; text: c.name; color: #ffffffd0; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; vertical-alignment: center; overflow: elide; }
+            // ways to play, top right
+            Rectangle {
+                x: parent.width - self.width - 10px; y: 10px; width: wt.preferred-width + 14px; height: 20px; border-radius: 4px; background: #000000a0;
+                wt := Text { text: c.fvers.length > 0 ? "+ FABRIC" : (c.optifine ? "+ OPTIFINE" : "NETHER"); color: #ffffffc8; font-family: Theme.mono; font-size: 10px; font-weight: 700; letter-spacing: 1px; horizontal-alignment: center; vertical-alignment: center; }
+            }
+            if c.tag != "": Rectangle {
+                x: 10px; y: 10px; width: tg.preferred-width + 14px; height: 20px; border-radius: 4px; background: c.tag == "NEW" ? Theme.red : #000000a0;
+                tg := Text { text: c.tag; color: #FFFFFF; font-family: Theme.mono; font-size: 10px; font-weight: 700; letter-spacing: 1px; horizontal-alignment: center; vertical-alignment: center; }
+            }
+            // picked: accent ring; hover: hairline
+            Rectangle { border-radius: Theme.r2; border-width: cd.on ? 2px : 1px; border-color: cd.on ? Theme.red2 : (ta.has-hover ? #ffffff40 : #ffffff14); animate border-color { duration: Theme.fast; } }
+            ta := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { Backend.card-pick(c.fam, -1, ""); root.picked(); }
+                double-clicked => { Backend.card-pick(c.fam, -1, ""); root.picked(); Backend.card-play(); }
+            }
+        }
+    }
+}
+
+// The right panel for the picked card: the version, how to play (Nether / Nether + Fabric), PLAY, and the way to
+// plain Minecraft for anyone looking for it.
+export component CardPanel inherits Rectangle {
+    callback edit(int);
+    callback go-vanilla();
+    property <Card> c: Backend.card-cur;
+    property <bool> fabric-ok: root.c.fvers.length > 0;
+    // the second way to play: Fabric where it runs, OptiFine on 1.8.9 / 1.12.2
+    property <int> way2: root.fabric-ok ? 1 : 2;
+    property <[string]> vers: Backend.card-loader == 1 ? root.c.fvers : root.c.vers;
+    property <int> vi: Backend.card-vi;
+    property <bool> made: Backend.card-idx >= 0;
+    property <Inst> it: Backend.instances[Math.max(0, Backend.card-idx)];
+    property <bool> busy: root.made && (root.it.starting || root.it.stopping);
+    background: Theme.s1;
+    Rectangle { x: 0px; width: 1px; background: Theme.ln; }
+
+    // art + title
+    Rectangle {
+        x: 1px; y: 0px; width: parent.width - 1px; height: 300px; clip: true; background: Theme.s2;
+        if root.c.has-pano: Image { width: parent.width; height: parent.height; source: root.c.pano; image-fit: cover; }
+        Rectangle { background: @linear-gradient(180deg, #00000030 0%, #00000000 30%, Theme.s1.with-alpha(0.85) 82%, Theme.s1 100%); }
+    }
+    Text { x: 32px; y: 186px; height: 20px; text: "NETHER"; color: Theme.red2; font-family: Theme.mono; font-size: 12px * Theme.ts; font-weight: 700; letter-spacing: 2px; vertical-alignment: center; }
+    Text { x: 30px; y: 204px; height: 64px; text: root.c.fam; color: Theme.tx; font-family: Theme.disp; font-size: 64px; font-weight: 800; vertical-alignment: center; }
+    Text { x: 32px; y: 268px; width: parent.width - 64px; height: 22px; text: root.c.name; color: Theme.dim; font-family: Theme.ui; font-size: 16px * Theme.ts; font-weight: 500; vertical-alignment: center; overflow: elide; }
+
+    // version
+    Text { x: 32px; y: 322px; height: 18px; text: "VERSION"; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 1.4px; vertical-alignment: center; }
+    if root.vers.length > 0: Dropdown {
+        x: 32px; y: 346px; width: 200px; items: root.vers; current: root.vi;
+        changed(i) => { Backend.card-pick(root.c.fam, Backend.card-loader, root.vers[i]); }
+    }
+    Text { x: 248px; y: 346px; width: parent.width - 280px; height: 40px; vertical-alignment: center; overflow: elide; font-family: Theme.ui; font-size: 13px * Theme.ts;
+        color: root.made ? Theme.dim : Theme.mut;
+        text: root.made ? (root.it.running ? "Playing now" : ("Ready  ·  " + (root.it.hours > 0 ? root.it.hours + " h played" : "not played yet"))) : "Downloads the first time you play"; }
+
+    // how to play
+    Text { x: 32px; y: 410px; height: 18px; text: "HOW TO PLAY"; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 1.4px; vertical-alignment: center; }
+    for o[k] in [{t: "NETHER", d: "Minecraft with the Nether client. Nothing else to install."},
+                 {t: root.way2 == 1 ? "NETHER + FABRIC" : "NETHER + OPTIFINE",
+                  d: root.way2 == 1 ? "Also adds Sodium, Lithium, FerriteCore and Mod Menu, and runs your own Fabric mods." : "Adds OptiFine's zoom, shaders and connected textures, downloaded and set up for you."}]: tl := Rectangle {
+        property <bool> ok: k == 0 || root.fabric-ok || root.c.optifine;
+        property <int> way: k == 0 ? 0 : root.way2;
+        property <bool> on: Backend.card-loader == self.way;
+        x: 32px + k * ((parent.width - 64px - 12px) / 2 + 12px); y: 434px; width: (parent.width - 64px - 12px) / 2; height: 96px;
+        border-radius: Theme.r2;
+        background: self.on ? Theme.red.with-alpha(0.094) : (ot.has-hover && self.ok ? Theme.s2 : Theme.bg);
+        border-width: 1px; border-color: self.on ? Theme.red2 : (ot.has-hover && self.ok ? Theme.ln2 : Theme.ln);
+        opacity: self.ok ? 1 : 0.45;
+        animate background, border-color { duration: Theme.fast; }
+        Text { x: 16px; y: 14px; height: 22px; text: o.t; color: Theme.tx; font-family: Theme.disp; font-size: 18px; font-weight: 700; vertical-alignment: center; }
+        if tl.on: Icon { x: parent.width - 30px; y: 18px; d: Ico.check; tint: Theme.red2; }
+        Text { x: 16px; y: 42px; width: parent.width - 32px; height: 44px; wrap: word-wrap; overflow: elide; color: Theme.dim; font-family: Theme.ui; font-size: 12px * Theme.ts;
+            text: tl.ok ? o.d : "Fabric doesn't run on " + root.c.fam + ". Nether has the client features built in."; }
+        ot := TouchArea { mouse-cursor: tl.ok ? pointer : default; clicked => { if tl.ok { Backend.card-pick(root.c.fam, tl.way, Backend.card-ver); } } }
+    }
+
+    // play
+    PlayButton {
+        x: 32px; y: 562px; width: 300px; height: 64px; text-size: 32px;
+        label: root.made && root.it.stopping ? "STOPPING" : (root.made && root.it.running ? "STOP" : (root.busy ? "STARTING" : "PLAY"));
+        arrow: !(root.made && (root.it.running || root.it.starting)); enabled: !root.busy && root.vers.length > 0;
+        clicked => { if root.made && root.it.running { Backend.stop(root.it.name); } else { Backend.card-play(); } }
+    }
+    if root.made: Btn { x: 348px; y: 562px; height: 64px; text: "EDIT"; icon: Ico.edit; clicked => { root.edit(Backend.card-idx); } }
+    if root.made && root.it.running: Pulse { x: 32px; y: 640px; }
+    Text { x: root.made && root.it.running ? 50px : 32px; y: 632px; width: parent.width - 64px; height: 24px; vertical-alignment: center; overflow: elide;
+        color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts;
+        text: root.made ? "Profile: " + root.it.name : "Makes a profile called Nether " + Backend.card-ver + (Backend.card-loader == 1 ? " Fabric" : (Backend.card-loader == 2 ? " OptiFine" : "")) + ". Change its mods any time."; }
+
+    // the other way to play, for anyone looking
+    Rectangle {
+        x: 32px; y: parent.height - 76px; width: parent.width - 64px; height: 52px; border-radius: Theme.r2;
+        background: vt.has-hover ? Theme.s2 : transparent; border-width: 1px; border-color: vt.has-hover ? Theme.ln2 : Theme.ln;
+        animate background, border-color { duration: Theme.fast; }
+        Text { x: 16px; y: 8px; height: 18px; text: "Plain Minecraft, Forge or another loader?"; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; vertical-alignment: center; }
+        Text { x: 16px; y: 26px; height: 18px; text: "Vanilla profiles play any version without the Nether client."; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; }
+        Text { x: parent.width - 120px; width: 90px; text: "VANILLA"; color: vt.has-hover ? Theme.tx : Theme.dim; font-family: Theme.disp; font-size: 15px; font-weight: 700; horizontal-alignment: right; vertical-alignment: center; }
+        Icon { x: parent.width - 26px; y: (parent.height - 12px) / 2; d: Ico.chev; tint: vt.has-hover ? Theme.tx : Theme.dim; }
+        vt := TouchArea { mouse-cursor: pointer; clicked => { root.go-vanilla(); } }
+    }
+
+    // nothing picked yet (the version list is loading): a quiet placeholder, never half-filled labels
+    if root.c.fam == "": Rectangle {
+        x: 1px; width: parent.width - 1px; background: Theme.s1;
+        Rectangle { y: 0px; height: 300px; background: Theme.s2; }
+        Text { x: 32px; y: 322px; text: "Loading versions…"; color: Theme.mut; font-family: Theme.ui; font-size: 14px * Theme.ts; }
+        TouchArea { }
+    }
+}

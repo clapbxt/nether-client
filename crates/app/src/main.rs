@@ -21,7 +21,7 @@ mod md;
 mod prefs;
 mod skin;
 mod mods;
-mod host;
+mod worldshare;
 mod deeplink;
 mod wardrobe;
 mod community;
@@ -36,6 +36,10 @@ mod snapshot;
 mod restore;
 mod palette;
 mod discord;
+mod friends;
+mod party;
+mod presets;
+mod voice;
 slint::include_modules!();
 
 #[allow(clippy::too_many_arguments)]
@@ -96,6 +100,9 @@ fn inst_from(d: &InstanceData) -> Inst {
     i.crashed = d.crashed;
     i.bk_auto = d.backup_auto;
     i.bk_keep = if d.backup_keep == 0 { 5 } else { d.backup_keep as i32 };
+    i.nether = d.nether_on();
+    i.pack = d.pack.as_str().into();
+    i.optifine = d.optifine.as_str().into();
     if d.last_ts > 0 { i.last = ago(d.last_ts as i64).into(); }
     i
 }
@@ -118,6 +125,7 @@ pub(crate) fn data_of(i: &Inst) -> InstanceData {
         icon: i.icon.to_string(), cover: i.cover.to_string(), shared_settings: i.shared,
         jvm_args: i.jvm.to_string(), width: i.win_w.max(0) as u32, height: i.win_h.max(0) as u32, fullscreen: i.fullscreen,
         group: i.group.to_string(), notes: i.notes.to_string(), crashed: i.crashed, backup_auto: i.bk_auto, backup_keep: i.bk_keep.max(0) as u32,
+        nether: Some(i.nether), pack: i.pack.to_string(), optifine: i.optifine.to_string(),
     }
 }
 
@@ -130,14 +138,18 @@ fn category_slug(kind: i32, idx: i32) -> String {
     list.get(idx.max(0) as usize).unwrap_or(&"").to_string()
 }
 
-/// Indices of the instances shown on the Instances page (filter 0 all, 1 modded, 2 vanilla; search text; sort
-/// 0 last played, 1 name, 2 playtime, 3 created) and the Home order (last played first).
+/// Indices of the profiles listed on the Play page (tab 0 Nether: none, it shows the version cards; 1 Vanilla: plain
+/// Minecraft; 2 Modpacks: installed packs and your own Nether profiles; search text; sort 0 last played, 1 name,
+/// 2 playtime, 3 created) and the Home order (last played first).
 fn refilter(ui: &AppWindow) {
     let b = ui.global::<Backend>();
-    let (f, q, sort) = (b.get_inst_filter(), b.get_inst_query().trim().to_lowercase(), b.get_inst_sort());
+    let (tab, q, sort) = (b.get_play_tab(), b.get_inst_query().trim().to_lowercase(), b.get_inst_sort());
     let all: Vec<Inst> = b.get_instances().iter().collect();
     let mut v: Vec<usize> = (0..all.len())
-        .filter(|n| match f { 1 => all[*n].loader != "Vanilla", 2 => all[*n].loader == "Vanilla", _ => true })
+        .filter(|n| {
+            let i = &all[*n];
+            match tab { 1 => !i.nether && i.pack.is_empty(), 2 => !i.pack.is_empty() || (i.nether && !presets::is_card(&i.name)), _ => false }
+        })
         .filter(|n| q.is_empty() || [&all[*n].name, &all[*n].ver, &all[*n].loader].iter().any(|s| s.to_lowercase().contains(&q)))
         .collect();
     match sort {
@@ -442,9 +454,15 @@ fn launch_opts(sh: &Shared, name: &str, version: &str, ram_gb: i32, loader_label
     let uname = session.name.clone();
     LaunchOpts {
         loader: Loader::from_label(loader_label), version: version.into(), game_dir: sh.paths.instance(name), session, ram_mb: (ram_gb.max(1) * 1024) as u32,
-        java_major: (java > 0).then_some(java), client_config: client::instance_file(sh, name, shared), client: true, groups: None,
+        java_major: (java > 0).then_some(java), client_config: client::instance_file(sh, name, shared), groups: None,
+        // only Nether profiles run the Nether client (Play: Nether vs Vanilla)
+        client: if saved.name.is_empty() { instances::nether_ok(version, loader_label) } else { saved.nether_on() },
+        // Nether + OptiFine (1.8.9 / 1.12.2): the launch downloads and sets it up the first time
+        optifine: Loader::from_label(loader_label) == Loader::Vanilla && nether_core::optifine::supported(version) && !saved.optifine.is_empty(),
         extra_jvm: {
             let mut j = nether_core::launch::split_args(&saved.jvm_args);
+            // the in-game Invite to world tells invited players which loader to start
+            j.push(format!("-Dnether.loader={loader_label}"));
             // the game's agent shows its own Discord status (the launcher steps aside while a game runs)
             if let Some(id) = discord::game_prop(&sh.paths, prefs::load(&sh.paths).discord) {
                 j.extend([format!("-Dnether.discord={id}"), format!("-Dnether.discordVer={version}"), format!("-Dnether.discordLoader={loader_label}"), format!("-Dnether.discordName={uname}")]);
@@ -953,6 +971,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 b.set_fabric_versions(ModelRc::new(VecModel::from(fab)));
                 b.set_quilt_versions(ModelRc::new(VecModel::from(quilt)));
                 b.set_legacy_versions(ModelRc::new(VecModel::from(legacy)));
+                presets::versions_loaded(ui);
             });
         });
     }
@@ -991,13 +1010,19 @@ fn main() -> Result<(), slint::PlatformError> {
     }
     // Home news: newest Minecraft release/snapshot and Fabric loader
     {
-        let weak = ui.as_weak();
+        let (weak, sh) = (ui.as_weak(), shared.clone());
         std::thread::spawn(move || {
             let items = nether_core::news::latest(&nether_core::download::client());
+            // the art Mojang's launcher shows with each release (cached); Nether / Fabric cards use our banner
+            let pics: Vec<_> = items.iter().take(3).map(|n| if n.image.is_empty() { None } else { artui::web_image(&sh, &n.image, 640) }).collect();
             // refresh published Nether packs so the (UI-thread) pack lists can read them from cache
             let _ = nether_core::backend::packs(&nether_core::download::client());
             ui_do(&weak, move |ui| {
-                let rows: Vec<News> = items.iter().map(|n| News { tag: n.tag.as_str().into(), title: n.title.as_str().into(), url: n.url.as_str().into() }).collect();
+                let mut pics = pics.into_iter();
+                let rows: Vec<News> = items.iter().map(|n| {
+                    let img = pics.next().flatten().map(slint::Image::from_rgba8);
+                    News { tag: n.tag.as_str().into(), title: n.title.as_str().into(), url: n.url.as_str().into(), has_img: img.is_some(), img: img.unwrap_or_default() }
+                }).collect();
                 // L2: nothing fetched (offline): Home hides the news section instead of a placeholder row
                 ui.global::<Backend>().set_news_failed(rows.is_empty());
                 ui.global::<Backend>().set_news(ModelRc::new(VecModel::from(rows)));
@@ -1060,11 +1085,12 @@ fn main() -> Result<(), slint::PlatformError> {
         let (weak, sh) = (ui.as_weak(), shared.clone());
         backend.on_remove_art(move |kind, key| if let Some(ui) = weak.upgrade() { artui::remove(&ui, &sh, kind, &key) });
     }
-    // close button: quit, or hide to the tray
+    // close button: quit, or hide to the tray (always while friends are in our party: voice and the party live here;
+    // the tray's Quit leaves the party properly)
     {
         let (weak, sh) = (ui.as_weak(), shared.clone());
         ui.window().on_close_requested(move || {
-            if prefs::load(&sh.paths).on_close == 1 {
+            if prefs::load(&sh.paths).on_close == 1 || party::busy() {
                 if let Some(ui) = weak.upgrade() { prefs::hide_to_tray(&ui, &sh.paths); }
             } else {
                 let _ = slint::quit_event_loop();
@@ -1073,7 +1099,10 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
     artui::init(ui.as_weak(), shared.clone());
-    host::init(&ui, shared.clone());
+    worldshare::init(&ui, shared.clone());
+    friends::init(&ui, shared.clone());
+    party::init(&ui, shared.clone());
+    presets::init(&ui, shared.clone());
     if !snapshot {
         deeplink::unregister_old();
         deeplink::listen(&ui, shared.clone());
@@ -1189,13 +1218,21 @@ fn main() -> Result<(), slint::PlatformError> {
                 return false;
             }
             if let Err(e) = std::fs::create_dir_all(sh.paths.instance(&name)) { show_toast(&ui, &sh, &format!("Couldn't create the folder: {e}")); return false; }
+            // 6 = Vanilla + OptiFine (Nether profiles on 1.8.9 / 1.12.2)
             let label = match loader { 1 => Loader::Fabric, 2 => Loader::Forge, 3 => Loader::NeoForge, 4 => Loader::Quilt, 5 => Loader::LegacyFabric, _ => Loader::Vanilla }.label();
             let mut i = inst(&name, &ver, label, 0, 0, ram.clamp(1, 16), "Global", "Never", false);
             i.secs = 0;
+            // a Nether profile only where the Nether client runs (the wizard offers nothing else)
+            i.nether = ui.global::<Backend>().get_create_nether() && instances::nether_ok(&ver, label);
+            let i_nether = i.nether;
+            if loader == 6 && nether_core::optifine::supported(&ver) { i.optifine = "on".into(); }
             i.icon = icon;
             i.cover = cover;
             insts.push(i);
             persist(&sh.paths, &*insts);
+            // made with NEW PROFILE: show it where it lists (Modpacks for your own Nether profiles, else Vanilla)
+            let b = ui.global::<Backend>();
+            if b.get_create_open() { b.set_play_tab(if i_nether { 2 } else { 1 }); }
             refilter(&ui);
             artui::refresh(&ui, &sh);
             show_toast(&ui, &sh, &format!("{name} created"));
@@ -1457,11 +1494,11 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.global::<Backend>().set_gate_open(gate == 1);
         // NC_SNAP_WPAGE=n: Wardrobe page (0 skins, 1 capes, 2.. cosmetic slots in Kind::ALL order)
         if let Some(n) = std::env::var("NC_SNAP_WPAGE").ok().and_then(|n| n.parse::<i32>().ok()) { ui.set_ward_page(n); }
-        // NC_SNAP_STATE: dev-only page states for captures (see host::snap, wardrobe::snap)
+        // NC_SNAP_STATE: dev-only page states for captures (see wardrobe::snap)
         if let Ok(st) = std::env::var("NC_SNAP_STATE") {
-            host::snap(&ui, &st);
             wardrobe::snap(&ui, &shared, &st);
             community::snap(&ui, &st);
+            friends::snap(&ui, &st);
             // L1 dialogs with sample rows (captures only)
             if st == "preflight" {
                 use nether_core::crash::{Action, Finding};
@@ -1513,6 +1550,15 @@ java.lang.OutOfMemoryError: Java heap space
             ui.window().set_size(slint::PhysicalSize::new(w, h));
         }
         if let Some(n) = std::env::var("NC_SNAP_STEP").ok().and_then(|n| n.parse::<i32>().ok()) { ui.global::<Wizard>().set_snap_step(n); }
+        // NC_SNAP_PLAYTAB=n: Play page tab (0 Nether, 1 Vanilla, 2 Modpacks); NC_SNAP_VANILLA=1: the create wizard makes a Vanilla profile
+        if let Some(n) = std::env::var("NC_SNAP_PLAYTAB").ok().and_then(|n| n.parse::<i32>().ok()) { ui.global::<Backend>().set_play_tab(n); refilter(&ui); }
+        if std::env::var("NC_SNAP_VANILLA").is_ok() { ui.global::<Backend>().set_create_nether(false); }
+        // NC_SNAP_CARD=fam,way: pick a Play card once the cards are in
+        if let Some((f, w)) = std::env::var("NC_SNAP_CARD").ok().and_then(|s| s.split_once(',').map(|(f, w)| (f.to_string(), w.parse::<i32>().unwrap_or(0)))) {
+            let weak = ui.as_weak();
+            slint::Timer::single_shot(std::time::Duration::from_millis(2500), move || if let Some(ui) = weak.upgrade() { ui.global::<Backend>().invoke_card_pick(f.as_str().into(), w, "".into()); });
+        }
+
         // NC_SNAP_TABS=n: press Tab n times before the capture (keyboard focus checks)
         if let Some(n) = std::env::var("NC_SNAP_TABS").ok().and_then(|n| n.parse::<u32>().ok()) {
             let w = ui.as_weak();
@@ -1523,6 +1569,11 @@ java.lang.OutOfMemoryError: Java heap space
                     ui.window().dispatch_event(slint::platform::WindowEvent::KeyReleased { text: k });
                 }
             });
+        }
+        // NC_SNAP_THEME=n: preview a theme without saving it
+        if let Some(n) = std::env::var("NC_SNAP_THEME").ok().and_then(|n| n.parse::<i32>().ok()) {
+            ui.global::<Backend>().set_lp_theme(n);
+            settings::apply_theme(&ui, n);
         }
         // NC_SNAP_LOOK=accent,text: preview the accent colour / text size without saving them
         if let Some((a, t)) = std::env::var("NC_SNAP_LOOK").ok().and_then(|s| s.split_once(',').map(|(a, t)| (a.parse().unwrap_or(0), t.parse().unwrap_or(0)))) {
@@ -1576,7 +1627,9 @@ java.lang.OutOfMemoryError: Java heap space
         ui.global::<Backend>().on_win_close(move || if let Some(ui) = w.upgrade() { ui.window().dispatch_event(slint::platform::WindowEvent::CloseRequested); });
     }
     let r = slint::run_event_loop_until_quit();
-    host::shutdown();
+    party::shutdown(&shared);
+    worldshare::shutdown(&shared);
+    friends::shutdown(&shared);
     // a downloaded update installs now that the launcher is closing (Setup waits for this process to exit)
     settings::apply_pending_update(false);
     r

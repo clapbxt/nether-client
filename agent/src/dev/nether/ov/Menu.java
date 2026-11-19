@@ -21,7 +21,7 @@ final class Menu {
     static final String[] TABS = {"Favorites", "All", "HUD", "Visual", "PvP", "Utility", "Wardrobe", "HUD Editor", "Settings"};
     private static final String[] TAB_ICON = {"favorites", "all", "hud", "visual", "pvp", "utility", "wardrobe", "hudeditor", "settings"};
     /** sidebar entries from here on are the CLIENT group */
-    static final int T_WARDROBE = 6, T_HUDED = 7, T_SETTINGS = 8;
+    static final int T_WARDROBE = 6, T_HUDED = 7, T_SETTINGS = 8, T_FRIENDS = 9;
     private static int sub;
 
     static boolean hudEdit;
@@ -52,7 +52,7 @@ final class Menu {
     static boolean editing() { return hudEdit && Input.menuOpen; }
     static boolean capturing() { return capture != null; }
     /** Typed characters go to a text field (search with text or focus, a waypoint name): a letter menu key types there. */
-    static boolean textFocus() { return WpDialog.open || PackBrowser.open || fieldFocus() || (!hudEdit && !hub && tab < T_WARDROBE && (searchFocus || !search.isEmpty())); }
+    static boolean textFocus() { return WpDialog.open || WorldShare.open || PackBrowser.open || PackMixer.open || (!hub && tab == T_FRIENDS && Friends.typing) || fieldFocus() || (!hudEdit && !hub && tab < T_WARDROBE && (searchFocus || !search.isEmpty())); }
     /** A waypoint name, a text setting, a slider value, a hex colour or a profile name is being typed into. */
     static boolean fieldFocus() { return editWp >= 0 || editSet != null; }
 
@@ -69,14 +69,26 @@ final class Menu {
         return 1 - (1 - x) * (1 - x) * (1 - x);
     }
 
-    static void opened() { tS = gridT = 0; tDir = 0; pillX = -1; hub = true; drag = capture = null; searchFocus = false; scroll = scrollT = 0; fCur = -1; kbNav = false; }
+    static void opened() {
+        tS = gridT = 0; tDir = 0; pillX = -1; hub = true; drag = capture = null; searchFocus = false; scroll = scrollT = 0; fCur = -1; kbNav = false;
+        // the title screen shows the hub's actions itself (MainMenu.actions): the menu key goes straight to the mods
+        if (MainMenu.title) { hub = false; page = null; if (tab != lastCat) setTab(lastCat); }
+    }
+
+    /** Open the menu straight on screen t (the title screen's actions row). */
+    static void openAt(int t) {
+        Input.setMenu(true);
+        if (Input.menuOpen) go(t);
+    }
     static void closed() {
         commitEdit();
         drag = capture = null;
         searchFocus = false;
         hudEdit = false;
         WpDialog.open = false;
+        WorldShare.open = false;
         PackBrowser.open = false;
+        PackMixer.open = false;
         Wardrobe.ask = false;
         ColorPicker.close();
         HudEditor.reset();
@@ -252,7 +264,7 @@ final class Menu {
         if (hub) { // Left / Right / Tab move between the three buttons, Enter / Space press one (MODS when none is focused)
             if (k == 262 || k == 263 || k == 258) {
                 int d = k == 263 || (k == 258 && shift) ? -1 : 1;
-                fCur = fCur < 0 ? (d > 0 ? 0 : 2) : Math.floorMod(fCur + d, 3);
+                fCur = fCur < 0 ? (d > 0 ? 0 : 3) : Math.floorMod(fCur + d, 4);
                 kbNav = true;
             } else if (press && (k == 257 || k == 335 || k == 32)) { if (fCur < 0) fCur = 1; act = 257; kbNav = true; }
             return;
@@ -447,7 +459,7 @@ final class Menu {
         Gfx.mask("x", X_SHAPE, 16, cx - size / 2, cy - size / 2, size, col);
     }
 
-    private static void drawStar(float cx, float cy, boolean filled, int col) {
+    static void drawStar(float cx, float cy, boolean filled, int col) {
         Gfx.mask(filled ? "star" : "staro", filled ? STAR : STAR_O, 16, cx - 8, cy - 8, 16, col);
     }
 
@@ -495,8 +507,18 @@ final class Menu {
 
     // ---------------------------------------------------------------- frame
 
+    /** Open the Nether menu at a tab (the party lobby's CHANGE OUTFIT). */
+    static void openTab(int t) {
+        hub = false;
+        tab = t;
+        Input.setMenu(true);
+    }
+
     static void frame(int fbW, int fbH, float dt) {
+        Party.tick();
         MainMenu.frame(fbW, fbH);
+        WorldShare.tick();
+        Friends.tick();
         Gfx.minPx = 0;
         Gfx.s = Gfx.base;
         boolean want = Input.menuOpen;
@@ -505,6 +527,7 @@ final class Menu {
             Input.clickL = Input.clickR = false;
             Gfx.alpha = 1;
             Modules.drawHud(fbW, fbH);
+            Party.hud(fbW, fbH);
             return;
         }
         // 720-unit-tall space, never smaller than 0.8 px/unit, but the whole panel always fits the window (narrow / short windows)
@@ -535,10 +558,29 @@ final class Menu {
             evs.clear();
             typed = "";
         }
+        if (PackMixer.open) { // the pack combiner takes every key while it is up
+            for (int[] ev : evs) PackMixer.key(ev[0], ev[1] == 1, shift, ctrl);
+            if (!typed.isEmpty() && PackMixer.open) PackMixer.type(typed);
+            evs.clear();
+            typed = "";
+        }
+        if (WorldShare.open) { // the Invite to world dialog takes every key while it is up
+            for (int[] ev : evs) WorldShare.key(ev[0], ev[1] == 1, shift, ctrl);
+            if (!typed.isEmpty() && WorldShare.open) WorldShare.type(typed);
+            evs.clear();
+            typed = "";
+        }
         if (WpDialog.open) { // the waypoint dialog takes every key while it is up
             for (int[] ev : evs) WpDialog.key(ev[0], ev[1] == 1, shift, ctrl);
             if (!typed.isEmpty() && WpDialog.open) WpDialog.type(typed);
             evs.clear();
+            typed = "";
+        }
+        if (!hub && tab == T_FRIENDS && Friends.typing) { // the Friends name field takes the keys while it is focused
+            List<int[]> rest = new ArrayList<>();
+            for (int[] ev : evs) if (!Friends.key(ev[0], ev[1] == 1, ctrl)) rest.add(ev);
+            evs = rest;
+            if (!typed.isEmpty()) Friends.type(typed);
             typed = "";
         }
         for (int[] ev : evs) key(ev[0], ev[1] == 1, shift, ctrl);
@@ -553,13 +595,16 @@ final class Menu {
             HudEditor.draw(fbW, fbH, wheel, e);
         } else {
             Gfx.alpha = 1;
-            Modules.drawHud(fbW, fbH);
+            if (!MainMenu.title) Modules.drawHud(fbW, fbH); // the title screen has no game to put a HUD over
+            Party.hud(fbW, fbH);
             Gfx.alpha = e;
             Gfx.s = sc;
             Gfx.minPx = MIN_PX;
-            Gfx.round = true; // rounded panel, rows and controls (HUD modules stay square)
+            Gfx.round = Th.round(); // rounded panel, rows and controls (HUD modules stay square)
             try {
                 if (PackBrowser.open) PackBrowser.draw(e, wheel);
+                else if (PackMixer.open) PackMixer.draw(e, wheel);
+                else if (WorldShare.open) WorldShare.draw(e, wheel);
                 else if (WpDialog.open) {
                     if (!WpDialog.fromWorld()) { // opened from the menu: it stays behind the dialog, without clicks
                         boolean c0 = click, c1 = clickRt;
@@ -597,8 +642,9 @@ final class Menu {
     // ---------------------------------------------------------------- hub (menu key): fireball logo, settings / MODS / wardrobe
 
     private static void hub(float e) {
-        Gfx.rect(0, 0, W, H, 0, Gfx.a(0xFF000000, Th.light() ? 0.18f : 0.34f));
-        float lh = 150, sq = 52, mw = 232, gap = 8, rw = sq * 2 + mw + gap * 2; // fireball + NETHER CLIENT wordmark
+        // over the title screen the hub is the only thing to look at: its buttons and logo recede further
+        Gfx.rect(0, 0, W, H, 0, Gfx.a(0xFF000000, (Th.light() ? 0.18f : 0.34f) + (MainMenu.title ? 0.26f : 0)));
+        float lh = 150, sq = 52, mw = 232, gap = 8, rw = sq * 3 + mw + gap * 3; // fireball + NETHER CLIENT wordmark
         float y = (H - (lh + 24 + sq)) / 2 + (1 - e) * 14, x = (W - rw) / 2, by = y + lh + 24;
         float a0 = Gfx.alpha, kl = k(tS, 0, 0.34f), ks = k(tS, 0.12f, 0.3f), km = k(tS, 0.07f, 0.3f);
         Gfx.alpha = a0 * kl;
@@ -609,10 +655,30 @@ final class Menu {
         boolean bm = hubBtn("hm", x + sq + gap, by + (1 - km) * 14, mw, sq, null, "MODS");
         Gfx.alpha = a0 * ks;
         boolean bw = hubBtn("hw", x + sq + mw + gap * 2 + (1 - ks) * 16, by + (1 - ks) * 14, sq, sq, "wardrobe", null);
+        float fx = x + sq * 2 + mw + gap * 3 + (1 - ks) * 16, fy = by + (1 - ks) * 14;
+        boolean bf = hubBtn("hf", fx, fy, sq, sq, "friends", null);
+        int badge = Friends.badge();
+        if (badge > 0) { // requests + asks to join
+            String b = badge > 9 ? "9+" : String.valueOf(badge);
+            float bw0 = Math.max(16, Gfx.width(Gfx.UI, 10, b) + 8);
+            Gfx.rect(fx + sq - bw0 + 4, fy - 4, bw0, 16, 8, Th.ac);
+            Gfx.textC(Gfx.UI, 10, fx + sq - bw0 / 2 + 4, fy + 4, 0xFFFFFFFF, b, 0);
+        }
+        int n = Friends.everyone;
+        if (n > 0) { // live count under the buttons: green dot + "1,284 players online"
+            String t = String.format(java.util.Locale.US, "%,d", n), u = n == 1 ? "  player online" : "  players online";
+            float tw = Gfx.width(Gfx.SEMI, 12, t), uw = Gfx.width(Gfx.UI, 12, u), lx = W / 2 - (14 + tw + uw) / 2, ly = by + sq + 22 + (1 - ks) * 14;
+            Gfx.alpha = a0 * ks * 0.92f;
+            Gfx.rect(lx, ly - 5, 10, 10, 5, Gfx.a(0xFF3FB950, 0.2f));
+            Gfx.rect(lx + 2, ly - 3, 6, 6, 3, 0xFF3FB950);
+            Gfx.text(Gfx.SEMI, 12, lx + 14, ly, Th.tx, t);
+            Gfx.text(Gfx.UI, 12, lx + 14 + tw, ly, Th.dim, u);
+        }
         Gfx.alpha = a0;
         if (bs) go(T_SETTINGS);
         else if (bm) go(lastCat);
         else if (bw) go(T_WARDROBE);
+        else if (bf) go(T_FRIENDS);
     }
 
     /** Hub button: glass radius 6, hairline brightening on hover; an icon or a Nether Pixel label. */
@@ -634,6 +700,8 @@ final class Menu {
 
     private static void toHub() {
         if (!leaveOk(Menu::toHub)) return;
+        // over the title screen there is no hub (its actions are on the screen): back closes the menu
+        if (MainMenu.title) { commitEdit(); ColorPicker.close(); page = null; search = ""; searchFocus = false; capture = null; Input.setMenu(false); return; }
         commitEdit();
         ColorPicker.close();
         page = null;
@@ -644,7 +712,7 @@ final class Menu {
         hub = true;
         tS = 0;
         tDir = 0;
-        fCur = kbNav ? (tab == T_SETTINGS ? 0 : tab == T_WARDROBE ? 2 : 1) : -1;
+        fCur = kbNav ? (tab == T_SETTINGS ? 0 : tab == T_WARDROBE ? 2 : tab == T_FRIENDS ? 3 : 1) : -1;
     }
 
     /** Leave the hub for the screen of tab t. */
@@ -657,7 +725,7 @@ final class Menu {
         fCur = -1;
         tS = gridT = 0;
         pillX = -1;
-        tDir = t == T_SETTINGS ? -1 : t == T_WARDROBE ? 1 : 0;
+        tDir = t == T_SETTINGS ? -1 : t == T_WARDROBE || t == T_FRIENDS ? 1 : 0;
     }
 
     /** Module in this sidebar category (0 favourites, 1 all, 2 HUD, 3 visual, 4 PvP, 5 utility). */
@@ -693,6 +761,7 @@ final class Menu {
     private static void panel(float wheel, float e) {
         if (tab == T_SETTINGS) settingsScreen(wheel, e);
         else if (tab == T_WARDROBE) wardrobeScreen(wheel, e);
+        else if (tab == T_FRIENDS) friendsScreen(wheel, e);
         else { if (tab >= T_WARDROBE) setTab(lastCat); modsScreen(wheel, e); }
         if (tip != null) tooltip(sx);
     }
@@ -772,17 +841,34 @@ final class Menu {
         footer("Esc back");
     }
 
+    /** Friends: people + FRIENDS; status, requests, join / invite. */
+    private static void friendsScreen(float wheel, float e) {
+        float pw = Math.max(640, Math.min(820, W * 0.7f)), ph = Math.max(480, Math.min(620, H * 0.86f));
+        float hx = header(pw, ph, e, "friends", "FRIENDS");
+        Friends.header(hx, sx, sw, sy + TOP / 2f);
+        Friends.draw(sx, sy, sw, sh, TOP, FOOT, wheel);
+        footer(Friends.typing ? "Enter sends the request  ·  Esc stops typing" : "Esc back");
+    }
+
     /** Screen frame: backdrop, panel, back arrow (to the hub), mark + title, close. Returns the x after the title. */
     private static float header(float pw, float ph, float e, String icon, String title) {
-        Gfx.rect(0, 0, W, H, 0, Gfx.a(0xFF000000, Th.light() ? 0.18f : 0.34f));
+        // over the title screen the hub is the only thing to look at: its buttons and logo recede further
+        Gfx.rect(0, 0, W, H, 0, Gfx.a(0xFF000000, (Th.light() ? 0.18f : 0.34f) + (MainMenu.title ? 0.26f : 0)));
         float kk = k(tS, 0, 0.32f);
         Gfx.alpha *= kk;
         sw = pw;
         sh = ph;
         sx = (W - pw) / 2 + tDir * (1 - kk) * 70;
         sy = (H - ph) / 2 + (1 - e) * 14 + (tDir == 0 ? (1 - kk) * 26 : 0);
-        Gfx.rect(sx, sy, pw, ph, 8, Gfx.a(Th.s1, 0.80f));
-        Gfx.ring(sx, sy, pw, ph, 8, 1, Th.ln2);
+        // Glass: see-through panel, larger radius and a soft top sheen; Minecraft: near-opaque square plate with a 2 px edge
+        if (Th.round()) {
+            Gfx.rect(sx, sy, pw, ph, 14, Gfx.a(Th.s1, Th.light() ? 0.82f : 0.74f));
+            Gfx.rectG(sx, sy, pw, Math.min(ph, 180), 14, Gfx.a(0xFFFFFFFF, Th.light() ? 0.30f : 0.05f), 0);
+            Gfx.ring(sx, sy, pw, ph, 14, 1, Th.ln2);
+        } else {
+            Gfx.rect(sx, sy, pw, ph, 0, Gfx.a(Th.s1, 0.94f));
+            Gfx.ring(sx, sy, pw, ph, 0, 2, Th.ln2);
+        }
         float cy = sy + TOP / 2f;
         float bt = an("back", in(sx + 12, cy - 14, 28, 28));
         Gfx.rect(sx + 12, cy - 14, 28, 28, 4, Gfx.a(Th.ov, 0.07f * bt));
@@ -989,7 +1075,7 @@ final class Menu {
         float bx = gx + bh + 6, bw = x + w - 10 - bx;
         float bt = an("tg" + m.id, in(bx, by, bw, bh));
         Gfx.rect(bx, by, bw, bh, 5, Gfx.mix(Gfx.a(Th.ov, 0.06f + 0.05f * bt), Gfx.mix(Th.ac, Th.ac2, bt), on1));
-        Gfx.textC(Gfx.SEMI, 10, bx + bw / 2, by + bh / 2, Gfx.mix(Th.dim, Th.onAccent(), on1), on ? "ENABLED" : "DISABLED", 0.6f);
+        Gfx.textC(Gfx.SEMI, 10, bx + bw / 2, by + bh / 2, Gfx.mix(Th.dim, Th.onAccent(), on1), lock ? "UNAVAILABLE" : on ? "ENABLED" : "DISABLED", 0.6f);
         Gfx.alpha = a0;
         if (lock && hv && m.lockNote() != null) tip = m.lockNote();
         int u = used(f);
@@ -1042,7 +1128,8 @@ final class Menu {
         String nm = fit(m.name, Gfx.UI, 13, room, 0);
         float nw = Gfx.text(Gfx.UI, 13, nx, y + ROW / 2f, lock ? Th.dim : Th.tx, nm);
         float dr = room - nw - 12;
-        if (dr > 60) Gfx.text(Gfx.UI, 11, nx + nw + 12, y + ROW / 2f, Th.mut, fit(m.desc, Gfx.UI, 11, dr, 0));
+        String why = lock ? m.lockNote() : null; // locked: the reason replaces the description
+        if (dr > 60) Gfx.text(Gfx.UI, 11, nx + nw + 12, y + ROW / 2f, why != null ? Th.ac2 : Th.mut, fit(why != null ? why : m.desc, Gfx.UI, 11, dr, 0));
         Gfx.alpha = a0;
         if (lock && in(x, y, w, ROW) && m.lockNote() != null) tip = m.lockNote();
         int u = used(f), a = adjust(f);
@@ -1260,14 +1347,15 @@ final class Menu {
         float yy = top + 8 - scroll;
         // theme
         Gfx.text(Gfx.UI, 13, lx, yy + 15, Th.tx, "Theme");
-        Gfx.text(Gfx.UI, 10, lx, yy + 31, Th.mut, "The look of this menu and the launcher.");
         float cx = lx + lw - 4 * 96;
+        Gfx.text(Gfx.UI, 10, lx, yy + 31, Th.mut,
+            fit("Glass is rounded and smooth, Minecraft square and pixel. Also the launcher.", Gfx.UI, 10, cx - lx - 12, 0));
         for (int i = 0; i < 4; i++) {
             boolean sel = Th.theme == i, hv = in(cx, yy + 8, 90, 28);
             float t = an("th" + i, sel);
             Gfx.rect(cx, yy + 8, 90, 28, 4, Gfx.a(Th.ac, 0.16f * t));
             Gfx.ring(cx, yy + 8, 90, 28, 4, 1, Gfx.mix(Th.ln2, Th.ac, t));
-            Gfx.textC(Gfx.UI, 11, cx + 45, yy + 22, Gfx.mix(Th.dim, Th.tx, Math.max(t, hv ? 1 : 0)), Th.NAMES[i], 0);
+            Gfx.textC(Gfx.UI, 11, cx + 45, yy + 22, Gfx.mix(Th.dim, Th.tx, Math.max(t, hv ? 1 : 0)), Th.LABELS[i], 0);
             if (hit(cx, yy + 8, 90, 28)) Config.set("client", "theme", Th.NAMES[i]);
             cx += 96;
         }

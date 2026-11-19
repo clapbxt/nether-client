@@ -85,6 +85,8 @@ public final class Overlay {
                     if (pm != null) { Menu.page = pm.id; ColorPicker.toggle(pm, pk.substring(pk.indexOf(':') + 1)); }
                     Input.setMenu(true);
                     if (Menu.hudEdit) Menu.hudEdit = true;
+                    if ("1".equals(System.getProperty("nether.friends"))) { Menu.hub = false; Menu.tab = Menu.T_FRIENDS; } // dev: the Friends screen
+                    if ("0".equals(System.getProperty("nether.hub"))) { Menu.hub = false; if (tb != null) Menu.tab = Math.max(0, Math.min(Menu.TABS.length - 1, Integer.parseInt(tb))); } // dev: skip the hub (with -Dnether.tab)
                 }
             }
             Config.tick();

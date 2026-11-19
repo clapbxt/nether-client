@@ -93,6 +93,8 @@ pub struct LaunchOpts {
     pub quick_play: Option<QuickPlay>,
     /// Set to stop the preparation (downloads); `launch` then fails with `download::CANCELLED`.
     pub cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// Run with OptiFine (Vanilla on 1.8.9 / 1.12.2): downloaded and set up on the first launch (see `optifine`).
+    pub optifine: bool,
 }
 
 /// Where the game goes right after the title screen.
@@ -171,6 +173,8 @@ mod tests {
     fn loader_labels() {
         for l in [Loader::Vanilla, Loader::Fabric, Loader::Quilt, Loader::LegacyFabric, Loader::Forge, Loader::NeoForge] { assert_eq!(Loader::from_label(l.label()), l); }
         assert_eq!(Loader::from_label("Legacy Fabric"), Loader::LegacyFabric);
+        assert!(pre_fabric("1.8.9") && pre_fabric("1.12.2") && pre_fabric("1.13"));
+        assert!(!pre_fabric("1.14") && !pre_fabric("1.21.11") && !pre_fabric("26.3") && !pre_fabric("25w14a"));
         assert_eq!(Loader::from_label("quilt"), Loader::Quilt);
         assert_eq!(Loader::LegacyFabric.modrinth(), Some("fabric"));
         assert_eq!(Loader::Quilt.modrinth(), Some("quilt"));
@@ -212,9 +216,15 @@ fn install_mode(c: &reqwest::blocking::Client, paths: &Paths, v: &VersionJson, p
     for lib in v.libraries.iter().filter(|l| rules_allow(&l.rules)) {
         let Some(d) = &lib.downloads else {
             if let Some(base) = &lib.url {
-                let path = mojang::maven_path(&lib.name);
                 let base = if base.ends_with('/') { base.clone() } else { format!("{base}/") };
-                jobs.push(Job { url: format!("{base}{path}"), dest: paths.libraries().join(&path), sha1: lib.sha1.clone().unwrap_or_default(), natives: false });
+                if let Some(key) = natives_key(lib) {
+                    // natives-only Maven library (Legacy Fabric's lwjgl-platform): just the classifier jar
+                    let path = mojang::maven_path(&format!("{}:{key}", lib.name));
+                    jobs.push(Job { url: format!("{base}{path}"), dest: paths.libraries().join(&path), sha1: String::new(), natives: true });
+                } else if lib.natives.is_none() {
+                    let path = mojang::maven_path(&lib.name);
+                    jobs.push(Job { url: format!("{base}{path}"), dest: paths.libraries().join(&path), sha1: lib.sha1.clone().unwrap_or_default(), natives: false });
+                }
             }
             continue;
         };
@@ -294,13 +304,20 @@ fn subst(s: &str, vars: &HashMap<&str, String>) -> String {
     out
 }
 
+/// A release older than 1.14, where official Fabric has no builds (Legacy Fabric covers 1.3-1.13.2).
+pub fn pre_fabric(version: &str) -> bool {
+    let mut it = version.split('.');
+    it.next() == Some("1") && it.next().and_then(|m| m.split(|c: char| !c.is_ascii_digit()).next()?.parse::<u32>().ok()).is_some_and(|m| m < 14)
+}
+
 /// The full version JSON for an instance (vanilla merged with its loader) and the loader's pending install step.
 fn resolve(c: &reqwest::blocking::Client, paths: &Paths, loader: Loader, version: &str, game_dir: &std::path::Path, progress: &Progress) -> Result<(VersionJson, Option<crate::forge::Pending>)> {
     let v = mojang::version_json(c, paths, version)?;
     Ok(match loader {
         Loader::Vanilla => (v, None),
         Loader::Fabric | Loader::Quilt | Loader::LegacyFabric => {
-            let flavor = loader.flavor().unwrap();
+            // Fabric itself starts at 1.14: a "Fabric" 1.8.9-1.13.2 instance runs on Legacy Fabric (same mods facet)
+            let flavor = if loader == Loader::Fabric && pre_fabric(version) { crate::fabric::Flavor::LegacyFabric } else { loader.flavor().unwrap() };
             progress(&format!("Preparing {}", flavor.name()), 0.01);
             let pin = fs::read_to_string(game_dir.join(LOADER_PIN)).ok().map(|s| s.trim().to_string()).filter(|s| valid_loader_version(s));
             (crate::fabric::apply_flavor(c, flavor, v, version, pin.as_deref())?.0, None)
@@ -331,6 +348,8 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
     let c = client();
     progress("Preparing", 0.0);
     let (v, pending) = resolve(&c, paths, opts.loader, &opts.version, &opts.game_dir, &progress)?;
+    let of = if opts.optifine && opts.loader == Loader::Vanilla { Some(crate::optifine::prepare(&c, paths, &opts.version, &progress)?) } else { None };
+    let v = match &of { Some(s) => crate::optifine::apply(v, s)?, None => v };
     let cancel = opts.cancel.as_deref();
     check_cancel(cancel)?;
     let (cp, natives) = install(&c, paths, &v, &progress, cancel)?;
@@ -342,6 +361,8 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
     let java = java::find_or_install(&c, paths, &component, major, &progress, cancel)?;
     check_cancel(cancel)?;
     if let (Some(p), Some(jar)) = (pending, cp.last()) { p.run(&c, paths, &java, jar, &progress)?; }
+    // OptiFine's Patcher needs this version's client jar (the last classpath entry) and Java
+    if let (Some(s), Some(jar)) = (&of, cp.last()) { crate::optifine::patch(paths, s, &java, jar, &progress)?; }
 
     check_cancel(cancel)?;
     progress("Starting Minecraft", 0.95);

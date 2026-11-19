@@ -37,7 +37,7 @@ fn pack(id: &str, name: &str, desc: &str, mods: &[&str], groups: &[&str]) -> Net
 /// Packs bundled with the launcher.
 pub fn builtin() -> Vec<NetherPack> {
     vec![
-        pack("essentials", "Nether Essentials", "The performance core: faster rendering, lighter memory and a mod menu.", &["sodium", "lithium", "ferrite-core", "entityculling", "immediatelyfast", "modmenu"], &["hud", "qol", "menu"]),
+        pack("essentials", "Nether Essentials", "The performance core: Sodium, Lithium, FerriteCore, ModernFix and a mod menu.", &["fabric-api", "sodium", "lithium", "ferrite-core", "modernfix", "entityculling", "immediatelyfast", "dynamic-fps", "modmenu"], &["hud", "qol", "menu"]),
         pack("shaders", "Nether Shaders", "Essentials plus Iris, ready for any shader pack.", &["sodium", "iris", "lithium", "ferrite-core", "entityculling", "modmenu"], &["hud", "qol", "menu"]),
         NetherPack {
             client: Some(serde_json::json!({

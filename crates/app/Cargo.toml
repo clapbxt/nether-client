@@ -21,6 +21,9 @@ arboard = "3"
 rfd = "0.18.0"
 tray-icon = "0.26.1"
 zip = { version = "9", default-features = false, features = ["deflate"] }
+# party voice: audio devices + Opus (pure Rust, no C toolchain)
+cpal = "0.18"
+opus1 = "0.3"
 
 [build-dependencies]
 slint-build = "1"

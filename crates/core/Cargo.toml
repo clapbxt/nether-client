@@ -11,7 +11,7 @@ dev = []
 anyhow = "1"
 dirs = "5"
 flate2 = "1"
-image = { version = "0.25", default-features = false, features = ["png", "webp", "gif"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
 hex = "0.4"
 keyring = { version = "3", features = ["windows-native"] }
 md5 = "0.7"
@@ -26,6 +26,10 @@ igd-next = "0.18.0"
 base64 = "0.22"
 url = "2"
 ring = "0.17"
+# Invite to world: peer-to-peer QUIC with hole punching, relay fallback (no accounts, no port forwarding)
+iroh = "1.4"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "sync", "time", "macros"] }
+bytes = "1"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_System_SystemInformation", "Win32_UI_Shell", "Win32_Foundation"] }

@@ -37,7 +37,7 @@ component TagGrid inherits Rectangle {
         width: root.cw - 6px; height: 24px;
         property <bool> lit: t == root.hot;
         background: self.lit ? Theme.red.with-alpha(0.133) : #ffffff06;
-        border-width: 1px; border-color: self.lit ? Theme.red2.with-alpha(0.600) : #ffffff1f; border-radius: 8px;
+        border-width: 1px; border-color: self.lit ? Theme.red2.with-alpha(0.600) : #ffffff1f; border-radius: Theme.r2;
         Text { x: 8px; width: parent.width - 16px; text: t; color: parent.lit ? Theme.redtx : Theme.tx; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; overflow: elide; }
     }
 }
@@ -100,7 +100,7 @@ export component ModDetail inherits Rectangle {
         animate y { duration: Theme.slow; easing: ease-out-quint; }
         width: root.W; height: root.H;
         background: Theme.s1;
-        border-width: 1px; border-color: #ffffff26; border-radius: 8px;
+        border-width: 1px; border-color: #ffffff26; border-radius: Theme.r2;
         clip: true;
         TouchArea { scroll-event(e) => { accept } }
 
@@ -132,7 +132,7 @@ export component ModDetail inherits Rectangle {
         // close
         Rectangle {
             x: root.W - 32px - 36px; y: 24px; width: 36px; height: 36px;
-            background: cl.has-hover ? #ffffff14 : transparent; border-width: 1px; border-color: cl.has-hover ? #ffffff44 : #ffffff1a; border-radius: 8px;
+            background: cl.has-hover ? #ffffff14 : transparent; border-width: 1px; border-color: cl.has-hover ? #ffffff44 : #ffffff1a; border-radius: Theme.r2;
             animate background, border-color { duration: Theme.mid; }
             Icon { x: 12px; y: 12px; d: Ico.close; tint: cl.has-hover ? Theme.tx : Theme.dim; }
             cl := TouchArea { clicked => { Backend.detail-open = false; } }
@@ -168,7 +168,7 @@ export component ModDetail inherits Rectangle {
         if root.d.installed && root.d.file != "": Rectangle {
             x: root.W - 32px - 224px - 10px - 150px - 10px - 130px; y: 76px; width: 130px; height: 48px;
             background: un.pressed ? Theme.red.with-alpha(0.267) : (un.has-hover ? Theme.red.with-alpha(0.149) : #ffffff08);
-            border-width: 1px; border-color: un.has-hover ? Theme.red2 : Theme.red2.with-alpha(0.400); border-radius: 8px;
+            border-width: 1px; border-color: un.has-hover ? Theme.red2 : Theme.red2.with-alpha(0.400); border-radius: Theme.r2;
             animate background, border-color { duration: Theme.mid; }
             Text { text: "UNINSTALL"; color: Theme.redtx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 0.7px; horizontal-alignment: center; vertical-alignment: center; }
             un := TouchArea { mouse-cursor: pointer; clicked => { Backend.uninstall-detail(); } }
@@ -178,7 +178,7 @@ export component ModDetail inherits Rectangle {
             x: root.W - 32px - 224px - 10px - 150px; y: 76px; width: 150px; height: 48px;
             visible: root.d.page-url != "";
             background: mr.pressed ? #ffffff22 : (mr.has-hover ? #ffffff14 : #ffffff08);
-            border-width: 1px; border-color: mr.has-hover ? Theme.mut : #ffffff2e; border-radius: 8px;
+            border-width: 1px; border-color: mr.has-hover ? Theme.mut : #ffffff2e; border-radius: Theme.r2;
             animate background, border-color { duration: Theme.mid; }
             HorizontalLayout { alignment: center; spacing: 8px;
                 Text { text: "MODRINTH"; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; letter-spacing: 0.7px; vertical-alignment: center; }
@@ -190,7 +190,7 @@ export component ModDetail inherits Rectangle {
         // ---------- version strip: mod version next to game version ----------
         Rectangle {
             x: 32px; y: 148px; width: root.W - 64px; height: 58px;
-            background: #ffffff06; border-width: 1px; border-color: root.d.compat-ok == 2 ? Theme.red2.with-alpha(0.333) : #ffffff1a; border-radius: 8px;
+            background: #ffffff06; border-width: 1px; border-color: root.d.compat-ok == 2 ? Theme.red2.with-alpha(0.333) : #ffffff1a; border-radius: Theme.r2;
             Rectangle { x: 0px; width: 3px; background: root.d.compat-ok == 2 ? Theme.red2 : (root.d.compat-ok == 1 ? Theme.tx : Theme.mut); }
             Rectangle {
                 x: 20px; y: 15px; width: 7px; height: 7px;
@@ -232,7 +232,7 @@ export component ModDetail inherits Rectangle {
                     height: 136px;
                     for g[i] in root.d.gallery: Rectangle {
                         x: i * 186px; width: 174px; height: 124px; clip: true; visible: i < 4;
-                        background: #ffffff08; border-width: 1px; border-color: gt.has-hover ? Theme.mut : #ffffff1a; border-radius: 8px;
+                        background: #ffffff08; border-width: 1px; border-color: gt.has-hover ? Theme.mut : #ffffff1a; border-radius: Theme.r2;
                         Image { width: parent.width; height: parent.height; source: g; image-fit: cover; }
                         gt := TouchArea { mouse-cursor: pointer; clicked => { root.zoom = g; root.zoomed = true; } }
                     }
@@ -268,7 +268,7 @@ export component ModDetail inherits Rectangle {
                             width: (parent.width + 6px) / 4 - 6px; height: 24px;
                             property <bool> mine: v == root.inst-ver;
                             background: self.mine ? Theme.red.with-alpha(0.133) : #ffffff06;
-                            border-width: 1px; border-color: self.mine ? Theme.red2.with-alpha(0.600) : #ffffff1f; border-radius: 8px;
+                            border-width: 1px; border-color: self.mine ? Theme.red2.with-alpha(0.600) : #ffffff1f; border-radius: Theme.r2;
                             Text { text: v; color: parent.mine ? Theme.redtx : Theme.tx; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }
                         }
                     }

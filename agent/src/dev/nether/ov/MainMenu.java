@@ -21,7 +21,7 @@ final class MainMenu {
     private MainMenu() {}
 
     // before MODULE: its settings read them during class init
-    private static final String[] LAYOUTS = {"Center", "Left", "Bottom"}, STYLES = {"Solid", "Outline", "Minimal"}, LOGOS = {"Wordmark", "Mark", "Hidden"};
+    private static final String[] LAYOUTS = {"Lobby", "Center", "Left", "Bottom"}, STYLES = {"Solid", "Outline", "Minimal"}, LOGOS = {"Wordmark", "Mark", "Hidden"};
 
     static final Module MODULE = new Module("menu", "Main Menu", "Visual",
         "Nether title screen: backgrounds, layouts, quick join and your account.", false, true, 0, 0) {
@@ -44,7 +44,8 @@ final class MainMenu {
         m.add(Setting.action("folder", "Backgrounds folder", "OPEN", MenuBack::openFolder).hint("PNG, JPG or GIF (first frame).").when(img));
         m.add(Setting.action("next", "Next image", "NEXT", MenuBack::next).when(img));
         m.add(Setting.header("Layout"));
-        m.add(Setting.choice("layout", "Layout", "Center", LAYOUTS));
+        m.add(Setting.choice("layout", "Layout", "Lobby", LAYOUTS).hint("Lobby: your party on stage, Fortnite style."));
+        m.add(Setting.bool("partyStage", "Party on stage", true).hint("Lobby layout: you and your party in your skins."));
         m.add(Setting.choice("buttons", "Button style", "Solid", STYLES));
         m.add(Setting.choice("logo", "Logo", "Wordmark", LOGOS));
         m.add(Setting.bool("splash", "Splash text", true));
@@ -69,11 +70,14 @@ final class MainMenu {
     private static String splash;
 
     static final int SINGLE = 0, MULTI = 1, MODS = 2, OPTIONS = 3, QUIT = 4, NETHER = 5;
-    private static final String[] LABELS = {"SINGLEPLAYER", "MULTIPLAYER", "MODS", "OPTIONS", "QUIT", "NETHER CLIENT"};
+    // MODS (the Fabric mod list) reads MOD MENU, so it never competes with the Nether MODS in the actions row
+    private static final String[] LABELS = {"SINGLEPLAYER", "MULTIPLAYER", "MOD MENU", "OPTIONS", "QUIT", "NETHER CLIENT"};
 
     private static void look() {
         if (looked) return;
         looked = true;
+        // parties (2026-11): the Lobby layout becomes the title screen once (Config stored the old default, Center)
+        if (!Config.bool("menu", "lobbyV1", false)) { Config.set("menu", "layout", "Lobby"); Config.set("menu", "lobbyV1", true); }
         legacy = Game.legacy();
         try {
             cTitle = Game.cls(legacy ? Game.l("aya", "net.minecraft.client.gui.GuiMainMenu") : "net.minecraft.class_442");
@@ -112,7 +116,7 @@ final class MainMenu {
         boolean isTitle = cTitle.isInstance(s);
         Gfx.minPx = 9; // corner text and labels stay legible in small windows
         boolean r0 = Gfx.round;
-        Gfx.round = true; // v6: rounded buttons, chips and glass
+        Gfx.round = Th.round(); // v6: rounded buttons, chips and glass
         try {
             if (isTitle) {
                 title = true;
@@ -120,17 +124,28 @@ final class MainMenu {
                 strip(s);
                 stripped = s;
                 drawTitle(fbW, fbH, s);
+                WorldShare.title(s);
+                Friends.title(s);
+                units(Gfx.base);
+                WorldShare.card(Gfx.fbW / Gfx.s, 56);
             } else if (!Input.menuOpen && packScreen(s)) {
                 // the game's resource pack screen: a vanilla-style GET PACKS button in the footer row opens the Modrinth browser
                 packs = true;
                 units(Gfx.base);
-                if (packButton()) PackBrowser.show();
+                if (packButton("Get Packs", false)) PackBrowser.show();
+                if (packButton("Combine", true)) PackMixer.show();
             } else if (cPause != null && cPause.isInstance(s) && !Input.menuOpen && MODULE.bool("pauseButton")) {
                 // F3+Esc pauses without the menu (screenshots): no button either
                 if (legacy || !Boolean.FALSE.equals(Game.fld(s, "field_19319"))) {
                     pause = true;
                     units(Gfx.base);
-                    if (chip("pause", 12, 12, 32, "NETHER", keyName(), true, false)) Input.setMenu(true);
+                    if (chip("pause", 12, 12, 32, "NETHER", keyName(), true, false, false)) Input.setMenu(true);
+                    // singleplayer: invite friends into this world (WorldShare)
+                    if (WorldShare.server() != null) {
+                        boolean on = WorldShare.sharing();
+                        if (chip("invite", 12 + chipW("NETHER", keyName(), true) + 8, 12, 32, on ? "SHARING" : "INVITE", null, false, on, true)) WorldShare.show();
+                    }
+                    WorldShare.card(Gfx.fbW / Gfx.s, 12);
                 }
             }
         } finally {
@@ -159,17 +174,17 @@ final class MainMenu {
 
     /**
      * GET PACKS beside vanilla's Open Pack Folder / Done (150 px each, 8 px apart, centred) in the game's own button
-     * texture, fireball mark left of the label; top right when the row has no room. Units: 2 per GUI px.
+     * texture, fireball mark left of the label; top right when the row has no room. COMBINE (left = true) mirrors it
+     * left of Open Pack Folder, or sits under GET PACKS in the corner. Units: 2 per GUI px.
      */
-    private static boolean packButton() {
+    private static boolean packButton(String label, boolean left) {
         int gs = Math.max(1, Math.round(Gfx.base * 2));
         int gw = (int) Math.ceil(Gfx.fbW / (double) gs), gh = (int) Math.ceil(Gfx.fbH / (double) gs);
-        String label = "Get Packs";
         boolean vf = Vanilla.font();
         float tw = vf ? Vanilla.width(label) : Gfx.width(Gfx.SEMI, 11, label);
         float w = Math.max(160, tw + 16 + 8 + 32), h = 40;
-        float x = (gw / 2 + 162) * 2, y = (gh - (footerLayout() ? 27 : 48)) * 2;
-        if (x + w > gw * 2 - 8) { x = gw * 2 - w - 8; y = 8; }
+        float x = left ? (gw / 2 - 162) * 2 - w : (gw / 2 + 162) * 2, y = (gh - (footerLayout() ? 27 : 48)) * 2;
+        if (x < 8 || x + w > gw * 2 - 8) { x = gw * 2 - w - 8; y = left ? 8 + h + 8 : 8; }
         boolean hov = over(x, y, w, h);
         if (!Vanilla.button(x, y, w, hov)) {
             Gfx.rect(x, y, w, h, 0, hov ? 0xFF6F6F6F : 0xFF4A4A4A);
@@ -251,7 +266,7 @@ final class MainMenu {
     // ---------------------------------------------------------------- input
 
     /** boxes (framebuffer px) of our controls on vanilla's title / pause screen, from the last frame */
-    private static final float[] boxes = new float[16];
+    private static final float[] boxes = new float[48];
     private static int nb;
 
     /** Mouse press from the input chain while no Nether menu is open; true swallows it. */
@@ -264,7 +279,7 @@ final class MainMenu {
         return false;
     }
 
-    private static void box(float x, float y, float w, float h) {
+    static void box(float x, float y, float w, float h) {
         if (title || nb + 4 > boxes.length) return;
         float k = Gfx.s;
         boxes[nb++] = x * k; boxes[nb++] = y * k; boxes[nb++] = w * k; boxes[nb++] = h * k;
@@ -276,7 +291,7 @@ final class MainMenu {
     /** cursor in units of the current scale; the quick panel's rect (units) while it is open */
     private static float MX, MY;
     private static float[] modal;
-    private static boolean inModal;
+    static boolean inModal;
 
     private static void units(float k) { Gfx.s = k; MX = fx() / k; MY = fy() / k; }
 
@@ -325,7 +340,8 @@ final class MainMenu {
         float t = Config.calm() ? 1 : Math.min(1, (System.nanoTime() - shownAt) / 3.5e8f);
         float e = 1 - (float) Math.pow(1 - t, 3);
         if (t < 0.6f) click = false;
-        modal = panelOpen ? new float[] {12, 52, PW, PH} : null;
+        modal = panelOpen ? new float[] {12, 52, PW, PH} : Party.modal(W, H);
+        tip = null;
         boolean inPanel = MX >= 12 && MY >= 52 && MX < 12 + PW && MY < 52 + PH; // raw test: over() is false under the open panel
         if (panelOpen && click && !inPanel && !inside(custBox)) { panelOpen = false; click = false; modal = null; }
         account();
@@ -337,15 +353,20 @@ final class MainMenu {
         float rise = (1 - e) * 8;
         String layout = MODULE.str("layout");
         boolean accTop = true;
-        if (layout.equals("Left")) accTop = rail(W, H, screen, rise);
-        else if (layout.equals("Bottom")) dock(W, H, screen, rise);
-        else center(W, H, screen, rise);
+        // where the party chat and the PLAY card may go in this layout
+        float chatX = 30, chatBottom = H - 30, playBottom = H - 36;
+        if (layout.equals("Left")) { accTop = rail(W, H, screen, rise); chatX = Math.min(330, Math.max(270, W * 0.3f)) + 16; }
+        else if (layout.equals("Bottom")) { dock(W, H, screen, rise); chatBottom = H - 58 - 26 - 12; playBottom = H - 58 - 26 - 14; }
+        else if (layout.equals("Center")) center(W, H, screen, rise);
+        else lobby(W, H, screen, rise);
         corner(W, accTop);
         footer(W, H, layout.equals("Bottom"));
+        Party.title(W, H, chatX, chatBottom, playBottom, screen);
         Gfx.alpha = a0;
         topBar();
         if (panelOpen) panel(W, H);
         else panelA = 0;
+        if (tip != null && !panelOpen) tooltip(W, H);
         // dev: -Dnether.titleClick=<button index> presses that button once the screen has settled; -Dnether.titlePanel=1 opens the quick panel
         String dev = System.getProperty("nether.titleClick");
         if (dev != null && t >= 1 && (System.nanoTime() - shownAt) > 2e9) { System.clearProperty("nether.titleClick"); act(Integer.parseInt(dev), screen); }
@@ -385,12 +406,67 @@ final class MainMenu {
         }
     }
 
+    /**
+     * Lobby: logo and buttons in a left column, your party on the stage to the right (Party.stage), quick join (solo) or
+     * the party's PLAY card bottom right.
+     */
+    private static void lobby(float W, float H, Object scr, float rise) {
+        boolean mods = cMods != null;
+        float x = 30, bw = Math.min(220, Math.max(180, W * 0.24f)), bh = 30, gap = 6;
+        MenuBack.hgrad(0, 0, bw + 160, H, Gfx.a(Gfx.BG, 0.6f), Gfx.a(Gfx.BG, 0));
+        float sc = Math.min(0.8f, Math.max(0.6f, (H - 300) / 260f));
+        float lh = logoH(sc);
+        int rows = mods ? 4 : 3;
+        float block = lh + (lh > 0 ? 16 : 0) + rows * (bh + gap) - gap + ACT_GAP + ACT_H;
+        float y = Math.max(56, 60 + (H * 0.62f - block) * 0.35f) + rise;
+        logo(x, y, false, sc);
+        y += lh + (lh > 0 ? 16 : 0);
+        float half = (bw - gap) / 2;
+        button(SINGLE, x, y, bw, bh, true, scr); y += bh + gap;
+        button(MULTI, x, y, bw, bh, true, scr); y += bh + gap;
+        if (mods) { button(MODS, x, y, bw, bh, true, scr); y += bh + gap; }
+        button(OPTIONS, x, y, half, bh, false, scr);
+        button(QUIT, x + half + gap, y, half, bh, false, scr);
+        // in a party the online count would run into the party chat (bottom left)
+        actions(x, y + bh + ACT_GAP, bw, !Party.active(), false);
+        float sx = x + bw + 20, sw = W - sx - 16;
+        // feet stay above the PLAY card (bottom right) so nameplates never run under it
+        float stageBottom = Party.active() ? H - 36 - 96 - 10 : H - 60;
+        if (MODULE.bool("partyStage")) Party.stage(sx, 70, sw, stageBottom - 70, scr);
+        float cw = 256;
+        if (!Party.active() && W - 16 - cw > sx) QuickJoin.card(W - 16 - cw, H - 36, cw, 76, scr);
+    }
+
+    static String tip;
+    /** A tooltip near the cursor this frame (title screen). */
+    static void tip(String t) { tip = t; }
+
+    private static void tooltip(float W, float H) {
+        float w = Math.min(320, Gfx.width(Gfx.UI, 10.5f, tip) + 20), h = 24;
+        float x = Math.min(W - w - 8, MX + 14), y = Math.min(H - h - 8, MY + 18);
+        Gfx.rect(x, y, w, h, 6, Gfx.a(Gfx.CARD2, 0.97f));
+        Gfx.ring(x, y, w, h, 6, 1, Gfx.LN2);
+        Gfx.text(Gfx.UI, 10.5f, x + 10, y + h / 2, Gfx.ICE, fit(Gfx.UI, 10.5f, tip, 0, w - 20));
+    }
+
+    /** cursor (units), a click still waiting this frame, the raw cursor test, and eating the click */
+    static float mx() { return MX; }
+    static float my() { return MY; }
+    static boolean clickNow() { return click; }
+    static void eat() { click = false; }
+    static boolean overRaw(float x, float y, float w, float h) { return MX >= x && MY >= y && MX < x + w && MY < y + h; }
+    static float[] chipBox() { return partyChip; }
+    private static float[] partyChip;
+
+    /** Game loader as a label (FABRIC, FORGE, NEOFORGE, QUILT, VANILLA). */
+    static String loader() { if (loader == null) loader = loaderName(); return loader; }
+
     /** Stack: logo and buttons in a centre column, quick join bottom right when it clears the column. */
     private static void center(float W, float H, Object scr, float rise) {
         boolean mods = cMods != null;
         float bw = 232, bh = 30, gap = 6, cx = W / 2;
         int rows = mods ? 4 : 3;
-        float lh = logoH(1), block = lh + (lh > 0 ? 10 : 0) + rows * (bh + gap) - gap;
+        float lh = logoH(1), block = lh + (lh > 0 ? 10 : 0) + rows * (bh + gap) - gap + ACT_GAP + ACT_H + 22;
         float top = 60 + Math.max(0, (H - 96 - block) * 0.45f) + rise;
         // legibility scrim behind the column (any background)
         float sw = bw + 300;
@@ -403,8 +479,9 @@ final class MainMenu {
         if (mods) { button(MODS, x0, y, bw, bh, false, scr); y += bh + gap; }
         button(OPTIONS, x0, y, half, bh, false, scr);
         button(QUIT, x0 + half + gap, y, half, bh, false, scr);
+        actions(x0, y + bh + ACT_GAP, bw, true, true);
         float cw = 256;
-        if (W - 16 - cw > cx + bw / 2 + 24) QuickJoin.card(W - 16 - cw, H - 36, cw, 76, scr);
+        if (!Party.active() && W - 16 - cw > cx + bw / 2 + 24) QuickJoin.card(W - 16 - cw, H - 36, cw, 76, scr);
     }
 
     /** Rail: a left panel with logo, buttons and the account card; quick join bottom right. Returns: account goes top right. */
@@ -424,11 +501,13 @@ final class MainMenu {
         if (mods) { button(MODS, x, y, bw, bh, true, scr); y += bh + gap; }
         button(OPTIONS, x, y, half, bh, true, scr);
         button(QUIT, x + half + gap, y, half, bh, true, scr);
-        y += bh;
+        y += bh + ACT_GAP;
+        actions(x, y, bw, true, false);
+        y += ACT_H + 22;
         boolean accTop = true;
         if (MODULE.bool("account") && y + 20 < H - 34 - 44) { accTop = accountCard(x, H - 34 - 44, bw) <= 0; }
         float cw = 256;
-        if (W - 16 - cw > RW + 24) QuickJoin.card(W - 16 - cw, H - 36, cw, 76, scr);
+        if (!Party.active() && W - 16 - cw > RW + 24) QuickJoin.card(W - 16 - cw, H - 36, cw, 76, scr);
         return accTop;
     }
 
@@ -441,12 +520,64 @@ final class MainMenu {
         float gap = 8, bh = 34, bw = Math.min(156, (W - 48 - gap * (ids.length - 1)) / ids.length);
         float x = (W - (ids.length * bw + (ids.length - 1) * gap)) / 2;
         for (int id : ids) { button(id, x, by + (barH - bh) / 2, bw, bh, false, scr); x += bw + gap; }
+        float aw = 300; // the actions row sits centred just above the bar
+        actions((W - aw) / 2, by - ACT_H - 14, aw, false, true);
         float sc = Math.min(1.35f, Math.max(1, (by - 120) / 260f));
         float lh = logoH(sc);
         MenuBack.hgrad(0, 0, W * 0.55f, by, Gfx.a(Gfx.BG, 0.5f), Gfx.a(Gfx.BG, 0));
         logo(48, 56 + Math.max(0, (by - 56 - lh) * 0.5f) + rise, false, sc);
         float cw = 256;
-        if (W - 16 - cw > 48 + 280 * sc) QuickJoin.card(W - 16 - cw, by - 14, cw, 76, scr);
+        if (!Party.active() && W - 16 - cw > 48 + 280 * sc) QuickJoin.card(W - 16 - cw, by - 14, cw, 76, scr);
+    }
+
+    // ---------------------------------------------------------------- the Nether actions row
+
+    static final float ACT_H = 34, ACT_GAP = 10;
+
+    /**
+     * The Right Shift hub's actions as part of the title screen itself (2026-11-19): settings, a wide MODS, wardrobe and
+     * friends (the hub's order), with the live player count under it when `online`.
+     */
+    private static void actions(float x, float y, float w, boolean online, boolean centred) {
+        float gap = 6, sq = ACT_H, mw = w - 3 * sq - 3 * gap;
+        int go = -1;
+        if (actBtn("as", x, y, sq, sq, "settings", null, "Nether settings")) go = Menu.T_SETTINGS;
+        if (actBtn("am", x + sq + gap, y, mw, sq, null, "MODS", "Nether mods and HUD  \u00b7  " + keyName())) go = Menu.lastCat;
+        if (actBtn("aw", x + sq + mw + gap * 2, y, sq, sq, "wardrobe", null, "Wardrobe")) go = Menu.T_WARDROBE;
+        float fx = x + sq * 2 + mw + gap * 3;
+        if (actBtn("af", fx, y, sq, sq, "friends", null, "Friends")) go = Menu.T_FRIENDS;
+        int badge = Friends.badge();
+        if (badge > 0) { // requests + asks to join
+            String b = badge > 9 ? "9+" : String.valueOf(badge);
+            float bw0 = Math.max(14, Gfx.width(Gfx.UI, 9, b) + 7);
+            Gfx.rect(fx + sq - bw0 + 4, y - 4, bw0, 14, 7, Th.ac);
+            Gfx.textC(Gfx.UI, 9, fx + sq - bw0 / 2 + 4, y + 3, 0xFFFFFFFF, b, 0);
+        }
+        int n = Friends.everyone;
+        if (online && n > 0) { // green dot + "1,284 players online"
+            String t = String.format(java.util.Locale.US, "%,d", n), u = n == 1 ? "  player online" : "  players online";
+            float tw = Gfx.width(Gfx.SEMI, 10.5f, t), uw = Gfx.width(Gfx.UI, 10.5f, u);
+            float lx = centred ? x + w / 2 - (12 + tw + uw) / 2 : x + 2, ly = y + sq + 13;
+            Gfx.rect(lx, ly - 4, 8, 8, 4, Gfx.a(0xFF3FB950, 0.2f));
+            Gfx.rect(lx + 1.5f, ly - 2.5f, 5, 5, 2.5f, 0xFF3FB950);
+            Gfx.text(Gfx.SEMI, 10.5f, lx + 12, ly, Gfx.ICE, t);
+            Gfx.text(Gfx.UI, 10.5f, lx + 12 + tw, ly, Gfx.DIM, u);
+        }
+        if (go >= 0) { panelOpen = false; Menu.openAt(go); }
+    }
+
+    /** An actions-row button: the title buttons' glass with a line icon or a label, and a tooltip on hover. */
+    private static boolean actBtn(String id, float x, float y, float w, float h, String icon, String label, String tipText) {
+        boolean hv = over(x, y, w, h), down = hv && Input.btn[0];
+        float t = an(id, hv);
+        Gfx.rect(x, y, w, h, 6, down ? Gfx.S3 : Gfx.mix(Gfx.a(Gfx.CARD, 0.8f), Gfx.CARD2, t));
+        Gfx.ring(x, y, w, h, 6, 1, Gfx.mix(Gfx.LN, Gfx.LN2, t));
+        int c = Gfx.mix(Gfx.DIM, Gfx.ICE, 0.45f + 0.55f * t);
+        float dy = down ? 1 : 0;
+        if (icon != null) ModIcons.draw(icon, x + w / 2 - 9, y + h / 2 - 9 + dy, 18, c);
+        else Gfx.textC(Gfx.SEMI, 13, x + w / 2, y + h / 2 + dy, c, label, 0);
+        if (hv && tipText != null) tip(tipText);
+        return hit(x, y, w, h);
     }
 
     /**
@@ -554,6 +685,7 @@ final class MainMenu {
                 Object ses = Game.call(Game.mc(), legacy ? Game.l("L", "func_110432_I") : "method_1548");
                 accName = str(Game.call(ses, legacy ? Game.l("c", "func_111285_a") : "method_1676"));
                 Object u = Game.call(ses, legacy ? Game.l("b", "func_148255_b") : "method_44717");
+                if (u == null && !legacy) u = Game.call(ses, "method_1673"); // before 1.19: the uuid string
                 if (u != null) accUuid = String.valueOf(u).replace("-", "").toLowerCase(Locale.ROOT);
             } catch (Throwable ignored) { }
         }
@@ -635,7 +767,9 @@ final class MainMenu {
         float x = 12, y = 12, h = 32;
         float w = chipW("CUSTOMISE", null, false) + 18;
         custBox = new float[] {x, y, w, h};
-        if (chip("cust", x, y, h, "CUSTOMISE", null, false, panelOpen)) panelOpen = !panelOpen;
+        if (chip("cust", x, y, h, "CUSTOMISE", null, false, panelOpen, false)) { panelOpen = !panelOpen; Party.drawerOpen = false; }
+        float pw = Party.chip(x + w + 8, y, h);
+        partyChip = pw > 0 ? new float[] {x + w + 8, y, pw, h} : null;
     }
 
     private static float chipW(String label, String key, boolean mark) {
@@ -647,7 +781,7 @@ final class MainMenu {
      * Small top-bar button: NETHER (ghast mark + key chip, red) or a neutral one with a settings glyph; drawn the same on
      * the title and pause screens. Returns true when clicked.
      */
-    private static boolean chip(String id, float x, float y, float h, String label, String key, boolean mark, boolean active) {
+    private static boolean chip(String id, float x, float y, float h, String label, String key, boolean mark, boolean active, boolean person) {
         float kw = key != null ? Gfx.width(Gfx.UI, 10, key) + 12 : 0;
         float w = chipW(label, key, mark) + (mark ? 0 : 18);
         float t = an(id, over(x, y, w, h) || active);
@@ -655,6 +789,15 @@ final class MainMenu {
         Gfx.ring(x, y, w, h, 6, 1, Gfx.mix(Gfx.LN2, Gfx.a(Gfx.ICE, 0.4f), t));
         float tx = x + 12;
         if (mark) { mark(tx, y + (h - 16.5f) / 2, 14); tx += 22; }
+        else if (person) { // a person with a plus (Invite to world)
+            int c = active ? Th.ac2 : Gfx.mix(Gfx.DIM, Gfx.ICE, t);
+            float cy = y + h / 2;
+            Gfx.rect(tx + 2, cy - 7, 5.5f, 5.5f, 2.75f, c);
+            Gfx.rect(tx, cy, 9.5f, 6, 3, c);
+            Gfx.rect(tx + 11, cy - 2.6f, 5, 1.4f, 0.7f, c);
+            Gfx.rect(tx + 12.8f, cy - 4.4f, 1.4f, 5, 0.7f, c);
+            tx += 18;
+        }
         else { // three sliders
             int c = Gfx.mix(Gfx.DIM, Gfx.ICE, t);
             for (int i = 0; i < 3; i++) {
@@ -755,7 +898,7 @@ final class MainMenu {
     }
 
     static void open(Object mc, Object screen) {
-        if (screen != null) Game.call(mc, legacy ? Game.l("a", "func_147108_a") : "method_1507", screen);
+        if (screen != null) Game.setScreen(screen);
     }
 
     /**

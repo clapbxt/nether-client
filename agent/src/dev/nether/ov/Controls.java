@@ -117,7 +117,7 @@ final class Controls {
         Field kf = opts == null ? null : Game.field(opts.getClass(), legacy ? Game.l("aw", "field_151456_ac") : "field_1839");
         if (kf == null) return null;
         Object arr = kf.get(opts);
-        Object keysym = legacy ? null : Game.field(Game.cls("net.minecraft.class_3675$class_307"), "field_1668").get(null);
+        Object keysym = legacy ? null : Game.cls("net.minecraft.class_3675$class_307").getEnumConstants()[0]; // KEYSYM, KEYBOARD on 26.3+
         Map<String, String> lang = legacy ? null : lang();
         List<Object[]> out = new ArrayList<>();
         for (int i = 0, n = Array.getLength(arr); i < n; i++) {
@@ -132,7 +132,7 @@ final class Controls {
                 Object key = Game.fld(k, "field_1655");
                 if (key == null || Game.call(key, "method_1442") != keysym) continue; // mouse buttons
                 Object c = Game.call(key, "method_1444");
-                if (c instanceof Integer) code = (Integer) c;
+                if (c instanceof Integer) code = Keys.fromGame((Integer) c);
             }
             if (code < 0) continue;
             String name = lang != null ? lang.get(id) : null;

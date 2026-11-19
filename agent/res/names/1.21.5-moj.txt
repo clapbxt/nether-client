@@ -1,0 +1,239 @@
+field_1329	location	Lnet/minecraft/world/phys/Vec3;
+field_1350	z	D
+field_1351	y	D
+field_1352	x	D
+field_1655	key	Lcom/mojang/blaze3d/platform/InputConstants$Key;
+field_1656	CATEGORY_SORT_ORDER	Ljava/util/Map;
+field_1668	KEYSYM	Lcom/mojang/blaze3d/platform/InputConstants$Type;
+field_1687	level	Lnet/minecraft/client/multiplayer/ClientLevel;
+field_1690	options	Lnet/minecraft/client/Options;
+field_1704	window	Lcom/mojang/blaze3d/platform/Window;
+field_1705	gui	Lnet/minecraft/client/gui/Gui;
+field_1708	fontManager	Lnet/minecraft/client/gui/font/FontManager;
+field_1724	player	Lnet/minecraft/client/player/LocalPlayer;
+field_1755	screen	Lnet/minecraft/client/gui/screens/Screen;
+field_1765	hitResult	Lnet/minecraft/world/phys/HitResult;
+field_1773	gameRenderer	Lnet/minecraft/client/renderer/GameRenderer;
+field_17772	fadeInStart	J
+field_18222	fading	Z
+field_1826	fov	Lnet/minecraft/client/OptionInstance;
+field_1838	chatHeightFocused	Lnet/minecraft/client/OptionInstance;
+field_1839	keyMappings	[Lnet/minecraft/client/KeyMapping;
+field_1840	gamma	Lnet/minecraft/client/OptionInstance;
+field_1842	hideGui	Z
+field_1843	sensitivity	Lnet/minecraft/client/OptionInstance;
+field_1849	keyRight	Lnet/minecraft/client/KeyMapping;
+field_18712	position	Lnet/minecraft/world/phys/Vec3;
+field_18717	xRot	F
+field_18718	yRot	F
+field_1881	keyDown	Lnet/minecraft/client/KeyMapping;
+field_1894	keyUp	Lnet/minecraft/client/KeyMapping;
+field_1903	keyJump	Lnet/minecraft/client/KeyMapping;
+field_1908	chatScale	Lnet/minecraft/client/OptionInstance;
+field_1913	keyLeft	Lnet/minecraft/client/KeyMapping;
+field_1915	chatWidth	Lnet/minecraft/client/OptionInstance;
+field_19319	showPauseMenu	Z
+field_2021	chat	Lnet/minecraft/client/gui/components/ChatComponent;
+field_2064	trimmedMessages	Ljava/util/List;
+field_21444	NO_OVERLAY	I
+field_2259	fontSets	Ljava/util/Map;
+field_24360	EMPTY	Lnet/minecraft/network/chat/Style;
+field_2586	splash	Lnet/minecraft/client/gui/components/SplashRenderer;
+field_26665	THIRD_PERSON_BACK	Lnet/minecraft/client/CameraType;
+field_26666	THIRD_PERSON_FRONT	Lnet/minecraft/client/CameraType;
+field_27433	leftArm	Lnet/minecraft/client/model/geom/ModelPart;
+field_33816	renderables	Ljava/util/List;
+field_3391	body	Lnet/minecraft/client/model/geom/ModelPart;
+field_3392	rightLeg	Lnet/minecraft/client/model/geom/ModelPart;
+field_3397	leftLeg	Lnet/minecraft/client/model/geom/ModelPart;
+field_3401	rightArm	Lnet/minecraft/client/model/geom/ModelPart;
+field_34801	keyBindsList	Lnet/minecraft/client/gui/screens/options/controls/KeyBindsList;
+field_3752	name	Ljava/lang/String;
+field_3761	ip	Ljava/lang/String;
+field_37868	value	Ljava/lang/Object;
+field_4019	fovModifier	F
+field_44666	splash	Ljava/lang/String;
+field_45607	skinLookup	Ljava/util/function/Supplier;
+field_4687	playerRenderers	Ljava/util/Map;
+field_4738	layers	Ljava/util/List;
+field_5330	storage	Ljava/util/Map;
+field_53325	x	D
+field_53326	y	D
+field_53327	z	D
+field_53333	isInvisible	Z
+field_53446	bodyRot	F
+field_53467	headItem	Lnet/minecraft/client/renderer/item/ItemStackRenderState;
+field_53528	id	I
+field_53542	isSpectator	Z
+field_55309	headEquipment	Lnet/minecraft/world/item/ItemStack;
+field_5918	FIRE_RESISTANCE	Lnet/minecraft/core/Holder;
+field_5965	xRot	F
+field_5969	zo	D
+field_6014	xo	D
+field_6031	yRot	F
+field_6036	yo	D
+field_6169	HEAD	Lnet/minecraft/world/entity/EquipmentSlot;
+field_6220	yBodyRotO	F
+field_6235	hurtTime	I
+field_6283	yBodyRot	F
+field_7477	instabuild	Z
+field_7503	abilities	Lnet/minecraft/world/entity/player/Abilities;
+field_7514	inventory	Lnet/minecraft/world/entity/player/Inventory;
+field_8255	SHIELD	Lnet/minecraft/world/item/Item;
+method_10517	getInstance	()Lnet/minecraft/locale/Language;
+method_10851	getContents	()Lnet/minecraft/network/chat/ComponentContents;
+method_10852	append	(Lnet/minecraft/network/chat/Component;)Lnet/minecraft/network/chat/MutableComponent;
+method_10862	setStyle	(Lnet/minecraft/network/chat/Style;)Lnet/minecraft/network/chat/MutableComponent;
+method_11022	getKey	()Ljava/lang/String;
+method_1422	setKey	(Lcom/mojang/blaze3d/platform/InputConstants$Key;)V
+method_1426	resetMapping	()V
+method_1442	getType	()Lcom/mojang/blaze3d/platform/InputConstants$Type;
+method_1444	getValue	()I
+method_1447	getOrCreate	(I)Lcom/mojang/blaze3d/platform/InputConstants$Key;
+method_150	getLevelName	()Ljava/lang/String;
+method_1507	setScreen	(Lnet/minecraft/client/gui/screens/Screen;)V
+method_1531	getTextureManager	()Lnet/minecraft/client/renderer/texture/TextureManager;
+method_1548	getUser	()Lnet/minecraft/client/User;
+method_1555	showOnlyReducedInfo	()Z
+method_1558	getCurrentServer	()Lnet/minecraft/client/multiplayer/ServerData;
+method_1561	getEntityRenderDispatcher	()Lnet/minecraft/client/renderer/entity/EntityRenderDispatcher;
+method_1562	getConnection	()Lnet/minecraft/client/multiplayer/ClientPacketListener;
+method_1576	getSingleplayerServer	()Lnet/minecraft/client/server/IntegratedServer;
+method_1592	stop	()V
+method_1676	getName	()Ljava/lang/String;
+method_17165	getParentModel	()Lnet/minecraft/client/model/EntityModel;
+method_1743	getChat	()Lnet/minecraft/client/gui/components/ChatComponent;
+method_17783	getType	()Lnet/minecraft/world/phys/HitResult$Type;
+method_1812	addMessage	(Lnet/minecraft/network/chat/Component;)V
+method_18456	players	()Ljava/util/List;
+method_19325	setRotation	(FF)V
+method_19418	getMainCamera	()Lnet/minecraft/client/Camera;
+method_22683	getWindow	()Lcom/mojang/blaze3d/platform/Window;
+method_22703	translateAndRotate	(Lcom/mojang/blaze3d/vertex/PoseStack;)V
+method_22903	pushPose	()V
+method_22904	translate	(DDD)V
+method_22909	popPose	()V
+method_22976	renderHandsWithItems	(FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource$BufferSource;Lnet/minecraft/client/player/LocalPlayer;I)V
+method_23070	renderFire	(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;)V
+method_23317	getX	()D
+method_23318	getY	()D
+method_23321	getZ	()D
+method_23500	renderType	(Lnet/minecraft/resources/ResourceLocation;)Lnet/minecraft/client/renderer/RenderType;
+method_23580	entityTranslucent	(Lnet/minecraft/resources/ResourceLocation;)Lnet/minecraft/client/renderer/RenderType;
+method_23760	last	()Lcom/mojang/blaze3d/vertex/PoseStack$Pose;
+method_23761	pose	()Lorg/joml/Matrix4f;
+method_23767	rotation	()Lorg/joml/Quaternionf;
+method_23919	addVertex	(FFFIFFIIFFF)V
+method_25448	armorCutoutNoCull	(Lnet/minecraft/resources/ResourceLocation;)Lnet/minecraft/client/renderer/RenderType;
+method_27693	append	(Ljava/lang/String;)Lnet/minecraft/network/chat/MutableComponent;
+method_27704	withFont	(Lnet/minecraft/resources/ResourceLocation;)Lnet/minecraft/network/chat/Style;
+method_27728	getWorldData	()Lnet/minecraft/world/level/storage/WorldData;
+method_27983	dimension	()Lnet/minecraft/resources/ResourceKey;
+method_2838	getHead	()Lnet/minecraft/client/model/geom/ModelPart;
+method_2871	getPlayerInfo	(Ljava/util/UUID;)Lnet/minecraft/client/multiplayer/PlayerInfo;
+method_2880	getOnlinePlayers	()Ljava/util/Collection;
+method_29177	location	()Lnet/minecraft/resources/ResourceLocation;
+method_2950	parseString	(Ljava/lang/String;)Lnet/minecraft/client/multiplayer/resolver/ServerAddress;
+method_2959	getLatency	()I
+method_2966	getProfile	()Lcom/mojang/authlib/GameProfile;
+method_31043	setCameraType	(Lnet/minecraft/client/CameraType;)V
+method_31044	getCameraType	()Lnet/minecraft/client/CameraType;
+method_31548	getInventory	()Lnet/minecraft/world/entity/player/Inventory;
+method_31549	getAbilities	()Lnet/minecraft/world/entity/player/Abilities;
+method_3196	getFov	(Lnet/minecraft/client/Camera;FZ)F
+method_3228	renderArmWithItem	(Lnet/minecraft/client/player/AbstractClientPlayer;FFLnet/minecraft/world/InteractionHand;FLnet/minecraft/world/item/ItemStack;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V
+method_36139	withColor	(I)Lnet/minecraft/network/chat/Style;
+method_36454	getYRot	()F
+method_36455	getXRot	()F
+method_36877	startConnecting	(Lnet/minecraft/client/gui/screens/Screen;Lnet/minecraft/client/Minecraft;Lnet/minecraft/client/multiplayer/resolver/ServerAddress;Lnet/minecraft/client/multiplayer/ServerData;ZLnet/minecraft/client/multiplayer/TransferState;)V
+method_37067	clearWidgets	()V
+method_3734	getCommands	()Lnet/minecraft/commands/Commands;
+method_3739	createCommandSourceStack	()Lnet/minecraft/commands/CommandSourceStack;
+method_3865	getLevelIdName	()Ljava/lang/String;
+method_4054	render	(Lnet/minecraft/client/renderer/entity/state/LivingEntityRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;I)V
+method_4055	shouldShowName	(Lnet/minecraft/world/entity/LivingEntity;D)Z
+method_41735	createWorldOpenFlows	()Lnet/minecraft/client/gui/screens/worldselection/WorldOpenFlows;
+method_4309	read	(Ljava/io/InputStream;)Lcom/mojang/blaze3d/platform/NativeImage;
+method_43470	literal	(Ljava/lang/String;)Lnet/minecraft/network/chat/MutableComponent;
+method_43473	empty	()Lnet/minecraft/network/chat/MutableComponent;
+method_44252	performPrefixedCommand	(Lnet/minecraft/commands/CommandSourceStack;Ljava/lang/String;)V
+method_44382	setScrollAmount	(D)V
+method_44717	getProfileId	()Ljava/util/UUID;
+method_4495	getGuiScale	()D
+method_4616	register	(Lnet/minecraft/resources/ResourceLocation;Lnet/minecraft/client/renderer/texture/AbstractTexture;)V
+method_46416	translate	(FFF)V
+method_48559	isInfiniteDuration	()Z
+method_53526	getDebugOverlay	()Lnet/minecraft/client/gui/components/DebugScreenOverlay;
+method_53536	showDebugScreen	()Z
+method_5438	getItem	(I)Lnet/minecraft/world/item/ItemStack;
+method_5439	getContainerSize	()I
+method_5476	getDisplayName	()Lnet/minecraft/network/chat/Component;
+method_5477	getName	()Lnet/minecraft/network/chat/Component;
+method_5578	getAmplifier	()I
+method_5584	getDuration	()I
+method_5586	getDescriptionId	()Ljava/lang/String;
+method_5591	isAmbient	()Z
+method_5628	getId	()I
+method_5667	getUUID	()Ljava/util/UUID;
+method_5767	isInvisible	()Z
+method_5854	getVehicle	()Lnet/minecraft/world/entity/Entity;
+method_5864	getType	()Lnet/minecraft/world/entity/EntityType;
+method_5872	turn	(DD)V
+method_5890	getKey	(Lnet/minecraft/world/entity/EntityType;)Lnet/minecraft/resources/ResourceLocation;
+method_6026	getActiveEffects	()Ljava/util/Collection;
+method_6032	getHealth	()F
+method_6059	hasEffect	(Lnet/minecraft/core/Holder;)Z
+method_60655	fromNamespaceAndPath	(Ljava/lang/String;Ljava/lang/String;)Lnet/minecraft/resources/ResourceLocation;
+method_6118	getItemBySlot	(Lnet/minecraft/world/entity/EquipmentSlot;)Lnet/minecraft/world/item/ItemStack;
+method_62425	createRenderState	(Lnet/minecraft/world/entity/Entity;F)Lnet/minecraft/client/renderer/entity/state/EntityRenderState;
+method_65606	isEmpty	()Z
+method_7299	decorateDisplayNameComponent	(Lnet/minecraft/network/chat/MutableComponent;)Lnet/minecraft/network/chat/MutableComponent;
+method_7325	isSpectator	()Z
+method_7331	respawn	()V
+method_7334	getGameProfile	()Lcom/mojang/authlib/GameProfile;
+method_7909	getItem	()Lnet/minecraft/world/item/Item;
+method_7919	getDamageValue	()I
+method_7936	getMaxDamage	()I
+method_7947	getCount	()I
+method_7960	isEmpty	()Z
+method_7963	isDamageableItem	()Z
+method_7964	getHoverName	()Lnet/minecraft/network/chat/Component;
+method_8532	getDayTime	()J
+method_9249	performCommand	(Lcom/mojang/brigadier/ParseResults;Ljava/lang/String;)V
+net.minecraft.class_1011	com.mojang.blaze3d.platform.NativeImage	
+net.minecraft.class_10197	net.minecraft.client.renderer.entity.layers.EquipmentLayerRenderer	
+net.minecraft.class_1043	net.minecraft.client.renderer.texture.DynamicTexture	
+net.minecraft.class_1294	net.minecraft.world.effect.MobEffects	
+net.minecraft.class_1297	net.minecraft.world.entity.Entity	
+net.minecraft.class_1299	net.minecraft.world.entity.EntityType	
+net.minecraft.class_1304	net.minecraft.world.entity.EquipmentSlot	
+net.minecraft.class_1657	net.minecraft.world.entity.player.Player	
+net.minecraft.class_1802	net.minecraft.world.item.Items	
+net.minecraft.class_1921	net.minecraft.client.renderer.RenderType	
+net.minecraft.class_2477	net.minecraft.locale.Language	
+net.minecraft.class_2561	net.minecraft.network.chat.Component	
+net.minecraft.class_2583	net.minecraft.network.chat.Style	
+net.minecraft.class_2960	net.minecraft.resources.ResourceLocation	
+net.minecraft.class_310	net.minecraft.client.Minecraft	
+net.minecraft.class_338	net.minecraft.client.gui.components.ChatComponent	
+net.minecraft.class_3675$class_307	com.mojang.blaze3d.platform.InputConstants$Type	
+net.minecraft.class_3887	net.minecraft.client.renderer.entity.layers.RenderLayer	
+net.minecraft.class_408	net.minecraft.client.gui.screens.ChatScreen	
+net.minecraft.class_412	net.minecraft.client.gui.screens.ConnectScreen	
+net.minecraft.class_4184	net.minecraft.client.Camera	
+net.minecraft.class_429	net.minecraft.client.gui.screens.options.OptionsScreen	
+net.minecraft.class_433	net.minecraft.client.gui.screens.PauseScreen	
+net.minecraft.class_442	net.minecraft.client.gui.screens.TitleScreen	
+net.minecraft.class_4587	com.mojang.blaze3d.vertex.PoseStack	
+net.minecraft.class_4603	net.minecraft.client.renderer.ScreenEffectRenderer	
+net.minecraft.class_4608	net.minecraft.client.renderer.texture.OverlayTexture	
+net.minecraft.class_500	net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen	
+net.minecraft.class_526	net.minecraft.client.gui.screens.worldselection.SelectWorldScreen	
+net.minecraft.class_5498	net.minecraft.client.CameraType	
+net.minecraft.class_639	net.minecraft.client.multiplayer.resolver.ServerAddress	
+net.minecraft.class_642	net.minecraft.client.multiplayer.ServerData	
+net.minecraft.class_6599	net.minecraft.client.gui.screens.options.controls.KeyBindsScreen	
+net.minecraft.class_757	net.minecraft.client.renderer.GameRenderer	
+net.minecraft.class_759	net.minecraft.client.renderer.ItemInHandRenderer	
+net.minecraft.class_897	net.minecraft.client.renderer.entity.EntityRenderer	
+net.minecraft.class_922	net.minecraft.client.renderer.entity.LivingEntityRenderer	

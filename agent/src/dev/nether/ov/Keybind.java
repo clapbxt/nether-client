@@ -27,7 +27,7 @@ final class Keybind {
 
     /** Per frame; does work four times a second. */
     static void tick() {
-        if (dead || Plat.cur.sdl()) return; // SDL: binding codes are scancodes, the Controls entry would be wrong
+        if (dead) return; // SDL builds (26.3+) bind scancodes: Keys.toGame / fromGame convert
         long now = System.currentTimeMillis();
         if (now < next) return;
         next = now + 250;
@@ -58,11 +58,11 @@ final class Keybind {
         Object mc = Game.mc();
         if (devStep == 8) {
             devScreen = Game.cls("net.minecraft.class_6599").getConstructors()[0].newInstance(null, Game.fld(mc, "field_1690"));
-            Game.call(mc, "method_1507", devScreen);
+            Game.setScreen(devScreen);
         }
         if (devStep == 12) Game.call(Game.fld(devScreen, "field_34801"), "method_44382", 1e6);
         if (devStep == 40 && p.length() > 1) {
-            Game.call(kb, "method_1422", Game.call(keysym, "method_1447", Integer.parseInt(p)));
+            Game.call(kb, "method_1422", Game.call(keysym, "method_1447", Keys.toGame(Integer.parseInt(p))));
             Game.stat(kbClass, "method_1426");
         }
     }
@@ -71,7 +71,7 @@ final class Keybind {
     static boolean listening() {
         if (kb == null || dead) return false;
         try {
-            Object scr = screenField.get(Game.mc());
+            Object scr = screenField.get(Game.screenOwner());
             if (scr == null) return false;
             for (Class<?> k = scr.getClass(); k != null && k != Object.class; k = k.getSuperclass())
                 for (Field f : k.getDeclaredFields()) {
@@ -90,7 +90,7 @@ final class Keybind {
         if (!legacy && !Game.fabric()) { if (Game.unavailable()) dead = true; return; }
         Object opts = Game.fld(mc, legacy ? Game.l("t", "field_71474_y") : "field_1690");
         Field keys = opts == null ? null : Game.field(opts.getClass(), legacy ? Game.l("aw", "field_151456_ac") : "field_1839");
-        screenField = Game.field(mc.getClass(), legacy ? Game.l("m", "field_71462_r") : "field_1755");
+        screenField = Game.screenField(); // Minecraft.screen, or Gui.screen on 26.3+
         if (keys == null || screenField == null) throw new IllegalStateException("options not found");
         Object arr = keys.get(opts);
         kbClass = arr.getClass().getComponentType();
@@ -99,14 +99,14 @@ final class Keybind {
             // 1.8.9 shows untranslated names as they are
             k = kbClass.getConstructor(String.class, int.class, String.class).newInstance("Open Menu", Keys.toLwjgl(344), "Nether Client");
         } else {
-            keysym = Game.field(Game.cls("net.minecraft.class_3675$class_307"), "field_1668").get(null);
+            keysym = Game.cls("net.minecraft.class_3675$class_307").getEnumConstants()[0]; // KEYSYM, KEYBOARD on 26.3+
             Class<?> cat = null;
             try { cat = Game.cls("net.minecraft.class_304$class_11900"); } catch (ClassNotFoundException e) { }
             if (cat != null) {
                 Object id = Game.stat(Game.cls("net.minecraft.class_2960"), "method_60655", "nether", "client");
                 Object c = Game.stat(cat, "method_74698", id);
                 if (c == null) throw new IllegalStateException("category");
-                k = kbClass.getConstructor(String.class, int.class, cat).newInstance(ID, 344, c);
+                k = kbClass.getConstructor(String.class, int.class, cat).newInstance(ID, Keys.toGame(344), c); // R-Shift (SDL scancode on 26.3+)
             } else {
                 // before 1.21.9: string categories with a sort-order map that must know ours
                 Field order = Game.field(kbClass, "field_1656");
@@ -135,7 +135,7 @@ final class Keybind {
         Object key = Game.fld(kb, "field_1655");
         if (Game.call(key, "method_1442") != keysym) return -1;
         Object c = Game.call(key, "method_1444");
-        return c instanceof Integer ? (Integer) c : -1;
+        return c instanceof Integer ? Keys.fromGame((Integer) c) : -1;
     }
 
     private static void bind(int glfw) {
@@ -145,7 +145,9 @@ final class Keybind {
             Game.call(kb, Game.l("b", "func_151462_b"), lw);
             Game.stat(kbClass, Game.l("b", "func_74508_b"));
         } else {
-            Object key = Game.call(keysym, "method_1447", glfw);
+            int code = Keys.toGame(glfw);
+            if (code < 0) return;
+            Object key = Game.call(keysym, "method_1447", code);
             if (key == null) return;
             Game.call(kb, "method_1422", key);
             Game.stat(kbClass, "method_1426");

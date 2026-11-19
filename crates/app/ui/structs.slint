@@ -7,7 +7,11 @@ export struct Inst { name: string, title: string, kind: string, ver: string, loa
     // starting = being prepared / launched (PLAY shows STARTING), stopping = asked to close (STOP shows STOPPING)
     starting: bool, stopping: bool,
     // L2: group ("" = none), notes, last session crashed, restore points (auto before launch weekly, automatic ones kept)
-    group: string, notes: string, crashed: bool, bk-auto: bool, bk-keep: int }
+    group: string, notes: string, crashed: bool, bk-auto: bool, bk-keep: int,
+    // Play: a Nether profile (the Nether client runs) or plain Minecraft; pack = the modpack it came from ("" = none)
+    nether: bool, pack: string,
+    // OptiFine on (Vanilla 1.8.9 / 1.12.2 Nether profiles): "" off, "on" = the launch sets it up
+    optifine: string }
 // a pickable icon (block texture) or wallpaper (version panorama)
 export struct Art { key: string, label: string, img: image }
 // a downloadable mod version (for the version picker)
@@ -24,7 +28,8 @@ export struct Acct { uuid: string, name: string, active: bool }
 // Settings > Java: one major version, what the launcher will run for it (custom = picked by the user)
 export struct JavaRt { major: int, title: string, sub: string, custom: bool }
 // one Home news line (live: Minecraft releases/snapshots, Fabric loader)
-export struct News { tag: string, title: string, url: string }
+// img = the release art from Mojang's launcher feed (has-img false: our banner)
+export struct News { tag: string, title: string, url: string, img: image, has-img: bool }
 // a world (or, server: true, a saved server; folder = its address) in an instance; sub = mode · version · last played · size
 export struct WorldRow { folder: string, name: string, sub: string, icon: image, has-icon: bool, hardcore: bool, server: bool, status: string, online: bool }
 // a screenshot thumbnail (screenshots tab)
@@ -45,6 +50,11 @@ export struct Row { id: string, name: string, sub: string, meta: string, ver: st
     vid: string, vlabels: [string], vids: [string], pick: int, busy: bool, prog: float, path: string, sel: bool, cjk: bool }
 
 export struct Link { k: string, url: string }
+// one-click presets on Home (crates/app/src/presets.rs); have = its instance exists
+export struct PresetRow { id: string, title: string, sub: string, ver: string, have: bool }
+// Play > Nether: one version family card (crates/app/src/presets.rs). vers = patches newest first, fvers = the ones
+// with Fabric; pano = the family's title panorama; tag = a short badge ("NEW", "PVP")
+export struct Card { fam: string, name: string, tag: string, vers: [string], fvers: [string], pano: image, has-pano: bool, optifine: bool }
 // Modrinth-style project page: header, version strip, description + sidebar (compatibility, categories, links, details)
 export struct Detail {
     id: string, title: string, summary: string, desc: string, author: string, downloads: string, followers: string,
@@ -68,6 +78,28 @@ export struct InstRow { idx: int, head: string, n: int, folded: bool, num: int }
 export struct PalRow { kind: string, title: string, sub: string }
 export global Backend {
     in-out property <[Inst]> instances;
+    in-out property <[PresetRow]> presets;
+    callback preset-play(string);
+    // Play page: 0 Nether, 1 Vanilla (plain Minecraft, any loader), 2 Modpacks
+    in-out property <int> play-tab: 0;
+    in-out property <[Card]> cards;
+    // the picked card: family, how to play (0 Nether, 1 Nether + Fabric), patch; inst / inst-idx = its profile once made
+    // (set by Rust from card-pick)
+    in-out property <string> card-fam;
+    in-out property <int> card-loader: 0;
+    in-out property <string> card-ver;
+    in-out property <string> card-inst;
+    in-out property <int> card-idx: -1;
+    in-out property <Card> card-cur;
+    in-out property <int> card-vi: 0;
+    callback card-pick(string, int, string);
+    callback card-play();
+    // the create wizard makes a Nether profile (only Nether / Nether + Fabric on supported versions)
+    in-out property <bool> create-nether: true;
+    in-out property <[string]> nether-versions;
+    in-out property <[string]> nether-fabric-versions;
+    in-out property <[string]> nether-forge-versions;
+
     in-out property <string> toast-text;
     in-out property <bool> toast-on;
     // toast-err: the toast reports a failure (stays longer, marked red)
@@ -410,102 +442,20 @@ export global Backend {
 }
 
 
-// Host page (crates/app/src/host.rs). One server runs at a time.
-export struct HostPlayer { name: string, op: bool, wl: bool }
-export struct HostBackup { name: string, size: string, date: string }
-// one server in the picker; status as HostState.status
-export struct HostServer { name: string, meta: string, status: int, players: int }
-// console line; k: 0 output, 1 warning/error, 2 typed command
-export struct ConLine { t: string, k: int }
-export global HostState {
-    // every server (crates/app/src/host.rs); idx = the one the page shows
-    in-out property <[HostServer]> servers;
-    in-out property <int> idx: -1;
-    // servers running right now (feeds the bottom deck)
-    in-out property <int> running;
-    // open tab: 0 console, 1 players, 2 add-ons, 3 settings, 4 world
-    in-out property <int> tab: 0;
-    in-out property <string> inst-name;
-    in-out property <string> inst-meta;
-    // "vanilla" | "fabric" | "paper"
-    in-out property <string> kind;
-    // 0 loading, 2 not set up yet (jar missing), 3 set up
-    in-out property <int> phase: 0;
-    in-out property <string> phase-note;
-    // 0 stopped, 1 starting, 2 running, 3 stopping, 4 crashed (exit-code)
-    in-out property <int> status: 0;
-    in-out property <int> exit-code: 0;
-    // install / start in flight for the shown server; live = its process exists
-    in-out property <bool> busy;
-    in-out property <bool> live;
-    in-out property <string> deck-text;
-    in-out property <string> uptime: "—";
-    in-out property <bool> eula-open;
-    in-out property <[ConLine]> console;
-    in-out property <int> console-rev;
-    in-out property <[HostPlayer]> players;
-    in-out property <[string]> whitelist;
-    in-out property <[string]> ops;
-    // singleplayer worlds of every instance: name = world, sub = instance
-    in-out property <[Row]> saves;
-    in-out property <[HostBackup]> backups;
-    // add-ons: installed jars (id = file name) and Modrinth results
-    in-out property <[Row]> addons;
-    in-out property <[Row]> hits;
-    in-out property <bool> hits-loading;
-    // settings (server.properties + launcher-side RAM / UPnP)
-    in-out property <string> port: "25565";
-    in-out property <string> motd;
-    in-out property <string> max-players: "20";
-    in-out property <int> difficulty: 1;
-    in-out property <int> gamemode: 0;
-    in-out property <bool> pvp: true;
-    in-out property <bool> online: true;
-    in-out property <bool> wl-on;
-    in-out property <bool> upnp: true;
-    in-out property <int> ram: 2;
-    // sharing: addresses, invite; upnp-state 0 off, 1 opening, 2 open, 3 failed, 4 turned off
-    in-out property <string> lan;
-    in-out property <string> pub-addr;
-    in-out property <string> addr;    // best invite address (tunnel > checked public > LAN)
-    in-out property <int> upnp-state;
-    in-out property <string> upnp-msg;
-    // checked from outside: 0 not yet, 1 checking, 2 reachable, 3 blocked, 4 couldn't check
-    in-out property <int> reach;
-    in-out property <string> reach-msg;
-    // playit.gg tunnel: 0 off, 1 starting, 2 waiting for the claim, 3 linked but no tunnel, 4 online, 5 failed
-    in-out property <int> tun;
-    in-out property <string> tun-msg;
-    in-out property <string> tun-url;
-    in-out property <string> tun-addr;
-    callback tunnel(int);   // 0 start, 1 stop
-    callback recheck();
-    // setup wizard
-    in-out property <bool> wiz-open;
-    in-out property <string> wiz-name;
-    in-out property <string> wiz-port: "25565";
-    in-out property <[string]> paper-versions;
-    callback opened();
-    callback select(int);
-    callback primary();
-    callback accept-eula();
-    callback send(string);
-    callback history(int) -> string;
-    callback player(string, int);
-    callback list-add(int, string);
-    callback list-remove(int, string);
-    callback save-settings();
-    callback import-save(int);
-    callback backup();
-    callback open-backups();
-    callback open-folder();
-    callback new-server();
-    // name, kind (0 vanilla 1 fabric 2 paper), version, RAM GB, port, world (-1 fresh, else index into saves), whitelist, online mode, UPnP
-    callback create(string, int, string, int, string, int, bool, bool, bool);
-    callback delete-server();
-    callback addon-search(string);
-    callback addon-install(string);
-    callback addon-remove(string);
+// Invite to world (crates/app/src/worldshare.rs): an invite to someone's singleplayer world, joined with a matching instance.
+export global WorldInvite {
+    in-out property <bool> open;
+    in-out property <string> from;
+    in-out property <string> world;
+    // "Minecraft 1.21.11 · Fabric"
+    in-out property <string> game;
+    // 0 the one matching instance, 1 pick one of several, 2 none: a new instance is made
+    in-out property <int> plan;
+    in-out property <[string]> insts;
+    in-out property <int> pick;
+    callback join();
+    callback decline();
+    callback later();
 }
 
 // Wardrobe skin library (crates/app/src/wardrobe.rs).

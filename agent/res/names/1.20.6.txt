@@ -1,0 +1,226 @@
+field_1329	a	Levt;
+field_1350	e	D
+field_1351	d	D
+field_1352	c	D
+field_1655	o	Leyv$a;
+field_1656	k	Ljava/util/Map;
+field_1668	a	Leyv$b;
+field_1687	r	Lfxx;
+field_1690	m	Lffl;
+field_1704	Q	Leze;
+field_1705	l	Lfgs;
+field_1708	ar	Lfjv;
+field_1724	s	Lgcs;
+field_1755	y	Lfnf;
+field_1765	v	Levr;
+field_1773	j	Lgdj;
+field_17772	y	J
+field_18222	x	Z
+field_1826	bO	Lffk;
+field_1838	aV	Lffk;
+field_1839	W	[Lfff;
+field_1840	cd	Lffk;
+field_1842	Y	Z
+field_1843	ap	Lffk;
+field_1849	z	Lfff;
+field_18712	f	Levt;
+field_18717	k	F
+field_18718	l	F
+field_1881	y	Lfff;
+field_1894	w	Lfff;
+field_1903	A	Lfff;
+field_1908	aS	Lffk;
+field_1913	x	Lfff;
+field_1915	aT	Lffk;
+field_19319	G	Z
+field_2021	Y	Lfhh;
+field_2064	l	Ljava/util/List;
+field_21444	d	I
+field_2259	h	Ljava/util/Map;
+field_24360	a	Lym;
+field_2586	s	Lfik;
+field_26665	b	Lfet;
+field_26666	c	Lfet;
+field_27433	o	Lfxc;
+field_33816	v	Ljava/util/List;
+field_3391	m	Lfxc;
+field_3392	p	Lfxc;
+field_3397	q	Lfxc;
+field_3401	n	Lfxc;
+field_34801	u	Lfnx;
+field_3752	a	Ljava/lang/String;
+field_3761	b	Ljava/lang/String;
+field_37868	k	Ljava/lang/Object;
+field_4019	r	F
+field_44666	f	Ljava/lang/String;
+field_45607	b	Ljava/util/function/Supplier;
+field_4687	i	Ljava/util/Map;
+field_4738	g	Ljava/util/List;
+field_5330	c	Ljava/util/Map;
+field_5918	l	Lji;
+field_5965	aG	F
+field_5969	N	D
+field_6014	L	D
+field_6031	aF	F
+field_6036	M	D
+field_6169	f	Lbtd;
+field_6220	aZ	F
+field_6235	aO	I
+field_6283	aY	F
+field_7477	d	Z
+field_7503	cA	Lcmw;
+field_7514	g	Lcmy;
+field_8255	vs	Lcum;
+method_10517	a	()Lun;
+method_10851	b	()Lxq;
+method_10852	b	(Lxp;)Lyd;
+method_10862	b	(Lym;)Lyd;
+method_11022	b	()Ljava/lang/String;
+method_1422	b	(Leyv$a;)V
+method_1426	d	()V
+method_1442	a	()Leyv$b;
+method_1444	b	()I
+method_1447	a	(I)Leyv$a;
+method_150	e	()Ljava/lang/String;
+method_1507	a	(Lfnf;)V
+method_1531	aa	()Lgpc;
+method_1548	X	()Lffv;
+method_1555	aw	()Z
+method_1558	S	()Lfyl;
+method_1561	ap	()Lgix;
+method_1562	L	()Lfxy;
+method_1576	V	()Lgtg;
+method_1592	q	()V
+method_1676	c	()Ljava/lang/String;
+method_17165	c	()Lfuc;
+method_1743	d	()Lfhh;
+method_17783	c	()Levr$a;
+method_1812	a	(Lxp;)V
+method_18456	x	()Ljava/util/List;
+method_19325	a	(FF)V
+method_19418	l	()Lfes;
+method_22683	aO	()Leze;
+method_22703	a	(Lfaa;)V
+method_22903	a	()V
+method_22904	a	(DDD)V
+method_22909	b	()V
+method_22976	a	(FLfaa;Lgdq$a;Lgcs;I)V
+method_23070	c	(Lffh;Lfaa;)V
+method_23317	du	()D
+method_23318	dw	()D
+method_23321	dA	()D
+method_23500	a	(Lalf;)Lgdy;
+method_23580	i	(Lalf;)Lgdy;
+method_23760	c	()Lfaa$a;
+method_23761	a	()Lorg/joml/Matrix4f;
+method_23767	f	()Lorg/joml/Quaternionf;
+method_23919	a	(FFFFFFFFFIIFFF)V
+method_25448	a	(Lalf;)Lgdy;
+method_27693	f	(Ljava/lang/String;)Lyd;
+method_27704	a	(Lalf;)Lym;
+method_27728	bb	()Leqe;
+method_27983	af	()Lale;
+method_2838	d	()Lfxc;
+method_2871	a	(Ljava/util/UUID;)Lfyi;
+method_2880	m	()Ljava/util/Collection;
+method_29177	a	()Lalf;
+method_2950	a	(Ljava/lang/String;)Lfzo;
+method_2959	f	()I
+method_2966	a	()Lcom/mojang/authlib/GameProfile;
+method_31043	a	(Lfet;)V
+method_31044	aA	()Lfet;
+method_31548	gc	()Lcmy;
+method_31549	gd	()Lcmw;
+method_3196	a	(Lfes;FZ)D
+method_3228	a	(Lgcp;FFLbqv;FLcur;FLfaa;Lgdq;I)V
+method_36139	a	(I)Lym;
+method_36454	dF	()F
+method_36455	dH	()F
+method_36877	a	(Lfnf;Lffh;Lfzo;Lfyl;ZLfyp;)V
+method_37067	p	()V
+method_3734	aH	()Leq;
+method_3739	aI	()Lep;
+method_3865	s	()Ljava/lang/String;
+method_4054	a	(Lbtr;FFLfaa;Lgdq;I)V
+method_4055	b	(Lbtr;)Z
+method_41735	x	()Lfse;
+method_4309	a	(Ljava/io/InputStream;)Lezb;
+method_43470	b	(Ljava/lang/String;)Lyd;
+method_43473	i	()Lyd;
+method_44252	a	(Lep;Ljava/lang/String;)V
+method_44382	a	(D)V
+method_44717	b	()Ljava/util/UUID;
+method_4495	s	()D
+method_4616	a	(Lalf;Lgom;)V
+method_46416	a	(FFF)V
+method_48559	b	()Z
+method_53526	aP	()Lfho;
+method_53536	d	()Z
+method_5438	a	(I)Lcur;
+method_5439	b	()I
+method_5476	O_	()Lxp;
+method_5477	af	()Lxp;
+method_5578	e	()I
+method_5584	d	()I
+method_5586	i	()Ljava/lang/String;
+method_5591	f	()Z
+method_5628	al	()I
+method_5667	cz	()Ljava/util/UUID;
+method_5767	ch	()Z
+method_5854	dc	()Lbsw;
+method_5864	ak	()Lbtc;
+method_5872	b	(DD)V
+method_5890	a	(Lbtc;)Lalf;
+method_6026	ex	()Ljava/util/Collection;
+method_6032	eA	()F
+method_6059	b	(Lji;)Z
+method_6118	a	(Lbtd;)Lcur;
+method_7299	a	(Lyd;)Lyd;
+method_7325	N_	()Z
+method_7331	ga	()V
+method_7334	gb	()Lcom/mojang/authlib/GameProfile;
+method_7909	g	()Lcum;
+method_7919	n	()I
+method_7936	o	()I
+method_7947	I	()I
+method_7960	e	()Z
+method_7963	l	()Z
+method_7964	x	()Lxp;
+method_8532	aa	()J
+method_9249	a	(Lcom/mojang/brigadier/ParseResults;Ljava/lang/String;)V
+net.minecraft.class_1011	ezb	
+net.minecraft.class_1043	goo	
+net.minecraft.class_1294	bsg	
+net.minecraft.class_1297	bsw	
+net.minecraft.class_1299	btc	
+net.minecraft.class_1304	btd	
+net.minecraft.class_1657	cmz	
+net.minecraft.class_1802	cuu	
+net.minecraft.class_1921	gdy	
+net.minecraft.class_2477	un	
+net.minecraft.class_2561	xp	
+net.minecraft.class_2583	ym	
+net.minecraft.class_2960	alf	
+net.minecraft.class_310	ffh	
+net.minecraft.class_338	fhh	
+net.minecraft.class_3675$class_307	eyv$b	
+net.minecraft.class_3887	gnl	
+net.minecraft.class_408	flv	
+net.minecraft.class_412	fly	
+net.minecraft.class_4184	fes	
+net.minecraft.class_429	fmw	
+net.minecraft.class_433	fna	
+net.minecraft.class_442	fnk	
+net.minecraft.class_4587	faa	
+net.minecraft.class_4603	gea	
+net.minecraft.class_4608	gos	
+net.minecraft.class_500	fqd	
+net.minecraft.class_526	fsa	
+net.minecraft.class_5498	fet	
+net.minecraft.class_639	fzo	
+net.minecraft.class_642	fyl	
+net.minecraft.class_6599	fny	
+net.minecraft.class_757	gdj	
+net.minecraft.class_759	gdm	
+net.minecraft.class_897	giy	
+net.minecraft.class_922	gka	

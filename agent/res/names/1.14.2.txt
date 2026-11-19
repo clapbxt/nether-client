@@ -1,0 +1,181 @@
+field_1329	a	Lcrx;
+field_1350	d	D
+field_1351	c	D
+field_1352	b	D
+field_1655	h	Lctt$a;
+field_1656	d	Ljava/util/Map;
+field_1668	a	Lctt$b;
+field_1687	h	Ldhn;
+field_1690	w	Lcvo;
+field_1704	g	Lcud;
+field_1705	t	Lcwd;
+field_1708	aE	Lcxz;
+field_1724	j	Ldjx;
+field_1755	o	Lczt;
+field_1765	v	Lcrv;
+field_1773	q	Ldkk;
+field_17772	z	J
+field_18222	y	Z
+field_1826	aG	D
+field_1838	x	D
+field_1839	aw	[Lcvh;
+field_1840	aH	D
+field_1842	az	Z
+field_1843	b	D
+field_1849	aa	Lcvh;
+field_1850	aA	I
+field_1866	aB	Z
+field_18712	d	Lcrx;
+field_18717	i	F
+field_18718	j	F
+field_1881	Z	Lcvh;
+field_1894	X	Lcvh;
+field_1903	ab	Lcvh;
+field_1908	u	D
+field_1913	Y	Lcvh;
+field_1915	v	D
+field_19319	a	Z
+field_2021	h	Lcwr;
+field_2064	e	Ljava/util/List;
+field_2259	b	Ljava/util/Map;
+field_2586	f	Ljava/lang/String;
+field_3391	h	Ldhd;
+field_3392	k	Ldhd;
+field_3397	l	Ldhd;
+field_3401	i	Ldhd;
+field_3742	b	Ljava/util/Map;
+field_3752	a	Ljava/lang/String;
+field_3761	b	Ljava/lang/String;
+field_4019	l	F
+field_4687	i	Ljava/util/Map;
+field_4738	h	Ljava/util/List;
+field_5330	a	Ljava/util/Map;
+field_5918	l	Laia;
+field_5965	t	F
+field_5969	o	D
+field_5987	p	D
+field_6010	q	D
+field_6014	m	D
+field_6031	s	F
+field_6035	r	D
+field_6036	n	D
+field_6169	f	Lain;
+field_6220	aL	F
+field_6235	ax	I
+field_6283	aK	F
+field_7477	d	Z
+field_7503	bN	Lavv;
+field_7514	bx	Lavx;
+field_8255	oW	Lbbw;
+field_9247	q	Lbyd;
+method_10517	a	()Lhw;
+method_10851	d	()Ljava/lang/String;
+method_10852	a	(Ljm;)Ljm;
+method_10862	a	(Lju;)Ljm;
+method_11022	k	()Ljava/lang/String;
+method_12460	p	()Lbye;
+method_1422	b	(Lctt$a;)V
+method_1426	c	()V
+method_1442	a	()Lctt$b;
+method_1444	b	()I
+method_1447	a	(I)Lctt$a;
+method_150	j	()Ljava/lang/String;
+method_1507	a	(Lczt;)V
+method_1531	F	()Lduk;
+method_1548	C	()Lcvv;
+method_1555	ag	()Z
+method_1558	x	()Ldhq;
+method_1561	V	()Ldpi;
+method_1562	q	()Ldhk;
+method_1576	A	()Ldxk;
+method_1592	k	()V
+method_1673	b	()Ljava/lang/String;
+method_1676	c	()Ljava/lang/String;
+method_17165	c	()Ldep;
+method_1743	f	()Lcwr;
+method_17783	c	()Lcrv$a;
+method_1812	a	(Ljm;)V
+method_18456	A	()Ljava/util/List;
+method_19325	a	(FF)V
+method_19418	n	()Lcuz;
+method_2838	a	()Ldhd;
+method_2871	a	(Ljava/util/UUID;)Ldho;
+method_2880	e	()Ljava/util/Collection;
+method_2950	a	(Ljava/lang/String;)Ldhp;
+method_2959	c	()I
+method_2966	a	()Lcom/mojang/authlib/GameProfile;
+method_3196	a	(Lcuz;FZ)D
+method_3228	a	(Ldju;FFLahc;FLbcb;F)V
+method_3236	d	()V
+method_3734	aH	()Lce;
+method_3739	aI	()Lcd;
+method_3865	J	()Ljava/lang/String;
+method_4054	a	(Lair;DDDFF)V
+method_4055	a	(Lair;)Z
+method_4309	a	(Ljava/io/InputStream;)Lcty;
+method_4495	s	()D
+method_4616	a	(Lqs;Ldul;)Z
+method_5438	a	(I)Lbcb;
+method_5439	N_	()I
+method_5476	d	()Ljm;
+method_5477	O	()Ljm;
+method_5578	c	()I
+method_5584	b	()I
+method_5586	g	()Ljava/lang/String;
+method_5591	d	()Z
+method_5628	T	()I
+method_5667	bA	()Ljava/util/UUID;
+method_5767	bm	()Z
+method_5854	ca	()Laii;
+method_5864	S	()Laim;
+method_5872	a	(DD)V
+method_5890	a	(Laim;)Lqs;
+method_6026	cz	()Ljava/util/Collection;
+method_6032	cC	()F
+method_6059	a	(Laia;)Z
+method_6118	b	(Lain;)Lbcb;
+method_7299	c	(Ljm;)Ljm;
+method_7325	t	()Z
+method_7331	dF	()V
+method_7334	dH	()Lcom/mojang/authlib/GameProfile;
+method_7909	b	()Lbbw;
+method_7919	g	()I
+method_7936	h	()I
+method_7947	D	()I
+method_7960	a	()Z
+method_7963	e	()Z
+method_7964	r	()Ljm;
+method_8532	S	()J
+method_9249	a	(Lcd;Ljava/lang/String;)I
+net.minecraft.class_1011	cty	
+net.minecraft.class_1043	dtz	
+net.minecraft.class_1294	aie	
+net.minecraft.class_1297	aii	
+net.minecraft.class_1299	aim	
+net.minecraft.class_1304	ain	
+net.minecraft.class_1657	avy	
+net.minecraft.class_1802	bcc	
+net.minecraft.class_1921	bgt	
+net.minecraft.class_2477	hw	
+net.minecraft.class_2561	jm	
+net.minecraft.class_2583	ju	
+net.minecraft.class_2585	jv	
+net.minecraft.class_2960	qs	
+net.minecraft.class_310	cvk	
+net.minecraft.class_338	cwr	
+net.minecraft.class_3675$class_307	ctt$b	
+net.minecraft.class_3887	dtg	
+net.minecraft.class_408	cyt	
+net.minecraft.class_412	cyw	
+net.minecraft.class_4184	cuz	
+net.minecraft.class_429	czm	
+net.minecraft.class_433	czp	
+net.minecraft.class_442	czx	
+net.minecraft.class_500	dby	
+net.minecraft.class_526	ddb	
+net.minecraft.class_639	dhp	
+net.minecraft.class_642	dhq	
+net.minecraft.class_757	dkk	
+net.minecraft.class_759	dkm	
+net.minecraft.class_897	dpj	
+net.minecraft.class_922	dqh	

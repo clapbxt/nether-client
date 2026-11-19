@@ -28,13 +28,15 @@ export component Ticks inherits Rectangle {
 
 // Flat panel with a hairline frame.
 export component Glass inherits Rectangle {
-    border-radius: 8px;
+    border-radius: Theme.r2;
     in property <bool> hoverable: false;
     out property <bool> hovered: ta.has-hover;
     background: Theme.s1;
     border-width: 1px;
     border-color: (root.hoverable && ta.has-hover) ? Theme.ln2 : Theme.ln;
     animate border-color { duration: Theme.fast; }
+    // liquid-glass sheen: a soft light from the top edge (transparent in the Minecraft themes)
+    Rectangle { border-radius: root.border-radius; background: @linear-gradient(180deg, Theme.sheen 0%, transparent 45%); }
     ta := TouchArea { }
     @children
 }
@@ -88,7 +90,7 @@ export component Stat inherits Rectangle {
 export component Slot inherits Rectangle {
     in property <string> label;
     background: Theme.s1;
-    border-radius: 6px;
+    border-radius: Theme.r1;
     border-width: 1px;
     border-color: Theme.ln;
     Hatch { x: 1px; y: 1px; width: parent.width - 2px; height: parent.height - 2px; }
@@ -101,7 +103,7 @@ export component ModIcon inherits Rectangle {
     width: 38px;
     height: 38px;
     background: Theme.s2;
-    border-radius: 6px;
+    border-radius: Theme.r1;
     clip: true;
     // quiet placeholder until the real icon streams in
     if !root.has: Hatch { width: parent.width; height: parent.height; }
@@ -152,7 +154,7 @@ export component VerTag inherits Rectangle {
     property <length> bw: root.mc == "" ? 0px : b.preferred-width + 16px;
     width: root.aw + root.bw;
     height: 22px;
-    border-radius: 4px;
+    border-radius: Theme.r1;
     clip: true;
     background: Theme.s2;
     Rectangle { x: root.aw; width: root.bw; background: root.bad ? Theme.red.with-alpha(0.188) : Theme.s3; }
@@ -161,7 +163,7 @@ export component VerTag inherits Rectangle {
 }
 
 export component Chip inherits Rectangle {
-    border-radius: 4px;
+    border-radius: Theme.r1;
     in property <string> text;
     in property <bool> hot;
     height: 22px;
@@ -173,7 +175,7 @@ export component Chip inherits Rectangle {
 // ---------- actions ----------
 
 export component Btn inherits Rectangle {
-    border-radius: 6px;
+    border-radius: Theme.r1;
     in property <string> text;
     in property <bool> solid;
     in property <bool> danger;
@@ -212,7 +214,7 @@ export component PlayButton inherits Rectangle {
     out property <bool> hovered: ta.has-hover;
     width: 200px;
     height: 52px;
-    border-radius: 8px;
+    border-radius: Theme.r2;
     background: !root.enabled ? Theme.s3 : (ta.pressed ? Theme.press : (ta.has-hover ? Theme.red2 : Theme.red));
     animate background { duration: Theme.fast; }
     HorizontalLayout {
@@ -225,12 +227,12 @@ export component PlayButton inherits Rectangle {
     ta := TouchArea { mouse-cursor: root.enabled ? pointer : default; clicked => { if root.enabled { root.clicked(); } } }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false; enabled: root.enabled;
         key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
-    if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-radius: 10px; border-width: 2px; border-color: Theme.ice; }
+    if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-radius: Theme.r3; border-width: 2px; border-color: Theme.ice; }
 }
 
 // Square icon-only button.
 export component IconBtn inherits Rectangle {
-    border-radius: 6px;
+    border-radius: Theme.r1;
     in property <string> d;
     in property <bool> danger;
     in property <bool> solid;
@@ -255,7 +257,7 @@ export component IconBtn inherits Rectangle {
     in property <string> tip;
     if root.tip != "" && (ta.has-hover || fs.has-focus): Rectangle {
         x: -tl.preferred-width - 26px; y: (root.height - 24px) / 2; width: tl.preferred-width + 18px; height: 24px;
-        background: Theme.s3; border-radius: 4px; border-width: 1px; border-color: Theme.ln2;
+        background: Theme.s3; border-radius: Theme.r1; border-width: 1px; border-color: Theme.ln2;
         tl := Text { text: root.tip; color: Theme.tx; font-family: Theme.ui; font-size: 12px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }
     }
 }
@@ -280,11 +282,12 @@ export component LinkBtn inherits Rectangle {
 
 // Segmented control: each item is as wide as its label (Nether Pixel runs wide, so widths are measured, never guessed).
 export component Seg inherits Rectangle {
-    border-radius: 6px;
+    border-radius: Theme.r1;
     in property <[string]> items;
     // minimum item width (labels never get narrower than their text + padding)
     in property <length> item-w: 0px;
-    in-out property <int> current: 0;
+    // no default binding: a two-way bound global keeps its value when the page is rebuilt
+    in-out property <int> current;
     callback changed(int);
     width: hl.preferred-width;
     height: 34px;
@@ -296,7 +299,7 @@ export component Seg inherits Rectangle {
         for it[i] in root.items: Rectangle {
             min-width: Math.max(root.item-w, lt.preferred-width + 28px);
             horizontal-stretch: 0;
-            border-radius: 4px;
+            border-radius: Theme.r1;
             background: root.current == i ? Theme.s3 : (st.has-hover ? Theme.hov : transparent);
             animate background { duration: Theme.mid; }
             lt := Text {
@@ -324,13 +327,13 @@ export component Toggle inherits Rectangle {
     in-out property <bool> on;
     in property <bool> enabled: true;
     callback toggled(bool);
-    width: 34px; height: 20px; border-radius: 10px;
+    width: 34px; height: 20px; border-radius: Theme.r3;
     background: root.on ? Theme.red : Theme.s3;
     border-width: 1px;
     border-color: root.on ? Theme.red : (ta.has-hover ? Theme.mut : Theme.ln2);
     animate background, border-color { duration: Theme.mid; }
     Rectangle {
-        x: root.on ? 16px : 2px; y: 2px; width: 14px; height: 14px; border-radius: 7px; background: root.on ? white : Theme.dim;
+        x: root.on ? 16px : 2px; y: 2px; width: 14px; height: 14px; border-radius: Theme.r1; background: root.on ? white : Theme.dim;
         animate x { duration: Theme.mid; easing: ease-out-quint; }
         animate background { duration: Theme.mid; }
     }
@@ -342,7 +345,7 @@ export component Toggle inherits Rectangle {
 }
 
 export component Dropdown inherits Rectangle {
-    border-radius: 6px;
+    border-radius: Theme.r1;
     in property <[string]> items;
     in-out property <int> current: 0;
     callback changed(int);
@@ -369,7 +372,7 @@ export component Dropdown inherits Rectangle {
     pop := PopupWindow {
         x: 0px; y: root.height + 4px; width: root.width; height: Math.min(root.items.length, 8) * 36px + 8px;
         Rectangle {
-            background: Theme.s2; border-radius: 6px; border-width: 1px; border-color: Theme.ln2;
+            background: Theme.s2; border-radius: Theme.r1; border-width: 1px; border-color: Theme.ln2;
             Flickable {
                 y: 4px; height: parent.height - 8px; content-height: root.items.length * 36px;
                 for it[i] in root.items: Rectangle {
@@ -407,7 +410,7 @@ export component Slider inherits Rectangle {
         background: i + root.min <= root.value ? Theme.dim : Theme.ln2;
     }
     Rectangle {
-        x: (root.value - root.min) * root.step - 1px; y: 4px; width: 14px; height: 14px; border-radius: 7px;
+        x: (root.value - root.min) * root.step - 1px; y: 4px; width: 14px; height: 14px; border-radius: Theme.r1;
         background: ta.pressed ? Theme.red2 : Theme.tx;
         animate background { duration: Theme.fast; }
     }
@@ -438,7 +441,7 @@ export component Slider inherits Rectangle {
 
 // Single-line text field with a placeholder (optional search glyph).
 export component Field inherits Rectangle {
-    border-radius: 6px;
+    border-radius: Theme.r1;
     in-out property <string> text <=> inp.text;
     in property <string> placeholder;
     in property <bool> search;
@@ -518,7 +521,7 @@ export component WinButtons inherits Rectangle {
         if i == 1 && !Backend.win-maxed: Rectangle { x: 17px; y: 22px; width: 11px; height: 11px; border-width: 1px; border-color: wb.has-hover ? Theme.tx : Theme.dim; }
         if i == 1 && Backend.win-maxed: Rectangle {
             Rectangle { x: 19px; y: 20px; width: 9px; height: 9px; border-width: 1px; border-color: wb.has-hover ? Theme.tx : Theme.dim; }
-            Rectangle { border-radius: 8px; x: 17px; y: 23px; width: 9px; height: 9px; background: wb.has-hover ? (Theme.s2) : Theme.s1; border-width: 1px; border-color: wb.has-hover ? Theme.tx : Theme.dim; }
+            Rectangle { border-radius: Theme.r2; x: 17px; y: 23px; width: 9px; height: 9px; background: wb.has-hover ? (Theme.s2) : Theme.s1; border-width: 1px; border-color: wb.has-hover ? Theme.tx : Theme.dim; }
         }
         if i == 2: Icon { x: 17px; y: 22px; d: Ico.close; tint: wb.has-hover ? white : Theme.dim; }
         wb := TouchArea { clicked => { if i == 0 { Backend.win-min(); } else if i == 1 { Backend.win-max(); } else { Backend.win-close(); } } }
@@ -584,7 +587,7 @@ export component Page inherits Rectangle {
 // Pulsing square for live states (steady when motion is reduced).
 export component Pulse inherits Rectangle {
     in property <color> tint: Theme.red2;
-    width: 8px; height: 8px; border-radius: 4px;
+    width: 8px; height: 8px; border-radius: Theme.r1;
     background: root.tint;
     opacity: Backend.calm ? 1 : 0.45 + 0.55 * Math.abs(sin(Backend.tick / 1.6s * 180deg));
 }
@@ -595,7 +598,7 @@ export component GroundShadow inherits Rectangle {
     for k in 4: Rectangle {
         x: k * root.width / 10; y: k * root.height / 10;
         width: root.width * (1 - k / 5); height: root.height * (1 - k / 5);
-        border-radius: self.height / 2; background: #00000030;
+        border-radius: Theme.square ? 0px : self.height / 2; background: #00000030;
     }
 }
 

@@ -1,0 +1,180 @@
+field_1329	field_72307_f	Lnet/minecraft/util/math/Vec3d;
+field_1350	field_72449_c	D
+field_1351	field_72448_b	D
+field_1352	field_72450_a	D
+field_1655	field_74512_d	Lnet/minecraft/client/util/InputMappings$Input;
+field_1656	field_193627_d	Ljava/util/Map;
+field_1668	KEYSYM	Lnet/minecraft/client/util/InputMappings$Type;
+field_1687	field_71441_e	Lnet/minecraft/client/world/ClientWorld;
+field_1690	field_71474_y	Lnet/minecraft/client/GameSettings;
+field_1704	field_195558_d	Lnet/minecraft/client/MainWindow;
+field_1705	field_71456_v	Lnet/minecraft/client/gui/IngameGui;
+field_1708	field_211501_aD	Lnet/minecraft/client/gui/fonts/FontResourceManager;
+field_1724	field_71439_g	Lnet/minecraft/client/entity/player/ClientPlayerEntity;
+field_1755	field_71462_r	Lnet/minecraft/client/gui/screen/Screen;
+field_1765	field_71476_x	Lnet/minecraft/util/math/RayTraceResult;
+field_1773	field_71460_t	Lnet/minecraft/client/renderer/GameRenderer;
+field_17772	field_213103_z	J
+field_18222	field_213102_y	Z
+field_1826	field_74334_X	D
+field_1838	field_96694_H	D
+field_1839	field_74324_K	[Lnet/minecraft/client/settings/KeyBinding;
+field_1840	field_74333_Y	D
+field_1842	field_74319_N	Z
+field_1843	field_74341_c	D
+field_1849	field_74366_z	Lnet/minecraft/client/settings/KeyBinding;
+field_1850	field_74320_O	I
+field_1866	field_74330_P	Z
+field_18712	field_216792_d	Lnet/minecraft/util/math/Vec3d;
+field_18717	field_216797_i	F
+field_18718	field_216798_j	F
+field_1881	field_74368_y	Lnet/minecraft/client/settings/KeyBinding;
+field_1894	field_74351_w	Lnet/minecraft/client/settings/KeyBinding;
+field_1903	field_74314_A	Lnet/minecraft/client/settings/KeyBinding;
+field_1908	field_96691_E	D
+field_1913	field_74370_x	Lnet/minecraft/client/settings/KeyBinding;
+field_1915	field_96692_F	D
+field_2021	field_73840_e	Lnet/minecraft/client/gui/NewChatGui;
+field_2064	field_146253_i	Ljava/util/List;
+field_2259	field_211510_b	Ljava/util/Map;
+field_2586	field_73975_c	Ljava/lang/String;
+field_3391	field_78115_e	Lnet/minecraft/client/renderer/entity/model/RendererModel;
+field_3392	field_178721_j	Lnet/minecraft/client/renderer/entity/model/RendererModel;
+field_3397	field_178722_k	Lnet/minecraft/client/renderer/entity/model/RendererModel;
+field_3401	field_178723_h	Lnet/minecraft/client/renderer/entity/model/RendererModel;
+field_3742	field_187107_a	Ljava/util/Map;
+field_3752	field_78847_a	Ljava/lang/String;
+field_3761	field_78845_b	Ljava/lang/String;
+field_4019	field_78507_R	F
+field_4687	field_178636_l	Ljava/util/Map;
+field_4738	field_177097_h	Ljava/util/List;
+field_5330	field_135032_a	Ljava/util/Map;
+field_5918	field_76426_n	Lnet/minecraft/potion/Effect;
+field_5965	field_70125_A	F
+field_5969	field_70166_s	D
+field_5987	field_70165_t	D
+field_6010	field_70163_u	D
+field_6014	field_70169_q	D
+field_6031	field_70177_z	F
+field_6035	field_70161_v	D
+field_6036	field_70167_r	D
+field_6169	HEAD	Lnet/minecraft/inventory/EquipmentSlotType;
+field_6220	field_70760_ar	F
+field_6235	field_70737_aN	I
+field_6283	field_70761_aq	F
+field_7477	field_75098_d	Z
+field_7503	field_71075_bZ	Lnet/minecraft/entity/player/PlayerAbilities;
+field_7514	field_71071_by	Lnet/minecraft/entity/player/PlayerInventory;
+field_8255	field_185159_cQ	Lnet/minecraft/item/Item;
+field_9247	field_73011_w	Lnet/minecraft/world/dimension/Dimension;
+method_10517	func_74808_a	()Lnet/minecraft/util/text/translation/LanguageMap;
+method_10851	func_150261_e	()Ljava/lang/String;
+method_10852	func_150257_a	(Lnet/minecraft/util/text/ITextComponent;)Lnet/minecraft/util/text/ITextComponent;
+method_10862	func_150255_a	(Lnet/minecraft/util/text/Style;)Lnet/minecraft/util/text/ITextComponent;
+method_11022	func_150268_i	()Ljava/lang/String;
+method_12460	func_186058_p	()Lnet/minecraft/world/dimension/DimensionType;
+method_1422	func_197979_b	(Lnet/minecraft/client/util/InputMappings$Input;)V
+method_1426	func_74508_b	()V
+method_1442	func_197938_b	()Lnet/minecraft/client/util/InputMappings$Type;
+method_1444	func_197937_c	()I
+method_1447	func_197944_a	(I)Lnet/minecraft/client/util/InputMappings$Input;
+method_150	func_76065_j	()Ljava/lang/String;
+method_1507	func_147108_a	(Lnet/minecraft/client/gui/screen/Screen;)V
+method_1531	func_110434_K	()Lnet/minecraft/client/renderer/texture/TextureManager;
+method_1548	func_110432_I	()Lnet/minecraft/util/Session;
+method_1555	func_189648_am	()Z
+method_1558	func_147104_D	()Lnet/minecraft/client/multiplayer/ServerData;
+method_1561	func_175598_ae	()Lnet/minecraft/client/renderer/entity/EntityRendererManager;
+method_1562	func_147114_u	()Lnet/minecraft/client/network/play/ClientPlayNetHandler;
+method_1576	func_71401_C	()Lnet/minecraft/server/integrated/IntegratedServer;
+method_1592	func_71400_g	()V
+method_1673	func_148255_b	()Ljava/lang/String;
+method_1676	func_111285_a	()Ljava/lang/String;
+method_17165	func_215332_c	()Lnet/minecraft/client/renderer/entity/model/EntityModel;
+method_1743	func_146158_b	()Lnet/minecraft/client/gui/NewChatGui;
+method_17783	func_216346_c	()Lnet/minecraft/util/math/RayTraceResult$Type;
+method_1812	func_146227_a	(Lnet/minecraft/util/text/ITextComponent;)V
+method_18456	func_217369_A	()Ljava/util/List;
+method_19325	func_216776_a	(FF)V
+method_19418	func_215316_n	()Lnet/minecraft/client/renderer/ActiveRenderInfo;
+method_2838	func_205072_a	()Lnet/minecraft/client/renderer/entity/model/RendererModel;
+method_2871	func_175102_a	(Ljava/util/UUID;)Lnet/minecraft/client/network/play/NetworkPlayerInfo;
+method_2880	func_175106_d	()Ljava/util/Collection;
+method_2950	func_78860_a	(Ljava/lang/String;)Lnet/minecraft/client/multiplayer/ServerAddress;
+method_2959	func_178853_c	()I
+method_2966	func_178845_a	()Lcom/mojang/authlib/GameProfile;
+method_3196	func_215311_a	(Lnet/minecraft/client/renderer/ActiveRenderInfo;FZ)D
+method_3228	func_187457_a	(Lnet/minecraft/client/entity/player/AbstractClientPlayerEntity;FFLnet/minecraft/util/Hand;FLnet/minecraft/item/ItemStack;F)V
+method_3236	func_78442_d	()V
+method_3734	func_195571_aL	()Lnet/minecraft/command/Commands;
+method_3739	func_195573_aM	()Lnet/minecraft/command/CommandSource;
+method_3865	func_71270_I	()Ljava/lang/String;
+method_4054	func_76986_a	(Lnet/minecraft/entity/LivingEntity;DDDFF)V
+method_4055	func_177070_b	(Lnet/minecraft/entity/LivingEntity;)Z
+method_4309	func_195713_a	(Ljava/io/InputStream;)Lnet/minecraft/client/renderer/texture/NativeImage;
+method_4495	func_198100_s	()D
+method_4616	func_110579_a	(Lnet/minecraft/util/ResourceLocation;Lnet/minecraft/client/renderer/texture/ITextureObject;)Z
+method_5438	func_70301_a	(I)Lnet/minecraft/item/ItemStack;
+method_5439	func_70302_i_	()I
+method_5476	func_145748_c_	()Lnet/minecraft/util/text/ITextComponent;
+method_5477	func_200200_C_	()Lnet/minecraft/util/text/ITextComponent;
+method_5578	func_76458_c	()I
+method_5584	func_76459_b	()I
+method_5586	func_76453_d	()Ljava/lang/String;
+method_5591	func_82720_e	()Z
+method_5628	func_145782_y	()I
+method_5667	func_110124_au	()Ljava/util/UUID;
+method_5767	func_82150_aj	()Z
+method_5854	func_184187_bx	()Lnet/minecraft/entity/Entity;
+method_5864	func_200600_R	()Lnet/minecraft/entity/EntityType;
+method_5872	func_195049_a	(DD)V
+method_5890	func_200718_a	(Lnet/minecraft/entity/EntityType;)Lnet/minecraft/util/ResourceLocation;
+method_6026	func_70651_bq	()Ljava/util/Collection;
+method_6032	func_110143_aJ	()F
+method_6059	func_70644_a	(Lnet/minecraft/potion/Effect;)Z
+method_6118	func_184582_a	(Lnet/minecraft/inventory/EquipmentSlotType;)Lnet/minecraft/item/ItemStack;
+method_7299	func_208016_c	(Lnet/minecraft/util/text/ITextComponent;)Lnet/minecraft/util/text/ITextComponent;
+method_7325	func_175149_v	()Z
+method_7331	func_71004_bE	()V
+method_7334	func_146103_bH	()Lcom/mojang/authlib/GameProfile;
+method_7909	func_77973_b	()Lnet/minecraft/item/Item;
+method_7919	func_77952_i	()I
+method_7936	func_77958_k	()I
+method_7947	func_190916_E	()I
+method_7960	func_190926_b	()Z
+method_7963	func_77984_f	()Z
+method_7964	func_200301_q	()Lnet/minecraft/util/text/ITextComponent;
+method_8532	func_72820_D	()J
+method_9249	func_197059_a	(Lnet/minecraft/command/CommandSource;Ljava/lang/String;)I
+net.minecraft.class_1011	net.minecraft.client.renderer.texture.NativeImage	
+net.minecraft.class_1043	net.minecraft.client.renderer.texture.DynamicTexture	
+net.minecraft.class_1294	net.minecraft.potion.Effects	
+net.minecraft.class_1297	net.minecraft.entity.Entity	
+net.minecraft.class_1299	net.minecraft.entity.EntityType	
+net.minecraft.class_1304	net.minecraft.inventory.EquipmentSlotType	
+net.minecraft.class_1657	net.minecraft.entity.player.PlayerEntity	
+net.minecraft.class_1802	net.minecraft.item.Items	
+net.minecraft.class_1921	net.minecraft.util.BlockRenderLayer	
+net.minecraft.class_2477	net.minecraft.util.text.translation.LanguageMap	
+net.minecraft.class_2561	net.minecraft.util.text.ITextComponent	
+net.minecraft.class_2583	net.minecraft.util.text.Style	
+net.minecraft.class_2585	net.minecraft.util.text.StringTextComponent	
+net.minecraft.class_2960	net.minecraft.util.ResourceLocation	
+net.minecraft.class_310	net.minecraft.client.Minecraft	
+net.minecraft.class_338	net.minecraft.client.gui.NewChatGui	
+net.minecraft.class_3675$class_307	net.minecraft.client.util.InputMappings$Type	
+net.minecraft.class_3887	net.minecraft.client.renderer.entity.layers.LayerRenderer	
+net.minecraft.class_408	net.minecraft.client.gui.screen.ChatScreen	
+net.minecraft.class_412	net.minecraft.client.gui.screen.ConnectingScreen	
+net.minecraft.class_4184	net.minecraft.client.renderer.ActiveRenderInfo	
+net.minecraft.class_429	net.minecraft.client.gui.screen.OptionsScreen	
+net.minecraft.class_433	net.minecraft.client.gui.screen.IngameMenuScreen	
+net.minecraft.class_442	net.minecraft.client.gui.screen.MainMenuScreen	
+net.minecraft.class_500	net.minecraft.client.gui.screen.MultiplayerScreen	
+net.minecraft.class_526	net.minecraft.client.gui.screen.WorldSelectionScreen	
+net.minecraft.class_639	net.minecraft.client.multiplayer.ServerAddress	
+net.minecraft.class_642	net.minecraft.client.multiplayer.ServerData	
+net.minecraft.class_757	net.minecraft.client.renderer.GameRenderer	
+net.minecraft.class_759	net.minecraft.client.renderer.FirstPersonRenderer	
+net.minecraft.class_897	net.minecraft.client.renderer.entity.EntityRenderer	
+net.minecraft.class_922	net.minecraft.client.renderer.entity.LivingRenderer	

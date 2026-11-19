@@ -19,7 +19,7 @@ final class Freelook extends Module {
         add(Setting.key("lookKey", "Freelook key", 342).hint("Default Left Alt."));
         add(Setting.choice("mode", "Mode", "Hold", "Hold", "Toggle"));
         add(Setting.bool("invert", "Invert vertical", false));
-        needs(2);
+        needs(4); // 1.8.9 / 1.12.2 too (Entity.setAngles + camera rotation reads, Agent LOOK_HOOKS)
     }
 
     boolean toggle() { return str("mode").equals("Toggle"); }

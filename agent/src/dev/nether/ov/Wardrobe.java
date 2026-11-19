@@ -367,6 +367,9 @@ final class Wardrobe {
             float a = Config.calm() ? 1 : Math.min(1, (5000 - age) / 400f);
             String n = Menu.fit(note, Gfx.UI, 11, pw - 24, 0);
             Gfx.text(Gfx.UI, 11, lx + 12, top + ph - 14, Gfx.a(noteOk ? 0xFF3DDC84 : Th.ac2, a), n);
+        } else if (Game.mc() != null && !Cosmetics.renders()) { // the game cannot draw them: say so instead of failing quietly
+            String v = Game.version();
+            Gfx.text(Gfx.UI, 11, lx + 12, top + ph - 14, Th.ac2, Menu.fit("Cosmetics can't render on " + (v != null ? "Minecraft " + v : "this version") + ", capes still show", Gfx.UI, 11, pw - 24, 0));
         }
 
         // the Nether badge (always on: shown before Nether players' names above their heads and in chat)

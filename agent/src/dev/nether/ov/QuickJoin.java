@@ -91,6 +91,14 @@ final class QuickJoin {
      * Draws the card with its bottom edge at {@code bottom}, never above {@code topLimit} (fewer rows instead).
      * Units at the current Gfx.s; hover/click through MainMenu.
      */
+    /** Servers of the multiplayer list (name, address), last played first: the party's destination picker. */
+    static List<String[]> list() {
+        kick();
+        List<String[]> l = new ArrayList<>();
+        for (Srv s : rows(12)) l.add(new String[] {s.name, s.ip});
+        return l;
+    }
+
     static void card(float x, float bottom, float w, float topLimit, Object screen) {
         if (broken) return;
         int want = (int) Math.round(MainMenu.MODULE.num("servers"));
@@ -160,20 +168,24 @@ final class QuickJoin {
 
     // ---------------------------------------------------------------- connect
 
-    private static void connect(Srv s, Object screen) {
+    private static void connect(Srv s, Object screen) { join(s.name, s.ip, screen); }
+
+    /** Connect to a server through the game's own connect screen, from `screen` (title / multiplayer screen). */
+    static void join(String name, String ip, Object screen) {
         Object mc = Game.mc();
         try {
             if (Game.legacy()) {
-                Object data = MainMenu.make(Game.cls(Game.l("bde", "net.minecraft.client.multiplayer.ServerData")), s.name, s.ip, false);
+                Object data = MainMenu.make(Game.cls(Game.l("bde", "net.minecraft.client.multiplayer.ServerData")), name, ip, false);
                 MainMenu.open(mc, MainMenu.make(Game.cls(Game.l("awz", "net.minecraft.client.multiplayer.GuiConnecting")), screen, mc, data));
             } else {
-                Object addr = Game.stat(Game.cls("net.minecraft.class_639"), "method_2950", s.ip);
-                Object info = serverInfo(Game.cls("net.minecraft.class_642"), s.name, s.ip);
+                Object addr = Game.stat(Game.cls("net.minecraft.class_639"), "method_2950", ip);
+                Object info = serverInfo(Game.cls("net.minecraft.class_642"), name, ip);
                 Class<?> cs = Game.cls("net.minecraft.class_412");
                 if (addr != null && info != null) {
                     Game.stat(cs, "method_36877", screen, mc, addr, info, false, null); // 1.20.5+: (+ transfer state)
-                    if (Game.screen() == screen) Game.stat(cs, "method_36877", screen, mc, addr, info, false);
-                }
+                    if (Game.screen() == screen) Game.stat(cs, "method_36877", screen, mc, addr, info, false); // 1.20-1.20.4: (+ quick play)
+                    if (Game.screen() == screen) Game.stat(cs, "method_36877", screen, mc, addr, info); // 1.17-1.19.4
+                } else if (info != null) MainMenu.open(mc, MainMenu.make(cs, screen, mc, info)); // 1.14-1.16: new ConnectScreen(parent, mc, serverData)
             }
         } catch (Throwable t) {
             System.out.println("[nether-agent] quick join: " + t);

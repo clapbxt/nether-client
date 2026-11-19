@@ -8,7 +8,7 @@ const fs = require("fs"), path = require("path");
 const src = path.join(__dirname, "..", "src", "dev", "nether", "ov"), res = path.join(__dirname, "..", "res", "names");
 const lines = f => fs.readFileSync(f, "utf8").split("\n").map(l => l.replace("\r", ""));
 const dot = s => s.split("/").join(".");
-const used = new Set(["net.minecraft.class_1657", "method_7299", "net.minecraft.class_922", "method_4055", "net.minecraft.class_338", "net.minecraft.class_1297", "method_5872", "net.minecraft.class_4184", "method_19325"]), usedSrg = new Set(["net.minecraft.client.Minecraft"]); // + the game class (bind), the name, nametag-visibility and freelook hooks (Agent)
+const used = new Set(["net.minecraft.class_1657", "method_7299", "net.minecraft.class_922", "method_4055", "net.minecraft.class_338", "net.minecraft.class_1297", "method_5872", "net.minecraft.class_4184", "method_19325", "net.minecraft.class_759", "method_3228", "net.minecraft.class_4603", "method_23070", "net.minecraft.class_897", "method_62425", "net.minecraft.class_10197", "method_75966", "net.minecraft.class_4587", "net.minecraft.class_1921", "method_25448", "net.minecraft.class_757", "method_3196", "method_22976", "method_3236", "method_4054"]), usedSrg = new Set(["net.minecraft.client.Minecraft"]); // + the game class (bind), the name, nametag-visibility and freelook hooks (Agent)
 for (const f of fs.readdirSync(src)) {
   if (f === "Names.java") continue;
   const t = fs.readFileSync(path.join(src, f), "utf8");
@@ -136,9 +136,67 @@ function srgTable(mc, srgFile) { // CL: notch mcp | FD: owner/notch mcp/owner/sr
   write(mc, obf, "srg", usedSrg);
 }
 
+// Mojang names of one version (Forge/NeoForge 1.20.5-1.21.10 run with them; Names.java holds 1.21.11's): <mc>-moj.txt.
+function mojTable(mc, tinyFile, mojFile) {
+  const mojToObf = {}, members = {};
+  let cur = null;
+  for (const line of lines(mojFile)) {
+    if (!line || line.startsWith("#")) continue;
+    if (!line.startsWith(" ")) { const m = line.match(/^(\S+) -> (\S+):$/); cur = m[2]; mojToObf[m[1]] = cur; members[cur] = []; }
+    else { const m = line.trim().match(/^(?:\d+:\d+:)?(\S+) (\S+?)(\((.*)\))? -> (\S+)$/); if (m) members[cur].push({ obf: m[5], name: m[2], params: m[3] ? (m[4] ? m[4].split(",") : []) : null }); }
+  }
+  const obfToMoj = Object.fromEntries(Object.entries(mojToObf).map(([a, b]) => [b, a]));
+  const prim = { int: "I", long: "J", boolean: "Z", byte: "B", char: "C", short: "S", float: "F", double: "D", void: "V" };
+  const desc = t => { let a = ""; while (t.endsWith("[]")) { a += "["; t = t.slice(0, -2); } return a + (prim[t] || "L" + (mojToObf[t] || t).split(".").join("/") + ";"); };
+  const rt = d => d.replace(/L([^;]+);/g, (_, o) => "L" + (obfToMoj[dot(o)] || dot(o)).split(".").join("/") + ";");
+  const out = {};
+  for (const line of lines(tinyFile)) {
+    const p = line.split("\t");
+    if (p[0] === "CLASS") { const moj = obfToMoj[dot(p[1])]; if (used.has(dot(p[2])) && moj) out[dot(p[2])] = [moj, ""]; }
+    else if ((p[0] === "FIELD" || p[0] === "METHOD") && used.has(p[4]) && !out[p[4]]) {
+      const ms = (members[dot(p[1])] || []).filter(m => m.obf === p[3] && (p[0] === "FIELD" ? m.params === null
+        : m.params !== null && "(" + m.params.map(desc).join("") + ")" === p[2].slice(0, p[2].indexOf(")") + 1)));
+      if (ms.length === 1) out[p[4]] = [ms[0].name, rt(p[2])];
+    }
+  }
+  write(mc + "-moj", out, "moj", used);
+}
+
+// Forge/NeoForge 1.14-1.20.4 run with SRG member names: intermediary -> SRG name + descriptor in runtime class names.
+// tsrg v1 (1.14-1.16: class names are MCP's) or tsrg2 (1.17+: classes are C_n, so the runtime Mojang class names come from client.txt).
+function forgeTable(mc, tinyFile, tsrgFile, mojFile) {
+  const cls = {}, mem = {};
+  let cur = null;
+  for (const line of lines(tsrgFile)) {
+    if (!line || line.startsWith("tsrg2") || line.startsWith("\t\t")) continue;
+    const p = line.trim().split(" ");
+    if (!line.startsWith("\t")) { cur = p[0]; cls[cur] = p[1]; }
+    else if (p.length >= 3 && p[1].startsWith("(")) mem[cur + " " + p[0] + " " + p[1]] = p[2]; // method: obf desc srg [id]
+    else mem[cur + " " + p[0]] = p[1]; // field: obf srg [id]
+  }
+  if (mojFile) for (const line of lines(mojFile)) { // obf -> Mojang class names (what Forge 1.17+ runs with)
+    const m = line.match(/^(\S+) -> (\S+):$/);
+    if (m) cls[m[2].split(".").join("/")] = m[1].split(".").join("/");
+  }
+  const rt = o => cls[o] || o;
+  const desc = d => d.replace(/L([^;]+);/g, (_, o) => "L" + rt(o) + ";");
+  const out = {};
+  for (const line of lines(tinyFile)) {
+    const p = line.split("\t");
+    if (p[0] === "CLASS" && used.has(dot(p[2]))) out[dot(p[2])] = [dot(rt(p[1])), ""];
+    else if ((p[0] === "FIELD" || p[0] === "METHOD") && used.has(p[4]) && !out[p[4]]) {
+      const s = p[0] === "METHOD" ? mem[p[1] + " " + p[3] + " " + p[2]] : mem[p[1] + " " + p[3]];
+      if (s) out[p[4]] = [s, desc(p[2])];
+    }
+  }
+  write(mc + "-srg", out, "forge", used);
+}
+
 const a = process.argv.slice(2);
 for (let i = 0; i < a.length; i++) {
   if (a[i] === "--official") { official(a[i + 1], a[i + 2]); i += 2; }
   else if (a[i] === "--obf") { obfTable(a[i + 1], a[i + 2]); i += 2; }
   else if (a[i] === "--srg") { srgTable(a[i + 1], a[i + 2]); i += 2; }
+  else if (a[i] === "--moj") { mojTable(a[i + 1], a[i + 2], a[i + 3]); i += 3; }
+  else if (a[i] === "--forge") { const moj = a[i + 4] && !a[i + 4].startsWith("--") ? a[i + 4] : null; forgeTable(a[i + 1], a[i + 2], a[i + 3], moj); i += moj ? 4 : 3; }
 }

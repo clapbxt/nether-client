@@ -76,14 +76,14 @@ export component DiscoverScreen inherits Rectangle {
         Flickable {
             y: 29px; height: parent.height - 29px; content-height: Backend.pack-rows.length * 68px + 16px; interactive: !Backend.detail-open;
             for r[i] in Backend.pack-rows: Rectangle {
-                y: i * 68px; height: 64px; width: parent.width; border-radius: 6px;
+                y: i * 68px; height: 64px; width: parent.width; border-radius: Theme.r1;
                 background: ta.has-hover ? Theme.hov : transparent;
                 animate background { duration: Theme.fast; }
                 ta := TouchArea { mouse-cursor: pointer; clicked => { Backend.open-pack(i); } }
                 Rectangle { x: 0px; y: 14px; width: 3px; height: parent.height - 28px; border-radius: 2px; background: Theme.red2; opacity: ta.has-hover ? 1 : 0; animate opacity { duration: Theme.fast; } }
                 if root.src != 2: ModIcon { x: 16px; y: 12px; width: 40px; height: 40px; src: r.icon; has: r.has-icon; }
                 if root.src == 2: Rectangle {
-                    x: 16px; y: 12px; width: 40px; height: 40px; border-radius: 6px; background: Theme.s2;
+                    x: 16px; y: 12px; width: 40px; height: 40px; border-radius: Theme.r1; background: Theme.s2;
                     Image { x: 6px; y: 6px; width: 28px; height: 28px; source: @image-url("assets/nether-icon.png"); image-fit: contain; }
                 }
                 Text { x: 70px; y: 10px; width: 760px; height: 24px; text: r.name; color: Theme.tx; font-family: r.cjk ? Theme.cjk : Theme.disp; font-size: r.cjk ? 16px * Theme.ts : 16px; font-weight: 700; vertical-alignment: center; overflow: elide; }
@@ -94,7 +94,7 @@ export component DiscoverScreen inherits Rectangle {
                 // quiet chevron at rest, VIEW under the pointer (nine outlined buttons were the loudest thing on the page)
                 if !ta.has-hover: Icon { x: parent.width - 34px; y: 26px; d: Ico.chev; tint: Theme.mut; }
                 if ta.has-hover: Rectangle {
-                    x: parent.width - 120px; y: 15px; width: 104px; height: 34px; border-radius: 6px; background: Theme.s3; border-width: 1px; border-color: Theme.ln2;
+                    x: parent.width - 120px; y: 15px; width: 104px; height: 34px; border-radius: Theme.r1; background: Theme.s3; border-width: 1px; border-color: Theme.ln2;
                     Text { text: "VIEW"; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
                 }
                 }

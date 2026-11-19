@@ -23,7 +23,8 @@ pub struct LauncherPrefs {
     pub calm: bool,
     /// accent colour (settings::ACCENTS index, 0 = fire)
     pub accent: i32,
-    /// theme (settings::THEME_NAMES index, 1 = Obsidian, the default)
+    /// theme (settings::THEME_NAMES index, 0 = NetherGlass Dark, the default); key "look" since v7 (old "theme" = OLED/Obsidian/Slate/Ice)
+    #[serde(rename = "look")]
     pub theme: i32,
     /// reading-text size: 0 default, 1 large, 2 larger
     pub text: i32,
@@ -36,11 +37,15 @@ pub struct LauncherPrefs {
 }
 
 impl Default for LauncherPrefs {
-    fn default() -> Self { LauncherPrefs { gpu: true, autostart: false, on_launch: 1, on_close: 0, calm: false, accent: 0, theme: 1, text: 0, capes: true, discord: true, auto_update: true } }
+    fn default() -> Self { LauncherPrefs { gpu: true, autostart: false, on_launch: 1, on_close: 0, calm: false, accent: 0, theme: 0, text: 0, capes: true, discord: true, auto_update: true } }
 }
 
 pub fn load(paths: &Paths) -> LauncherPrefs {
-    serde_json::from_value(nether_core::store::config(paths)["launcher"].clone()).unwrap_or_default()
+    let v = nether_core::store::config(paths)["launcher"].clone();
+    let mut p: LauncherPrefs = serde_json::from_value(v.clone()).unwrap_or_default();
+    // pre-v7 themes: Ice (3) was the light one, every other one becomes NetherGlass Dark
+    if v.get("look").is_none() && v["theme"].as_i64() == Some(3) { p.theme = 1; }
+    p
 }
 
 pub fn save(paths: &Paths, p: &LauncherPrefs) -> anyhow::Result<()> {

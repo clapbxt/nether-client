@@ -12,6 +12,8 @@ pub struct Item {
     pub tag: String,
     pub title: String,
     pub url: String,
+    /// card image (https URL; empty = the UI's own art)
+    pub image: String,
 }
 
 const TTL: Duration = Duration::from_secs(3600);
@@ -20,7 +22,7 @@ fn wiki(version: &str) -> String { format!("https://minecraft.wiki/?search=Java+
 
 /// Newest entries from the feeds; empty when offline.
 pub fn latest(c: &Client) -> Vec<Item> {
-    let mut out: Vec<Item> = crate::backend::news(c).into_iter().take(2).map(|n| Item { tag: n.tag, title: n.title, url: n.url }).collect();
+    let mut out: Vec<Item> = crate::backend::news(c).into_iter().take(2).map(|n| Item { tag: n.tag, title: n.title, url: n.url, image: String::new() }).collect();
     if let Ok(v) = get_cached(c, "https://launchercontent.mojang.com/v2/javaPatchNotes.json", &[], TTL) {
         let entries = v["entries"].as_array().cloned().unwrap_or_default();
         // the feed is newest-first; a release older than the current snapshot cycle is still the newest release
@@ -28,14 +30,16 @@ pub fn latest(c: &Client) -> Vec<Item> {
             if let Some(e) = entries.iter().find(|e| e["type"].as_str() == Some(kind)) {
                 let ver = e["version"].as_str().unwrap_or_default();
                 let title = e["title"].as_str().unwrap_or(ver);
-                out.push(Item { tag: tag.into(), title: title.into(), url: wiki(ver) });
+                // the art Mojang's own launcher shows with these patch notes
+                let image = e["image"]["url"].as_str().filter(|u| u.starts_with('/')).map(|u| format!("https://launchercontent.mojang.com{u}")).unwrap_or_default();
+                out.push(Item { tag: tag.into(), title: title.into(), url: wiki(ver), image });
             }
         }
     }
     if let Ok(v) = get_cached(c, "https://meta.fabricmc.net/v2/versions/loader", &[], TTL) {
         if let Some(l) = v.as_array().and_then(|a| a.iter().find(|l| l["stable"].as_bool().unwrap_or(false))) {
             let ver = l["version"].as_str().unwrap_or_default();
-            out.push(Item { tag: "FABRIC".into(), title: format!("Fabric Loader {ver}"), url: "https://fabricmc.net/".into() });
+            out.push(Item { tag: "FABRIC".into(), title: format!("Fabric Loader {ver}"), url: "https://fabricmc.net/".into(), image: String::new() });
         }
     }
     out

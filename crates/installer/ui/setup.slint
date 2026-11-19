@@ -49,8 +49,8 @@ component Opt inherits Rectangle {
 
 component Bar inherits Rectangle {
     in property <float> f;
-    height: 8px; border-radius: 4px; background: Theme.s3; clip: true;
-    Rectangle { x: 0px; width: parent.width * Math.clamp(root.f, 0, 1); border-radius: 4px; background: Theme.red; animate width { duration: 160ms; } }
+    height: 8px; border-radius: Theme.r1; background: Theme.s3; clip: true;
+    Rectangle { x: 0px; width: parent.width * Math.clamp(root.f, 0, 1); border-radius: Theme.r1; background: Theme.red; animate width { duration: 160ms; } }
 }
 
 export component SetupWindow inherits Window {
@@ -88,7 +88,7 @@ export component SetupWindow inherits Window {
             property <[string]> steps: Setup.mode == 1 ? ["CONFIRM", "REMOVE", "DONE"] : ["WELCOME", "OPTIONS", "INSTALL", "DONE"];
             property <int> at: Setup.mode == 1 ? (Setup.step == 0 ? 0 : (Setup.step == 2 ? 1 : 2)) : Math.min(Setup.step, 3);
             for s[i] in self.steps: Rectangle {
-                x: 20px; y: 150px + i * 42px; width: 260px; height: 38px; border-radius: 6px;
+                x: 20px; y: 150px + i * 42px; width: 260px; height: 38px; border-radius: Theme.r1;
                 background: i == at ? Theme.red.with-alpha(0.16) : transparent;
                 Rectangle { x: 0px; y: 9px; width: 3px; height: parent.height - 18px; border-radius: 2px; background: Theme.red2; visible: i == at; }
                 Text { x: 16px; height: parent.height; text: s; color: i == at ? Theme.tx : (i < at ? Theme.dim : Theme.mut); font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; }
@@ -126,7 +126,7 @@ export component SetupWindow inherits Window {
         if Setup.mode == 0 && Setup.step == 1: Rectangle {
             Heading { x: cx; y: 56px; text: "OPTIONS"; font-size: 32px; }
             Text { x: cx; y: 136px; text: "INSTALL FOLDER"; color: Theme.mut; font-family: Theme.ui; font-size: 12px; font-weight: 700; letter-spacing: 0.9px; }
-            Rectangle { x: cx; y: 156px; width: cw - 150px; height: 38px; background: Theme.s1; border-radius: 6px; border-width: 1px; border-color: Theme.ln2;
+            Rectangle { x: cx; y: 156px; width: cw - 150px; height: 38px; background: Theme.s1; border-radius: Theme.r1; border-width: 1px; border-color: Theme.ln2;
                 Text { x: 12px; width: parent.width - 24px; height: parent.height; text: Setup.location; color: Theme.tx; font-family: Theme.mono; font-size: 12px; vertical-alignment: center; overflow: elide; } }
             Btn { x: cx + cw - self.width; y: 156px; text: "BROWSE"; enabled: Setup.installed-version == ""; clicked => { Setup.browse(); } }
             Opt { x: cx; y: 212px; width: cw; title: "Desktop shortcut"; sub: "Nether Client on your desktop."; on <=> Setup.desktop; }

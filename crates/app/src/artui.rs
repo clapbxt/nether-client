@@ -32,8 +32,20 @@ fn icon_path(sh: &Shared, key: &str) -> Option<PathBuf> {
     }
 }
 
+/// Cover keys: "custom:<file>" (uploaded), "key:<family>" (official update key art), else a version (its panorama).
 fn cover_path(sh: &Shared, key: &str) -> PathBuf {
-    match key.strip_prefix("custom:") { Some(f) => custom_dir(sh, 1).join(f), None => pano_path(sh, key) }
+    if let Some(f) = key.strip_prefix("custom:") { return custom_dir(sh, 1).join(f); }
+    if let Some(f) = key.strip_prefix("key:") { return sh.paths.root.join("cache").join("art").join(format!("key-{f}.jpg")); }
+    pano_path(sh, key)
+}
+
+/// An instance's cover when none was picked: its update's key art, else its version's panorama.
+fn default_cover(ver: &str) -> String { art::key_family(ver).map(|f| format!("key:{f}")).unwrap_or_else(|| ver.to_string()) }
+
+/// Fetch a cover key that isn't cached yet (network).
+fn fetch_cover(sh: &Shared, key: &str) -> bool {
+    let c = &client();
+    match key.strip_prefix("key:") { Some(f) => art::key_art(c, &sh.paths, f).is_ok(), None => art::panorama(c, &sh.paths, key).is_ok() }
 }
 
 fn customs(sh: &Shared, kind: i32) -> Vec<Art> {
@@ -119,6 +131,35 @@ pub(crate) fn img(p: &Path) -> Option<Image> {
 
 fn pano_path(sh: &Shared, version: &str) -> PathBuf { sh.paths.root.join("cache").join("art").join(format!("pano-{version}.png")) }
 
+thread_local! {
+    /// Play cards: version panoramas decoded to 512 px, and the versions being fetched / decoded right now
+    static CARD_PANOS: RefCell<HashMap<String, Image>> = RefCell::new(HashMap::new());
+    static CARD_BUSY: RefCell<std::collections::HashSet<String>> = RefCell::new(std::collections::HashSet::new());
+}
+
+/// A version's art for the Play cards: its update's official key art (minecraft.net), else its title panorama.
+/// None while it downloads / decodes off the UI thread (`done` runs on the UI thread when it is ready).
+pub fn card_art(ui: &AppWindow, sh: &Arc<Shared>, version: &str, done: fn(&AppWindow, &Arc<Shared>)) -> Option<Image> {
+    if let Some(i) = CARD_PANOS.with(|m| m.borrow().get(version).cloned()) { return Some(i); }
+    if !CARD_BUSY.with(|b| b.borrow_mut().insert(version.to_string())) { return None; }
+    let (weak, sh, v) = (ui.as_weak(), sh.clone(), version.to_string());
+    std::thread::spawn(move || {
+        let c = client();
+        let key = art::key_family(&v).and_then(|f| art::key_art(&c, &sh.paths, f).ok());
+        let buf = match key {
+            Some(p) => decode(&p, 1024),
+            None => { let p = pano_path(&sh, &v); if p.exists() || art::panorama(&c, &sh.paths, &v).is_ok() { decode(&p, 512) } else { None } }
+        };
+        ui_do(&weak, move |ui| {
+            CARD_BUSY.with(|b| b.borrow_mut().remove(&v));
+            let Some(buf) = buf else { return };
+            CARD_PANOS.with(|m| m.borrow_mut().insert(v, Image::from_rgba8(buf)));
+            done(ui, &sh);
+        });
+    });
+    None
+}
+
 /// Re-apply icon and cover images to every instance card; fetch covers that aren't cached yet.
 pub fn refresh(ui: &AppWindow, sh: &Arc<Shared>) {
     let m = ui.global::<Backend>().get_instances();
@@ -127,7 +168,7 @@ pub fn refresh(ui: &AppWindow, sh: &Arc<Shared>) {
     for n in 0..m.row_count() {
         let Some(mut i) = m.row_data(n) else { continue };
         let icon = if i.icon.is_empty() { DEFAULT_ICON.to_string() } else { i.icon.to_string() };
-        let cover = if i.cover.is_empty() { i.ver.to_string() } else { i.cover.to_string() };
+        let cover = if i.cover.is_empty() { default_cover(&i.ver) } else { i.cover.to_string() };
         let icon_img = icon_path(sh, &icon).or_else(|| art::block_icon_path(&sh.paths, DEFAULT_ICON)).and_then(|p| img(&p));
         let p = cover_path(sh, &cover);
         // covers decode off the UI thread (a miss is filled in by the follow-up refresh below)
@@ -159,8 +200,7 @@ pub fn refresh(ui: &AppWindow, sh: &Arc<Shared>) {
     if missing.is_empty() { return; }
     let (weak, sh) = (ui.as_weak(), sh.clone());
     std::thread::spawn(move || {
-        let c = client();
-        let got = missing.iter().filter(|v| art::panorama(&c, &sh.paths, v).is_ok()).count();
+        let got = missing.iter().filter(|v| fetch_cover(&sh, v)).count();
         if got > 0 { ui_do(&weak, move |ui| refresh(ui, &sh)); }
     });
 }
@@ -202,9 +242,10 @@ pub fn init(weak: slint::Weak<AppWindow>, sh: Arc<Shared>) {
     });
 }
 
-/// Show the panorama of `version` (the create dialog's "this version" wallpaper).
+/// Show the default cover of `version` (the create dialog's "this version" wallpaper): key art, else its panorama.
 pub fn cover_for(ui: &AppWindow, sh: &Arc<Shared>, version: String) {
-    let p = pano_path(sh, &version);
+    let key = default_cover(&version);
+    let p = cover_path(sh, &key);
     if p.exists() {
         if let Some(i) = img(&p) { ui.global::<Backend>().set_version_cover(i); }
         return;
@@ -212,8 +253,22 @@ pub fn cover_for(ui: &AppWindow, sh: &Arc<Shared>, version: String) {
     ui.global::<Backend>().set_version_cover(Image::default());
     let (weak, sh) = (ui.as_weak(), sh.clone());
     std::thread::spawn(move || {
-        if let Ok(p) = art::panorama(&client(), &sh.paths, &version) {
-            ui_do(&weak, move |ui| if let Some(i) = img(&p) { ui.global::<Backend>().set_version_cover(i) });
+        if fetch_cover(&sh, &key) {
+            ui_do(&weak, move |ui| if let Some(i) = img(&cover_path(&sh, &key)) { ui.global::<Backend>().set_version_cover(i) });
         }
     });
+}
+
+/// A web image (news art) downloaded once into the art cache and decoded to at most `max` px (call off the UI thread).
+pub fn web_image(sh: &Shared, url: &str, max: u32) -> Option<SharedPixelBuffer<Rgba8Pixel>> {
+    let name: String = url.rsplit('/').next()?.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '.').collect();
+    if name.is_empty() { return None; }
+    let p = sh.paths.root.join("cache").join("art").join(format!("web-{name}"));
+    if !p.exists() {
+        let bytes = client().get(url).send().ok()?.error_for_status().ok()?.bytes().ok()?;
+        image::load_from_memory(&bytes).ok()?;
+        std::fs::create_dir_all(p.parent()?).ok()?;
+        std::fs::write(&p, &bytes).ok()?;
+    }
+    decode(&p, max)
 }

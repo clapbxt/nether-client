@@ -69,11 +69,11 @@ Copy-Item (Join-Path $root "res\fonts") (Join-Path $cls "fonts") -Recurse
 Copy-Item (Join-Path $root "res\names") (Join-Path $cls "names") -Recurse
 # brand art (made from art/ by the launcher's asset step: fireball + NETHER CLIENT wordmark)
 Copy-Item (Join-Path $root "res\brand") (Join-Path $cls "brand") -Recurse
-# module icons (design/module-icons/<id>.svg, read by ov/ModIcons)
-Copy-Item (Join-Path $root "..\design\module-icons") (Join-Path $cls "icons") -Recurse
+# line icons (res/icons/<id>.svg, read by ov/ModIcons)
+Copy-Item (Join-Path $root "res\icons") (Join-Path $cls "icons") -Recurse
 # Hook must sit on the bootstrap class path so every loader (incl. Fabric Knot) can see it
 $boot = Join-Path $out "boot\dev\nether\agent"; New-Item -ItemType Directory -Force $boot | Out-Null
-Move-Item (Join-Path $cls "dev\nether\agent\Hook*.class") $boot
+Move-Item (Join-Path $cls "dev\nether\agent\Hook*.class"), (Join-Path $cls "dev\nether\agent\Tiny*.class") $boot # Tiny: Legacy Fabric 1.8.9 names, shared by the agent and the overlay
 & jar cf (Join-Path $out "nether-agent-boot.jar") -C (Join-Path $out "boot") .
 if ($LASTEXITCODE -ne 0) { throw "boot jar failed" }
 Set-Content (Join-Path $out "manifest.txt") "Premain-Class: dev.nether.agent.Agent`nBoot-Class-Path: nether-agent-boot.jar`n" -Encoding ascii

@@ -1,23 +1,34 @@
-// Design tokens (v6: OLED / Obsidian / Slate / Ice, Nether Pixel). See NC Obsidian Vault/Design.md.
+// Design tokens (v7: NetherGlass Dark/Light = rounded glass + Barlow display; NetherMinecraft Dark/Light = square + Nether Pixel).
+// Rust (settings::apply_theme) swaps every value below; defaults = NetherGlass Dark. See NC Obsidian Vault/Design.md.
 export global Theme {
     // theme surfaces (OLED default; Rust swaps them for Obsidian / Slate / Ice): bg, three raised steps, hairlines,
     // text (primary, secondary, tertiary), ink = text on ice / accent plates, ice = primary button fill
-    in-out property <color> bg: #000000;
-    in-out property <color> s1: #0B0B0D;
-    in-out property <color> s2: #141418;
-    in-out property <color> s3: #1D1D23;
-    in-out property <color> ln: #ffffff14;
-    in-out property <color> ln2: #ffffff29;
-    in-out property <color> tx: #F1F2F5;
-    in-out property <color> dim: #A3A8B3;
-    in-out property <color> mut: #6B707B;
-    in-out property <color> ink: #09090C;
-    in-out property <color> ice: #F1F2F5;
-    // glass (Home): s1 at ~66% + hairline; the one place that is see-through
-    in-out property <color> glass: #0B0B0DA8;
-    in-out property <color> glass-ln: #ffffff1a;
+    in-out property <color> bg: #0D1015;
+    in-out property <color> s1: #161A21E6;
+    in-out property <color> s2: #1C222B;
+    in-out property <color> s3: #252C37;
+    in-out property <color> ln: #ffffff12;
+    in-out property <color> ln2: #ffffff26;
+    in-out property <color> tx: #E9EDF3;
+    in-out property <color> dim: #9BA5B4;
+    in-out property <color> mut: #677183;
+    in-out property <color> ink: #0D1015;
+    in-out property <color> ice: #E9EDF3;
+    // glass (Home): s1 see-through + hairline
+    in-out property <color> glass: #161A21B0;
+    in-out property <color> glass-ln: #ffffff1c;
     // white-on-dark / dark-on-light overlay base for hover fills
     in-out property <color> hov: #ffffff0f;
+    // stage backdrop: top-left tint the bg fades from, accent aura strength (0 = none), glass top sheen
+    in-out property <color> bg-top: #161C26;
+    in-out property <float> aura: 0.10;
+    in-out property <color> sheen: #ffffff0d;
+    // shape: radius for controls / panels / floating cards (all 0 in the Minecraft themes); square = Minecraft theme
+    in-out property <length> r1: 8px;
+    in-out property <length> r2: 12px;
+    in-out property <length> r3: 16px;
+    in-out property <bool> square: false;
+    in-out property <bool> light: false;
     // accent, racing red by default (Settings > Personalization swaps it): base, bright, deep,
     // readable text on dark, pressed, and the dark plate under PLAY
     in-out property <color> red: #F76A05;
@@ -29,7 +40,7 @@ export global Theme {
     // reading-text scale (Settings > Personalization > Text size); display type stays as designed
     in-out property <float> ts: 1.0;
     // type: condensed display (titles, buttons, labels), text face, data face
-    out property <string> disp: "Nether Pixel";
+    in-out property <string> disp: "Barlow";
     out property <string> ui: "Barlow";
     out property <string> mono: "JetBrains Mono";
     // motion; Reduce motion (set from Rust with Backend.calm) collapses every transition to none

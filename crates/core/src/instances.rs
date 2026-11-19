@@ -62,9 +62,57 @@ pub struct InstanceData {
     pub backup_auto: bool,
     #[serde(default)]
     pub backup_keep: u32,
+    /// A Nether profile (the Nether client runs in it) or plain Minecraft. None (instances from before profiles) is
+    /// decided by `nether_ok`: Vanilla or Fabric on a version the client supports.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nether: Option<bool>,
+    /// The modpack this instance was installed from ("" = none): it lists under Play > Modpacks.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub pack: String,
+    /// OptiFine on (Vanilla 1.8.9 / 1.12.2 Nether profiles): "" off, "on" = set up on the next launch (the launcher
+    /// downloads it, see `optifine`).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub optifine: String,
 }
 
 fn yes() -> bool { true }
+
+/// Where the Nether client runs: Vanilla on 1.8.9, 1.12.2, 1.14 and newer (26.x too); Fabric and Forge on 1.14 and
+/// newer, plus Fabric 1.8.9 (run on Legacy Fabric); Legacy Fabric on 1.8.9 and 1.12.2. NeoForge, Quilt and other versions are plain Minecraft only.
+pub fn nether_ok(version: &str, loader: &str) -> bool {
+    use crate::launch::Loader;
+    let l = Loader::from_label(loader);
+    let (legacy, vanilla) = (matches!(l, Loader::LegacyFabric), matches!(l, Loader::Vanilla));
+    let fabric = matches!(l, Loader::Fabric | Loader::Forge);
+    if !fabric && !legacy && !vanilla { return false; }
+    let mut it = version.split('.').map(|p| p.parse::<u32>().ok());
+    match (it.next().flatten(), it.next().flatten()) {
+        (Some(1), Some(m)) if m >= 14 => !legacy,
+        // a "Fabric" 1.8.9 instance runs on Legacy Fabric (launch::pre_fabric), whose names the agent maps (Tiny)
+        (Some(1), Some(8 | 12)) => match version { "1.8.9" => !matches!(l, Loader::Forge), "1.12.2" => !fabric, _ => false },
+        (Some(y), _) if y >= 26 => !legacy,
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod nether_tests {
+    #[test]
+    fn where_nether_runs() {
+        use super::nether_ok as ok;
+        assert!(ok("1.21.11", "Fabric") && ok("1.21.11", "Vanilla") && ok("26.3", "Fabric") && ok("1.14", "Vanilla"));
+        assert!(ok("1.8.9", "Vanilla") && ok("1.8.9", "Legacy Fabric") && ok("1.12.2", "Vanilla"));
+        assert!(ok("1.20.1", "Forge") && !ok("1.12.2", "Forge") && !ok("1.8.9", "Forge"));
+        assert!(ok("1.8.9", "Fabric") && !ok("1.12.2", "Fabric") && !ok("1.21.1", "NeoForge") && !ok("1.20.1", "Quilt"));
+        assert!(!ok("1.13.2", "Vanilla") && !ok("1.7.10", "Vanilla") && !ok("1.8.8", "Vanilla") && !ok("25w14a", "Vanilla"));
+        assert!(!ok("1.21.1", "Legacy Fabric"));
+    }
+}
+
+impl InstanceData {
+    /// The Nether client runs in this instance.
+    pub fn nether_on(&self) -> bool { self.nether != Some(false) && nether_ok(&self.version, &self.loader) }
+}
 
 fn file(paths: &Paths) -> PathBuf { paths.root.join("instances.json") }
 

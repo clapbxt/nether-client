@@ -172,3 +172,67 @@ pub fn block_icon_path(paths: &Paths, name: &str) -> Option<PathBuf> {
     let p = cache(paths).join("blocks").join(format!("{name}.png"));
     p.exists().then_some(p)
 }
+
+/// Official update key art: the hero images of Mojang's release articles on minecraft.net, one per version family
+/// (the art Lunar's version cards use). `top` / `bottom` (fractions of the height) crop away the logo and title Mojang
+/// paints into some of them, so our own type can sit on the art. 1.8 never had key art; its card uses the Elder
+/// Guardian art from Mojang's Bountiful-era Mob Menagerie article (ocean monuments were 1.8's headline).
+pub struct KeyArt { pub fam: &'static str, pub update: &'static str, url: &'static str, top: f32, bottom: f32 }
+
+const MCNET: &str = "https://www.minecraft.net/content/dam/minecraftnet";
+
+pub const KEY_ART: &[KeyArt] = &[
+    KeyArt { fam: "26", update: "Wilderness Bound", url: "games/minecraft/screenshots/MC-Updates_Carousel-N-0_2026_FGD-26_01_1000x563.png", top: 0.18, bottom: 0.76 },
+    KeyArt { fam: "1.21", update: "Tricky Trials", url: "games/minecraft/game-updates/Editorial_article_TrickyTrials_launch_1170x500.jpg", top: 0.0, bottom: 1.0 },
+    KeyArt { fam: "1.20", update: "Trails & Tales", url: "games/minecraft/screenshots/1_20_header.jpg", top: 0.0, bottom: 1.0 },
+    KeyArt { fam: "1.19", update: "The Wild Update", url: "games/minecraft/key-art/Xbox_Minecraft_WildUpdate_Main_.Net_1170x500.jpg", top: 0.28, bottom: 1.0 },
+    KeyArt { fam: "1.18", update: "Caves & Cliffs: Part II", url: "games/minecraft/key-art/CC2_KeyArt_1140x565.jpg", top: 0.28, bottom: 0.83 },
+    KeyArt { fam: "1.17", update: "Caves & Cliffs: Part I", url: "games/minecraft/screenshots/1-17-release-header.jpg", top: 0.0, bottom: 1.0 },
+    KeyArt { fam: "1.16", update: "Nether Update", url: "games/minecraft/key-art/nether-header.jpg", top: 0.0, bottom: 1.0 },
+    KeyArt { fam: "1.12", update: "World of Color", url: "archive/b1c06cfe1e13734b3da8912f424e75ac-mc112_header.png", top: 0.0, bottom: 1.0 },
+    KeyArt { fam: "1.8", update: "Bountiful Update", url: "games/minecraft/game-characters/mm_eg_header.jpg", top: 0.0, bottom: 1.0 },
+];
+
+/// The key-art family of a version ("1.21.4" -> "1.21", "26.1.2" -> "26"), if it has art.
+pub fn key_family(version: &str) -> Option<&'static str> {
+    let mut it = version.split(['.', '-', ' ']);
+    let major = it.next()?;
+    let fam = if major == "1" { format!("1.{}", it.next()?) } else { major.to_string() };
+    KEY_ART.iter().find(|k| k.fam == fam).map(|k| k.fam)
+}
+
+/// A family's key art as a cached JPEG (cropped, at most 1600 px wide). Network on the first call; call off the UI thread.
+pub fn key_art(c: &Client, paths: &Paths, fam: &str) -> Result<PathBuf> {
+    let k = KEY_ART.iter().find(|k| k.fam == fam).ok_or_else(|| anyhow!("no key art for {fam}"))?;
+    let file = cache(paths).join(format!("key-{fam}.jpg"));
+    if file.exists() { return Ok(file); }
+    let bytes = c.get(format!("{MCNET}/{}", k.url)).send()?.error_for_status()?.bytes()?;
+    let img = image::load_from_memory(&bytes)?;
+    let (w, h) = (img.width(), img.height());
+    let (y0, y1) = ((h as f32 * k.top) as u32, ((h as f32 * k.bottom) as u32).min(h));
+    let img = img.crop_imm(0, y0, w, y1.saturating_sub(y0).max(1));
+    let img = if img.width() > 1600 { img.resize(1600, 1600, image::imageops::FilterType::Lanczos3) } else { img };
+    std::fs::create_dir_all(cache(paths))?;
+    let tmp = file.with_extension("part");
+    img.to_rgb8().save_with_format(&tmp, image::ImageFormat::Jpeg)?;
+    std::fs::rename(&tmp, &file)?;
+    Ok(file)
+}
+
+/// Path of a family's cached key art (None until `key_art` fetched it).
+pub fn key_art_path(paths: &Paths, fam: &str) -> Option<PathBuf> {
+    let p = cache(paths).join(format!("key-{fam}.jpg"));
+    p.exists().then_some(p)
+}
+
+#[cfg(test)]
+mod key_tests {
+    #[test]
+    fn families() {
+        assert_eq!(super::key_family("1.21.11"), Some("1.21"));
+        assert_eq!(super::key_family("26.1.2"), Some("26"));
+        assert_eq!(super::key_family("1.8.9"), Some("1.8"));
+        assert_eq!(super::key_family("1.20"), Some("1.20"));
+        assert_eq!(super::key_family("1.7.10"), None);
+    }
+}

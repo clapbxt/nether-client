@@ -233,6 +233,13 @@ final class Cosmetics {
 
     private static long nextInstall, nextIds;
     private static boolean off;
+
+    /** Cosmetics can be drawn on players in this game (1.15+ PoseStack layers, or 1.8.9) and have not failed. */
+    static boolean renders() {
+        if (off) return false;
+        if (Game.legacy()) return true;
+        return Game.fabric() && Game.cls0("net.minecraft.class_4587") != null;
+    }
     private static Class<?> layerCls;
     private static final Map<Integer, String> idUuid = new HashMap<>();
 
@@ -485,15 +492,18 @@ final class Cosmetics {
         Object ps = a[0], sink = a[1], st = a[3];
         int light = (Integer) a[2];
         Object eid = Game.fld(st, "field_53528");
-        String uuid = eid instanceof Integer ? idUuid.get(eid) : null;
+        // 1.21.2+: a render state; 1.15-1.21.1: the player entity itself (a = pose, buffers, light, player, limb, limbAmount, partial, ...)
+        Object who = eid instanceof Integer ? null : Game.call(st, "method_5667");
+        String uuid = eid instanceof Integer ? idUuid.get(eid) : who instanceof UUID ? who.toString().replace("-", "") : null;
         String[] look = look(uuid);
         if (look == null) return;
-        if (Boolean.TRUE.equals(Game.fld(st, "field_53333")) || Boolean.TRUE.equals(Game.fld(st, "field_53542"))) return; // invisible / spectator
+        if (who != null) { if (Boolean.TRUE.equals(Game.call(st, "method_5767")) || Boolean.TRUE.equals(Game.call(st, "method_7325"))) return; }
+        else if (Boolean.TRUE.equals(Game.fld(st, "field_53333")) || Boolean.TRUE.equals(Game.fld(st, "field_53542"))) return; // invisible / spectator
         Object model = Game.call(layer, "method_17165");
         if (model == null) return;
         double t = now();
         // models on their body parts; nothing on the head under a helmet or a worn head item
-        Object helm = Game.fld(st, "field_55309"), headItem = Game.fld(st, "field_53467");
+        Object helm = who != null ? Game.call(st, "method_6118", headSlot()) : Game.fld(st, "field_55309"), headItem = who != null ? null : Game.fld(st, "field_53467");
         boolean covered = (helm != null && Boolean.FALSE.equals(Game.call(helm, "method_7960"))) || (headItem != null && Boolean.FALSE.equals(Game.call(headItem, "method_65606")));
         for (int s = 0; s < SLOTS.length; s++) {
             Item it = item(look[s], SLOTS[s]);
@@ -511,7 +521,15 @@ final class Cosmetics {
         // particle aura: world-axis particles around the feet
         Item au = item(look[AURA], "aura");
         if (au != null && au.aura != null) {
-            Object bx = Game.fld(st, "field_53325"), by = Game.fld(st, "field_53326"), bz = Game.fld(st, "field_53327"), br = Game.fld(st, "field_53446");
+            Object bx, by, bz, br;
+            if (who != null) { // entity: positions and body yaw interpolated by the frame's partial tick
+                float pt = a.length > 6 && a[6] instanceof Float ? (Float) a[6] : 1f;
+                bx = lerp(Game.fld(st, "field_6014"), Game.call(st, "method_23317"), pt);
+                by = lerp(Game.fld(st, "field_6036"), Game.call(st, "method_23318"), pt);
+                bz = lerp(Game.fld(st, "field_5969"), Game.call(st, "method_23321"), pt);
+                Object b0 = Game.fld(st, "field_6220"), b1 = Game.fld(st, "field_6283");
+                br = b0 instanceof Float && b1 instanceof Float ? (Float) b0 + ((Float) b1 - (Float) b0) * pt : null;
+            } else { bx = Game.fld(st, "field_53325"); by = Game.fld(st, "field_53326"); bz = Game.fld(st, "field_53327"); br = Game.fld(st, "field_53446"); }
             if (bx instanceof Double && by instanceof Double && bz instanceof Double && br instanceof Float) {
                 double fx = (Double) bx, fy = (Double) by, fz = (Double) bz;
                 remember(uuid, t, fx, fy, fz);
@@ -519,6 +537,18 @@ final class Cosmetics {
                 if (camera(r, u)) submit(ps, sink, au, aura(au, uuid, t, fx, fy, fz, unbody((Float) br, 1.501f, 0.9375f), r, u, light));
             }
         }
+    }
+
+    private static Object headSlotV;
+    /** EquipmentSlot.HEAD (entity path: the worn helmet). */
+    private static Object headSlot() {
+        if (headSlotV == null) try { headSlotV = Game.field(Game.cls("net.minecraft.class_1304"), "field_6169").get(null); } catch (Throwable e) { }
+        return headSlotV;
+    }
+
+    private static Double lerp(Object a, Object b, float t) {
+        if (!(a instanceof Double) || !(b instanceof Double)) return null;
+        return (Double) a + ((Double) b - (Double) a) * t;
     }
 
     private static Object cam;

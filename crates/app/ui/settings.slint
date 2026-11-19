@@ -43,7 +43,7 @@ component Uploads inherits Rectangle {
     Rectangle {
         x: mod(root.items.length, root.cols) * (root.tile + 8px); y: floor(root.items.length / root.cols) * (root.tile + 8px);
         width: root.tile; height: root.tile;
-        background: at.has-hover ? Theme.s2 : transparent; border-width: 1px; border-color: at.has-hover ? Theme.red2 : Theme.ln2; border-radius: 8px;
+        background: at.has-hover ? Theme.s2 : transparent; border-width: 1px; border-color: at.has-hover ? Theme.red2 : Theme.ln2; border-radius: Theme.r2;
         animate background, border-color { duration: Theme.mid; }
         Icon { x: (parent.width - 12px) / 2; y: (parent.height - 12px) / 2; d: Ico.plus; tint: at.has-hover ? Theme.tx : Theme.dim; }
         at := TouchArea { mouse-cursor: pointer; clicked => { root.add(); } }
@@ -60,7 +60,7 @@ component Jump inherits Rectangle {
     in property <bool> active;
     callback clicked();
     height: 38px;
-    border-radius: 6px;
+    border-radius: Theme.r1;
     background: root.active ? Theme.red.with-alpha(0.16) : (ta.has-hover ? Theme.hov : transparent);
     animate background { duration: Theme.fast; }
     Rectangle { x: 0px; y: 8px; width: 3px; height: parent.height - 16px; border-radius: 2px; background: Theme.red2; opacity: root.active ? 1 : 0; animate opacity { duration: Theme.mid; } }
@@ -68,7 +68,7 @@ component Jump inherits Rectangle {
     ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
         key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
-    if fs.has-focus: Rectangle { border-radius: 6px; border-width: 2px; border-color: Theme.ice; }
+    if fs.has-focus: Rectangle { border-radius: Theme.r1; border-width: 2px; border-color: Theme.ice; }
 }
 
 // A saved Microsoft account: head, name, what it is used for; switch / remove on the right.
@@ -88,6 +88,30 @@ component AcctRow inherits SetRow {
         clicked => { if root.acct.active { Backend.sign-out(); } else { Backend.remove-account(root.acct.uuid); } } }
 }
 
+struct ThemeSpec { name: string, sub: string, bg: color, panel: color, line: color, text: color, r: length }
+
+// Theme picker tile: a tiny window drawn in that theme's own colours and shape, name below
+component ThemeTile inherits Rectangle {
+    in property <ThemeSpec> spec;
+    in property <bool> on;
+    callback pick();
+    width: 120px; height: 82px;
+    Rectangle {
+        width: 120px; height: 56px; y: 0px; background: root.spec.bg; border-radius: root.spec.r; clip: true;
+        border-width: root.on ? 2px : 1px; border-color: root.on ? Theme.red : ta.has-hover ? Theme.ln2 : Theme.ln;
+        animate border-color { duration: Theme.fast; }
+        // side rail, two panels, accent action
+        Rectangle { x: 8px; y: 8px; width: 22px; height: 40px; background: root.spec.panel; border-radius: root.spec.r / 2.5; }
+        Rectangle { x: 36px; y: 8px; width: 76px; height: 18px; background: root.spec.panel; border-radius: root.spec.r / 2.5; border-width: 1px; border-color: root.spec.line; }
+        Rectangle { x: 36px; y: 30px; width: 46px; height: 18px; background: root.spec.panel; border-radius: root.spec.r / 2.5; border-width: 1px; border-color: root.spec.line; }
+        Rectangle { x: 86px; y: 30px; width: 26px; height: 18px; background: Theme.red; border-radius: root.spec.r / 2.5; }
+        Rectangle { x: 12px; y: 13px; width: 14px; height: 3px; background: root.spec.text.with-alpha(0.7); }
+        Rectangle { x: 41px; y: 15px; width: 40px; height: 3px; background: root.spec.text.with-alpha(0.6); }
+    }
+    Text { x: 0px; y: 62px; width: 120px; text: root.spec.name + " " + root.spec.sub; color: root.on || ta.has-hover ? Theme.tx : Theme.dim; font-family: Theme.ui; font-size: 12px; font-weight: 600; horizontal-alignment: center; overflow: elide; }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.pick(); } }
+}
+
 export component SettingsScreen inherits Rectangle {
     property <length> cw: 760px;
     // section tops (each follows the one before it)
@@ -96,8 +120,8 @@ export component SettingsScreen inherits Rectangle {
     property <length> y3: root.y2 + 40px + root.nacc * 64px + 68px;
     property <length> y4: root.y3 + 40px + Backend.javas.length * 64px + 40px;
     property <length> y5: root.y4 + 40px + 6 * 64px + 40px;
-    property <length> y6: root.y5 + 40px + 3 * 64px + 150px + ic.height + wp.height + 40px;
-    property <length> py: root.y5 + 216px;
+    property <length> y6: root.y5 + 40px + 3 * 64px + 190px + ic.height + wp.height + 40px;
+    property <length> py: root.y5 + 256px;
     property <length> sy: root.y6 + 24px + Backend.folders.length * 64px;
     // L2: privacy (what the launcher and client connect to)
     property <length> y7: root.sy + 4 * 64px + 40px;
@@ -106,6 +130,11 @@ export component SettingsScreen inherits Rectangle {
     property <length> end: fl.content-height - fl.height - 2px;
     property <[length]> tops: [0px, root.y2, root.y3, root.y4, root.y5, root.y6, root.y7];
     property <int> at: root.pos >= Math.min(root.y7 - 120px, root.end) ? 6 : (root.pos >= root.y6 - 120px ? 5 : (root.pos >= root.y5 - 120px ? 4 : (root.pos >= root.y4 - 120px ? 3 : (root.pos >= root.y3 - 120px ? 2 : (root.pos >= root.y2 - 120px ? 1 : 0)))));
+    property <[ThemeSpec]> themes: [
+        { name: "NetherGlass", sub: "Dark", bg: #0D1015, panel: #1C222B, line: #ffffff1f, text: #E9EDF3, r: 10px },
+        { name: "NetherGlass", sub: "Light", bg: #E8ECF2, panel: #FFFFFF, line: #141E3224, text: #151922, r: 10px },
+        { name: "NetherMinecraft", sub: "Dark", bg: #161616, panel: #2C2C2C, line: #ffffff33, text: #FFFFFF, r: 0px },
+        { name: "NetherMinecraft", sub: "Light", bg: #B4B4B4, panel: #D0D0D0, line: #00000059, text: #1E1E1E, r: 0px }];
     property <[string]> accent-names: ["Racing red", "Ember", "Acid", "Cobalt", "Violet"];
     property <[color]> accents: [#F76A05, #E5372D, #22A845, #1F6FEB, #8B3DFF];
     // L2: what connects where (Rule 6); k = what for, url = hosts and when
@@ -117,7 +146,9 @@ export component SettingsScreen inherits Rectangle {
         {k: "Skins, capes and news", url: "sessionserver.mojang.com, api.mojang.com, textures.minecraft.net, launchercontent.mojang.com"},
         {k: "Nether content and capes", url: "the Nether service (signed news, packs and cape list; your cape, and lookups in game)"},
         {k: "Launcher updates", url: "api.github.com, github.com · checking for and downloading signed updates"},
-        {k: "Hosting", url: "api.playit.gg, api.ipify.org, api.mcstatus.io, fill.papermc.io · only while you use the Host tab"},
+        {k: "Invite to world", url: "iroh.link (peer-to-peer link + relay fallback), api.ipify.org, api.mcstatus.io, api.mojang.com · only while you share or join a world"},
+        {k: "Friends, world invites", url: "the Nether friends service (Cloudflare) · while signed in: your friends, requests, blocks and status"},
+        {k: "Parties, chat and voice", url: "your party members directly (peer-to-peer), iroh.link relays as fallback · only in a party; never stored or recorded"},
         {k: "Sharing logs", url: "api.mclo.gs · only when you confirm Share or press Upload (a public link)"},
         {k: "In game", url: "sessionserver.mojang.com for your head, and your saved servers for their status (title screen) · media helper: local only"},
         {k: "Lyrics (off by default)", url: "lrclib.net, and music.163.com for word timing · the song's title, artist, album and length"},
@@ -189,16 +220,17 @@ export component SettingsScreen inherits Rectangle {
         SetRow { x: 0px; y: root.y5 + 24px; width: root.cw; reserve: 230px; title: "Accent colour"; sub: root.accent-names[Backend.lp-accent] + " · PLAY, selection marks and live states";
             for c[i] in root.accents: Rectangle {
                 x: parent.width - 5 * 36px + 6px + i * 36px; y: 18px; width: 28px; height: 28px; background: c;
-                border-width: Backend.lp-accent == i ? 2px : 0px; border-color: Theme.ice; border-radius: 8px;
-                Rectangle { x: 2px; y: 2px; width: 24px; height: 24px; border-radius: 6px; background: transparent; border-width: Backend.lp-accent == i ? 2px : 0px; border-color: Theme.bg; }
+                border-width: Backend.lp-accent == i ? 2px : 0px; border-color: Theme.ice; border-radius: Theme.r2;
+                Rectangle { x: 2px; y: 2px; width: 24px; height: 24px; border-radius: Theme.r1; background: transparent; border-width: Backend.lp-accent == i ? 2px : 0px; border-color: Theme.bg; }
                 sw := TouchArea { mouse-cursor: pointer; clicked => { Backend.lp-accent = i; Backend.save-launcher(); } }
                 sf := FocusScope { width: 0px; height: 0px; focus-on-click: false;
                     key-pressed(e) => { if e.text == " " || e.text == Key.Return { Backend.lp-accent = i; Backend.save-launcher(); return accept; } return reject; } }
-                if sf.has-focus || (sw.has-hover && Backend.lp-accent != i): Rectangle { x: -4px; y: -4px; width: parent.width + 8px; height: parent.height + 8px; border-radius: 10px; border-width: 1px; border-color: sf.has-focus ? Theme.ice : Theme.ln2; }
+                if sf.has-focus || (sw.has-hover && Backend.lp-accent != i): Rectangle { x: -4px; y: -4px; width: parent.width + 8px; height: parent.height + 8px; border-radius: Theme.r3; border-width: 1px; border-color: sf.has-focus ? Theme.ice : Theme.ln2; }
             }
         }
-        SetRow { x: 0px; y: root.y5 + 152px; width: root.cw; reserve: 420px; title: "Theme"; sub: "Also the in-game menu's look. Ice is light.";
-            Seg { x: parent.width - self.width; y: 15px; items: ["OLED", "OBSIDIAN", "SLATE", "ICE"]; current: Backend.lp-theme; changed(i) => { Backend.lp-theme = i; Backend.save-launcher(); } }
+        SetRow { x: 0px; y: root.y5 + 152px; width: root.cw; height: 104px; reserve: 540px; title: "Theme"; sub: "Also the in-game menu and HUD. Glass is rounded and smooth; Minecraft is square with pixel type.";
+            for t[i] in root.themes: ThemeTile { x: parent.width - 4 * 128px + 8px + i * 128px; y: 12px; spec: t; on: Backend.lp-theme == i;
+                pick => { Backend.lp-theme = i; Backend.save-launcher(); } }
         }
         SetRow { x: 0px; y: root.y5 + 88px; width: root.cw; reserve: 340px; title: "Text size"; sub: "Bigger reading text. Titles keep their size.";
             Seg { x: parent.width - self.width; y: 15px; items: ["DEFAULT", "LARGE", "LARGER"]; current: Backend.lp-text; changed(i) => { Backend.lp-text = i; Backend.save-launcher(); } }
@@ -255,7 +287,8 @@ export component SettingsScreen inherits Rectangle {
         {s: 5, n: 0, h: "Safe to clear", b: "The download cache only holds icons and lookups. It refills as you browse."},
         {s: 5, n: 1, h: "Signed updates", b: "Every update is checked against our signing key before it installs."},
         {s: 6, n: 0, h: "No telemetry", b: "No analytics, no ads, no tracking. The list on the left is every service Nether talks to."},
-        {s: 6, n: 1, h: "Only when you use it", b: "Hosting, log sharing and lyrics connect only while you use them."},
+        {s: 6, n: 1, h: "Only when you use it", b: "World sharing, log sharing and lyrics connect only while you use them."},
+        {s: 6, n: 2, h: "Parties stay between you", b: "Party chat and voice go straight to your party and are never saved. Hide my IP sends them through a relay."},
     ];
     Rectangle {
         x: 1124px; y: 0px; width: 316px; height: parent.height; background: Theme.s1;

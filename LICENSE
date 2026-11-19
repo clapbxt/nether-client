@@ -1,21 +1,99 @@
-MIT License
+Nether Client Source-Available License
+Version 1.0, 16 November 2026
 
-Copyright (c) 2026 clapbxt
+Copyright (c) 2026 clapbxt, operating as Nether Client. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This license covers the source code, build scripts, documentation, artwork and other material in this repository
+(the "Software"), except third-party components, which keep their own licenses (see NOTICE.md).
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The source of the Software is published so that people can read it, learn from it, check what it does and help
+improve it. It is not open source, and none of the rights below include making your own public version of it.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+
+1. WHAT YOU MAY DO
+
+Provided you follow this license, you may, free of charge:
+
+  a. Use. Download, install and run official builds of the Software for your own personal, non-commercial use.
+
+  b. Learn. Read and study the source code, and use the general ideas and techniques you learn from it in your own
+     work, provided you do not copy the Software's code or assets into that work.
+
+  c. Build and modify privately. Build the Software from source and modify it on your own devices, for your own
+     personal, non-commercial use, learning or testing. Modified builds must stay with you.
+
+  d. Contribute. Fork this repository on GitHub, as GitHub's terms allow, solely to prepare changes and submit them
+     to this repository as pull requests, issues or patches.
+
+  e. Quote. Reproduce short excerpts of the source in discussions, bug reports, reviews, education or research,
+     with credit to Nether Client and a link to this repository.
+
+
+2. WHAT YOU MAY NOT DO
+
+Unless you have written permission from the copyright holder, you may not:
+
+  a. Distribute, publish, sell, rent, lend, sublicense or otherwise make available the Software or any modified
+     version of it, as source code or as a binary, except a fork kept solely for 1(d).
+
+  b. Create, publish or operate any launcher, client, mod, service or other product that is based on the Software,
+     derived from it, or substantially copies its code, assets or design, whether free or paid. This includes
+     "alternative", "unofficial", re-branded or "lite" versions.
+
+  c. Use the Software, or any part of it, for any commercial purpose, including as part of a paid product or service,
+     a server network's own client, or advertising-supported distribution.
+
+  d. Use the name "Nether Client", its logos or its other brand assets to identify anything other than the official
+     Software, or in a way that suggests endorsement.
+
+  e. Connect modified builds, or any other software, to Nether Client's online services in a way that breaks the
+     Terms of Service (TERMS.md), or use those services other than through the official Software.
+
+  f. Remove or change any copyright, license or attribution notice in the Software.
+
+
+3. CONTRIBUTIONS
+
+By submitting a contribution (code, documentation, artwork or anything else) to this repository, you confirm that
+you have the right to submit it, and you grant the copyright holder a perpetual, worldwide, non-exclusive,
+royalty-free, irrevocable license to use, copy, modify, distribute, sublicense and relicense that contribution, as
+part of the Software or otherwise, under any terms, including commercial terms. You keep the copyright in your
+contribution.
+
+
+4. THIRD-PARTY COMPONENTS
+
+Parts of the Software come from third parties under their own licenses (listed in NOTICE.md). Nothing in this
+license limits your rights under those licenses for those parts.
+
+
+5. TERMINATION
+
+Your rights under this license end automatically if you break it. If you stop the breach and fix it within 30 days
+of first being told about it, your rights are restored, unless you have broken this license before. When your rights
+end, you must stop using the Software and delete any copies and modified versions you have.
+
+
+6. NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+
+
+7. LIMITATION OF LIABILITY
+
+TO THE FULLEST EXTENT ALLOWED BY LAW, IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+8. OTHER TERMS
+
+All rights not expressly granted here are reserved. If any part of this license cannot be enforced, the rest stays
+in effect. This license is governed by the laws of the United States and of the U.S. state in which the copyright
+holder resides.
+
+For permission beyond this license, contact the copyright holder through the Nether Client Discord:
+https://discord.gg/R5vxAxVjwu
+
+Nether Client is not an official Minecraft product. It is not approved by or associated with Mojang or Microsoft.

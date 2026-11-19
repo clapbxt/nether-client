@@ -1,0 +1,239 @@
+field_1329	a	Lfgc;
+field_1350	f	D
+field_1351	e	D
+field_1352	d	D
+field_1655	o	Lfka$a;
+field_1656	k	Ljava/util/Map;
+field_1668	a	Lfka$b;
+field_1687	s	Lglo;
+field_1690	n	Lfqu;
+field_1704	S	Lfki;
+field_1705	m	Lftj;
+field_1708	au	Lfwo;
+field_1724	t	Lgqm;
+field_1755	z	Lfzq;
+field_1765	w	Lfga;
+field_1773	j	Lgrd;
+field_17772	z	J
+field_18222	y	Z
+field_1826	bW	Lfqt;
+field_1838	ba	Lfqt;
+field_1839	V	[Lfqo;
+field_1840	cl	Lfqt;
+field_1842	X	Z
+field_1843	ap	Lfqt;
+field_1849	y	Lfqo;
+field_18712	i	Lfgc;
+field_18717	n	F
+field_18718	o	F
+field_1881	x	Lfqo;
+field_1894	v	Lfqo;
+field_1903	z	Lfqo;
+field_1908	aX	Lfqt;
+field_1913	w	Lfqo;
+field_1915	aY	Lfqt;
+field_19319	J	Z
+field_2021	al	Lftz;
+field_2064	l	Ljava/util/List;
+field_21444	d	I
+field_2259	h	Ljava/util/Map;
+field_24360	a	Lyd;
+field_2586	u	Lfvc;
+field_26665	b	Lfpz;
+field_26666	c	Lfpz;
+field_27433	s	Lgkr;
+field_33816	v	Ljava/util/List;
+field_3391	q	Lgkr;
+field_3392	t	Lgkr;
+field_3397	u	Lgkr;
+field_3401	r	Lgkr;
+field_34801	w	Lgdc;
+field_3752	a	Ljava/lang/String;
+field_3761	b	Ljava/lang/String;
+field_37868	k	Ljava/lang/Object;
+field_4019	q	F
+field_44666	f	Ljava/lang/String;
+field_45607	b	Ljava/util/function/Supplier;
+field_4687	i	Ljava/util/Map;
+field_4738	i	Ljava/util/List;
+field_5330	c	Ljava/util/Map;
+field_53325	s	D
+field_53326	t	D
+field_53327	u	D
+field_53333	A	Z
+field_53446	ac	F
+field_53467	av	Lhhi;
+field_53528	aJ	I
+field_53542	m	Z
+field_55309	Y	Ldak;
+field_5918	l	Ljg;
+field_5965	aF	F
+field_5969	M	D
+field_6014	K	D
+field_6031	aE	F
+field_6036	L	D
+field_6169	f	Lbxo;
+field_6220	aW	F
+field_6235	aN	I
+field_6283	aV	F
+field_7477	d	Z
+field_7503	cw	Lcse;
+field_7514	ct	Lcsh;
+field_8255	wD	Ldag;
+method_10517	a	()Ltv;
+method_10851	b	()Lxh;
+method_10852	b	(Lxg;)Lxu;
+method_10862	b	(Lyd;)Lxu;
+method_11022	b	()Ljava/lang/String;
+method_1422	b	(Lfka$a;)V
+method_1426	d	()V
+method_1442	a	()Lfka$b;
+method_1444	b	()I
+method_1447	a	(I)Lfka$a;
+method_150	e	()Ljava/lang/String;
+method_1507	a	(Lfzq;)V
+method_1531	aa	()Lhks;
+method_1548	X	()Lfrc;
+method_1555	az	()Z
+method_1558	S	()Lgmd;
+method_1561	aq	()Lgxt;
+method_1562	L	()Lglp;
+method_1576	V	()Lhpb;
+method_1592	q	()V
+method_1676	c	()Ljava/lang/String;
+method_17165	d	()Lghn;
+method_1743	d	()Lftz;
+method_17783	d	()Lfga$a;
+method_1812	a	(Lxg;)V
+method_18456	z	()Ljava/util/List;
+method_19325	a	(FF)V
+method_19418	k	()Lfpy;
+method_22683	aO	()Lfki;
+method_22703	a	(Lfld;)V
+method_22903	a	()V
+method_22904	a	(DDD)V
+method_22909	b	()V
+method_22976	a	(FLfld;Lgrn$a;Lgqm;I)V
+method_23070	a	(Lfld;Lgrn;)V
+method_23317	dA	()D
+method_23318	dC	()D
+method_23321	dG	()D
+method_23500	a	(Lalr;)Lgry;
+method_23580	j	(Lalr;)Lgry;
+method_23760	c	()Lfld$a;
+method_23761	a	()Lorg/joml/Matrix4f;
+method_23767	f	()Lorg/joml/Quaternionf;
+method_23919	a	(FFFIFFIIFFF)V
+method_25448	a	(Lalr;)Lgry;
+method_27693	f	(Ljava/lang/String;)Lxu;
+method_27704	a	(Lalr;)Lyd;
+method_27728	aZ	()Lfan;
+method_27983	aj	()Lalq;
+method_2838	b	()Lgkr;
+method_2871	a	(Ljava/util/UUID;)Lgma;
+method_2880	l	()Ljava/util/Collection;
+method_29177	a	()Lalr;
+method_2950	a	(Ljava/lang/String;)Lgng;
+method_2959	f	()I
+method_2966	a	()Lcom/mojang/authlib/GameProfile;
+method_31043	a	(Lfpz;)V
+method_31044	aE	()Lfpz;
+method_31548	gj	()Lcsh;
+method_31549	gk	()Lcse;
+method_3196	a	(Lfpy;FZ)F
+method_3228	a	(Lgqj;FFLbvb;FLdak;FLfld;Lgrn;I)V
+method_36139	a	(I)Lyd;
+method_36454	dL	()F
+method_36455	dN	()F
+method_36877	a	(Lfzq;Lfqq;Lgng;Lgmd;ZLgmh;)V
+method_37067	p	()V
+method_3734	aG	()Lel;
+method_3739	aH	()Lek;
+method_3865	j	()Ljava/lang/String;
+method_4054	a	(Lhfe;Lfld;Lgrn;I)V
+method_4055	a	(Lbyf;D)Z
+method_41735	x	()Lgfe;
+method_4309	a	(Ljava/io/InputStream;)Lfkf;
+method_43470	b	(Ljava/lang/String;)Lxu;
+method_43473	i	()Lxu;
+method_44252	a	(Lek;Ljava/lang/String;)V
+method_44382	a	(D)V
+method_44717	b	()Ljava/util/UUID;
+method_4495	s	()D
+method_4616	a	(Lalr;Lhkb;)V
+method_46416	a	(FFF)V
+method_48559	b	()Z
+method_53526	aQ	()Lfug;
+method_53536	d	()Z
+method_5438	a	(I)Ldak;
+method_5439	b	()I
+method_5476	P_	()Lxg;
+method_5477	ah	()Lxg;
+method_5578	e	()I
+method_5584	d	()I
+method_5586	j	()Ljava/lang/String;
+method_5591	f	()Z
+method_5628	ao	()I
+method_5667	cG	()Ljava/util/UUID;
+method_5767	co	()Z
+method_5854	dk	()Lbxe;
+method_5864	an	()Lbxn;
+method_5872	b	(DD)V
+method_5890	a	(Lbxn;)Lalr;
+method_6026	eD	()Ljava/util/Collection;
+method_6032	eG	()F
+method_6059	b	(Ljg;)Z
+method_60655	a	(Ljava/lang/String;Ljava/lang/String;)Lalr;
+method_6118	a	(Lbxo;)Ldak;
+method_62425	b	(Lbxe;F)Lhec;
+method_65606	c	()Z
+method_7299	a	(Lxu;)Lxu;
+method_7325	ak	()Z
+method_7331	gg	()V
+method_7334	gi	()Lcom/mojang/authlib/GameProfile;
+method_7909	h	()Ldag;
+method_7919	o	()I
+method_7936	p	()I
+method_7947	M	()I
+method_7960	f	()Z
+method_7963	m	()Z
+method_7964	y	()Lxg;
+method_8532	af	()J
+method_9249	a	(Lcom/mojang/brigadier/ParseResults;Ljava/lang/String;)V
+net.minecraft.class_1011	fkf	
+net.minecraft.class_10197	hbu	
+net.minecraft.class_1043	hkd	
+net.minecraft.class_1294	bwk	
+net.minecraft.class_1297	bxe	
+net.minecraft.class_1299	bxn	
+net.minecraft.class_1304	bxo	
+net.minecraft.class_1657	csi	
+net.minecraft.class_1802	dao	
+net.minecraft.class_1921	gry	
+net.minecraft.class_2477	tv	
+net.minecraft.class_2561	xg	
+net.minecraft.class_2583	yd	
+net.minecraft.class_2960	alr	
+net.minecraft.class_310	fqq	
+net.minecraft.class_338	ftz	
+net.minecraft.class_3675$class_307	fka$b	
+net.minecraft.class_3887	hcj	
+net.minecraft.class_408	fym	
+net.minecraft.class_412	fyp	
+net.minecraft.class_4184	fpy	
+net.minecraft.class_429	gcv	
+net.minecraft.class_433	fzl	
+net.minecraft.class_442	fzs	
+net.minecraft.class_4587	fld	
+net.minecraft.class_4603	gsa	
+net.minecraft.class_4608	hkg	
+net.minecraft.class_500	gci	
+net.minecraft.class_526	gez	
+net.minecraft.class_5498	fpz	
+net.minecraft.class_639	gng	
+net.minecraft.class_642	gmd	
+net.minecraft.class_6599	gdd	
+net.minecraft.class_757	grd	
+net.minecraft.class_759	grg	
+net.minecraft.class_897	gxu	
+net.minecraft.class_922	gyw	

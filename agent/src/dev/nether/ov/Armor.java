@@ -3,8 +3,8 @@ package dev.nether.ov;
 /**
  * Armor Status HUD: worn armor, optionally the held / off-hand item and the arrow supply while a bow or crossbow is in
  * hand. Layouts: List, Icons, Compact, and Vanilla (the game's hotbar slots, font, durability bar and stack count, all
- * from its textures so resource packs restyle them; {@link Vanilla}). Icons are the items' flat textures ({@link Icons});
- * enchantment glint and trims are renderer work and are not shown.
+ * from its textures so resource packs restyle them; {@link Vanilla}). Icons are the items' flat textures ({@link Icons#of}:
+ * dyed leather in its colour, heads as the skin's or mob's face); enchantment glint and trims are renderer work and are not shown.
  */
 final class Armor extends Module {
     /** label per entry kind: 0-3 armor head to feet, 4 main hand, 5 off hand, 6 arrows */
@@ -159,7 +159,7 @@ final class Armor extends Module {
         for (int i = 0; i < n; i++) {
             String[] p = items[i];
             float cy = y + py() + RowsModule.RH * (i + 0.5f);
-            int[] ic = bool("icons") ? Icons.get(p[3]) : null;
+            int[] ic = bool("icons") ? Icons.of(p) : null;
             if (ic != null) Gfx.icon(ic, x + px() + off + 1, cy - 7, 14);
             else Gfx.text(Gfx.SEMI, 9, x + px() + off, cy, Gfx.DIM, TAG[kind[i]], false, 0);
             if (names) txt(Gfx.UI, 12, x + px() + 32 + off, cy, color(), cut(p[0], nameW));
@@ -192,7 +192,7 @@ final class Armor extends Module {
             int col = low(i) ? warnCol() : barCol(f);
             float cx = tx + (vert ? 4 : 0);
             Gfx.rect(cx, ty, T, T, 3, Gfx.a(Gfx.ICE, 0.06f));
-            int[] ic = bool("icons") ? Icons.get(p[3]) : null;
+            int[] ic = bool("icons") ? Icons.of(p) : null;
             if (ic != null) Gfx.icon(ic, cx + 5, ty + 3, 20);
             else Gfx.text(Gfx.SEMI, 8, cx + T / 2 - Gfx.width(Gfx.SEMI, 8, TAG[kind[i]]) / 2, ty + 13, Gfx.DIM, TAG[kind[i]], false, 0);
             if (bar && m > 0) {
@@ -236,7 +236,7 @@ final class Armor extends Module {
             float t = Config.calm() ? 0.5f : 0.5f + 0.5f * (float) Math.sin(System.currentTimeMillis() / 260.0);
             Gfx.rect(ix - 2, iy - 2, I + 4, I + 4, 4, Gfx.a(warnCol(), 0.16f + 0.16f * t));
         }
-        int[] ic = Icons.get(p[3]);
+        int[] ic = Icons.of(p);
         if (ic != null) Gfx.icon(ic, ix, iy, I);
         else Gfx.text(Gfx.SEMI, 9, ix + I / 2 - Gfx.width(Gfx.SEMI, 9, TAG[kind[i]]) / 2, iy + I / 2, Gfx.DIM, TAG[kind[i]], false, 0);
         int d = dmg[i], m = max[i];

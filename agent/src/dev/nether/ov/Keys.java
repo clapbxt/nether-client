@@ -45,6 +45,12 @@ final class Keys {
     /** SDL scancode for a GLFW key, 0 when unknown. */
     static int toSdl(int glfw) { return glfw >= 0 && glfw < 512 ? GLFW_SDL[glfw] : 0; }
 
+    /** GLFW key for the game's own key code (InputConstants: GLFW keys, SDL scancodes on 26.3+), -1 when unknown. */
+    static int fromGame(int c) { return Plat.cur != null && Plat.cur.sdl() ? fromSdl(c) : c; }
+
+    /** The game's own key code for a GLFW key (-1 when the SDL build has none). */
+    static int toGame(int glfw) { if (Plat.cur == null || !Plat.cur.sdl()) return glfw; int s = toSdl(glfw); return s == 0 ? -1 : s; }
+
     /** GLFW key for an LWJGL2 code, -1 when unknown. */
     static int toGlfw(int lw) { return lw > 0 && lw < 256 && TO_GLFW[lw] != 0 ? TO_GLFW[lw] : -1; }
 

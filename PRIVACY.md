@@ -24,7 +24,11 @@ your player UUID and nothing else.
 | Nether news, packs, cape list | the Nether service (signed files) | Opening Home and Wardrobe |
 | Nether capes | the Nether cape service (Cloudflare) | Wearing a cape, and checking in at game start so others see your icon |
 | Updates | api.github.com, github.com | Checking for and downloading signed updates |
+| OptiFine (Nether + OptiFine profiles, 1.8.9 / 1.12.2) | bmclapi2.bangbang93.com (the OptiFine mirror HMCL and XMCL use) | Only the first launch of an OptiFine profile |
 | Hosting | api.playit.gg, api.ipify.org, api.mcstatus.io, fill.papermc.io | Only while you use the Host tab |
+| Friends, world invites | the Nether friends service (Cloudflare) | While you are signed in: your friends list, requests, blocks and status, about once a minute |
+| Parties and party voice | your party members, directly (peer-to-peer); n0's iroh.link relays when a direct link can't be made | Only while you are in a party with others |
+| Invite to world (friends joining your world) | your friends, directly (peer-to-peer); n0's iroh.link relays when a direct link can't be made | While a game runs, the launcher keeps a link to an iroh.link relay ready so sharing your world is instant; friends connect only after you invite them |
 | Sharing logs | api.mclo.gs | Only when you confirm Share or press Upload; anyone with the link can read it (your user name, home folder, IP addresses and tokens are removed first) |
 
 ## In game
@@ -40,6 +44,26 @@ your player UUID and nothing else.
   Menu settings to stop it.
 - **The media player** reads your PC's media session through a small local helper. Nothing leaves your PC.
 
+## Friends and parties
+
+- **Friends.** The friends service keeps your friends list, friend requests, blocks and a short-lived status
+  (online / away, and what you are playing; the server address only when **Share server** is on). Friends see your
+  status only while you are online. Choose **Invisible** to look offline.
+- **Parties.** So that friends can invite you or ask to join, your launcher adds its party address (a random key made
+  fresh each time the launcher starts) and the size of your party to the status your friends see. Everything else in a
+  party (who is in it, invites, join requests, chat and voice) goes **directly between party members' launchers**,
+  encrypted. It is never sent to or stored by a Nether server.
+- **Party chat** is shown only on the title screen and lives in memory: it is never saved, logged or shown again after
+  the party ends.
+- **Party voice** is off until you turn on push-to-talk or open mic. The microphone isn't opened before that. Voice goes
+  only to your party and is **never recorded**.
+- **Your IP address.** A direct peer-to-peer link lets the party leader see your public IP address (and you see
+  theirs). Turn on **Hide my IP (relay)** in the party panel to send everything through a relay instead: party members
+  then never see your IP; the relay (run by n0, the makers of iroh) sees connection details such as IP addresses and
+  timing, never what is said.
+- **Blocking** someone stops their party chat and voice reaching you (and yours reaching them) at once; they can't
+  invite you, and a party you are in won't let them join.
+
 ## What we store
 
 The cape service stores, per player who checked in: your UUID, the Nether cape and cosmetics (hat, headband, mask, back, wings, aura,
@@ -48,4 +72,12 @@ pet) you chose, and when you were last seen. Players unseen for 180 days are del
 Turning **Nether capes in game** off deletes your entry right away (if you are signed out or offline, at your next
 sign-in).
 
+The friends service stores your friends list (at most 67 friends), pending requests (deleted after 14 days), blocks,
+and your last status. 180 days after you were last seen, all of it is deleted, including you on others' lists. World invites expire after two hours. Nothing about parties is stored.
+
 Everything else (instances, worlds, settings, screenshots, logs) stays in `%APPDATA%\NetherClient` on your PC.
+
+## Contact
+
+To ask what we store about you, or to have it deleted, contact us on the [Nether Client Discord](https://discord.gg/R5vxAxVjwu).
+The [Terms of Service](TERMS.md) also apply.

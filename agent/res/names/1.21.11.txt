@@ -6,6 +6,7 @@ field_1655	a	Lfyc$a;
 field_1668	a	Lfyc$b;
 field_1687	r	Lhif;
 field_1690	k	Lgfo;
+field_1704	O	Lfyk;
 field_1705	j	Lgiq;
 field_1708	ar	Lgnp;
 field_1724	s	Lhnh;
@@ -64,9 +65,20 @@ field_53467	aL	Lihm;
 field_53528	D	I
 field_53542	p	Z
 field_55309	ap	Ldlt;
+field_5918	l	Ljd;
 field_5965	ba	F
+field_5969	aa	D
+field_6014	Y	D
 field_6031	aZ	F
+field_6036	Z	D
+field_6169	f	Lcgv;
+field_6220	bD	F
 field_6235	bu	I
+field_6283	bC	F
+field_7477	d	Z
+field_7503	cG	Lddi;
+field_7514	cE	Lddl;
+field_8255	xH	Ldlp;
 method_10517	a	()Luu;
 method_10851	b	()Lyi;
 method_10852	b	(Lyh;)Lyw;
@@ -93,11 +105,15 @@ method_1743	e	()Lgjf;
 method_17783	d	()Lftk$a;
 method_1812	a	(Lyh;)V
 method_18456	E	()Ljava/util/List;
+method_19325	a	(FF)V
 method_19418	p	()Lger;
 method_22683	aR	()Lfyk;
 method_22703	a	(Lfzm;)V
 method_22903	a	()V
+method_22904	a	(DDD)V
 method_22909	b	()V
+method_22976	a	(FLfzm;Lhpo;Lhnh;I)V
+method_23070	a	(Lfzm;Lhon;Lilp;)V
 method_23317	dP	()D
 method_23318	dR	()D
 method_23321	dV	()D
@@ -120,6 +136,9 @@ method_2966	a	()Lcom/mojang/authlib/GameProfile;
 method_31043	a	(Lges;)V
 method_31044	aV	()Lges;
 method_31548	gK	()Lddl;
+method_31549	gL	()Lddi;
+method_3196	a	(Lger;FZ)F
+method_3228	a	(Lhne;FFLcdb;FLdlt;FLfzm;Lhpo;I)V
 method_36139	a	(I)Lzf;
 method_36454	ec	()F
 method_36455	ee	()F
@@ -127,6 +146,8 @@ method_36877	a	(Lgsb;Lgfj;Lhjw;Lhit;ZLhix;)V
 method_37067	t	()V
 method_3734	aF	()Lee;
 method_3739	aG	()Led;
+method_3865	j	()Ljava/lang/String;
+method_4054	a	(Lieh;Lfzm;Lhpo;Likp;)V
 method_4055	a	(Lchl;D)Z
 method_41735	B	()Lgyk;
 method_4309	a	(Ljava/io/InputStream;)Lfyh;
@@ -137,6 +158,7 @@ method_44382	a	(D)V
 method_44717	b	()Ljava/util/UUID;
 method_4495	s	()I
 method_4616	a	(Lamo;Likz;)V
+method_46416	a	(FFF)V
 method_48559	b	()Z
 method_53526	aT	()Lgjm;
 method_53536	b	()Z
@@ -150,17 +172,26 @@ method_5586	j	()Ljava/lang/String;
 method_5591	f	()Z
 method_5628	aA	()I
 method_5667	cY	()Ljava/util/UUID;
+method_5767	cG	()Z
+method_5854	dz	()Lcgk;
+method_5864	ay	()Lcgu;
+method_5872	b	(DD)V
+method_5890	a	(Lcgu;)Lamo;
 method_6026	eW	()Ljava/util/Collection;
 method_6032	eZ	()F
+method_6059	d	(Ljd;)Z
 method_60655	a	(Ljava/lang/String;Ljava/lang/String;)Lamo;
 method_6118	a	(Lcgv;)Ldlt;
+method_62425	b	(Lcgk;F)Lidf;
 method_65606	e	()Z
 method_7299	a	(Lyw;)Lyw;
+method_7325	au	()Z
 method_7331	o	()V
 method_7334	gI	()Lcom/mojang/authlib/GameProfile;
 method_73477	a	(Lijs;)Lfzp;
 method_73483	a	(Lfzm;Lijs;Lhpo$a;)V
 method_74698	a	(Lamo;)Lgfh$a;
+method_75966	a	(Lamo;)Lijs;
 method_76000	j	(Lamo;)Lijs;
 method_7909	h	()Ldlp;
 method_7919	o	()I
@@ -172,14 +203,19 @@ method_7964	y	()Lyh;
 method_8532	al	()J
 method_9249	a	(Lcom/mojang/brigadier/ParseResults;Ljava/lang/String;)V
 net.minecraft.class_1011	fyh	
+net.minecraft.class_10197	iau	
 net.minecraft.class_1043	ilc	
 net.minecraft.class_11659	hpo	
 net.minecraft.class_11659$class_11660	hpo$a	
 net.minecraft.class_11719$class_11721	ym$c	
 net.minecraft.class_12079$class_10726	iu$b	
 net.minecraft.class_12249	ijt	
+net.minecraft.class_1294	cfo	
+net.minecraft.class_1297	cgk	
+net.minecraft.class_1299	cgu	
 net.minecraft.class_1304	cgv	
 net.minecraft.class_1657	ddm	
+net.minecraft.class_1802	dlx	
 net.minecraft.class_1921	ijs	
 net.minecraft.class_2477	uu	
 net.minecraft.class_2561	yh	
@@ -192,9 +228,12 @@ net.minecraft.class_3675$class_307	fyc$b
 net.minecraft.class_3887	ibj	
 net.minecraft.class_408	gqy	
 net.minecraft.class_412	grb	
+net.minecraft.class_4184	ger	
 net.minecraft.class_429	gwb	
 net.minecraft.class_433	grx	
 net.minecraft.class_442	gsd	
+net.minecraft.class_4587	fzm	
+net.minecraft.class_4603	hpc	
 net.minecraft.class_4608	ilg	
 net.minecraft.class_500	gvp	
 net.minecraft.class_526	gyf	
@@ -202,8 +241,7 @@ net.minecraft.class_5498	ges
 net.minecraft.class_639	hjw	
 net.minecraft.class_642	hit	
 net.minecraft.class_6599	gwj	
+net.minecraft.class_757	hob	
+net.minecraft.class_759	hof	
+net.minecraft.class_897	hwp	
 net.minecraft.class_922	hxs	
-net.minecraft.class_1297	cgk	
-method_5872	b	(DD)V
-net.minecraft.class_4184	ger	
-method_19325	a	(FF)V

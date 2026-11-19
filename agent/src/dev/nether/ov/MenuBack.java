@@ -80,7 +80,7 @@ final class MenuBack {
     /** Soft round light: stacked translucent discs (smooth enough on dark backgrounds, no shader of its own). */
     private static void glow(float cx, float cy, float R, int col, float a) {
         boolean r0 = Gfx.round;
-        Gfx.round = true;
+        Gfx.round = Th.round();
         int n = 22;
         for (int i = 0; i < n; i++) {
             float r = R * (1 - i / (float) n);

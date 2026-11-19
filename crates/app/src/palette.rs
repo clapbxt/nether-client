@@ -63,7 +63,6 @@ fn statics(ui: &AppWindow) -> Vec<Item> {
         item("PAGE", "Home", "Launch target, recent instances, player", "start", Act::Tab(0)),
         item("PAGE", "Instances", "Every instance, groups and search", "list", Act::Tab(1)),
         item("PAGE", "Install packs", "Modrinth and Nether modpacks", "modpacks discover browse", Act::Tab(2)),
-        item("PAGE", "Host", "Run a server and invite friends", "server friends", Act::Tab(4)),
         item("PAGE", "Wardrobe", "Skins and capes", "skin cape", Act::Tab(5)),
         item("ACTION", "New instance", "A new Minecraft setup", "create add make", Act::New),
         item("ACTION", "Import an instance", ".mrpack, .zip or another launcher's folder", "prism multimc curseforge modrinth", Act::Import),
