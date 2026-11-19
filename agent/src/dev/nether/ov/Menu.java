@@ -131,6 +131,14 @@ final class Menu {
         return L >= x && L < x + w && T >= y && T < y + h;
     }
 
+    /** Starts (click inside) and keeps (button held) a drag with this id; false once released. For custom editors. */
+    static boolean dragging(String id, float x, float y, float w, float h) {
+        if (click && in(x, y, w, h)) { drag = id; click = false; }
+        if (!id.equals(drag)) return false;
+        if (!Input.btn[0]) { drag = null; return false; }
+        return true;
+    }
+
     static boolean hit(float x, float y, float w, float h) {
         if (click && in(x, y, w, h)) { click = false; return true; }
         return false;
@@ -1148,6 +1156,7 @@ final class Menu {
         for (int i = 0; i < m.settings.size(); i++) { Setting s = m.settings.get(i); if (m.row(i)) h += SROW + (s.t == Setting.COLOR && ColorPicker.isOpen(m.id, s.key) ? ColorPicker.H : 0); }
         h += SROW; // the Enabled-free footer: reset buttons
         if (m instanceof Waypoints) h += wpHeight((Waypoints) m);
+        if (ViewEditor.has(m)) h += ViewEditor.H + 12;
         return h;
     }
 
@@ -1166,6 +1175,7 @@ final class Menu {
         }
         Waypoints wp = m instanceof Waypoints ? (Waypoints) m : null;
         if (wp == null && editWp >= 0) commitEdit();
+        if (ViewEditor.has(m)) { ViewEditor.draw(m, lx, yy + 4, lw, "ve" + m.id); yy += ViewEditor.H + 12; }
         yy = settingRows(m, lx, yy, lw);
         if (wp != null) { wpList(wp, lx, yy, lw); yy += wpHeight(wp); }
         String rl = "Reset to default";
