@@ -50,9 +50,14 @@ struct Saved {
     /// "<family>/<way>" -> the patch last played
     #[serde(default)]
     pick: HashMap<String, String>,
+    /// instance -> Essentials mods the player said no to (never offered again for that profile)
+    #[serde(default)]
+    declined: HashMap<String, Vec<String>>,
 }
 
 thread_local! {
+    /// card profile -> Essentials mods it lacks that have a build for its version now: (slug, title)
+    static ADDS: RefCell<HashMap<String, Vec<(String, String)>>> = RefCell::new(HashMap::new());
     /// instance names the cards made (Play > Nether lists them on the cards, not as your own profiles)
     static MADE: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
 }
@@ -177,6 +182,105 @@ fn pick(ui: &AppWindow, sh: &Arc<Shared>, fam: &str, way: i32, ver: &str) {
     b.set_card_vi(list.iter().position(|v| *v == ver).unwrap_or(0) as i32);
     b.set_card_inst(if idx >= 0 { inst.as_str().into() } else { "".into() });
     b.set_card_idx(idx);
+    let adds = ADDS.with(|a| a.borrow().get(&inst).map(|v| v.iter().map(|m| m.1.clone()).collect::<Vec<_>>().join(", ")).unwrap_or_default());
+    b.set_card_adds(if idx >= 0 { adds.into() } else { "".into() });
+}
+
+/// Re-pick the current card (after the offers changed).
+fn repick(ui: &AppWindow, sh: &Arc<Shared>) {
+    let b = ui.global::<Backend>();
+    pick(ui, sh, &b.get_card_fam(), b.get_card_loader(), &b.get_card_ver());
+}
+
+/// Card profile update / repair (2026-11-20): Essentials mods a Fabric card profile lacks that have a build for
+/// its version now, e.g. ModernFix once it is out for 1.21.11 (it was skipped when the profile was made), or a
+/// pack mod that went missing. Checked 20 s after start and then twice a day; offered on the card panel and with
+/// one toast per new find, never added without a click.
+fn check_adds(ui: &AppWindow, sh: &Arc<Shared>) {
+    let saved = load(sh);
+    let b = ui.global::<Backend>();
+    let have: HashMap<String, (String, String)> = b.get_instances().iter().map(|i| (i.name.to_string(), (i.ver.to_string(), i.loader.to_string()))).collect();
+    let todo: Vec<(String, String, Vec<String>)> = saved.made.iter()
+        .filter(|(k, _)| k.ends_with("/1"))
+        .filter_map(|(_, n)| have.get(n).filter(|(_, l)| l == "Fabric").map(|(v, _)| (n.clone(), v.clone(), saved.declined.get(n).cloned().unwrap_or_default())))
+        .collect();
+    if todo.is_empty() { return; }
+    let Some(pack) = netherpack::find(&sh.paths, "essentials") else { return };
+    let (weak, sh) = (ui.as_weak(), sh.clone());
+    std::thread::spawn(move || {
+        let c = client();
+        let mut found: Vec<(String, String, Vec<(String, String)>)> = vec![];
+        for (name, ver, skip) in todo {
+            match netherpack::missing(&c, &pack, &ver, &instances::content_dir(&sh.paths, &name, 0), &skip) {
+                Ok(m) => found.push((name, ver, m)),
+                Err(e) => crate::applog::line(&format!("card check {name}: {e:#}")),
+            }
+        }
+        ui_do(&weak, move |ui| {
+            let mut fresh = vec![];
+            ADDS.with(|a| {
+                let mut a = a.borrow_mut();
+                for (name, ver, m) in found {
+                    let old: HashSet<String> = a.get(&name).map(|v| v.iter().map(|x| x.0.clone()).collect()).unwrap_or_default();
+                    if m.iter().any(|x| !old.contains(&x.0)) { fresh.push((name.clone(), ver, m.iter().map(|x| x.1.clone()).collect::<Vec<_>>())); }
+                    if m.is_empty() { a.remove(&name); } else { a.insert(name, m); }
+                }
+            });
+            repick(ui, &sh);
+            if let Some((name, ver, titles)) = fresh.into_iter().next() {
+                let (n2, s2) = (name.clone(), sh.clone());
+                let verb = if titles.len() == 1 { "is" } else { "are" };
+                crate::toast_action(ui, &sh, &format!("{} {verb} out for {ver}. Add to {name}?", titles.join(", ")), false, "ADD", move |ui| add(ui, &s2, &n2));
+            }
+        });
+    });
+}
+
+/// Install the offered Essentials mods into a card profile.
+fn add(ui: &AppWindow, sh: &Arc<Shared>, name: &str) {
+    let Some(mods) = ADDS.with(|a| a.borrow_mut().remove(name)) else { return };
+    let b = ui.global::<Backend>();
+    let Some(i) = b.get_instances().iter().find(|i| i.name.as_str() == name) else { return };
+    let (ver, running) = (i.ver.to_string(), i.running);
+    repick(ui, sh);
+    let (weak, sh, name) = (ui.as_weak(), sh.clone(), name.to_string());
+    std::thread::spawn(move || {
+        let key = format!("cardadd:{name}");
+        let dir = instances::content_dir(&sh.paths, &name, 0);
+        let c = client();
+        let (mut ok, mut bad) = (vec![], vec![]);
+        let n = mods.len().max(1) as f32;
+        for (k, (slug, title)) in mods.iter().enumerate() {
+            let (w2, k2, t, f) = (weak.clone(), key.clone(), format!("{name} · Adding {title}"), k as f32 / n);
+            ui_do(&w2, move |ui| crate::job(ui, &k2, &t, f));
+            match nether_core::modrinth::install(&c, slug, None, &ver, Some("fabric"), &dir, &|_, _, _| {}) {
+                Ok(_) => ok.push(title.clone()),
+                Err(e) => { crate::applog::line(&format!("card add {slug} to {name}: {e:#}")); bad.push((slug.clone(), title.clone())); }
+            }
+        }
+        ui_do(&weak, move |ui| {
+            crate::job_end(ui, &key);
+            let names = |v: &[(String, String)]| v.iter().map(|b| b.1.clone()).collect::<Vec<_>>().join(", ");
+            let msg = match (ok.is_empty(), bad.is_empty()) {
+                (false, true) => format!("Added {} to {name}{}", ok.join(", "), if running { ". Restart the game to use it" } else { "" }),
+                (false, false) => format!("Added {}; couldn't download {}", ok.join(", "), names(&bad)),
+                _ => format!("Couldn't download {}. Check your connection", names(&bad)),
+            };
+            if !bad.is_empty() { ADDS.with(|a| a.borrow_mut().insert(name.clone(), bad)); }
+            repick(ui, &sh);
+            show_toast(ui, &sh, &msg);
+        });
+    });
+}
+
+/// "Not for this profile": never offer these mods to it again.
+fn decline(ui: &AppWindow, sh: &Arc<Shared>, name: &str) {
+    let Some(mods) = ADDS.with(|a| a.borrow_mut().remove(name)) else { return };
+    let mut saved = load(sh);
+    let d = saved.declined.entry(name.to_string()).or_default();
+    for (slug, _) in mods { if !d.contains(&slug) { d.push(slug); } }
+    save(sh, &saved);
+    repick(ui, sh);
 }
 
 pub fn init(ui: &AppWindow, sh: Arc<Shared>) {
@@ -195,6 +299,19 @@ pub fn init(ui: &AppWindow, sh: Arc<Shared>) {
     b.on_card_pick(move |fam, way, ver| if let Some(ui) = weak.upgrade() { pick(&ui, &s2, &fam, way, &ver) });
     let (weak, s2) = (ui.as_weak(), sh.clone());
     b.on_card_play(move || if let Some(ui) = weak.upgrade() { play(&ui, &s2) });
+    let (weak, s2) = (ui.as_weak(), sh.clone());
+    b.on_card_add(move || if let Some(ui) = weak.upgrade() { let n = ui.global::<Backend>().get_card_inst().to_string(); add(&ui, &s2, &n) });
+    let (weak, s2) = (ui.as_weak(), sh.clone());
+    b.on_card_add_skip(move || if let Some(ui) = weak.upgrade() { let n = ui.global::<Backend>().get_card_inst().to_string(); decline(&ui, &s2, &n) });
+    // update / repair check: 20 s after start, then every 12 h
+    let t2: &'static slint::Timer = Box::leak(Box::new(slint::Timer::default()));
+    let (weak, s3) = (ui.as_weak(), sh.clone());
+    t2.start(slint::TimerMode::SingleShot, std::time::Duration::from_secs(20), move || {
+        if let Some(ui) = weak.upgrade() { check_adds(&ui, &s3); }
+        let t3: &'static slint::Timer = Box::leak(Box::new(slint::Timer::default()));
+        let (w4, s4) = (weak.clone(), s3.clone());
+        t3.start(slint::TimerMode::Repeated, std::time::Duration::from_secs(12 * 3600), move || if let Some(ui) = w4.upgrade() { check_adds(&ui, &s4) });
+    });
 }
 
 /// Play the picked card: its profile when made, else make it (with its mods), then play.

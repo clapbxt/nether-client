@@ -136,6 +136,19 @@ export component CardPanel inherits Rectangle {
         color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts;
         text: root.made ? "Profile: " + root.it.name : "Makes a profile called Nether " + Backend.card-ver + (Backend.card-loader == 1 ? " Fabric" : (Backend.card-loader == 2 ? " OptiFine" : "")) + ". Change its mods any time."; }
 
+    // update / repair: Essentials mods that have a build for this version now (e.g. ModernFix)
+    if root.made && Backend.card-adds != "": Rectangle {
+        x: 32px; y: 660px; width: parent.width - 64px; height: 44px; border-radius: Theme.r2;
+        background: Theme.red.with-alpha(0.094); border-width: 1px; border-color: Theme.red2.with-alpha(0.5);
+        Icon { x: 14px; y: 16px; d: Ico.download; tint: Theme.red2; }
+        Text { x: 36px; width: parent.width - 36px - ab.width - 52px; height: parent.height; vertical-alignment: center; overflow: elide;
+            text: Backend.card-adds + " can be added now"; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; }
+        ab := Btn { x: parent.width - self.width - 40px; y: 6px; height: 32px; text: "ADD"; solid: true; clicked => { Backend.card-add(); } }
+        Rectangle { x: parent.width - 34px; y: 8px; width: 28px; height: 28px; border-radius: Theme.r1; background: xt.has-hover ? Theme.s3 : transparent;
+            Icon { x: 8px; y: 8px; d: Ico.close; tint: xt.has-hover ? Theme.tx : Theme.mut; }
+            xt := TouchArea { mouse-cursor: pointer; clicked => { Backend.card-add-skip(); } } }
+    }
+
     // the other way to play, for anyone looking
     Rectangle {
         x: 32px; y: parent.height - 76px; width: parent.width - 64px; height: 52px; border-radius: Theme.r2;

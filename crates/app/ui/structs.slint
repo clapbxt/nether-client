@@ -95,6 +95,10 @@ export global Backend {
     in-out property <int> card-vi: 0;
     callback card-pick(string, int, string);
     callback card-play();
+    // the picked card's profile lacks Essentials mods that have a build now (titles, "" = none): ADD / not for this profile
+    in-out property <string> card-adds;
+    callback card-add();
+    callback card-add-skip();
     // the create wizard makes a Nether profile (only Nether / Nether + Fabric on supported versions)
     in-out property <bool> create-nether: true;
     in-out property <[string]> nether-versions;

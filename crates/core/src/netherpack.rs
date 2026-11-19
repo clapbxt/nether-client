@@ -89,3 +89,47 @@ pub fn install(c: &Client, pack: &NetherPack, mc: &str, mods_dir: &Path, progres
     progress("Pack installed", 1.0);
     Ok((ok, missing))
 }
+
+/// Pack mods missing from `mods_dir` that have a build for `mc` now: (slug, title). Covers a mod skipped at install
+/// because it had no build yet (ModernFix on a new version) and one that went missing. Jars are identified by hash
+/// on Modrinth; a `.disabled` jar counts as present (the player turned it off). `skip` = mods never to offer again.
+pub fn missing(c: &Client, pack: &NetherPack, mc: &str, mods_dir: &Path, skip: &[String]) -> Result<Vec<(String, String)>> {
+    let want: Vec<String> = pack.mods.iter().filter(|m| !skip.contains(m)).cloned().collect();
+    if want.is_empty() { return Ok(vec![]); }
+    let files: Vec<_> = std::fs::read_dir(mods_dir).map(|r| r.flatten().map(|e| e.path())
+        .filter(|p| { let n = p.file_name().and_then(|n| n.to_str()).unwrap_or(""); n.ends_with(".jar") || n.ends_with(".jar.disabled") }).collect()).unwrap_or_default();
+    let hashes: Vec<String> = files.iter().filter_map(|f| crate::modrinth::file_sha512(f).ok()).collect();
+    let have: std::collections::HashSet<String> = if hashes.is_empty() { Default::default() } else {
+        crate::modrinth::lookup(c, &hashes)?.into_values().map(|v| v.project_id).collect()
+    };
+    let ids = crate::modrinth::project_ids(c, &want)?;
+    let mut out = vec![];
+    for m in &want {
+        let Some((id, title)) = ids.get(m) else { continue };
+        if have.contains(id) { continue; }
+        if crate::modrinth::latest_compatible(c, m, mc, Some(&pack.loader))?.is_some() { out.push((m.clone(), title.clone())); }
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    /// Network: an empty mods folder lacks every Essentials mod that has a 1.21.11 build; one installed is not offered.
+    #[test]
+    #[ignore]
+    fn missing_finds_new_builds() {
+        let c = crate::download::client();
+        let dir = std::env::temp_dir().join(format!("nc-missing-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let pack = super::builtin().into_iter().find(|p| p.id == "essentials").unwrap();
+        let all = super::missing(&c, &pack, "1.21.11", &dir, &[]).unwrap();
+        println!("1.21.11 offers: {all:?}");
+        assert!(all.iter().any(|m| m.0 == "sodium"));
+        crate::modrinth::install(&c, "sodium", None, "1.21.11", Some("fabric"), &dir, &|_, _, _| {}).unwrap();
+        let after = super::missing(&c, &pack, "1.21.11", &dir, &["modmenu".into()]).unwrap();
+        println!("after sodium, modmenu declined: {after:?}");
+        assert!(!after.iter().any(|m| m.0 == "sodium" || m.0 == "modmenu"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

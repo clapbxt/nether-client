@@ -181,6 +181,18 @@ pub fn projects(c: &Client, ids: &[String]) -> Result<std::collections::HashMap<
     Ok(v.iter().map(|p| (p["id"].as_str().unwrap_or_default().to_string(), (p["title"].as_str().unwrap_or_default().to_string(), p["icon_url"].as_str().unwrap_or_default().to_string()))).collect())
 }
 
+/// slug or id -> (project id, title), for every project Modrinth knows (slugs are matched case-insensitively).
+pub fn project_ids(c: &Client, slugs: &[String]) -> Result<std::collections::HashMap<String, (String, String)>> {
+    if slugs.is_empty() { return Ok(Default::default()); }
+    let v: Vec<Value> = serde_json::from_value(get_cached(c, &format!("{API}/projects"), &[("ids", json!(slugs).to_string())], HOURS6)?)?;
+    let mut out = std::collections::HashMap::new();
+    for p in &v {
+        let (id, slug, title) = (p["id"].as_str().unwrap_or_default(), p["slug"].as_str().unwrap_or_default(), p["title"].as_str().unwrap_or_default());
+        for s in slugs { if s.eq_ignore_ascii_case(slug) || s == id { out.insert(s.clone(), (id.to_string(), title.to_string())); } }
+    }
+    Ok(out)
+}
+
 /// Markdown -> readable plain text (drops images/html/headings marks), capped in length.
 pub fn plain(md: &str, max: usize) -> String {
     let mut out = String::new();
