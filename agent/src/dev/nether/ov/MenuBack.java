@@ -59,8 +59,11 @@ final class MenuBack {
             default: // panorama: the game draws it underneath; the title screen's own logo is faded out (modern) or covered (1.8.9)
                 Gfx.rect(0, 0, W, H, 0, Gfx.a(Gfx.BLACK, dim));
                 if (legacy) {
-                    Gfx.rect(0, 0, W, 150, 0, Gfx.BG);
-                    Gfx.rectG(0, 150, W, 70, 0, Gfx.BG, Gfx.a(Gfx.BG, 0));
+                    // the logo ends 74 GUI px down; 1.12's "Java Edition" banner under it ends at 81 (2 units per GUI px)
+                    String v = Game.version();
+                    float top = v != null && v.startsWith("1.12") ? 166 : 150;
+                    Gfx.rect(0, 0, W, top, 0, Gfx.BG);
+                    Gfx.rectG(0, top, W, 70, 0, Gfx.BG, Gfx.a(Gfx.BG, 0));
                     Gfx.rectG(0, H - 150, W, 50, 0, Gfx.a(Gfx.BG, 0), Gfx.BG);
                     Gfx.rect(0, H - 100, W, 100, 0, Gfx.BG);
                 }

@@ -62,12 +62,55 @@ final class Data {
                 Object v = f.get(st);
                 if (v == null || v == st) continue;
                 String t = String.valueOf(v);
+                if (t.startsWith("{") && t.length() > 2) t = deep(v, t);
                 if (t.startsWith("{") && t.length() > 2) b.append(t.length() > 16384 ? t.substring(0, 16384) : t).append(' ');
             }
             return b.toString();
         } catch (Throwable t) {
             return "";
         }
+    }
+
+    /** A value that prints as Class@hash (no toString of its own). */
+    private static final java.util.regex.Pattern IDENT = java.util.regex.Pattern.compile("[\\w.$]+@[0-9a-f]{4,}");
+
+    /**
+     * Component values without a toString of their own print as Class@hash: 1.21.9+ prints a head's profile as
+     * "class_9296$class_11756@8b6c7069", hiding the owner. Those values (found in the patch's map) are spelled out
+     * field by field, so the GameProfile / name inside reads as text for {@link Heads}.
+     */
+    private static String deep(Object v, String t) {
+        if (!IDENT.matcher(t).find()) return t;
+        java.util.Map<?, ?> m = v instanceof java.util.Map ? (java.util.Map<?, ?>) v : null;
+        for (Class<?> c = v.getClass(); m == null && c != null && c != Object.class; c = c.getSuperclass())
+            for (Field f : c.getDeclaredFields()) {
+                if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || !java.util.Map.class.isAssignableFrom(f.getType())) continue;
+                try { f.setAccessible(true); Object o = f.get(v); if (o instanceof java.util.Map) { m = (java.util.Map<?, ?>) o; break; } } catch (Throwable ignored) { }
+            }
+        if (m == null) return t;
+        for (Object val : m.values()) {
+            Object x = val instanceof java.util.Optional ? ((java.util.Optional<?>) val).orElse(null) : val;
+            if (x == null) continue;
+            String s = String.valueOf(x);
+            if (IDENT.matcher(s).matches()) t = t.replace(s, spell(x, 0));
+        }
+        return t;
+    }
+
+    private static String spell(Object o, int depth) {
+        StringBuilder b = new StringBuilder(o.getClass().getSimpleName()).append('[');
+        for (Class<?> c = o.getClass(); c != null && c != Object.class; c = c.getSuperclass())
+            for (Field f : c.getDeclaredFields()) {
+                if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) continue;
+                try {
+                    f.setAccessible(true);
+                    Object x = f.get(o);
+                    String s = String.valueOf(x);
+                    if (depth < 2 && x != null && IDENT.matcher(s).matches()) s = spell(x, depth + 1);
+                    b.append(f.getName()).append('=').append(s.length() > 4096 ? s.substring(0, 4096) : s).append(", ");
+                } catch (Throwable ignored) { }
+            }
+        return b.append(']').toString();
     }
 
     /** Item stack as {name, damage, maxDamage, item id, count, data text ({@link #extra}, "" unless the icon needs it)} (damage/max -1 = no durability); null for an empty stack. */

@@ -49,7 +49,9 @@ final class Heads {
         Matcher m = TEX.matcher(p);
         if (m.find()) return "tex:" + m.group(1);
         m = UUID.matcher(p);
-        if (m.find()) return "id:" + (m.group(1) + m.group(2) + m.group(3) + m.group(4) + m.group(5)).toLowerCase(java.util.Locale.ROOT);
+        // a version-3 UUID is an offline one ("OfflinePlayer:<name>", e.g. a name-only head the game filled in): Mojang
+        // doesn't know it, so the name is asked instead
+        if (m.find() && m.group(3).charAt(0) != '3') return "id:" + (m.group(1) + m.group(2) + m.group(3) + m.group(4) + m.group(5)).toLowerCase(java.util.Locale.ROOT);
         m = IDS.matcher(p);
         if (m.find()) {
             StringBuilder b = new StringBuilder();

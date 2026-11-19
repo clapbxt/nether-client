@@ -49,9 +49,14 @@ final class Icons {
      * Icon of a worn / held stack ({@link Data#stack}): dyed leather in its own colour, a player head as its owner's face
      * ({@link Heads}), mob heads as the mob's face; everything else as {@link #get}.
      */
+    /** dev: -Dnether.debugIcons=1 prints the stack data of worn / held icons once */
+    private static final boolean DEBUG = "1".equals(System.getProperty("nether.debugIcons"));
+    private static final java.util.Set<String> logged = new java.util.HashSet<>();
+
     static int[] of(String[] p) {
         if (p == null || p.length < 4) return null;
         String id = p[3], x = p.length > 5 && p[5] != null ? p[5] : "";
+        if (DEBUG && !x.isEmpty() && logged.add(id + x.length())) System.out.println("[nether-agent] icon data " + id + ": " + (x.length() > 600 ? x.substring(0, 600) : x));
         if (id.startsWith("minecraft:leather_")) {
             int c = dye(x);
             return get(c < 0 ? id : id + "#" + Integer.toHexString(c & 0xFFFFFF));
@@ -80,7 +85,9 @@ final class Icons {
         if (x == null || x.isEmpty()) return -1;
         java.util.regex.Matcher m;
         int k = x.indexOf("minecraft:dyed_color");
-        if (k >= 0) m = java.util.regex.Pattern.compile("-?\\d+").matcher(x.substring(k + 20));
+        // a whole number, not digits inside a name: 1.21.5+ prints the component as an intermediary record,
+        // "minecraft:dyed_color=>class_9282[comp_2384=16711680]" (the class name's 9282 is not the colour)
+        if (k >= 0) m = java.util.regex.Pattern.compile("(?<![\\w.$])-?\\d+(?![\\w.])").matcher(x.substring(k + 20));
         else { m = java.util.regex.Pattern.compile("display:\\{[^{}]*?color:(-?\\d+)").matcher(x); }
         if (!m.find()) return -1;
         try { return Integer.parseInt(m.groupCount() > 0 ? m.group(1) : m.group()) & 0xFFFFFF; } catch (NumberFormatException e) { return -1; }
@@ -90,6 +97,13 @@ final class Icons {
     static int[] face(BufferedImage img, int fx, int fy, int fw, int hx, int hy) {
         if (img == null || img.getWidth() < 64) return null;
         int u = img.getWidth() / 64, n = Math.min(8 * u, MAX);
+        // vanilla's "Notch transparency hack": an old 64x32 skin whose whole hat area is opaque has no hat (Notch's
+        // skin is solid black there), so its overlay is ignored, as the game does
+        if (hx >= 0 && img.getHeight() * 2 == img.getWidth()) {
+            boolean opaque = true;
+            for (int y = 0; opaque && y < 32 * u; y++) for (int x = 32 * u; x < 64 * u; x++) if ((img.getRGB(x, y) >>> 24) < 128) { opaque = false; break; }
+            if (opaque) hx = -1;
+        }
         int[] px = new int[n * n];
         for (int y = 0; y < n; y++) for (int x = 0; x < n; x++) {
             int sx = x * 8 * u / n, sy = y * 8 * u / n;
