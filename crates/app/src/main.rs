@@ -458,11 +458,13 @@ fn launch_opts(sh: &Shared, name: &str, version: &str, ram_gb: i32, loader_label
         // only Nether profiles run the Nether client (Play: Nether vs Vanilla)
         client: if saved.name.is_empty() { instances::nether_ok(version, loader_label) } else { saved.nether_on() },
         // Nether + OptiFine (1.8.9 / 1.12.2): the launch downloads and sets it up the first time
-        optifine: Loader::from_label(loader_label) == Loader::Vanilla && nether_core::optifine::supported(version) && !saved.optifine.is_empty(),
+        optifine: optifine_ok(version, loader_label) && !saved.optifine.is_empty(),
         extra_jvm: {
             let mut j = nether_core::launch::split_args(&saved.jvm_args);
             // the in-game Invite to world tells invited players which loader to start
             j.push(format!("-Dnether.loader={loader_label}"));
+            // the party bridge knows which instance a linked game runs (launcher Join tells that game to connect)
+            j.push(format!("-Dnether.instance={name}"));
             // the game's agent shows its own Discord status (the launcher steps aside while a game runs)
             if let Some(id) = discord::game_prop(&sh.paths, prefs::load(&sh.paths).discord) {
                 j.extend([format!("-Dnether.discord={id}"), format!("-Dnether.discordVer={version}"), format!("-Dnether.discordLoader={loader_label}"), format!("-Dnether.discordName={uname}")]);
@@ -475,6 +477,66 @@ fn launch_opts(sh: &Shared, name: &str, version: &str, ram_gb: i32, loader_label
         cancel: None,
     }
 }
+
+static VERSIONS_NOW: AtomicBool = AtomicBool::new(false);
+
+/// Version lists for the create dialog: loaded at start, refreshed every 20 minutes so a release that comes out while
+/// the launcher is open shows up (with a toast and a NEW mark), retried with backoff when the services can't be
+/// reached (each list falls back to its last copy on disk), and at once from the dialog's RETRY.
+fn versions_watch(ui: &AppWindow, sh: &Arc<Shared>) {
+    let weak = ui.as_weak();
+    ui.global::<Backend>().on_retry_versions(move || {
+        if let Some(ui) = weak.upgrade() { ui.global::<Backend>().set_versions_state(0); }
+        VERSIONS_NOW.store(true, Ordering::SeqCst);
+    });
+    let (weak, sh) = (ui.as_weak(), sh.clone());
+    std::thread::Builder::new().name("nether-versions".into()).spawn(move || {
+        let c = nether_core::download::client();
+        let mut backoff = 15u64;
+        loop {
+            let l = nether_core::versions::load(&c);
+            let ok = !l.release.is_empty();
+            // a newer release than the last one this launcher saw (not on the first run)
+            let known = nether_core::store::config(&sh.paths)["known_release"].as_str().unwrap_or_default().to_string();
+            let fresh = nether_core::versions::is_newer(&l.release, &l.latest, &known);
+            if ok && !l.latest.is_empty() && l.latest != known {
+                let v = l.latest.clone();
+                let _ = nether_core::store::update_config(&sh.paths, |o| { o.insert("known_release".into(), v.into()); });
+            }
+            let sh2 = sh.clone();
+            let failed = l.failed.clone();
+            ui_do(&weak, move |ui| {
+                let b = ui.global::<Backend>();
+                let same = |cur: ModelRc<slint::SharedString>, new: &[String]| cur.iter().map(|x| x.to_string()).eq(new.iter().cloned());
+                let model = |new: &[String]| ModelRc::new(VecModel::from(new.iter().map(|x| x.as_str().into()).collect::<Vec<slint::SharedString>>()));
+                let changed = !same(b.get_mc_versions(), &l.release);
+                if changed { b.set_mc_versions(model(&l.release)); }
+                if !same(b.get_fabric_versions(), &l.fabric) { b.set_fabric_versions(model(&l.fabric)); }
+                if !same(b.get_quilt_versions(), &l.quilt) { b.set_quilt_versions(model(&l.quilt)); }
+                if !same(b.get_legacy_versions(), &l.legacy) { b.set_legacy_versions(model(&l.legacy)); }
+                if !same(b.get_forge_versions(), &l.forge) { b.set_forge_versions(model(&l.forge)); }
+                if !same(b.get_neoforge_versions(), &l.neoforge) { b.set_neoforge_versions(model(&l.neoforge)); }
+                b.set_versions_state(if ok { 1 } else { 2 });
+                b.set_versions_failed(l.failed.join(", ").into());
+                if ok && changed { presets::versions_loaded(ui); }
+                if fresh {
+                    b.set_new_version(l.latest.as_str().into());
+                    let fab = if l.fabric.iter().any(|v| *v == l.latest) { "" } else { " Fabric follows once it supports it." };
+                    show_toast(ui, &sh2, &format!("Minecraft {} is out: pick it in NEW PROFILE.{fab}", l.latest));
+                }
+            });
+            // all answered: refresh later; something missing: retry soon, backing off to 10 minutes
+            let wait = if ok && failed.is_empty() { backoff = 15; nether_core::versions::TTL.as_secs() } else { let w = backoff; backoff = (backoff * 4).min(600); w };
+            for _ in 0..wait {
+                if VERSIONS_NOW.swap(false, Ordering::SeqCst) { break; }
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+        }
+    }).ok();
+}
+
+/// OptiFine runs on Vanilla-loader 1.8.9 / 1.12.2 profiles (LaunchWrapper; see `optifine`).
+fn optifine_ok(version: &str, loader: &str) -> bool { Loader::from_label(loader) == Loader::Vanilla && nether_core::optifine::supported(version) }
 
 /// Ends an instance's "starting" state however its launch thread exits (error, cancel, panic, game started).
 struct Starting { weak: slint::Weak<AppWindow>, sh: Arc<Shared>, name: String, key: String }
@@ -952,29 +1014,7 @@ fn main() -> Result<(), slint::PlatformError> {
     }
 
     // ---- instances: versions for the create dialog, create/duplicate/delete/export, settings ----
-    {
-        let weak = ui.as_weak();
-        std::thread::spawn(move || {
-            let c = nether_core::download::client();
-            let rel: Vec<slint::SharedString> = nether_core::mojang::manifest(&c).map(|m| m.versions.iter().filter(|v| v.kind == "release").map(|v| v.id.as_str().into()).collect()).unwrap_or_default();
-            // stable game versions from a Fabric-family meta service (same shape for all three)
-            let games = |url: &str| -> Vec<slint::SharedString> {
-                nether_core::download::get_json::<Vec<serde_json::Value>>(&c, url)
-                    .map(|v| v.iter().filter(|g| g["stable"].as_bool().unwrap_or(false)).filter_map(|g| g["version"].as_str().map(Into::into)).collect()).unwrap_or_default()
-            };
-            let fab = games("https://meta.fabricmc.net/v2/versions/game");
-            let quilt = games("https://meta.quiltmc.org/v3/versions/game");
-            let legacy = games("https://meta.legacyfabric.net/v2/versions/game");
-            ui_do(&weak, move |ui| {
-                let b = ui.global::<Backend>();
-                b.set_mc_versions(ModelRc::new(VecModel::from(rel)));
-                b.set_fabric_versions(ModelRc::new(VecModel::from(fab)));
-                b.set_quilt_versions(ModelRc::new(VecModel::from(quilt)));
-                b.set_legacy_versions(ModelRc::new(VecModel::from(legacy)));
-                presets::versions_loaded(ui);
-            });
-        });
-    }
+    versions_watch(&ui, &shared);
     // settings: storage & about
     {
         let b = ui.global::<Backend>();
@@ -1147,6 +1187,27 @@ fn main() -> Result<(), slint::PlatformError> {
             let Some(i) = ui.global::<Backend>().get_instances().row_data(idx.max(0) as usize) else { return };
             edit_inst(&ui, &sh, &i.name, |i| i.shared = on);
         });
+    }
+    {
+        let (weak, sh) = (ui.as_weak(), shared.clone());
+        backend.on_set_inst_nether(move |idx, on| {
+            let Some(ui) = weak.upgrade() else { return };
+            let Some(i) = ui.global::<Backend>().get_instances().row_data(idx.max(0) as usize) else { return };
+            if presets::is_card(&i.name) || !instances::nether_ok(&i.ver, &i.loader) { return; }
+            edit_inst(&ui, &sh, &i.name, |i| i.nether = on);
+            refilter(&ui); // Nether profiles list under Modpacks, plain ones under Vanilla
+            show_toast(&ui, &sh, &if on { format!("{} now runs the Nether client", i.name) } else { format!("{} is now plain Minecraft", i.name) });
+        });
+        let (weak, sh) = (ui.as_weak(), shared.clone());
+        backend.on_set_inst_optifine(move |idx, on| {
+            let Some(ui) = weak.upgrade() else { return };
+            let Some(i) = ui.global::<Backend>().get_instances().row_data(idx.max(0) as usize) else { return };
+            if !optifine_ok(&i.ver, &i.loader) { return; }
+            edit_inst(&ui, &sh, &i.name, |i| i.optifine = if on { "on".into() } else { "".into() });
+        });
+        backend.on_nether_ok(|v, l| instances::nether_ok(&v, &l));
+        backend.on_optifine_ok(|v, l| optifine_ok(&v, &l));
+        backend.on_is_card(|n| presets::is_card(&n));
     }
     {
         let weak = ui.as_weak();

@@ -433,10 +433,7 @@ fn join(ui: &AppWindow, sh: &Arc<Shared>) {
     }
     let pick = (w.get_pick().max(0) as usize).min(m.len().saturating_sub(1));
     let Some(inst) = m.get(pick).and_then(|(row, _)| b.get_instances().row_data(*row)) else { return };
-    if inst.running {
-        show_toast(ui, sh, &format!("{} is already running: join from the invite in game", inst.name));
-        return;
-    }
+    // a running game (this instance or another) is handled by play_into: told to join, or closed first
     close(ui);
     // open the link first (off the UI thread), then start the game into it
     let (weak, sh2, addr, id, name) = (ui.as_weak(), sh.clone(), s.inv.address.clone(), s.inv.id, inst.name.to_string());

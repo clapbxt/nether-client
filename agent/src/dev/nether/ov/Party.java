@@ -115,6 +115,7 @@ final class Party {
                 Map<String, Object> h = new LinkedHashMap<>();
                 h.put("t", "hello");
                 h.put("token", token);
+                h.put("inst", System.getProperty("nether.instance", ""));
                 out.write(line(h));
                 out.flush();
                 synchronized (Party.class) { sock = s; os = out; linked = true; }
@@ -310,12 +311,14 @@ final class Party {
             case "go": {
                 String a = str(m.get("address")), n = str(m.get("name"));
                 if (a.isEmpty()) return;
-                if (Game.player0() == null && Game.screen() != null) { Input.setMenu(false); QuickJoin.join(n.isEmpty() ? a : n, a, Game.screen()); }
+                boolean join = "join".equals(str(m.get("why"))); // the launcher's Join (not the party)
+                String to = n.isEmpty() ? a : n;
+                if (Game.player0() == null && Game.screen() != null) { Input.setMenu(false); QuickJoin.join(to, a, Game.screen()); }
                 else {
                     goAddr = a; goName = n;
                     // save and leave like the pause screen's button, then connect from the title / multiplayer screen
-                    if (Leave.later()) Toast.show("Following your party to " + (n.isEmpty() ? a : n) + "  ·  saving and leaving this world");
-                    else Toast.show("Your party is on " + (n.isEmpty() ? a : n) + "  ·  leave this world to follow");
+                    if (Leave.later()) Toast.show((join ? "Joining " : "Following your party to ") + to + "  ·  saving and leaving this world");
+                    else Toast.show(join ? "Leave this world to join " + to : "Your party is on " + to + "  ·  leave this world to follow");
                 }
                 return;
             }

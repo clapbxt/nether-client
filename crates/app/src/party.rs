@@ -49,7 +49,7 @@ struct Prefs {
     voice_intro: bool,
 }
 
-enum Cmd { Net(Event), Game(Value), Hello(u64, TcpStream), Poke(String, bool) }
+enum Cmd { Net(Event), Game(Value), Hello(u64, TcpStream), Poke(String, bool), ToGame(String, Value) }
 
 #[derive(Clone)]
 struct InInvite { id: u64, from: String, from_name: String, party: String, leader: String, leader_name: String, leader_peer: String, size: u32, at: Instant }
@@ -108,6 +108,19 @@ struct VoiceRoute { peers: Vec<String>, sid: u16, on: bool }
 static TX: Mutex<Option<Sender<Cmd>>> = Mutex::new(None);
 static NET: Mutex<Option<Net>> = Mutex::new(None);
 static LEAVE: Mutex<Option<Box<dyn FnOnce() + Send>>> = Mutex::new(None);
+/// Linked games (bridge client id -> the instance it runs, from its hello's "inst").
+static GAMES: Mutex<Vec<(u64, String)>> = Mutex::new(Vec::new());
+
+/// The running game of this instance is linked (its agent can be told to join a server).
+pub fn game_linked(inst: &str) -> bool { GAMES.lock().unwrap_or_else(|e| e.into_inner()).iter().any(|(_, n)| n == inst) }
+
+/// Tell the running game of `inst` to join a server: it saves and leaves its world (or disconnects) the way the pause
+/// screen's button does, then connects. false = that game isn't linked (agent off or not started yet).
+pub fn game_join(inst: &str, address: &str, name: &str) -> bool {
+    if !game_linked(inst) { return false; }
+    let Some(tx) = TX.lock().unwrap_or_else(|e| e.into_inner()).clone() else { return false };
+    tx.send(Cmd::ToGame(inst.to_string(), json!({ "t": "go", "address": address, "name": name, "why": "join" }))).is_ok()
+}
 
 fn dir(sh: &Shared) -> PathBuf { sh.paths.root.join("client").join("party") }
 fn prefs_file(sh: &Shared) -> PathBuf { sh.paths.root.join("party.json") }
@@ -193,8 +206,10 @@ fn bridge(sh: &Arc<Shared>, tx: Sender<Cmd>) {
                 if r.read_line(&mut line).is_err() { return; }
                 let ok = serde_json::from_str::<Value>(&line).ok().is_some_and(|v| v["t"] == "hello" && v["token"] == token.as_str());
                 if !ok { return; }
+                let inst = serde_json::from_str::<Value>(&line).ok().and_then(|v| v["inst"].as_str().map(str::to_string)).unwrap_or_default();
                 let _ = r.get_ref().set_read_timeout(None);
                 if tx.send(Cmd::Hello(id, w)).is_err() { return; }
+                GAMES.lock().unwrap_or_else(|e| e.into_inner()).push((id, inst));
                 loop {
                     line.clear();
                     match r.read_line(&mut line) {
@@ -203,6 +218,7 @@ fn bridge(sh: &Arc<Shared>, tx: Sender<Cmd>) {
                         Ok(_) => if let Ok(v) = serde_json::from_str::<Value>(&line) { if tx.send(Cmd::Game(v)).is_err() { break; } },
                     }
                 }
+                GAMES.lock().unwrap_or_else(|e| e.into_inner()).retain(|(c, _)| *c != id);
                 let _ = tx.send(Cmd::Game(json!({ "t": "bye", "client": id })));
             });
         }
@@ -241,6 +257,12 @@ impl Actor {
             Ok(Cmd::Net(e)) => self.on_net(e),
             Ok(Cmd::Game(v)) => self.on_game(&v),
             Ok(Cmd::Hello(id, s)) => { self.clients.push((id, s)); self.last_state.clear(); self.push_chat_history(id); }
+            Ok(Cmd::ToGame(inst, v)) => {
+                let ids: Vec<u64> = GAMES.lock().unwrap_or_else(|e| e.into_inner()).iter().filter(|(_, n)| *n == inst).map(|(c, _)| *c).collect();
+                let line = format!("{v}
+");
+                self.clients.retain_mut(|(c, s)| !ids.contains(c) || s.write_all(line.as_bytes()).is_ok());
+            }
             Ok(Cmd::Poke(uuid, world)) => { if let Some(fp) = self.friend_peer(&uuid) { self.tell(&fp, if world { Msg::WorldInvite } else { Msg::Sync }); } }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return false,

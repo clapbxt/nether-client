@@ -165,7 +165,42 @@ pub fn import_world(ui: &AppWindow, sh: &Arc<Shared>, idx: i32) {
 }
 
 /// Start an instance with Quick Play (a world or a server).
+///
+/// Joining a server never starts a second game: when the chosen instance is already running, its game is told to
+/// join (it saves and leaves its world or disconnects first, like the pause screen's button). When another instance
+/// is running, the player is asked to close it (Minecraft saves on the way out), and the chosen one starts once it
+/// has exited.
 pub(crate) fn play_into(ui: &AppWindow, sh: &Arc<Shared>, i: &Inst, q: QuickPlay) {
+    if let QuickPlay::Server(addr) = &q {
+        if i.running {
+            if crate::party::game_join(&i.name, addr, addr) { show_toast(ui, sh, &format!("Joining {addr} in {}", i.name)); }
+            else { show_toast(ui, sh, &format!("{} is already running: join {addr} from its Multiplayer screen", i.name)); }
+            return;
+        }
+        let other = ui.global::<Backend>().get_instances().iter().find(|o| (o.running || o.starting) && o.name != i.name).map(|o| o.name.to_string());
+        if let Some(o) = other {
+            let (sh2, want, addr) = (sh.clone(), i.name.to_string(), addr.clone());
+            let text = format!("{o} is running. It saves and closes, then {want} starts and joins {addr}.");
+            ask(ui, &format!("Close {o}?"), &text, "CLOSE AND JOIN", false, move |ui| {
+                stop(ui, &sh2, &o);
+                let (weak, sh3) = (ui.as_weak(), sh2.clone());
+                std::thread::spawn(move || {
+                    // stop() closes the window, and forces the game down after 20 s
+                    let t = std::time::Instant::now();
+                    while sh3.running.lock().unwrap_or_else(|e| e.into_inner()).contains_key(&o) && t.elapsed().as_secs() < 45 {
+                        std::thread::sleep(std::time::Duration::from_millis(300));
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(800)); // the launch thread marks it stopped
+                    crate::ui_do(&weak, move |ui| {
+                        let insts = ui.global::<Backend>().get_instances();
+                        if insts.iter().any(|x| x.name.as_str() == o && (x.running || x.starting)) { show_toast(ui, &sh3, &format!("{o} didn't close, so {want} wasn't started")); return; }
+                        if let Some(inst) = insts.iter().find(|x| x.name.as_str() == want) { play_into(ui, &sh3, &inst, QuickPlay::Server(addr)); }
+                    });
+                });
+            });
+            return;
+        }
+    }
     if i.running { show_toast(ui, sh, &format!("{} is already running", i.name)); return; }
     crate::start_launch(ui.as_weak(), sh.clone(), i.name.to_string(), i.ver.to_string(), i.ram, i.loader.to_string(), crate::JAVAS[i.java.clamp(0, 4) as usize], i.shared, Some(q), true);
 }

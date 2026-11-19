@@ -185,6 +185,15 @@ export global Backend {
     // game versions the Quilt and Legacy Fabric loaders support (their meta services)
     in-out property <[string]> quilt-versions;
     in-out property <[string]> legacy-versions;
+    // Forge / NeoForge: releases they have builds for
+    in-out property <[string]> forge-versions;
+    in-out property <[string]> neoforge-versions;
+    // version lists: 0 loading, 1 ready, 2 unreachable (nothing cached); versions-failed = sources that didn't answer
+    in-out property <int> versions-state;
+    in-out property <string> versions-failed;
+    // a release that came out while the launcher was in use (marked NEW in the version picker)
+    in-out property <string> new-version;
+    callback retry-versions();
     callback create-instance(string, string, int, int, string, string) -> bool;
     // pickers: block icons and version wallpapers (cover-choices[0] = "own version"); version-cover = art for the dialog's version
     in-out property <[Art]> icon-choices;
@@ -193,6 +202,12 @@ export global Backend {
     callback cover-for(string);
     callback set-inst-art(int, string, string);
     callback set-inst-shared(int, bool);
+    // a profile's page: switch the Nether client and OptiFine (where they run); ready-made card profiles stay Nether
+    callback set-inst-nether(int, bool);
+    callback set-inst-optifine(int, bool);
+    pure callback nether-ok(string, string) -> bool;
+    pure callback optifine-ok(string, string) -> bool;
+    pure callback is-card(string) -> bool;
     // shared game settings (Settings page)
     in-out property <bool> sync-on: true;
     in-out property <bool> sync-controls: true;

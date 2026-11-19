@@ -29,12 +29,12 @@ impl Kind {
     }
 }
 
-const NEO_MAVEN: &str = "https://maven.neoforged.net/releases/net/neoforged/neoforge";
+pub(crate) const NEO_MAVEN: &str = "https://maven.neoforged.net/releases/net/neoforged/neoforge";
 const FORGE_MAVEN: &str = "https://maven.minecraftforge.net/net/minecraftforge/forge";
-const FORGE_PROMOS: &str = "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json";
+pub(crate) const FORGE_PROMOS: &str = "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json";
 
 /// NeoForge versions for a Minecraft version start with this (1.21.1 -> "21.1.", 1.21 -> "21.0.", 26.3 -> "26.3.0.").
-fn neo_prefix(mc: &str) -> String {
+pub(crate) fn neo_prefix(mc: &str) -> String {
     let p: Vec<&str> = mc.split('.').collect();
     if p[0] == "1" {
         format!("{}.{}.", p.get(1).unwrap_or(&"0"), p.get(2).unwrap_or(&"0"))

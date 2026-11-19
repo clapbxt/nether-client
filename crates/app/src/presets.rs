@@ -92,7 +92,9 @@ pub fn versions_loaded(ui: &AppWindow) {
     let mut nv: Vec<slint::SharedString> = rel.iter().filter(|v| instances::nether_ok(v, "Vanilla")).map(|v| v.as_str().into()).collect();
     if !nv.iter().any(|v| v == "1.8.9") { nv.push("1.8.9".into()); }
     let nf: Vec<slint::SharedString> = fab.iter().filter(|v| instances::nether_ok(v, "Fabric")).map(|v| v.as_str().into()).collect();
-    let ng: Vec<slint::SharedString> = rel.iter().filter(|v| instances::nether_ok(v, "Forge")).map(|v| v.as_str().into()).collect();
+    // Forge: the releases it has builds for (all releases until that list has loaded)
+    let forge = names(&b.get_forge_versions());
+    let ng: Vec<slint::SharedString> = rel.iter().filter(|v| instances::nether_ok(v, "Forge") && (forge.is_empty() || forge.contains(v))).map(|v| v.as_str().into()).collect();
     b.set_nether_forge_versions(ModelRc::new(VecModel::from(ng)));
     b.set_nether_versions(ModelRc::new(VecModel::from(nv)));
     b.set_nether_fabric_versions(ModelRc::new(VecModel::from(nf)));

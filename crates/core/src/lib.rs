@@ -40,6 +40,7 @@ pub mod store;
 pub mod trash;
 pub mod ugc;
 pub mod update;
+pub mod versions;
 
 use std::sync::Arc;
 

@@ -412,20 +412,36 @@ export component InstancesScreen inherits Rectangle {
                 }
 
                 SectionHead { x: 56px; y: 424px; width: 880px; idx: "02"; title: "GAME & CLIENT SETTINGS"; }
-                SetRow { x: 56px; y: 448px; width: 880px; reserve: 0px; title: "Client modules"; sub: "Set in game with Right Shift. They follow the switch below, like your other game settings."; }
+                // Nether client on / off (Play: Nether vs Vanilla) and OptiFine, where they run
+                property <bool> n-ok: Backend.nether-ok(Backend.instances[root.sel].ver, Backend.instances[root.sel].loader);
+                property <bool> of-ok: Backend.optifine-ok(Backend.instances[root.sel].ver, Backend.instances[root.sel].loader);
+                property <bool> card: Backend.is-card(Backend.instances[root.sel].name);
+                property <length> of-dy: self.of-ok ? 64px : 0px;
+                property <string> later: Backend.instances[root.sel].running || Backend.instances[root.sel].starting ? " Takes effect on the next launch." : "";
+                SetRow { x: 56px; y: 448px; width: 880px; title: "Nether client";
+                    sub: !n-ok ? "Not on \{Backend.instances[root.sel].loader} \{Backend.instances[root.sel].ver}: it runs on Vanilla, Fabric and Forge 1.14+, and on 1.8.9 and 1.12.2."
+                        : (card ? "A ready-made Nether profile. Modules are set in game with Right Shift." + later
+                        : (Backend.instances[root.sel].nether ? "On: HUD, modules and cosmetics in game (Right Shift). Off makes this plain Minecraft." + later
+                        : "Off: plain Minecraft. Turn it on for the HUD, modules and cosmetics; mods and worlds stay as they are." + later));
+                    if n-ok && !card: Toggle { x: parent.width - 42px; y: 21px; on: Backend.instances[root.sel].nether; toggled(v) => { Backend.set-inst-nether(root.sel, v); } }
+                }
                 SetRow { x: 56px; y: 512px; width: 880px; title: "Share game settings";
                     sub: !Backend.sync-on ? "Sharing is turned off in Settings: this instance keeps its own settings and client modules." : (Backend.instances[root.sel].shared ? "Keybinds, video, audio and client modules follow you between instances." : "This instance keeps its own game settings and client modules.");
                     LinkBtn { x: parent.width - 200px; y: 18px; text: "SETTINGS"; clicked => { root.go-settings(); } }
                     Toggle { x: parent.width - 42px; y: 21px; on: Backend.instances[root.sel].shared; toggled(v) => { Backend.set-inst-shared(root.sel, v); } }
                 }
+                if of-ok: SetRow { x: 56px; y: 576px; width: 880px; title: "OptiFine";
+                    sub: (Backend.instances[root.sel].optifine != "" ? "On: the newest stable OptiFine for \{Backend.instances[root.sel].ver}, set up on launch." : "Off. Turn it on for OptiFine's video settings, zoom and shaders; it downloads on the next launch.") + later;
+                    Toggle { x: parent.width - 42px; y: 21px; on: Backend.instances[root.sel].optifine != ""; toggled(v) => { Backend.set-inst-optifine(root.sel, v); } }
+                }
 
                 // appearance: icon + wallpaper
-                SectionHead { x: 56px; y: 612px; width: 880px; idx: "03"; title: "APPEARANCE"; }
-                Eyebrow { x: 56px; y: 648px; text: "ICON"; }
-                IconPicker { x: 56px; y: 672px; width: 880px; cols: 25; tile: 31px; items: Backend.icon-choices; current: Backend.instances[root.sel].icon;
+                SectionHead { x: 56px; y: 612px + of-dy; width: 880px; idx: "03"; title: "APPEARANCE"; }
+                Eyebrow { x: 56px; y: 648px + of-dy; text: "ICON"; }
+                IconPicker { x: 56px; y: 672px + of-dy; width: 880px; cols: 25; tile: 31px; items: Backend.icon-choices; current: Backend.instances[root.sel].icon;
                     picked(k) => { Backend.set-inst-art(root.sel, k, Backend.instances[root.sel].cover); } }
-                Eyebrow { x: 56px; y: 800px; text: "WALLPAPER"; }
-                ocp := CoverPicker { x: 56px; y: 824px; width: 880px; cols: 13; tile: 60px; items: Backend.cover-choices; current: Backend.instances[root.sel].cover;
+                Eyebrow { x: 56px; y: 800px + of-dy; text: "WALLPAPER"; }
+                ocp := CoverPicker { x: 56px; y: 824px + of-dy; width: 880px; cols: 13; tile: 60px; items: Backend.cover-choices; current: Backend.instances[root.sel].cover;
                     own: Backend.instances[root.sel].cover == "" ? Backend.instances[root.sel].cover-img : Backend.cover-choices[0].img; own-label: Backend.instances[root.sel].ver;
                     picked(k) => { Backend.set-inst-art(root.sel, Backend.instances[root.sel].icon, k); } }
 
@@ -841,7 +857,8 @@ export component InstancesScreen inherits Rectangle {
             property <bool> nether: Backend.create-nether;
             property <[{t: string, s: int}]> steps: [{t: dlg.nether ? "HOW TO PLAY" : "LOADER", s: 0}, {t: "VERSION", s: 1}, {t: "NETHER PACK", s: 2}, {t: "RESOURCE PACKS", s: 4}, {t: "FINISH", s: 5}];
             property <[string]> vers: dlg.nether ? (dlg.loader == 1 ? Backend.nether-fabric-versions : (dlg.loader == 2 ? Backend.nether-forge-versions : (dlg.loader == 6 ? ["1.12.2", "1.8.9"] : Backend.nether-versions)))
-                : (dlg.loader == 1 ? Backend.fabric-versions : (dlg.loader == 4 ? Backend.quilt-versions : (dlg.loader == 5 ? Backend.legacy-versions : Backend.mc-versions)));
+                : (dlg.loader == 1 ? Backend.fabric-versions : (dlg.loader == 2 ? Backend.forge-versions : (dlg.loader == 3 ? Backend.neoforge-versions
+                : (dlg.loader == 4 ? Backend.quilt-versions : (dlg.loader == 5 ? Backend.legacy-versions : Backend.mc-versions)))));
             property <[string]> loader-names: ["Vanilla", "Fabric", "Forge", "NeoForge", "Quilt", "Legacy Fabric"];
             property <string> ver: dlg.vers.length > 0 ? dlg.vers[Math.min(dlg.vi, dlg.vers.length - 1)] : "";
             property <string> loader-name: dlg.loader == 6 ? "OptiFine" : dlg.loader-names[dlg.loader];
@@ -919,7 +936,12 @@ export component InstancesScreen inherits Rectangle {
             if dlg.step == 1: Rectangle {
                 x: 32px; y: 166px; width: parent.width - 64px; height: 450px;
                 Text { x: 0px; y: 0px; text: "Minecraft versions with " + dlg.loader-name + ". Newest first."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; }
-                if dlg.vers.length == 0: Text { x: 0px; y: 40px; text: "Loading versions…"; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; }
+                if dlg.vers.length == 0: Text { x: 0px; y: 40px; width: parent.width;
+                    text: Backend.versions-state == 0 ? "Loading versions…"
+                        : (Backend.versions-state == 2 ? "Couldn't reach Mojang's version list, and there's no saved copy yet. Check your connection; it retries on its own."
+                        : (Backend.versions-failed != "" ? "Couldn't reach " + Backend.versions-failed + " for its versions. It retries on its own." : "No " + dlg.loader-name + " versions yet."));
+                    color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
+                if dlg.vers.length == 0 && Backend.versions-state != 0: Btn { x: 0px; y: 96px; text: "RETRY"; clicked => { Backend.retry-versions(); } }
                 Flickable {
                     y: 32px; height: parent.height - 32px; content-height: Math.ceil(dlg.vers.length / 6) * 52px;
                     for v[i] in dlg.vers: Rectangle {
@@ -928,6 +950,7 @@ export component InstancesScreen inherits Rectangle {
                         border-width: 1px; border-color: dlg.vi == i ? Theme.ice : Theme.ln; border-radius: Theme.r2;
                         Text { text: v; color: dlg.vi == i ? Theme.ink : Theme.tx; font-family: Theme.mono; font-size: 14px * Theme.ts; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
                         if i == 0: Rectangle { x: parent.width - 8px; y: 0px; width: 8px; height: 8px; background: Theme.red2; }
+                        if v == Backend.new-version: Text { x: 6px; y: 3px; text: "NEW"; color: dlg.vi == i ? Theme.ink : Theme.red2; font-family: Theme.mono; font-size: 9px * Theme.ts; font-weight: 700; }
                         vt := TouchArea { mouse-cursor: pointer; clicked => { dlg.vi = i; } double-clicked => { dlg.vi = i; dlg.go(2); } }
                     }
                 }
