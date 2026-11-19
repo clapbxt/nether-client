@@ -58,6 +58,12 @@ final class InputGlfw extends Plat {
 
     @Override boolean focused() { return Input.window == 0 || GLFW.glfwGetWindowAttrib(Input.window, GLFW.GLFW_FOCUSED) != 0; }
 
+    @Override int away(long window) {
+        if (window == 0) return 0;
+        if (GLFW.glfwGetWindowAttrib(window, GLFW.GLFW_ICONIFIED) != 0) return 2;
+        return GLFW.glfwGetWindowAttrib(window, GLFW.GLFW_FOCUSED) != 0 ? 0 : 1;
+    }
+
     @Override void opened() {
         long window = Input.window;
         Input.gameMode = GLFW.glfwGetInputMode(window, Input.CURSOR);

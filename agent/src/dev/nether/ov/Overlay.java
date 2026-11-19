@@ -53,6 +53,7 @@ public final class Overlay {
             renderThread = Thread.currentThread();
             Game.frame++;
             if (!inited) init();
+            BackgroundFps.limit(window); // before the size check: a minimized window has no size
             long now = System.nanoTime();
             float dt = lastNs == 0 ? 0.016f : Math.min(0.1f, (now - lastNs) / 1e9f);
             lastNs = now;

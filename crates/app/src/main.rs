@@ -39,6 +39,7 @@ mod discord;
 mod friends;
 mod party;
 mod presets;
+mod perfui;
 mod setup;
 mod voice;
 slint::include_modules!();
@@ -466,6 +467,8 @@ fn launch_opts(sh: &Shared, name: &str, version: &str, ram_gb: i32, loader_label
             j.push(format!("-Dnether.loader={loader_label}"));
             // the party bridge knows which instance a linked game runs (launcher Join tells that game to connect)
             j.push(format!("-Dnether.instance={name}"));
+            // Dynamic FPS handles the background frame rate: the agent's own limiter steps aside
+            if nether_core::perf::dynamic_fps_on(&sh.paths, name) { j.push("-Dnether.dynfps=1".into()); }
             // the game's agent shows its own Discord status (the launcher steps aside while a game runs)
             if let Some(id) = discord::game_prop(&sh.paths, prefs::load(&sh.paths).discord) {
                 j.extend([format!("-Dnether.discord={id}"), format!("-Dnether.discordVer={version}"), format!("-Dnether.discordLoader={loader_label}"), format!("-Dnether.discordName={uname}")]);
@@ -1208,6 +1211,12 @@ fn main() -> Result<(), slint::PlatformError> {
             edit_inst(&ui, &sh, &i.name, |i| i.optifine = if on { "on".into() } else { "".into() });
         });
         backend.on_nether_ok(|v, l| instances::nether_ok(&v, &l));
+        let (weak, sh) = (ui.as_weak(), shared.clone());
+        backend.on_load_boosts(move || if let Some(ui) = weak.upgrade() { perfui::load(&ui, &sh) });
+        let (weak, sh) = (ui.as_weak(), shared.clone());
+        backend.on_set_boost(move |slug, on| if let Some(ui) = weak.upgrade() { perfui::set(&ui, &sh, &slug, on) });
+        let (weak, sh) = (ui.as_weak(), shared.clone());
+        backend.on_boosts_all_on(move || if let Some(ui) = weak.upgrade() { perfui::all_on(&ui, &sh) });
         backend.on_optifine_ok(|v, l| optifine_ok(&v, &l));
         backend.on_is_card(|n| presets::is_card(&n));
     }
@@ -1643,6 +1652,11 @@ java.lang.OutOfMemoryError: Java heap space
             ui.global::<Backend>().set_lp_accent(a);
             ui.global::<Backend>().set_lp_text(t);
             settings::apply_look(&ui, a, t);
+        }
+        // NC_SNAP_NOGATE: keep the sign-in gate away even when the saved login can't refresh (captures of signed-in pages)
+        if std::env::var("NC_SNAP_NOGATE").is_ok() {
+            let w = ui.as_weak();
+            slint::Timer::single_shot(std::time::Duration::from_millis(2500), move || if let Some(ui) = w.upgrade() { ui.global::<Backend>().set_gate_open(false); });
         }
         let src = if args.get(i + 5).map(|s| s == "1").unwrap_or(false) { 0 } else { 1 };
         if det >= 0 {

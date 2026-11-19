@@ -27,6 +27,7 @@ pub mod java;
 pub mod launch;
 pub mod mojang;
 pub mod paths;
+pub mod perf;
 pub mod preflight;
 pub mod preview;
 pub mod restore;

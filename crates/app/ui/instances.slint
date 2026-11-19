@@ -114,7 +114,7 @@ export component InstancesScreen inherits Rectangle {
     callback go-settings();
     in-out property <int> sel: -1;
     init => { Backend.current-inst = root.sel; Backend.measure-inst(); root.load-mods(); if root.itab == 3 { Backend.load-worlds(); } if root.itab == 4 { Backend.load-shots(); } if root.itab == 5 { Backend.load-log(Backend.log-kind); } }
-    changed sel => { Backend.current-inst = root.sel; Backend.measure-inst(); if root.itab == 3 { Backend.load-worlds(); } if root.itab == 4 { Backend.load-shots(); } if root.itab == 5 { Backend.load-log(Backend.log-kind); } }
+    changed sel => { Backend.current-inst = root.sel; Backend.measure-inst(); if root.itab == 0 { Backend.load-boosts(); } if root.itab == 3 { Backend.load-worlds(); } if root.itab == 4 { Backend.load-shots(); } if root.itab == 5 { Backend.load-log(Backend.log-kind); } }
     changed itab => { root.load-mods(); if root.itab == 3 { Backend.load-worlds(); } if root.itab == 4 { Backend.load-shots(); } if root.itab == 5 { Backend.load-log(Backend.log-kind); } }
     changed kind => { Backend.browse-cat = 0; root.load-mods(); }
     // mods (tab 1) and resource packs / shaders (tab 2) come from Modrinth and the instance folder
@@ -377,7 +377,7 @@ export component InstancesScreen inherits Rectangle {
 
         // overview (scrolls)
         if root.itab == 0: Page {
-            init => { Backend.load-rpoints(); }
+            init => { Backend.load-rpoints(); Backend.load-boosts(); }
             Flickable {
                 y: 187px; height: parent.height - 187px; content-height: Math.max(ocp.y + ocp.height + 330px, 772px + Backend.rpoints.length * 60px);
                 // spec strip
@@ -389,7 +389,7 @@ export component InstancesScreen inherits Rectangle {
                     Stat { x: 660px; width: 220px; size: 24px; k: "MEMORY"; v: "\{Backend.instances[root.sel].ram} GB"; }
                 }
 
-                SectionHead { x: 56px; y: 108px; width: 880px; idx: "01"; title: "PERFORMANCE"; }
+                SectionHead { x: 56px; y: 108px; width: 880px; title: "LAUNCH"; }
                 SetRow { x: 56px; y: 132px; width: 880px; title: "Java"; sub: "Auto picks the right Java for this Minecraft version.";
                     Dropdown { x: parent.width - 230px; y: 12px; width: 230px; items: ["Auto", "Java 8", "Java 17", "Java 21", "Java 25"]; current: Backend.instances[root.sel].java; changed(i) => { Backend.set-inst-java(root.sel, i); } }
                 }
@@ -411,37 +411,50 @@ export component InstancesScreen inherits Rectangle {
                         text: Backend.instances[root.sel].win-h > 0 ? "\{Backend.instances[root.sel].win-h}" : ""; edited => { Backend.set-inst-window(root.sel, ww.text, wh.text); } }
                 }
 
-                SectionHead { x: 56px; y: 424px; width: 880px; idx: "02"; title: "GAME & CLIENT SETTINGS"; }
-                // Nether client on / off (Play: Nether vs Vanilla) and OptiFine, where they run
-                property <bool> n-ok: Backend.nether-ok(Backend.instances[root.sel].ver, Backend.instances[root.sel].loader);
+                // FPS boosters (perf.rs): the loader's curated performance mods; OptiFine on Vanilla 1.8.9 / 1.12.2
                 property <bool> of-ok: Backend.optifine-ok(Backend.instances[root.sel].ver, Backend.instances[root.sel].loader);
-                property <bool> card: Backend.is-card(Backend.instances[root.sel].name);
-                property <length> of-dy: self.of-ok ? 64px : 0px;
                 property <string> later: Backend.instances[root.sel].running || Backend.instances[root.sel].starting ? " Takes effect on the next launch." : "";
-                SetRow { x: 56px; y: 448px; width: 880px; title: "Nether client";
+                property <length> bh: Backend.boosts.length * 64px + (self.of-ok ? 64px : 0px);
+                property <length> fh: (Backend.boost-foot != "" ? 40px : 0px) + (Backend.boost-more ? 40px : 0px);
+                // where GAME & CLIENT SETTINGS starts
+                property <length> g0: 448px + self.bh + self.fh + 36px;
+                SectionHead { x: 56px; y: 424px; width: 880px; title: "FPS BOOSTERS"; note: Backend.boost-note; }
+                for r[i] in Backend.boosts: SetRow { x: 56px; y: 448px + i * 64px; width: 880px; title: r.name; sub: r.sub; dimmed: !r.can && !r.on && !r.busy;
+                    if r.warn: Rectangle { x: parent.width - 62px; y: 27px; width: 8px; height: 8px; border-radius: 4px; background: Theme.red2; }
+                    if r.busy: Text { x: parent.width - 120px; width: 64px; y: 0px; height: parent.height; text: "…"; color: Theme.mut; font-family: Theme.mono; font-size: 15px; horizontal-alignment: right; vertical-alignment: center; }
+                    Toggle { x: parent.width - 42px; y: 21px; on: r.on; enabled: r.can; opacity: r.can ? 1 : 0.4; toggled(v) => { Backend.set-boost(r.slug, v); } }
+                }
+                if of-ok: SetRow { x: 56px; y: 448px + Backend.boosts.length * 64px; width: 880px; title: "OptiFine";
+                    sub: (Backend.instances[root.sel].optifine != "" ? "On: the newest stable OptiFine for \{Backend.instances[root.sel].ver}, set up on launch." : "Off. OptiFine adds FPS settings, zoom and shaders; it downloads on the next launch.") + later;
+                    Toggle { x: parent.width - 42px; y: 21px; on: Backend.instances[root.sel].optifine != ""; toggled(v) => { Backend.set-inst-optifine(root.sel, v); } }
+                }
+                if Backend.boost-foot != "": Text { x: 56px; y: 448px + bh + 14px; width: 880px; text: Backend.boost-foot; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; }
+                if Backend.boost-more: LinkBtn { x: 56px; y: 448px + bh + (Backend.boost-foot != "" ? 40px : 6px); text: "TURN ON ALL AVAILABLE"; clicked => { Backend.boosts-all-on(); } }
+
+                SectionHead { x: 56px; y: g0; width: 880px; title: "GAME & CLIENT SETTINGS"; }
+                // Nether client on / off (Play: Nether vs Vanilla)
+                property <bool> n-ok: Backend.nether-ok(Backend.instances[root.sel].ver, Backend.instances[root.sel].loader);
+                property <bool> card: Backend.is-card(Backend.instances[root.sel].name);
+                SetRow { x: 56px; y: g0 + 24px; width: 880px; title: "Nether client";
                     sub: !n-ok ? "Not on \{Backend.instances[root.sel].loader} \{Backend.instances[root.sel].ver}: it runs on Vanilla, Fabric and Forge 1.14+, and on 1.8.9 and 1.12.2."
                         : (card ? "A ready-made Nether profile. Modules are set in game with Right Shift." + later
                         : (Backend.instances[root.sel].nether ? "On: HUD, modules and cosmetics in game (Right Shift). Off makes this plain Minecraft." + later
                         : "Off: plain Minecraft. Turn it on for the HUD, modules and cosmetics; mods and worlds stay as they are." + later));
-                    if n-ok && !card: Toggle { x: parent.width - 42px; y: 21px; on: Backend.instances[root.sel].nether; toggled(v) => { Backend.set-inst-nether(root.sel, v); } }
+                    if n-ok && !card: Toggle { x: parent.width - 42px; y: 21px; on: Backend.instances[root.sel].nether; toggled(v) => { Backend.set-inst-nether(root.sel, v); Backend.load-boosts(); } }
                 }
-                SetRow { x: 56px; y: 512px; width: 880px; title: "Share game settings";
+                SetRow { x: 56px; y: g0 + 88px; width: 880px; title: "Share game settings";
                     sub: !Backend.sync-on ? "Sharing is turned off in Settings: this instance keeps its own settings and client modules." : (Backend.instances[root.sel].shared ? "Keybinds, video, audio and client modules follow you between instances." : "This instance keeps its own game settings and client modules.");
                     LinkBtn { x: parent.width - 200px; y: 18px; text: "SETTINGS"; clicked => { root.go-settings(); } }
                     Toggle { x: parent.width - 42px; y: 21px; on: Backend.instances[root.sel].shared; toggled(v) => { Backend.set-inst-shared(root.sel, v); } }
                 }
-                if of-ok: SetRow { x: 56px; y: 576px; width: 880px; title: "OptiFine";
-                    sub: (Backend.instances[root.sel].optifine != "" ? "On: the newest stable OptiFine for \{Backend.instances[root.sel].ver}, set up on launch." : "Off. Turn it on for OptiFine's video settings, zoom and shaders; it downloads on the next launch.") + later;
-                    Toggle { x: parent.width - 42px; y: 21px; on: Backend.instances[root.sel].optifine != ""; toggled(v) => { Backend.set-inst-optifine(root.sel, v); } }
-                }
 
                 // appearance: icon + wallpaper
-                SectionHead { x: 56px; y: 612px + of-dy; width: 880px; idx: "03"; title: "APPEARANCE"; }
-                Eyebrow { x: 56px; y: 648px + of-dy; text: "ICON"; }
-                IconPicker { x: 56px; y: 672px + of-dy; width: 880px; cols: 25; tile: 31px; items: Backend.icon-choices; current: Backend.instances[root.sel].icon;
+                SectionHead { x: 56px; y: g0 + 188px; width: 880px; title: "APPEARANCE"; }
+                Eyebrow { x: 56px; y: g0 + 224px; text: "ICON"; }
+                IconPicker { x: 56px; y: g0 + 248px; width: 880px; cols: 25; tile: 31px; items: Backend.icon-choices; current: Backend.instances[root.sel].icon;
                     picked(k) => { Backend.set-inst-art(root.sel, k, Backend.instances[root.sel].cover); } }
-                Eyebrow { x: 56px; y: 800px + of-dy; text: "WALLPAPER"; }
-                ocp := CoverPicker { x: 56px; y: 824px + of-dy; width: 880px; cols: 13; tile: 60px; items: Backend.cover-choices; current: Backend.instances[root.sel].cover;
+                Eyebrow { x: 56px; y: g0 + 376px; text: "WALLPAPER"; }
+                ocp := CoverPicker { x: 56px; y: g0 + 400px; width: 880px; cols: 13; tile: 60px; items: Backend.cover-choices; current: Backend.instances[root.sel].cover;
                     own: Backend.instances[root.sel].cover == "" ? Backend.instances[root.sel].cover-img : Backend.cover-choices[0].img; own-label: Backend.instances[root.sel].ver;
                     picked(k) => { Backend.set-inst-art(root.sel, Backend.instances[root.sel].icon, k); } }
 

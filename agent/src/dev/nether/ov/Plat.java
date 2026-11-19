@@ -28,6 +28,9 @@ abstract class Plat {
     /** The game window has keyboard focus (a toggle re-sends its key when focus comes back). */
     boolean focused() { return true; }
 
+    /** Where the window is: 0 in front (focused), 1 behind another window, 2 minimized (Background FPS). */
+    int away(long window) { return focused() ? 0 : 1; }
+
     boolean legacy() { return false; }
 
     /** Clipboard text, "" when empty or unreadable (render thread). Default: AWT (platforms override with their own). */

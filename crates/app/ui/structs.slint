@@ -55,6 +55,8 @@ export struct Link { k: string, url: string }
 export struct PresetRow { id: string, title: string, sub: string, ver: string, have: bool }
 // Play > Nether: one version family card (crates/app/src/presets.rs). vers = patches newest first, fvers = the ones
 // with Fabric; pano = the family's title panorama; tag = a short badge ("NEW", "PVP")
+// profile page > FPS boosters: one curated performance mod (sub = what it does or why it can't be used; can = the toggle works)
+export struct Boost { slug: string, name: string, sub: string, on: bool, can: bool, warn: bool, busy: bool }
 export struct Card { fam: string, name: string, tag: string, vers: [string], fvers: [string], pano: image, has-pano: bool, optifine: bool }
 // Modrinth-style project page: header, version strip, description + sidebar (compatibility, categories, links, details)
 export struct Detail {
@@ -213,6 +215,15 @@ export global Backend {
     pure callback nether-ok(string, string) -> bool;
     pure callback optifine-ok(string, string) -> bool;
     pure callback is-card(string) -> bool;
+    // profile page > FPS boosters (perf.rs): the loader's curated performance mods for the profile on screen
+    in-out property <[Boost]> boosts;
+    // section note ("5 of 7 on"), footnote under the list, and whether TURN ALL ON has anything to do
+    in-out property <string> boost-note;
+    in-out property <string> boost-foot;
+    in-out property <bool> boost-more;
+    callback load-boosts();
+    callback set-boost(string, bool);
+    callback boosts-all-on();
     // shared game settings (Settings page)
     in-out property <bool> sync-on: true;
     in-out property <bool> sync-controls: true;

@@ -51,6 +51,14 @@ final class PlatSdl extends Plat implements Hook.Sdl {
 
     @Override boolean sdl() { return true; }
 
+    @Override boolean focused() { return Input.window == 0 || (SDLVideo.SDL_GetWindowFlags(Input.window) & SDLVideo.SDL_WINDOW_INPUT_FOCUS) != 0; }
+
+    @Override int away(long window) {
+        if (window == 0) return 0;
+        long f = SDLVideo.SDL_GetWindowFlags(window);
+        return (f & SDLVideo.SDL_WINDOW_MINIMIZED) != 0 ? 2 : (f & SDLVideo.SDL_WINDOW_INPUT_FOCUS) != 0 ? 0 : 1;
+    }
+
     @Override void install() { Hook.sdl = this; }
 
     @Override void size(long window, int[] o) {

@@ -76,8 +76,11 @@ pub fn find(paths: &Paths, id: &str) -> Option<NetherPack> { all(paths).into_ite
 pub fn install(c: &Client, pack: &NetherPack, mc: &str, mods_dir: &Path, progress: &crate::Progress) -> Result<(Vec<String>, Vec<String>)> {
     std::fs::create_dir_all(mods_dir)?;
     let (mut ok, mut missing) = (vec![], vec![]);
-    let n = pack.mods.len().max(1) as f32;
-    for (i, m) in pack.mods.iter().enumerate() {
+    // Fabric packs always get Fabric API: Sodium 0.6+ needs its modules but Modrinth lists no dependency (2026-11-20)
+    let mut list = pack.mods.clone();
+    if pack.loader == "fabric" && !list.iter().any(|m| m == "fabric-api") { list.insert(0, "fabric-api".into()); }
+    let n = list.len().max(1) as f32;
+    for (i, m) in list.iter().enumerate() {
         progress(&format!("Installing {m}"), i as f32 / n);
         let base = i as f32 / n;
         let sub = |_f: &str, d: u64, t: u64| { if t > 0 { progress(&format!("Installing {m}"), base + (d as f32 / t as f32) / n); } };

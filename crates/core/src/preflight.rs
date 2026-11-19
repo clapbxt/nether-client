@@ -41,6 +41,10 @@ struct Meta {
     mc: Vec<String>,
     /// Forge/NeoForge maven range for minecraft
     mc_range: Option<String>,
+    /// Fabric `breaks` / Quilt `breaks`: mod id -> version predicates (empty = any version)
+    breaks: Vec<(String, Vec<String>)>,
+    /// its own version as declared
+    version: String,
 }
 
 /// Loader-provided ids that are never separate jars.
@@ -79,7 +83,9 @@ fn meta_of<R: Read + Seek>(z: &mut zip::ZipArchive<R>, depth: u32) -> Meta {
         m.fabric = true;
         if let Some(id) = j["id"].as_str() { m.ids.push(id.to_string()); }
         m.name = j["name"].as_str().unwrap_or_default().to_string();
+        m.version = j["version"].as_str().unwrap_or_default().to_string();
         m.provides.extend(strs(&j["provides"]));
+        if let Some(b) = j["breaks"].as_object() { m.breaks.extend(b.iter().map(|(k, v)| (k.clone(), strs(v)))); }
         if let Some(d) = j["depends"].as_object() {
             for (k, v) in d {
                 if k == "minecraft" { m.mc = strs(v); } else { m.deps.push(k.clone()); }
@@ -94,6 +100,10 @@ fn meta_of<R: Read + Seek>(z: &mut zip::ZipArchive<R>, depth: u32) -> Meta {
         if m.name.is_empty() { m.name = q["metadata"]["name"].as_str().unwrap_or_default().to_string(); }
         m.provides.extend(strs(&q["provides"]));
         if !m.fabric {
+            if m.version.is_empty() { m.version = q["version"].as_str().unwrap_or_default().to_string(); }
+            for d in q["breaks"].as_array().into_iter().flatten() {
+                match d { serde_json::Value::String(s) => m.breaks.push((s.clone(), vec![])), o => if let Some(id) = o["id"].as_str() { m.breaks.push((id.to_string(), strs(&o["versions"]))) } }
+            }
             for d in q["depends"].as_array().into_iter().flatten() {
                 let (id, optional) = match d { serde_json::Value::String(s) => (s.clone(), false), o => (o["id"].as_str().unwrap_or_default().to_string(), o["optional"].as_bool().unwrap_or(false)) };
                 if id.is_empty() || optional { continue; }
@@ -180,6 +190,9 @@ fn mods_toml(s: &str) -> Toml {
 
 /// The mod's own display name from its jar metadata (cached), if it declares one.
 pub fn mod_name(p: &Path) -> Option<String> { read_meta(p).map(|m| m.name).filter(|n| !n.trim().is_empty()) }
+
+/// A jar's (name, own mod ids, required mod ids), cached; None when it isn't a readable jar.
+pub fn jar_info(p: &Path) -> Option<(String, Vec<String>, Vec<String>)> { read_meta(p).map(|m| (m.name, m.ids, m.deps)) }
 
 /// Metadata of a jar, cached by (path, size, modified) for the launcher's lifetime.
 fn read_meta(p: &Path) -> Option<Meta> {
@@ -290,6 +303,8 @@ fn java_needed(paths: &Paths, version: &str) -> Option<u32> {
 
 /// Modrinth slug for a missing mod id (most match; a few well-known ones differ).
 pub fn slug_for(id: &str) -> String {
+    // fabric-block-view-api-v2 and the other Fabric API modules come with Fabric API
+    if id.starts_with("fabric-") && (id.ends_with("-v0") || id.ends_with("-v1") || id.ends_with("-v2") || id.ends_with("-v3") || id.contains("-api")) && !id.starts_with("fabric-language") { return "fabric-api".into(); }
     match id { "fabric" => "fabric-api".into(), "yet_another_config_lib_v3" | "yet-another-config-lib" => "yacl".into(), _ => id.replace('_', "-") }
 }
 
@@ -387,6 +402,27 @@ pub fn check(paths: &Paths, t: &Target) -> Vec<Finding> {
         out.push(f("duplicate-mods", format!("{} is installed twice", label(&v[0].1, old)),
             format!("{} and {} both contain the mod \"{id}\". The game refuses to start with two copies.", fname(old), fname(new)),
             format!("Disable the older copy ({}).", fname(old)), Some(Action::Disable(old.clone()))));
+    }
+
+    // mods that refuse to run together (Fabric / Quilt `breaks`): the loader stops at once
+    let live: Vec<&(PathBuf, Meta)> = active.iter().copied().filter(|(p, _)| !gone.contains(p.as_path())).collect();
+    let mut seen: HashSet<(PathBuf, PathBuf)> = HashSet::new();
+    for (pa, a) in &live {
+        for (id, preds) in &a.breaks {
+            for (pb, b) in &live {
+                if pa == pb || !b.ids.iter().any(|i| i == id) { continue; }
+                let any = preds.is_empty() || preds.iter().all(|p| p.trim() == "*");
+                let hit = if any { Some(true) } else { fabric_ok(preds, &b.version) };
+                if hit != Some(true) || !seen.insert((pa.clone(), pb.clone())) { continue; }
+                let (na, nb) = (label(a, pa), label(b, pb));
+                let (why, fix) = if any {
+                    (format!("{na} refuses to start alongside {nb}, so the game stops while loading."), format!("Disable {nb} ({}).", fname(pb)))
+                } else {
+                    (format!("{na} refuses to start with {nb} {} (it needs a build outside {}).", b.version, preds.join(" ")), format!("Update {nb} from the Mods tab, or disable it."))
+                };
+                out.push(f("mod-conflict", format!("{na} can't run with {nb}"), why, fix, Some(Action::Disable(pb.clone()))));
+            }
+        }
     }
 
     // missing required mods
@@ -513,6 +549,27 @@ mod tests {
         // launching past them keeps them quiet
         ignore(&paths, "t", &f.iter().map(key).collect::<Vec<_>>()).unwrap();
         assert!(pending(&paths, &tgt(17)).is_empty());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    /// `breaks`: any version (OptiFabric) and a version range (an old Iris) are found; a newer Iris is fine.
+    #[test]
+    fn mods_that_break_each_other() {
+        let root = crate::modpack::tmpdir("preflight-breaks");
+        let paths = Paths { root: root.clone() };
+        let mods = paths.instance("t").join("mods");
+        fs::create_dir_all(&mods).unwrap();
+        let tgt = Target { name: "t", version: "1.21.11", loader: Loader::Fabric, java: 0, ram_gb: 2 };
+        jar(&mods, "sodium.jar", &[("fabric.mod.json", br#"{"id":"sodium","name":"Sodium","version":"0.8.15-beta.1+mc1.21.11","breaks":{"optifabric":"*","iris":"<=1.10.7"}}"#)]);
+        jar(&mods, "iris.jar", &[("fabric.mod.json", br#"{"id":"iris","name":"Iris","version":"1.10.8+1.21.11-fabric","depends":{"sodium":"0.8.x"}}"#)]);
+        assert!(check(&paths, &tgt).is_empty(), "{:?}", check(&paths, &tgt));
+        jar(&mods, "iris.jar", &[("fabric.mod.json", br#"{"id":"iris","name":"Iris","version":"1.10.6+mc1.21.11","depends":{"sodium":"*"}}"#)]);
+        jar(&mods, "optifabric.jar", &[("fabric.mod.json", br#"{"id":"optifabric","name":"OptiFabric","version":"1.14.3"}"#)]);
+        let f = check(&paths, &tgt);
+        let c: Vec<_> = f.iter().filter(|x| x.id == "mod-conflict").collect();
+        assert_eq!(c.len(), 2, "{f:?}");
+        assert!(c.iter().any(|x| x.title == "Sodium can't run with OptiFabric" && matches!(&x.action, Some(Action::Disable(p)) if p.ends_with("optifabric.jar"))));
+        assert!(c.iter().any(|x| x.title == "Sodium can't run with Iris" && x.fix.starts_with("Update Iris")));
         let _ = fs::remove_dir_all(root);
     }
 }

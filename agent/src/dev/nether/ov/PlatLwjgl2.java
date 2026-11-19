@@ -37,6 +37,8 @@ final class PlatLwjgl2 extends Plat implements Hook.Legacy {
 
     @Override boolean focused() { return Display.isActive(); }
 
+    @Override int away(long window) { return !Display.isVisible() ? 2 : Display.isActive() ? 0 : 1; }
+
     @Override void tick() {
         if (Input.menuOpen) {
             Input.mx = Mouse.getX();

@@ -55,6 +55,7 @@ final class Modules {
         all.add(STOPWATCH);
         all.add(SELFTAG);
         all.add(new BackgroundReload());
+        all.add(BackgroundFps.M);
         all.add(MainMenu.MODULE);
         Runtime.getRuntime().addShutdownHook(new Thread(Modules::exitHook));
     }
