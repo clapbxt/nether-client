@@ -10,9 +10,10 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 /**
- * Legacy Fabric 1.8.9: the game runs remapped to Legacy intermediary (ave -> net/minecraft/class_1600), so the agent's
- * notch names go through this table, read from net.legacyfabric:intermediary:1.8.9 (mappings/mappings.tiny, tiny v1
- * official -> intermediary) on the class path. Loaded lazily by whichever side asks first; empty (off) anywhere else.
+ * Legacy Fabric 1.8.9 / 1.12.2: the game runs remapped to Legacy intermediary (ave -> net/minecraft/class_1600), so the
+ * agent's notch names go through this table, read from net.legacyfabric:intermediary:<version> (mappings/mappings.tiny,
+ * tiny v1 official -> intermediary) on the class path. Loaded lazily by whichever side asks first; empty (off) anywhere
+ * else. On 1.12.2 the code's names are SRG: Names maps them to notch first, then this table (Game lmode 4).
  */
 public final class Tiny {
     private Tiny() { }
@@ -22,7 +23,10 @@ public final class Tiny {
     private static final Map<String, String> CLS = new HashMap<>(), REV = new HashMap<>(), MEM = new HashMap<>(), ND = new HashMap<>(), OFF = new HashMap<>();
     private static boolean tried, on;
 
-    /** True when the game runs on Legacy Fabric 1.8.9 (the table is on the class path). */
+    /** The Minecraft version the table is for ("1.8.9", "1.12.2"), "" when off. */
+    public static String ver = "";
+
+    /** True when the game runs on Legacy Fabric (the table is on the class path). */
     public static synchronized boolean on() {
         if (!tried) { tried = true; load(); }
         return on;
@@ -30,7 +34,8 @@ public final class Tiny {
 
     private static void load() {
         for (String p : System.getProperty("java.class.path", "").split(File.pathSeparator)) {
-            if (!p.replace('\\', '/').contains("net/legacyfabric/intermediary/1.8.9/")) continue;
+            java.util.regex.Matcher vm = java.util.regex.Pattern.compile("net/legacyfabric/intermediary/([^/]+)/").matcher(p.replace('\\', '/'));
+            if (!vm.find()) continue;
             try (ZipFile z = new ZipFile(p)) {
                 ZipEntry e = z.getEntry("mappings/mappings.tiny");
                 if (e == null) continue;
@@ -47,7 +52,8 @@ public final class Tiny {
                     }
                 }
                 on = !CLS.isEmpty();
-                System.out.println("[nether-agent] Legacy Fabric names: " + CLS.size() + " classes, " + MEM.size() + " members");
+                if (on) ver = vm.group(1);
+                System.out.println("[nether-agent] Legacy Fabric " + ver + " names: " + CLS.size() + " classes, " + MEM.size() + " members");
                 return;
             } catch (Throwable t) {
                 System.out.println("[nether-agent] Legacy Fabric names unreadable: " + t);

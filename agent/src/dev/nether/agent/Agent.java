@@ -145,11 +145,12 @@ public final class Agent {
         String v = null;
         for (int i = 0; i + 1 < a.length; i++) if (a[i].equals("--version")) v = a[i + 1];
         if (v == null) return;
+        // Legacy Fabric (1.8.9 / 1.12.2) runs the game on Legacy intermediary, which reuses modern Fabric's class_N numbers
+        // for unrelated classes: drop the modern Fabric rows there.
+        if ((v.startsWith("1.8") || v.startsWith("1.12")) && Tiny.on()) for (Map<String, ?> t : java.util.Arrays.<Map<String, ?>>asList(NAME_HOOKS, LABEL_HOOKS, FLOAT_HOOKS, LOOK_HOOKS, VIEW_HOOKS, CHAT_HOOKS))
+            t.keySet().removeIf(k -> k.startsWith("net/minecraft/class_"));
         if (v.equals("1.8.9")) {
-            // vanilla notch names; Legacy Fabric runs the game on Legacy intermediary, so put189 maps them through Tiny there.
-            // Legacy intermediary reuses modern Fabric's class_N numbers for unrelated classes: drop the modern Fabric rows.
-            if (Tiny.on()) for (Map<String, ?> t : java.util.Arrays.<Map<String, ?>>asList(NAME_HOOKS, LABEL_HOOKS, FLOAT_HOOKS, LOOK_HOOKS, VIEW_HOOKS, CHAT_HOOKS))
-                t.keySet().removeIf(k -> k.startsWith("net/minecraft/class_"));
+            // vanilla notch names; on Legacy Fabric put189 maps them through Tiny.
             put189(NAME_HOOKS, "wn", 0, "f_", "()Leu;"); // EntityPlayer.getDisplayName
             put189(VIEW_HOOKS, "bfn", 1, "lfire", "f", "(F)V", "", ""); // ItemRenderer.renderFireInFirstPerson
             put189(VIEW_HOOKS, "bjl", 1, "lmount", "a", "(Lpr;DDDFF)V", "", ""); // RendererLivingEntity.doRender

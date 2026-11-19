@@ -101,14 +101,20 @@ final class Game {
         }
     }
 
-    /** lf: Legacy Fabric 1.8.9, the code's notch names mapped to Legacy intermediary (classes here, members by owner in own / find). */
+    /** lf: Legacy Fabric, the code's notch names (1.8.9) or SRG names via notch (1.12.2: lf and obf) mapped to Legacy intermediary (classes here, members by owner in own / find). */
     private static boolean official, obf, lf;
 
     /** The runtime's name for a Fabric intermediary name (Mojang names on Forge/NeoForge/unobfuscated versions, obfuscated ones on vanilla). */
-    static String n(String name) { return lf ? dev.nether.agent.Tiny.cls(name).replace('/', '.') : official ? Names.official(name) : obf ? Names.obf(name) : name; }
+    static String n(String name) { return lf ? dev.nether.agent.Tiny.cls(obf ? Names.obf(name) : name).replace('/', '.') : official ? Names.official(name) : obf ? Names.obf(name) : name; }
 
     /** Whether runtime member `real` is the code's member `name` (Legacy Fabric: real is intermediary, name notch). */
-    private static boolean is(String real, String name) { return lf ? name.equals(dev.nether.agent.Tiny.off(real)) : real.equals(n(name)); }
+    private static boolean is(String real, String name) { return lf ? (obf ? Names.obf(name) : name).equals(dev.nether.agent.Tiny.off(real)) : real.equals(n(name)); }
+
+    /** Obfuscated descriptor of a member in runtime names (Legacy Fabric 1.12.2: notch types mapped to intermediary); null when unknown. */
+    private static String want(String name) {
+        String d = obf ? Names.obfDesc(name) : null;
+        return d != null && lf ? dev.nether.agent.Tiny.desc(d) : d;
+    }
 
     /** JVM descriptor of a type / method (obfuscated members are matched on it: their names overload freely). */
     private static String desc(Class<?> c) {
@@ -135,8 +141,9 @@ final class Game {
     private static Field own(Class<?> k, String name) {
         try {
             String o = lf ? dev.nether.agent.Tiny.rev(k.getName()) : null;
-            Field d = k.getDeclaredField(lf ? (o == null ? name : dev.nether.agent.Tiny.field(o, name)) : n(name));
-            String want = obf ? Names.obfDesc(name) : null;
+            String nm = lf && obf ? Names.obf(name) : name;
+            Field d = k.getDeclaredField(lf ? (o == null ? nm : dev.nether.agent.Tiny.field(o, nm)) : n(name));
+            String want = want(name);
             return want == null || want.equals(desc(d.getType())) ? d : null;
         } catch (Throwable e) {
             return null;
@@ -165,7 +172,7 @@ final class Game {
         Sig[] sigs = byName.get(name);
         if (sigs != null) for (Sig s : sigs) if (s.fits(a)) return s.m;
         Object m = NONE;
-        String want = obf ? Names.obfDesc(name) : null;
+        String want = want(name);
         outer:
         for (Class<?> k = c; k != null; k = k.getSuperclass())
             for (Method d : k.getDeclaredMethods())
@@ -867,7 +874,7 @@ final class Game {
                 if (n.startsWith("java.") || n.startsWith("jdk.") || n.startsWith("sun.") || n.startsWith("org.lwjgl") || n.startsWith("dev.nether") || !seen.add(n)) continue;
                 // mod loaders have singletons of their own on the stack: only Minecraft itself counts
                 // (known names, or a package-less obfuscated vanilla class)
-                if (n.indexOf('.') >= 0 && !n.equals("net.minecraft.class_310") && !n.equals("net.minecraft.client.Minecraft") && !n.equals("net.minecraft.class_1600")) continue; // class_1600: Legacy Fabric 1.8.9
+                if (n.indexOf('.') >= 0 && !n.equals("net.minecraft.class_310") && !n.equals("net.minecraft.client.Minecraft") && !n.equals(lfMain())) continue; // Legacy Fabric: class_1600 (1.8.9) etc.
                 for (ClassLoader cl : loaders) {
                     Class<?> c;
                     try { c = Class.forName(n, false, cl); } catch (Throwable t) { continue; }
@@ -915,7 +922,8 @@ final class Game {
         if (lw2) {
             if (n.equals("net.minecraft.client.Minecraft")) lmode = 1; // Forge 1.8.9 / 1.12.2: SRG names
             else if (n.equals("ave")) lmode = 0; // vanilla 1.8.9: notch names written in the code
-            else if (n.equals("net.minecraft.class_1600") && dev.nether.agent.Tiny.on()) { lmode = 3; lf = true; } // Legacy Fabric 1.8.9: the same names through the intermediary table
+            else if (n.equals("net.minecraft.class_1600") && dev.nether.agent.Tiny.on() && "1.8.9".equals(dev.nether.agent.Tiny.ver)) { lmode = 3; lf = true; } // Legacy Fabric 1.8.9: the same names through the intermediary table
+            else if (n.equals(lfMain()) && "1.12.2".equals(dev.nether.agent.Tiny.ver)) { lmode = 4; lf = true; obf = true; } // Legacy Fabric 1.12.2: SRG -> notch (Names) -> intermediary (Tiny)
             else {
                 String v = version();
                 if (Names.load(v) && n.equals(Names.obf("net.minecraft.client.Minecraft"))) { lmode = 2; obf = true; } // vanilla 1.12.2: SRG -> notch table
@@ -962,8 +970,25 @@ final class Game {
      * Vanilla 1.8.9 (notch names): Minecraft ave (field h = thePlayer bew, t = gameSettings avh), Entity pk (s/t/u = posX/Y/Z,
      * y = rotationYaw, z = rotationPitch), avh (a = mouseSensitivity, aI = fovSetting, aJ = gammaSetting). Verified with javap.
      */
-    /** 0 = vanilla 1.8.9 (notch names in the code), 1 = Forge (SRG names at runtime), 2 = vanilla 1.12.2 (SRG -> notch table), 3 = Legacy Fabric 1.8.9 (notch -> Legacy intermediary, Tiny). */
+    /** 0 = vanilla 1.8.9 (notch names in the code), 1 = Forge (SRG names at runtime), 2 = vanilla 1.12.2 (SRG -> notch table), 3 = Legacy Fabric 1.8.9 (notch -> Legacy intermediary, Tiny),
+     *  4 = Legacy Fabric 1.12.2 (SRG -> notch -> Legacy intermediary). */
     private static int lmode;
+
+    /** Legacy Fabric: the runtime name of the Minecraft class (class_1600 on 1.8.9; 1.12.2 through its SRG table), "" otherwise. */
+    private static String lfMain;
+    private static String lfMain() {
+        if (lfMain != null) return lfMain;
+        String m = "";
+        if (dev.nether.agent.Tiny.on()) {
+            if ("1.8.9".equals(dev.nether.agent.Tiny.ver)) m = "net.minecraft.class_1600";
+            else if ("1.12.2".equals(dev.nether.agent.Tiny.ver) && Names.load("1.12.2")) {
+                String o = Names.obf("net.minecraft.client.Minecraft");
+                String c = dev.nether.agent.Tiny.cls(o);
+                if (!c.equals(o)) m = c.replace('/', '.');
+            }
+        }
+        return lfMain = m;
+    }
 
     /** LWJGL2-era name: the vanilla 1.8.9 notch name or the SRG/MCP name (Forge's deobfuscation_data; mapped to notch by the table on vanilla 1.12.2). */
     static String l(String notch, String srgName) { return lmode == 0 || lmode == 3 ? notch : srgName; }
@@ -988,7 +1013,7 @@ final class Game {
             legacy = true;
             resolved = true;
             status = "ok";
-            System.out.println("[nether-agent] game state bound (legacy " + (lmode == 1 ? "Forge" : lmode == 2 ? "vanilla " + version() : (lmode == 3 ? "Legacy Fabric 1.8.9 " : "1.8.9 ") + c.getName()) + ")");
+            System.out.println("[nether-agent] game state bound (legacy " + (lmode == 1 ? "Forge" : lmode == 2 ? "vanilla " + version() : (lmode == 3 ? "Legacy Fabric 1.8.9 " : lmode == 4 ? "Legacy Fabric 1.12.2 " : "1.8.9 ") + c.getName()) + ")");
         } catch (Throwable t) {
             unsupported = true;
             status = "bind failed " + t;
