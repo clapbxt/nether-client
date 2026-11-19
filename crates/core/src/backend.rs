@@ -474,7 +474,8 @@ mod tests {
         let news: Vec<NewsItem> = serde_json::from_str(include_str!("../../../backend/content/news.json")).unwrap();
         assert_eq!(news[0].tag, "NETHER");
         let capes: Vec<Cape> = serde_json::from_str(include_str!("../../../backend/content/capes/index.json")).unwrap();
-        assert!(capes.iter().any(|c| c.id == "snowman"));
+        // the shipped list may be empty (the snowman test cape was taken out 2026-11-15); every entry must have a valid id
+        assert!(capes.iter().all(|c| valid_cape_id(&c.id)));
         let _: Vec<NetherPack> = serde_json::from_str(include_str!("../../../backend/content/packs.json")).unwrap();
     }
 
@@ -507,7 +508,7 @@ mod tests {
         let sig = include_str!("../../../backend/content/manifest.sig");
         let key = hex::decode(CONTENT_KEY_HEX.trim()).unwrap();
         let m = verify_manifest(&key, body, sig, 0, 0).unwrap();
-        assert!(m.files.contains_key("capes/snowman.png"));
+        assert!(m.files.contains_key("news.json") && m.files.contains_key("capes/index.json"));
         for (p, e) in &m.files {
             let b = std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../backend/content").join(p)).unwrap();
             assert_eq!(hex::encode(Sha256::digest(&b)), e.sha256, "{p}");
@@ -525,7 +526,12 @@ mod tests {
     fn cape_ids_and_pngs() {
         assert!(valid_cape_id("snowman") && valid_cape_id("a_b-9"));
         for bad in ["", "A", "x/../y", "..", "a.b", "a b", "x\\y", &"a".repeat(33)] { assert!(!valid_cape_id(bad), "{bad}"); }
-        let png = std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../backend/content/capes/snowman.png")).unwrap();
+        // a 64x32 PNG header (signature + IHDR), all the check reads; no shipped cape file is needed
+        let mut png = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13];
+        png.extend_from_slice(b"IHDR");
+        png.extend_from_slice(&64u32.to_be_bytes());
+        png.extend_from_slice(&32u32.to_be_bytes());
+        png.extend_from_slice(&[8, 6, 0, 0, 0, 0, 0, 0, 0]);
         assert!(valid_cape_png(&png));
         let mut huge = png.clone();
         huge[16..20].copy_from_slice(&20000u32.to_be_bytes());
