@@ -74,13 +74,15 @@ pub fn apply_look(ui: &AppWindow, accent: i32, text: i32) {
 
 fn java_rows(sh: &Shared) -> Vec<JavaRt> {
     MAJORS.iter().map(|(m, games)| {
-        let (sub, custom) = match java::which(&sh.paths, *m) {
+        let src = java::which(&sh.paths, *m);
+        let ready = src != Source::Missing;
+        let (sub, custom) = match src {
             Source::Custom(p) => (p.display().to_string(), true),
             Source::Downloaded(_) => ("Downloaded by Nether Client".into(), false),
             Source::System(p) => (format!("Installed: {}", p.display()), false),
             Source::Missing => ("Downloads automatically the first time a game needs it".into(), false),
         };
-        JavaRt { major: *m as i32, title: format!("Java {m} · {games}").into(), sub: sub.into(), custom }
+        JavaRt { major: *m as i32, title: format!("Java {m} · {games}").into(), sub: sub.into(), custom, ready }
     }).collect()
 }
 
@@ -88,8 +90,11 @@ fn java_rows(sh: &Shared) -> Vec<JavaRt> {
 fn refresh_java(ui: &AppWindow, sh: &Arc<Shared>) {
     let (weak, sh) = (ui.as_weak(), sh.clone());
     std::thread::spawn(move || {
-        let rows: Vec<(i32, String, String, bool)> = java_rows(&sh).into_iter().map(|r| (r.major, r.title.to_string(), r.sub.to_string(), r.custom)).collect();
-        ui_do(&weak, move |ui| ui.global::<Backend>().set_javas(ModelRc::new(VecModel::from(rows.into_iter().map(|(major, t, s, custom)| JavaRt { major, title: t.into(), sub: s.into(), custom }).collect::<Vec<_>>()))));
+        let rows: Vec<(i32, String, String, bool, bool)> = java_rows(&sh).into_iter().map(|r| (r.major, r.title.to_string(), r.sub.to_string(), r.custom, r.ready)).collect();
+        ui_do(&weak, move |ui| {
+            crate::setup::java_notes(ui, &rows);
+            ui.global::<Backend>().set_javas(ModelRc::new(VecModel::from(rows.into_iter().map(|(major, t, s, custom, ready)| JavaRt { major, title: t.into(), sub: s.into(), custom, ready }).collect::<Vec<_>>())));
+        });
     });
 }
 

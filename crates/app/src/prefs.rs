@@ -34,10 +34,26 @@ pub struct LauncherPrefs {
     pub discord: bool,
     /// download and install launcher updates by itself (installed copies only)
     pub auto_update: bool,
+    /// memory (GB) new profiles start with; 0 = recommended for this PC (`rec_ram`)
+    pub ram: i32,
+    /// the first-run setup walkthrough was finished or skipped (it never shows again)
+    pub setup_done: bool,
 }
 
 impl Default for LauncherPrefs {
-    fn default() -> Self { LauncherPrefs { gpu: true, autostart: false, on_launch: 1, on_close: 0, calm: false, accent: 0, theme: 0, text: 0, capes: true, discord: true, auto_update: true } }
+    fn default() -> Self { LauncherPrefs { gpu: true, autostart: false, on_launch: 1, on_close: 0, calm: false, accent: 0, theme: 0, text: 0, capes: true, discord: true, auto_update: true, ram: 0, setup_done: false } }
+}
+
+/// Memory a new profile gets on a PC with `sys_gb` of RAM: enough for Nether profiles and light packs, never more
+/// than about a third of the PC (Prism's advice: keep games under 50-70 % of RAM; 4-6 GB covers most modpacks).
+pub fn rec_ram(sys_gb: i32) -> i32 {
+    match sys_gb { ..=6 => 2, 7..=12 => 3, 13..=24 => 4, _ => 6 }
+}
+
+/// Memory (GB) for a new profile: the setup's pick, else the recommendation.
+pub fn new_profile_ram(paths: &Paths, sys_gb: i32) -> i32 {
+    let r = load(paths).ram;
+    if r > 0 { r.clamp(1, 16) } else { rec_ram(sys_gb) }
 }
 
 pub fn load(paths: &Paths) -> LauncherPrefs {

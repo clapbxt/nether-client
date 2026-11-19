@@ -39,6 +39,7 @@ mod discord;
 mod friends;
 mod party;
 mod presets;
+mod setup;
 mod voice;
 slint::include_modules!();
 
@@ -1097,7 +1098,7 @@ fn main() -> Result<(), slint::PlatformError> {
             let Some(ui) = weak.upgrade() else { return };
             let b = ui.global::<Backend>();
             let old = prefs::load(&sh.paths);
-            let p = prefs::LauncherPrefs { gpu: b.get_lp_gpu(), autostart: b.get_lp_autostart(), on_launch: b.get_lp_on_launch(), on_close: b.get_lp_on_close(), calm: b.get_calm(), accent: b.get_lp_accent(), theme: b.get_lp_theme(), text: b.get_lp_text(), capes: b.get_lp_capes(), discord: b.get_lp_discord(), auto_update: b.get_lp_auto_update() };
+            let p = prefs::LauncherPrefs { gpu: b.get_lp_gpu(), autostart: b.get_lp_autostart(), on_launch: b.get_lp_on_launch(), on_close: b.get_lp_on_close(), calm: b.get_calm(), accent: b.get_lp_accent(), theme: b.get_lp_theme(), text: b.get_lp_text(), capes: b.get_lp_capes(), discord: b.get_lp_discord(), auto_update: b.get_lp_auto_update(), ram: old.ram, setup_done: old.setup_done };
             settings::apply_look(&ui, p.accent, p.text);
             settings::apply_theme(&ui, p.theme);
             client::set_look(&sh, settings::THEME_NAMES[p.theme.clamp(0, 3) as usize], settings::accent_hex(p.accent));
@@ -1143,6 +1144,7 @@ fn main() -> Result<(), slint::PlatformError> {
     friends::init(&ui, shared.clone());
     party::init(&ui, shared.clone());
     presets::init(&ui, shared.clone());
+    setup::init(&ui, shared.clone());
     if !snapshot {
         deeplink::unregister_old();
         deeplink::listen(&ui, shared.clone());

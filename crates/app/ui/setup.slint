@@ -1,0 +1,292 @@
+import { Theme } from "theme.slint";
+import { Backend, Setup } from "structs.slint";
+import { Btn, PlayButton, LinkBtn, Eyebrow, Heading, Chip, Icon, Ico, Slider, Pulse } from "components.slint";
+
+// First-run setup walkthrough (crates/app/src/setup.rs, 2026-11-20). The sign-in gate's composition (logo top
+// left, copy on the left, art plate on the right) with the profile wizard's step rail. Research: vault
+// research/Launcher onboarding research.md (OneClient, Prism, Modrinth App, Lunar).
+
+component Waiting2 inherits Rectangle {
+    in property <string> text;
+    height: 20px;
+    Pulse { x: 0px; y: 6px; }
+    Text { x: 18px; width: parent.width - 18px; height: parent.height; text: root.text; color: Theme.redtx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 500; vertical-alignment: center; overflow: elide; }
+}
+
+// one numbered line of the welcome list
+component StepLine inherits Rectangle {
+    in property <string> n;
+    in property <string> t;
+    in property <string> d;
+    height: 58px;
+    Text { x: 0px; y: 2px; text: root.n; color: Theme.red2; font-family: Theme.mono; font-size: 12px * Theme.ts; font-weight: 700; }
+    Text { x: 40px; y: 0px; text: root.t; color: Theme.tx; font-family: Theme.disp; font-size: 20px; font-weight: 700; }
+    Text { x: 40px; y: 26px; width: parent.width - 40px; text: root.d; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; overflow: elide; }
+}
+
+// a ready-made profile to start with: its update art full bleed, version + way on it
+component PickCard inherits Rectangle {
+    in property <bool> on;
+    in property <image> art;
+    in property <bool> has-art;
+    in property <string> ver;
+    in property <string> way;
+    in property <string> d;
+    in property <string> tag;
+    in property <bool> hot;
+    callback picked();
+    callback chosen();
+    border-radius: Theme.r3;
+    clip: true;
+    background: Theme.s1;
+    // lean in on hover (the Play cards do the same)
+    property <float> zoom: ta.has-hover ? 1.06 : 1.0;
+    animate zoom { duration: Theme.mid; }
+    if root.has-art: Image { source: root.art; image-fit: cover;
+        x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
+        width: parent.width * root.zoom; height: parent.height * root.zoom; }
+    Rectangle { background: @linear-gradient(180deg, #00000010 20%, #000000d8 100%); }
+    if root.tag != "": Chip { x: 18px; y: 16px; text: root.tag; hot: root.hot; }
+    Text { x: 20px; y: parent.height - 104px; text: root.ver; color: #FFFFFF; font-family: Theme.disp; font-size: 40px; font-weight: 800; }
+    Text { x: 22px; y: parent.height - 58px; text: root.way; color: #ffffffd8; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.8px; }
+    Text { x: 22px; y: parent.height - 34px; width: parent.width - 44px; text: root.d; color: #ffffffb0; font-family: Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
+    Rectangle { border-radius: Theme.r3; border-width: root.on ? 2px : 1px; border-color: root.on ? Theme.red2 : (ta.has-hover ? Theme.ln2 : Theme.ln); animate border-color { duration: Theme.fast; } }
+    if root.on: Rectangle { x: parent.width - 34px; y: 14px; width: 20px; height: 20px; border-radius: 10px; background: Theme.red;
+        Icon { x: 4px; y: 4px; d: Ico.check; tint: white; } }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.picked(); } double-clicked => { root.chosen(); } }
+}
+
+// one row of the summary
+component SumRow inherits Rectangle {
+    in property <string> k;
+    in property <string> v;
+    in property <bool> ok: true;
+    height: 44px;
+    Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; }
+    Eyebrow { x: 0px; height: parent.height; vertical-alignment: center; text: root.k; }
+    Text { x: 150px; width: parent.width - 180px; height: parent.height; text: root.v; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 500; vertical-alignment: center; overflow: elide; }
+    if root.ok: Icon { x: parent.width - 14px; y: (parent.height - 12px) / 2; d: Ico.check; tint: Theme.ice; }
+}
+
+export component SetupFlow inherits Rectangle {
+    in property <length> W;
+    in property <length> H;
+    in property <length> top: 56px;
+    // the Nether profile maker opens on the Play page
+    callback go-play();
+    callback go-home();
+    property <length> cx: 96px;
+    property <length> cw: root.W - 600px - root.cx - 64px;
+    property <length> cy: 176px;
+    property <bool> signed: Backend.acct-state == 2;
+    property <[string]> vers: ["1.21.11", "1.8.9"];
+    property <[string]> ways: ["Nether + Fabric", "Nether"];
+    property <string> pick-name: Setup.pick == 2 ? "Your own Nether profile" : "Nether " + root.vers[Setup.pick] + (Setup.pick == 0 ? " Fabric" : "");
+    property <bool> card-art: Setup.step >= 3 && ((Setup.pick == 0 && Setup.has-art0) || (Setup.pick == 1 && Setup.has-art1));
+    width: root.W; height: root.H;
+    background: Theme.bg;
+    // swallow the pages behind; only the top strip drags the window
+    TouchArea { pointer-event(e) => { if e.kind == PointerEventKind.down && e.button == PointerEventButton.left && self.mouse-y < root.top { Backend.win-drag(); } } }
+    Image { source: @image-url("assets/nether-logo.svg"); x: 20px; y: 10px; width: 36px; height: 36px; }
+    Text { x: 66px; y: 0px; height: root.top; text: "Nether"; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; vertical-alignment: center; }
+    Text { x: 160px; y: 0px; height: root.top; text: "SETUP · \{Setup.step + 1} OF 5"; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 1px; vertical-alignment: center; }
+
+    // ---------- right: the art plate (the picked profile's update art from step 4 on) ----------
+    Rectangle {
+        x: root.W - 600px; y: root.top; width: 560px; height: root.H - root.top - 40px; background: Theme.s1; border-radius: Theme.r2; clip: true;
+        Image { source: @image-url("assets/banner.jpg"); width: parent.width; height: parent.height; image-fit: cover; opacity: root.card-art ? 0 : 1; animate opacity { duration: Theme.mid; } }
+        Image { source: Setup.art0; width: parent.width; height: parent.height; image-fit: cover; opacity: root.card-art && Setup.pick == 0 ? 1 : 0; }
+        Image { source: Setup.art1; width: parent.width; height: parent.height; image-fit: cover; opacity: root.card-art && Setup.pick == 1 ? 1 : 0; }
+        if root.card-art: Rectangle {
+            Rectangle { background: @linear-gradient(180deg, #00000000 50%, #000000c0 100%); }
+            Text { x: 28px; y: parent.height - 88px; text: root.vers[Setup.pick]; color: #FFFFFF; font-family: Theme.disp; font-size: 44px; font-weight: 800; }
+            Text { x: 30px; y: parent.height - 40px; text: root.ways[Setup.pick].to-uppercase(); color: #ffffffd0; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.8px; }
+        }
+        Rectangle { border-radius: Theme.r2; border-width: 1px; border-color: Theme.ln; }
+    }
+
+    // ---------- step rail ----------
+    HorizontalLayout {
+        x: root.cx; y: 92px; width: root.cw; height: 30px; spacing: 6px;
+        for st[i] in ["WELCOME", "ACCOUNT", "JAVA & MEMORY", "PROFILE", "LAUNCH"]: Rectangle {
+            border-radius: Theme.r1;
+            background: Setup.step == i ? Theme.s3 : transparent;
+            Rectangle { y: parent.height - 2px; height: 2px; background: i < Setup.step ? Theme.ice : (Setup.step == i ? Theme.red2 : Theme.ln2); }
+            Text { x: 10px; height: parent.height; text: "0\{i + 1}"; color: Setup.step == i ? Theme.red2 : Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; vertical-alignment: center; }
+            Text { x: 34px; width: parent.width - 40px; height: parent.height; overflow: elide; text: st; color: Setup.step == i ? Theme.tx : (i < Setup.step ? Theme.dim : Theme.mut); font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.8px; vertical-alignment: center; }
+            // finished steps can be revisited (not while the first launch runs)
+            TouchArea { mouse-cursor: i < Setup.step && Setup.phase == 0 ? pointer : default; clicked => { if i < Setup.step && Setup.phase == 0 { Setup.step = i; } } }
+        }
+    }
+
+    // ---------- 01 welcome ----------
+    if Setup.step == 0: Rectangle {
+        x: root.cx; y: root.cy; width: root.cw; height: root.H - root.cy - 40px;
+        Eyebrow { x: 0px; y: 0px; text: "FIRST-TIME SETUP"; color: Theme.redtx; }
+        Heading { x: 0px; y: 22px; text: "WELCOME TO"; font-size: 64px; }
+        Heading { x: 0px; y: 96px; text: "NETHER"; font-size: 64px; color: Theme.red2; }
+        Text { x: 2px; y: 190px; width: parent.width; text: "Let's get you playing. It takes about a minute."; color: Theme.dim; font-family: Theme.ui; font-size: 19px; wrap: word-wrap; }
+        StepLine { x: 2px; y: 248px; width: parent.width; n: "02"; t: "ACCOUNT"; d: "Sign in with the Microsoft account that owns Minecraft."; }
+        StepLine { x: 2px; y: 306px; width: parent.width; n: "03"; t: "JAVA & MEMORY"; d: "Java is handled for you. Check how much memory games get."; }
+        StepLine { x: 2px; y: 364px; width: parent.width; n: "04"; t: "PROFILE"; d: "Pick a ready-made Nether profile, or make your own."; }
+        StepLine { x: 2px; y: 422px; width: parent.width; n: "05"; t: "LAUNCH"; d: "The game downloads and starts. That's it."; }
+        PlayButton { x: 2px; y: 508px; width: 320px; height: 60px; label: "GET STARTED"; text-size: 22px; clicked => { Setup.step = 1; } }
+    }
+
+    // ---------- 02 account ----------
+    if Setup.step == 1: Rectangle {
+        x: root.cx; y: root.cy; width: root.cw; height: root.H - root.cy - 40px;
+        Heading { x: 0px; y: 0px; text: "SIGN IN"; font-size: 56px; }
+        Text { x: 2px; y: 76px; width: Math.min(parent.width, 640px); wrap: word-wrap; color: Theme.dim; font-family: Theme.ui; font-size: 16px * Theme.ts;
+            text: "Nether plays with your Microsoft account. It has to own Minecraft: Java Edition (PC Game Pass counts). You sign in on microsoft.com; Nether never sees your password, and the sign-in is kept in Windows' credential store."; }
+
+        if Backend.acct-state == 0: Rectangle {
+            y: 180px; height: 200px;
+            PlayButton { x: 2px; y: 0px; width: 400px; height: 60px; label: "SIGN IN WITH MICROSOFT"; text-size: 22px; arrow: false; clicked => { Backend.sign-in(); } }
+            if Backend.acct-msg != "": Text { x: 2px; y: 80px; width: Math.min(parent.width, 640px); text: Backend.acct-msg; color: Theme.redtx; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
+        }
+        if Backend.acct-state == 1: Rectangle {
+            y: 180px; height: 240px;
+            Eyebrow { x: 2px; y: 0px; text: "ENTER THIS CODE ON THE MICROSOFT PAGE"; }
+            Text { x: 0px; y: 20px; text: Backend.acct-code; color: Theme.tx; font-family: Theme.mono; font-size: 56px; font-weight: 700; letter-spacing: 8px; }
+            Text { x: 2px; y: 98px; text: Backend.acct-url; color: Theme.dim; font-family: Theme.mono; font-size: 13px * Theme.ts; }
+            op := Btn { x: 2px; y: 130px; height: 44px; text: "OPEN PAGE"; solid: true; icon: Ico.ext; clicked => { Backend.open-url(Backend.acct-url); } }
+            Btn { x: op.x + op.width + 10px; y: 130px; height: 44px; text: "COPY CODE"; icon: Ico.copy; clicked => { Backend.copy-text(Backend.acct-code); } }
+            Waiting2 { x: 2px; y: 196px; width: 320px; text: "Waiting for you to finish signing in"; }
+            LinkBtn { x: 340px; y: 192px; text: "CANCEL"; clicked => { Backend.cancel-sign-in(); } }
+        }
+        if Backend.acct-state == 3: Waiting2 { x: 2px; y: 184px; width: 400px; text: "Signing you in…"; }
+        if root.signed: Rectangle {
+            x: 2px; y: 180px; width: Math.min(parent.width, 520px); height: 76px; border-radius: Theme.r2;
+            background: Theme.s1; border-width: 1px; border-color: Theme.ln;
+            Rectangle { x: 14px; y: 14px; width: 48px; height: 48px; background: Theme.s3;
+                if Backend.skin-ready: Image { width: 48px; height: 48px; source: Backend.acct-head; image-rendering: pixelated; }
+                if !Backend.skin-ready: Icon { x: 18px; y: 18px; d: Ico.user; tint: Theme.mut; } }
+            Text { x: 78px; y: 14px; width: parent.width - 120px; text: Backend.acct-name; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; overflow: elide; }
+            Text { x: 78px; y: 44px; text: "Signed in · ready to play online"; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; }
+            Rectangle { x: parent.width - 40px; y: 28px; width: 20px; height: 20px; border-radius: 10px; background: Theme.ice;
+                Icon { x: 4px; y: 4px; d: Ico.check; tint: Theme.ink; } }
+        }
+        Text { x: 2px; y: 448px; width: Math.min(parent.width, 640px); wrap: word-wrap; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts;
+            text: "New to Java Edition? Buy it or pick your player name at minecraft.net first. Child accounts need a parent to allow multiplayer in the Xbox family settings."; }
+        LinkBtn { x: 2px; y: 490px; text: "MINECRAFT.NET"; clicked => { Backend.open-url("https://www.minecraft.net/en-us/store/minecraft-java-bedrock-edition-pc"); } }
+    }
+
+    // ---------- 03 Java & memory ----------
+    if Setup.step == 2: Rectangle {
+        x: root.cx; y: root.cy; width: root.cw; height: root.H - root.cy - 40px;
+        property <length> lw: Math.min(self.width, 680px);
+        Heading { x: 0px; y: 0px; text: "JAVA & MEMORY"; font-size: 56px; }
+        Text { x: 2px; y: 76px; width: parent.lw; wrap: word-wrap; color: Theme.dim; font-family: Theme.ui; font-size: 16px * Theme.ts;
+            text: "Minecraft runs on Java. Nether picks the right one for each version and downloads Mojang's own the first time a game needs it. Nothing to install."; }
+        for j[i] in Backend.javas: Rectangle {
+            x: 2px; y: 146px + i * 44px; width: parent.lw; height: 40px; border-radius: Theme.r1; background: Theme.s1;
+            Rectangle { x: 14px; y: 15px; width: 10px; height: 10px; border-radius: 5px; background: j.ready ? Theme.ice : Theme.s3; border-width: 1px; border-color: j.ready ? Theme.ice : Theme.ln2; }
+            Text { x: 38px; width: 300px; height: parent.height; text: j.title; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; vertical-alignment: center; overflow: elide; }
+            Text { x: 340px; width: parent.width - 354px; height: parent.height; text: j.ready ? "On this PC" : "Downloads when needed"; color: j.ready ? Theme.dim : Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; overflow: elide; }
+        }
+        property <length> my: 146px + Math.max(4, Backend.javas.length) * 44px + 28px;
+        Eyebrow { x: 2px; y: parent.my; text: "MEMORY FOR NEW PROFILES"; }
+        Text { x: 2px + parent.lw - 120px; y: parent.my - 2px; width: 120px; text: "\{Backend.new-ram} GB"; color: Theme.tx; font-family: Theme.mono; font-size: 14px * Theme.ts; font-weight: 700; horizontal-alignment: right; }
+        Slider { x: 2px; y: parent.my + 26px; width: parent.lw; min: 1; max: Math.max(4, Math.min(Backend.sys-ram, 16)); value <=> Backend.new-ram; }
+        Text { x: 2px; y: parent.my + 62px; width: parent.lw; wrap: word-wrap; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts;
+            text: Backend.new-ram * 3 > Backend.sys-ram * 2
+                ? "That's most of this PC's \{Backend.sys-ram} GB: Windows and Minecraft both slow down when memory runs out. \{Setup.rec-ram} GB is plenty for Nether profiles."
+                : "This PC has \{Backend.sys-ram} GB. \{Setup.rec-ram} GB is plenty for Nether profiles and light packs; big modpacks want 6-8 GB. Each profile can change it later."; }
+        if Backend.new-ram != Setup.rec-ram: LinkBtn { x: 2px; y: parent.my + 104px; text: "USE \{Setup.rec-ram} GB (RECOMMENDED)"; clicked => { Backend.new-ram = Setup.rec-ram; } }
+    }
+
+    // ---------- 04 first profile ----------
+    if Setup.step == 3: Rectangle {
+        x: root.cx; y: root.cy; width: root.cw; height: root.H - root.cy - 40px;
+        Heading { x: 0px; y: 0px; text: "YOUR FIRST PROFILE"; font-size: 56px; }
+        Text { x: 2px; y: 76px; width: Math.min(parent.width, 680px); wrap: word-wrap; color: Theme.dim; font-family: Theme.ui; font-size: 16px * Theme.ts;
+            text: "A profile is one Minecraft setup: its version, mods, worlds and settings. Start with a ready-made one; Play has every other version whenever you want more."; }
+        property <length> pw: (self.width - 14px) / 2;
+        PickCard { x: 2px; y: 150px; width: parent.pw; height: 240px; on: Setup.pick == 0; art: Setup.art0; has-art: Setup.has-art0;
+            ver: "1.21.11"; way: "NETHER + FABRIC"; d: "Sodium, Lithium and other performance mods built in"; tag: "RECOMMENDED";
+            picked => { Setup.pick = 0; } chosen => { Setup.pick = 0; Setup.step = 4; } }
+        PickCard { x: 2px + parent.pw + 12px; y: 150px; width: parent.pw; height: 240px; on: Setup.pick == 1; art: Setup.art1; has-art: Setup.has-art1;
+            ver: "1.8.9"; way: "NETHER"; d: "Classic PvP: Nether HUD, keystrokes and CPS"; tag: "PVP";
+            picked => { Setup.pick = 1; } chosen => { Setup.pick = 1; Setup.step = 4; } }
+        Rectangle {
+            x: 2px; y: 404px; width: parent.width - 2px; height: 72px; border-radius: Theme.r2;
+            background: Setup.pick == 2 ? Theme.red.with-alpha(0.094) : (ot.has-hover ? Theme.s2 : Theme.s1);
+            border-width: 1px; border-color: Setup.pick == 2 ? Theme.red2 : Theme.ln;
+            animate background, border-color { duration: Theme.fast; }
+            Text { x: 22px; y: 14px; text: "ANOTHER VERSION OR WAY TO PLAY"; color: Theme.tx; font-family: Theme.disp; font-size: 18px; font-weight: 700; }
+            Text { x: 22px; y: 40px; width: parent.width - 80px; text: "Any version with Nether, Nether + Fabric, Forge or OptiFine, in the profile maker"; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; overflow: elide; }
+            Icon { x: parent.width - 32px; y: 30px; d: Ico.chev; tint: Setup.pick == 2 ? Theme.red2 : Theme.mut; }
+            ot := TouchArea { mouse-cursor: pointer; clicked => { Setup.pick = 2; } double-clicked => { Setup.pick = 2; Setup.step = 4; } }
+        }
+    }
+
+    // ---------- 05 first launch ----------
+    if Setup.step == 4: s5 := Rectangle {
+        x: root.cx; y: root.cy; width: root.cw; height: root.H - root.cy - 40px;
+        property <length> lw: Math.min(self.width, 640px);
+        // ready: the summary and PLAY
+        if Setup.phase == 0: Rectangle {
+            Heading { x: 0px; y: 0px; text: Setup.pick == 2 ? "ALMOST THERE" : "READY TO PLAY"; font-size: 56px; }
+            Text { x: 2px; y: 76px; width: s5.lw; wrap: word-wrap; color: Theme.dim; font-family: Theme.ui; font-size: 16px * Theme.ts;
+                text: Setup.pick == 2 ? "The profile maker opens next: pick how to play and a version. It starts with the memory you chose."
+                    : "The first launch downloads the game and its files, so it takes longer than the ones after it. Minecraft opens in its own window."; }
+            Rectangle {
+                x: 2px; y: 146px; width: s5.lw; height: 4 * 44px;
+                SumRow { y: 0px; width: parent.width; k: "ACCOUNT"; v: root.signed ? Backend.acct-name : "Not signed in yet"; ok: root.signed; }
+                SumRow { y: 44px; width: parent.width; k: "PROFILE"; v: root.pick-name; }
+                SumRow { y: 88px; width: parent.width; k: "JAVA"; v: Setup.pick == 0 ? Setup.java0 : (Setup.pick == 1 ? Setup.java1 : "The right one for the version you pick"); }
+                SumRow { y: 132px; width: parent.width; k: "MEMORY"; v: "\{Backend.new-ram} GB"; }
+            }
+            if Setup.pick != 2: PlayButton { x: 2px; y: 360px; width: 340px; height: 64px; label: "PLAY " + root.vers[Setup.pick]; text-size: 24px;
+                clicked => { Setup.play(); } }
+            if Setup.pick == 2: PlayButton { x: 2px; y: 360px; width: 340px; height: 64px; label: "MAKE MY PROFILE"; text-size: 22px;
+                clicked => { Setup.finish(true); root.go-play(); } }
+            LinkBtn { x: 2px; y: 448px; text: "SKIP, I'LL PLAY LATER"; clicked => { Setup.finish(false); root.go-home(); } }
+        }
+        // getting ready: the launch's own progress line
+        if Setup.phase == 1: Rectangle {
+            Heading { x: 0px; y: 0px; text: "GETTING READY"; font-size: 56px; }
+            Text { x: 2px; y: 76px; width: s5.lw; wrap: word-wrap; color: Theme.dim; font-family: Theme.ui; font-size: 16px * Theme.ts;
+                text: "Downloading " + root.pick-name + ": Minecraft, Java and the mods it comes with. This only happens once."; }
+            Waiting2 { x: 2px; y: 150px; width: s5.lw; text: Backend.job-on ? Backend.job-text : "Starting…"; }
+            Rectangle {
+                x: 2px; y: 184px; width: s5.lw; height: 6px; border-radius: 3px; background: Theme.s3;
+                Rectangle { width: Backend.job-on && Backend.job-prog >= 0 ? parent.width * Math.clamp(Backend.job-prog, 0, 1) : 0px; border-radius: 3px; background: Theme.red2; animate width { duration: Theme.mid; } }
+            }
+            Text { x: 2px; y: 214px; width: s5.lw; wrap: word-wrap; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts;
+                text: "You can leave this open; the launcher steps aside once Minecraft's window appears."; }
+        }
+        // running: the first launch worked
+        if Setup.phase == 2: Rectangle {
+            Eyebrow { x: 2px; y: 0px; text: "MINECRAFT IS RUNNING"; color: Theme.ice; }
+            Heading { x: 0px; y: 22px; text: "YOU'RE IN"; font-size: 64px; }
+            StepLine { x: 2px; y: 120px; width: s5.lw; n: "→"; t: "RIGHT SHIFT"; d: "Opens the Nether menu in game: mods, HUD layout and cosmetics."; }
+            StepLine { x: 2px; y: 182px; width: s5.lw; n: "→"; t: "HOME AND PLAY"; d: "Your profile is on Home. Play has every version and way to play."; }
+            StepLine { x: 2px; y: 244px; width: s5.lw; n: "→"; t: "FRIENDS AND PARTIES"; d: "Top right in the launcher, and on the title screen in game."; }
+            PlayButton { x: 2px; y: 336px; width: 260px; height: 60px; label: "DONE"; text-size: 22px; arrow: false; clicked => { Setup.finish(false); root.go-home(); } }
+        }
+        // stopped before it ran
+        if Setup.phase == 3: Rectangle {
+            Eyebrow { x: 2px; y: 0px; text: Setup.crashed ? "THE GAME CRASHED" : "THE GAME DIDN'T START"; color: Theme.redtx; }
+            Heading { x: 0px; y: 22px; text: "NOT THIS TIME"; font-size: 56px; }
+            Text { x: 2px; y: 100px; width: s5.lw; wrap: word-wrap; color: Theme.dim; font-family: Theme.ui; font-size: 16px * Theme.ts;
+                text: Setup.crashed ? "Minecraft closed while starting. The crash page says why, and most problems have a one-click fix there."
+                    : "Something stopped the launch; the message at the bottom of the window says what. Fix it and try again, or finish setup and play from Home."; }
+            ta := PlayButton { x: 2px; y: 190px; width: 260px; height: 60px; label: "TRY AGAIN"; text-size: 22px; clicked => { Setup.play(); } }
+            if Setup.crashed: Btn { x: 280px; y: 202px; height: 40px; text: "VIEW CRASH"; clicked => { Backend.crash-open = true; } }
+            LinkBtn { x: 2px; y: 278px; text: "FINISH SETUP"; clicked => { Setup.finish(false); root.go-home(); } }
+        }
+    }
+
+    // ---------- footer: back / next (steps 2-4) ----------
+    if Setup.step >= 1 && Setup.step <= 3: Rectangle {
+        x: root.cx; y: root.H - 104px; width: root.cw; height: 44px;
+        Rectangle { y: -20px; height: 1px; background: Theme.ln; }
+        Btn { x: 0px; y: 2px; height: 40px; text: "BACK"; clicked => { Setup.step -= 1; } }
+        Btn { x: parent.width - self.width; y: 2px; height: 40px; width: 200px; text: "NEXT"; solid: true; enabled: Setup.step != 1 || root.signed;
+            clicked => { Setup.step += 1; } }
+        if Setup.step == 1 && !root.signed: Text { x: parent.width - 200px - 16px - 300px; width: 300px; height: parent.height; horizontal-alignment: right; vertical-alignment: center;
+            text: "Sign in to continue"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; }
+    }
+}

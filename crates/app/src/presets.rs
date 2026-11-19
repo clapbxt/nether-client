@@ -70,6 +70,12 @@ fn load(sh: &Shared) -> Saved {
 
 fn save(sh: &Shared, s: &Saved) { let _ = nether_core::store::write_json(&file(sh), s); }
 
+/// The profile a Home preset ("modern", "pvp189") made, if it made one.
+pub fn preset_profile(sh: &Shared, id: &str) -> Option<String> {
+    let (_, _, _, _, way, ver) = PRESETS.iter().find(|p| p.0 == id)?;
+    load(sh).made.get(&format!("{ver}/{way}")).cloned()
+}
+
 /// A card made this instance (it isn't listed under "Your Nether profiles").
 pub fn is_card(name: &str) -> bool { MADE.with(|m| m.borrow().contains(name)) }
 
@@ -210,7 +216,7 @@ fn play(ui: &AppWindow, sh: &Arc<Shared>) {
     let name = instances::free_name(&sh.paths, &format!("Nether {ver}{}", match way { 1 => " Fabric", 2 => " OptiFine", _ => "" }), &taken);
     b.set_create_nether(true);
     // way 2 makes a Vanilla profile with OptiFine on (create-instance loader 6)
-    if !b.invoke_create_instance(name.as_str().into(), ver.as_str().into(), if way == 2 { 6 } else { way }, 4, "".into(), "".into()) { return; }
+    if !b.invoke_create_instance(name.as_str().into(), ver.as_str().into(), if way == 2 { 6 } else { way }, b.get_new_ram(), "".into(), "".into()) { return; }
     saved.made.insert(key, name.clone());
     save(sh, &saved);
     // 1.8.9 starts with the PvP HUD (keystrokes, CPS); Fabric gets the performance pack

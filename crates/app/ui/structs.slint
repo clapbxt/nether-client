@@ -26,7 +26,8 @@ export struct CosCard { id: string, name: string, kind: string, desc: string, im
 // a saved Microsoft account (account panel); active = the one Play uses
 export struct Acct { uuid: string, name: string, active: bool }
 // Settings > Java: one major version, what the launcher will run for it (custom = picked by the user)
-export struct JavaRt { major: int, title: string, sub: string, custom: bool }
+// ready: a Java of this major is on this PC (ours, the system's or a custom one)
+export struct JavaRt { major: int, title: string, sub: string, custom: bool, ready: bool }
 // one Home news line (live: Minecraft releases/snapshots, Fabric loader)
 // img = the release art from Mojang's launcher feed (has-img false: our banner)
 export struct News { tag: string, title: string, url: string, img: image, has-img: bool }
@@ -283,6 +284,8 @@ export global Backend {
     callback shot-action(int, int);
     // overview: total system memory (GB) for the RAM slider; fullscreen launch
     in-out property <int> sys-ram: 16;
+    // memory (GB) a new profile starts with: the first-run setup's pick (prefs "ram"), else a RAM-based recommendation
+    in-out property <int> new-ram: 4;
     callback set-inst-fullscreen(int, bool);
     // generic yes/no dialog (Rust holds what happens on yes)
     in-out property <bool> ask-open: false;
@@ -512,6 +515,28 @@ export global Wizard {
     callback pick-pack(string);
     callback load-rps(string);
     callback finish(string, string);
+}
+
+// First-run setup walkthrough (crates/app/src/setup.rs, 2026-11-20). step: 0 welcome, 1 account, 2 Java & memory,
+// 3 first profile, 4 first launch. pick: 0 Nether 1.21.11 + Fabric, 1 Nether 1.8.9, 2 another version (the Nether
+// profile wizard). phase (step 4): 0 ready, 1 getting ready / starting, 2 running, 3 didn't start.
+// java0 / java1: the Java the two ready-made profiles run on and whether it is on this PC already.
+export global Setup {
+    in-out property <bool> open: false;
+    in-out property <int> step: 0;
+    in-out property <int> pick: 0;
+    in-out property <int> rec-ram: 4;
+    in-out property <int> phase: 0;
+    in-out property <bool> crashed: false;
+    in-out property <string> java0;
+    in-out property <string> java1;
+    in-out property <image> art0;
+    in-out property <image> art1;
+    in-out property <bool> has-art0;
+    in-out property <bool> has-art1;
+    callback play();
+    // close the walkthrough (it never shows again); wizard = open the Nether profile maker next
+    callback finish(bool);
 }
 
 // Combine packs dialog (instance Packs tab). pick: 0 from base, 1 vanilla, 2+ = choices index (pack).

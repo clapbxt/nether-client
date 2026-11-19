@@ -846,7 +846,7 @@ export component InstancesScreen inherits Rectangle {
             // loader: 0 Vanilla, 1 Fabric, 2 Forge, 3 NeoForge, 4 Quilt, 5 Legacy Fabric (main.rs create-instance)
             property <int> loader: 1;
             property <int> vi: 0;
-            property <int> ram: 4;
+            property <int> ram: Backend.new-ram;
             property <string> icon: "";
             property <string> wall: "";
             // 0 loader, 1 version, 2 Nether pack (Fabric only), 4 resource packs, 5 finish (3, the old client step, is skipped:

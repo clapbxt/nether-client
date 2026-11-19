@@ -9,10 +9,11 @@ import "fonts/JetBrainsMono-Bold.ttf";
 
 import { Theme } from "theme.slint";
 export { Theme }
-import { Backend, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat } from "structs.slint";
-export { Backend, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat }
+import { Backend, Setup, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat } from "structs.slint";
+export { Backend, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat, Setup }
 import { Btn, Eyebrow, Page, Slash, Hatch, PlayButton, Icon, Ico, Pulse, LinkBtn, Heading, Scrim, WinButtons, Field, FocusTrap, Toggle, Dropdown } from "components.slint";
 import { HomeScreen } from "home.slint";
+import { SetupFlow } from "setup.slint";
 import { InstancesScreen } from "instances.slint";
 import { DiscoverScreen } from "discover.slint";
 import { WardrobeScreen } from "wardrobe.slint";
@@ -143,7 +144,7 @@ export component AppWindow inherits Window {
         x: 0px; y: 0px; width: root.width; height: root.height; focus-on-click: false;
         // Ctrl+K works from anywhere, a focused text field included
         capture-key-pressed(e) => {
-            if e.modifiers.control && (e.text == "k" || e.text == "K") && !Backend.gate-open { Backend.pal-show(); return accept; }
+            if e.modifiers.control && (e.text == "k" || e.text == "K") && !Backend.gate-open && !Setup.open { Backend.pal-show(); return accept; }
             return reject;
         }
         key-pressed(e) => {
@@ -154,7 +155,7 @@ export component AppWindow inherits Window {
                 if Backend.crash-open { Backend.crash-open = false; return accept; }
                 return reject;
             }
-            if !e.modifiers.control || Backend.gate-open { return reject; }
+            if !e.modifiers.control || Backend.gate-open || Setup.open { return reject; }
             if e.text == "," { root.open-idx = -1; root.tab = 6; return accept; }
             if e.text == "n" || e.text == "N" { Backend.create-nether = Backend.play-tab != 1; Backend.create-open = true; root.open-idx = -1; root.tab = 1; return accept; }
             if e.text == "1" { root.open-idx = -1; root.tab = 0; return accept; }
@@ -425,8 +426,15 @@ export component AppWindow inherits Window {
             FriendsPanel { x: root.W - 138px - 12px - self.width; y: 6px; height: Math.min(720px, parent.height - 12px); }
         }
 
-        // ---------- full-screen Microsoft sign-in gate ----------
-        if Backend.gate-open: Rectangle {
+        // ---------- first-run setup walkthrough (setup.rs): account, Java & memory, first profile, first launch ----------
+        if Setup.open: SetupFlow {
+            x: 0px; y: 0px; W: root.W; H: root.H; top: root.top;
+            go-play => { root.open-idx = -1; root.tab = 1; }
+            go-home => { root.open-idx = -1; root.tab = 0; }
+        }
+
+        // ---------- full-screen Microsoft sign-in gate (behind the setup walkthrough while it is open) ----------
+        if Backend.gate-open && !Setup.open: Rectangle {
             x: 0px; y: 0px; width: root.W; height: root.H; background: Theme.bg;
             // only the top strip drags the window (like the top bar everywhere else)
             TouchArea { pointer-event(e) => { if e.kind == PointerEventKind.down && e.button == PointerEventButton.left && self.mouse-y < root.top { Backend.win-drag(); } } }
@@ -538,7 +546,7 @@ export component AppWindow inherits Window {
             WinButtons { stage-w: root.W; }
             }
         }
-        if Backend.gate-open && !Backend.crash-open: WinButtons { stage-w: root.W; }
+        if (Backend.gate-open || Setup.open) && !Backend.crash-open: WinButtons { stage-w: root.W; }
 
         // ---------- L1: pre-launch check: problems that would stop the game, each with its fix; never blocks ----------
         if Backend.pre-open: Scrim {
