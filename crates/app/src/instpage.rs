@@ -573,7 +573,6 @@ fn wait_exit(pid: u32, max: std::time::Duration) -> bool {
 #[cfg(not(windows))]
 fn wait_exit(_pid: u32, max: std::time::Duration) -> bool { std::thread::sleep(max); false }
 
-/// Import a modpack file (.mrpack, CurseForge zip, Prism export) or a Prism/MultiMC instance folder.
 thread_local! {
     /// What the IMPORT dialog lists, in row order (UI thread only).
     static FOUND: std::cell::RefCell<Vec<nether_core::launchers::Found>> = const { std::cell::RefCell::new(Vec::new()) };
