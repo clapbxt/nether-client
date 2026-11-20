@@ -496,12 +496,7 @@ final class PackBrowser {
         return true;
     }
 
-    private static void browse(String url) {
-        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        String[] cmd = os.contains("win") ? new String[] {"rundll32", "url.dll,FileProtocolHandler", url}
-            : os.contains("mac") ? new String[] {"open", url} : new String[] {"xdg-open", url};
-        try { new ProcessBuilder(cmd).start(); say("Opened in your browser"); } catch (Throwable e) { say("Couldn't open the browser"); }
-    }
+    private static void browse(String url) { say(Net.browse(url) ? "Opened in your browser" : "Couldn't open the browser"); }
 
     private static void page(float x, float y, float w, float h, float wheel) {
         collectPage();

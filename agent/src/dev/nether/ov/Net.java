@@ -28,6 +28,18 @@ import javax.net.ssl.SSLContext;
 final class Net {
     private Net() {}
 
+    /** The Nether Client community Discord (README, launcher rail, title screen). */
+    static final String DISCORD = "https://discord.gg/R5vxAxVjwu";
+
+    /** Opens an https link in the system browser (never from the render thread's GL state); false when that failed. */
+    static boolean browse(String url) {
+        if (url == null || !url.startsWith("https://")) return false;
+        String os = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
+        String[] cmd = os.contains("win") ? new String[] {"rundll32", "url.dll,FileProtocolHandler", url}
+            : os.contains("mac") ? new String[] {"open", url} : new String[] {"xdg-open", url};
+        try { new ProcessBuilder(cmd).start(); return true; } catch (Throwable e) { return false; }
+    }
+
     static final String UA = "NetherClient/" + System.getProperty("nether.version", "0.1.0") + " (https://github.com/clapbxt/nether-client)"; // LRCLIB asks for app, version and a homepage
     private static final long NEG_TTL = 7L * 24 * 3600 * 1000, CACHE_CAP = 64L << 20, SPACING = 300;
     private static final int DEF_MAX = 2 << 20;

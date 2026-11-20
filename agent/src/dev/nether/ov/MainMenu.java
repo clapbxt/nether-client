@@ -653,11 +653,28 @@ final class MainMenu {
             version = "MINECRAFT " + (v != null ? v.toUpperCase(Locale.ROOT) : "") + " / " + loader + (nv != null ? " / NETHER " + nv : "");
         }
         float lw = Gfx.text(Gfx.UI, 9, 12, H - 12, Gfx.a(Gfx.ICE, 0.6f), version);
+        lw += discord(12 + lw + 14, H - 12);
         String c1 = "Copyright Mojang AB. Do not distribute!", c2 = "Not affiliated with Mojang or Microsoft";
         float w1 = Gfx.width(Gfx.UI, 9, c1), w2 = Gfx.width(Gfx.UI, 9, c2);
         if (lw + w1 + 40 > W) return;
         Gfx.text(Gfx.UI, 9, W - 12 - w1, H - 12, Gfx.a(Gfx.ICE, 0.75f), c1);
         if (!dock) Gfx.text(Gfx.UI, 9, W - 12 - w2, H - 12 - Math.max(14, 12.5f / Gfx.s), Gfx.a(Gfx.ICE, 0.6f), c2);
+    }
+
+    /**
+     * "DISCORD" link after the version line: Discord's own symbol in white (their brand rules allow colour, black or
+     * white, unaltered) and a label; opens the community invite in the browser. Returns the width used.
+     */
+    private static float discord(float x, float cy) {
+        float w = 12 + 5 + Gfx.width(Gfx.SEMI, 9, "DISCORD", 1.2f), h = 18;
+        boolean hv = over(x - 4, cy - h / 2, w + 8, h);
+        float t = an("discord", hv);
+        if (t > 0.01f) Gfx.rect(x - 4, cy - h / 2, w + 8, h, 4, Gfx.a(Gfx.ICE, 0.08f * t));
+        ModIcons.draw("discord", x, cy - 6, 12, Gfx.a(0xFFFFFFFF, 0.6f + 0.4f * t));
+        Gfx.text(Gfx.SEMI, 9, x + 17, cy, Gfx.a(Gfx.ICE, 0.6f + 0.4f * t), "DISCORD", false, 1.2f);
+        if (hv) tip("Join the Nether Client Discord (opens in your browser)");
+        if (hit(x - 4, cy - h / 2, w + 8, h)) Net.browse(Net.DISCORD);
+        return w + 14;
     }
 
     private static String loaderName() {

@@ -105,6 +105,7 @@ final class ModIcons {
                 int join = "round".equals(a.get("stroke-linejoin")) ? BasicStroke.JOIN_ROUND : "bevel".equals(a.get("stroke-linejoin")) ? BasicStroke.JOIN_BEVEL : BasicStroke.JOIN_MITER;
                 sh = new BasicStroke(Float.parseFloat(a.getOrDefault("stroke-width", "1")), cap, join, 4).createStrokedShape(sh);
             } else if (fill.equals("none")) continue;
+            else if ("evenodd".equals(a.get("fill-rule")) && sh instanceof Path2D) ((Path2D) sh).setWindingRule(Path2D.WIND_EVEN_ODD);
             base.add(new Area(sh));
             any = true;
         }

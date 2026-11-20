@@ -43,6 +43,8 @@ component RailBtn inherits Rectangle {
     in property <string> d;
     in property <string> label;
     in property <bool> active;
+    // filled symbol (a brand mark such as Discord's, shown in white as its rules allow) instead of a line icon
+    in property <bool> filled;
     callback clicked();
     width: 48px; height: 48px; border-radius: Theme.r3;
     background: root.active ? Theme.red.with-alpha(0.16) : (ta.has-hover ? Theme.hov : transparent);
@@ -50,8 +52,9 @@ component RailBtn inherits Rectangle {
     if root.active: Rectangle { x: -14px; y: 12px; width: 3px; height: 24px; border-radius: 1.5px; background: Theme.red; }
     Path {
         x: 13px; y: 13px; width: 22px; height: 22px; viewbox-width: 20; viewbox-height: 20;
-        commands: root.d; fill: transparent; stroke-width: 1.6px;
+        commands: root.d; fill: root.filled ? #ffffff : transparent; fill-rule: evenodd; stroke-width: root.filled ? 0px : 1.6px;
         stroke: root.active ? Theme.red2 : (ta.has-hover ? Theme.tx : Theme.dim);
+        opacity: root.filled && !ta.has-hover ? 0.62 : 1;
     }
     ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
@@ -293,6 +296,12 @@ export component AppWindow inherits Window {
                 x: (root.rail - 48px) / 2; y: root.top + 22px + i * 58px;
                 d: root.icons[i]; label: l; active: root.tab == root.ids[i];
                 clicked => { root.open-idx = -1; root.tab = root.ids[i]; }
+            }
+            // community Discord (official symbol, white): opens the invite in the browser
+            RailBtn {
+                x: (root.rail - 48px) / 2; y: root.H - 48px - 20px - 56px; label: "Discord"; filled: true;
+                d: "M 15.545 4.913 A 13.195 13.195 0 0 0 12.288 3.903 A 0.049 0.049 0 0 0 12.236 3.928 C 12.095 4.178 11.94 4.504 11.831 4.761 C 10.601 4.577 9.377 4.577 8.173 4.761 C 8.063 4.499 7.902 4.178 7.761 3.928 A 0.051 0.051 0 0 0 7.708 3.903 A 13.158 13.158 0 0 0 4.451 4.913 A 0.047 0.047 0 0 0 4.43 4.932 C 2.356 8.031 1.787 11.054 2.066 14.039 A 0.055 0.055 0 0 0 2.087 14.077 C 3.456 15.082 4.781 15.692 6.082 16.096 A 0.052 0.052 0 0 0 6.139 16.078 C 6.446 15.658 6.721 15.214 6.956 14.748 A 0.051 0.051 0 0 0 6.928 14.678 C 6.493 14.513 6.079 14.311 5.68 14.083 A 0.051 0.051 0 0 1 5.675 13.998 C 5.759 13.935 5.843 13.87 5.923 13.804 A 0.05 0.05 0 0 1 5.975 13.797 C 8.593 14.992 11.428 14.992 14.016 13.797 A 0.049 0.049 0 0 1 14.068 13.803 C 14.148 13.869 14.232 13.935 14.317 13.998 A 0.051 0.051 0 0 1 14.312 14.083 A 8.199 8.199 0 0 1 13.064 14.677 A 0.051 0.051 0 0 0 13.036 14.748 C 13.277 15.214 13.551 15.657 13.853 16.077 A 0.051 0.051 0 0 0 13.909 16.096 C 15.217 15.692 16.542 15.082 17.911 14.077 A 0.051 0.051 0 0 0 17.932 14.04 C 18.266 10.588 17.373 7.59 15.566 4.932 A 0.041 0.041 0 0 0 15.545 4.913 Z M 7.347 12.221 C 6.559 12.221 5.909 11.497 5.909 10.609 C 5.909 9.72 6.546 8.996 7.347 8.996 C 8.154 8.996 8.798 9.726 8.785 10.609 C 8.785 11.497 8.148 12.221 7.347 12.221 Z M 12.664 12.221 C 11.875 12.221 11.226 11.497 11.226 10.609 C 11.226 9.72 11.863 8.996 12.664 8.996 C 13.471 8.996 14.114 9.726 14.102 10.609 C 14.102 11.497 13.471 12.221 12.664 12.221 Z";
+                clicked => { Backend.open-url("https://discord.gg/R5vxAxVjwu"); }
             }
             RailBtn {
                 x: (root.rail - 48px) / 2; y: root.H - 48px - 20px; label: "Settings"; active: root.tab == 6;
