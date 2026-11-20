@@ -148,6 +148,14 @@ final class Screenshots extends Module {
         long now = System.currentTimeMillis();
         // dev captures: -Dnether.shotsOpen=<seconds>[,<picture index>] opens the browser (and a picture) that long after start
         String dev = System.getProperty("nether.shotsOpen");
+        String ed = System.getProperty("nether.shotsEdit");
+        if (ed != null && devAt >= 0) {
+            String[] p = ed.split(",");
+            if (Game.devT() > Integer.parseInt(p[0].trim())) { devAt = -1; devEdit(p.length > 1 ? p[1].trim() : "none"); }
+        }
+        if (devPending != null && open && !scanning) devEdit(devPending);
+        if (devSave != 0 && Math.abs(devSave) < now) { finish(devSave > 0 ? 1 : 2); devSave = 0; }
+        if (open) afterEdits();
         if (dev != null && devAt >= 0) { // seconds counted like -Dnether.keys (from joining the -Dnether.world)
             String[] p = dev.split(",");
             if (Game.devT() > Integer.parseInt(p[0].trim())) { devAt = -1; show(); if (p.length > 1) view = Integer.parseInt(p[1].trim()); }
@@ -323,6 +331,7 @@ final class Screenshots extends Module {
 
     static void close() {
         open = false;
+        stopEdit();
         if (fromWorld) { fromWorld = false; Input.setMenu(false); }
     }
 
@@ -338,6 +347,11 @@ final class Screenshots extends Module {
 
     static void key(int k, boolean press, boolean shift, boolean ctrl) {
         if (!press) return;
+        if (editing) {
+            if (k == 256) { if (replaceAsk) replaceAsk = false; else stopEdit(); }
+            else if (k == 90 && ctrl && !strokes.isEmpty()) { strokes.remove(strokes.size() - 1); layerDirty = true; }
+            return;
+        }
         if (k == 256) { if (confirm) confirm = false; else if (view >= 0) view = -1; else close(); return; }
         if (view < 0) { if (k == 266) scrollT -= 300; else if (k == 267) scrollT += 300; return; }
         int n = list().size();
@@ -388,8 +402,8 @@ final class Screenshots extends Module {
         boolean fresh = note != null && System.currentTimeMillis() - noteAt < 5000;
         if (fresh) {
             float nw = Gfx.width(Gfx.UI, 11, note) + 28;
-            Toast.glass(x + (w - nw) / 2, y + h - 46, nw, 26);
-            Gfx.textC(Gfx.UI, 11, x + w / 2, y + h - 33, Th.tx, note, 0);
+            Toast.glass(x + (w - nw) / 2, y + 20, nw, 26); // in the header, clear of every button
+            Gfx.textC(Gfx.UI, 11, x + w / 2, y + 33, Th.tx, note, 0);
         }
         Gfx.alpha = a0;
     }
@@ -478,6 +492,8 @@ final class Screenshots extends Module {
 
     private static void viewer(List<Shot> l, float x, float y, float w, float h) {
         Shot s = l.get(view);
+        if (editing && s.name.equals(editName)) { editor(s, x, y, w, h); return; }
+        if (editing) stopEdit();
         vt = Config.calm() ? 1 : Math.min(1, vt + Gfx.dt * 8);
         // back
         if (Menu.button("ssback", "BACK", x + 24, y + 60, 76, 28, false)) { view = -1; return; }
@@ -523,6 +539,283 @@ final class Screenshots extends Module {
         if (Menu.button("sscopy", "COPY", bx, by, 80, 30, false)) copy(s.name, true);
         bx += 88;
         if (Menu.button("ssshow", "SHOW IN FOLDER", bx, by, 140, 30, false)) reveal(s.name);
+        bx += 148;
+        if (Menu.button("ssedit", "EDIT", bx, by, 76, 30, false)) startEdit(s.name);
         if (Menu.button("ssdel", "DELETE", x + w - 24 - 90, by, 90, 30, false)) confirm = true;
     }
+
+    // ---------------------------------------------------------------- editor: draw and crop, then copy / save a copy / replace
+
+    private static final int[] COLORS = {0xFFFFFFFF, 0xFF111114, 0xFFE10600, 0xFFFFB020, 0xFF3DDC84, 0xFF4DA3FF};
+    /** pen widths as a share of the picture's width (thin, medium, thick) */
+    private static final float[] SIZES = {0.003f, 0.007f, 0.015f};
+    private static final class Stroke { final int col; final float w; final List<float[]> pts = new ArrayList<>(); Stroke(int c, float w) { col = c; this.w = w; } }
+
+    private static boolean editing, penDown, cropDown, replaceAsk;
+    private static String editName;
+    private static int tool, ink = 2, size = 1;
+    private static final List<Stroke> strokes = new ArrayList<>();
+    /** normalized x0, y0, x1, y1; null = whole picture */
+    private static float[] crop;
+    private static float cropU, cropV;
+    private static BufferedImage layer;
+    private static boolean layerDirty;
+    private static long layerAt;
+    private static volatile boolean saving;
+
+    private static void startEdit(String name) {
+        editing = true;
+        editName = name;
+        tool = 0;
+        strokes.clear();
+        crop = null;
+        penDown = cropDown = replaceAsk = false;
+        layer = null;
+        Gfx.dropTexture("ssl");
+    }
+
+    private static void stopEdit() {
+        editing = false;
+        strokes.clear();
+        crop = null;
+        layer = null;
+        Gfx.dropTexture("ssl");
+    }
+
+    private static boolean changed() { return !strokes.isEmpty() || crop != null; }
+
+    /** Strokes drawn with Graphics2D into an image of w x h (round caps, smooth). */
+    private static void paint(Graphics2D g, List<Stroke> list, int w, int h) {
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+        for (Stroke s : list) {
+            g.setColor(new java.awt.Color(s.col, true));
+            g.setStroke(new java.awt.BasicStroke(Math.max(1, s.w * w), java.awt.BasicStroke.CAP_ROUND, java.awt.BasicStroke.JOIN_ROUND));
+            java.awt.geom.Path2D.Float p = new java.awt.geom.Path2D.Float();
+            for (int i = 0; i < s.pts.size(); i++) { float[] q = s.pts.get(i); if (i == 0) p.moveTo(q[0] * w, q[1] * h); else p.lineTo(q[0] * w, q[1] * h); }
+            if (s.pts.size() == 1) { float[] q = s.pts.get(0); p.lineTo(q[0] * w + 0.01f, q[1] * h); }
+            g.draw(p);
+        }
+    }
+
+    /** The on-screen stroke layer (1024 px wide), uploaded at most 30x a second. Render thread. */
+    private static void syncLayer(float ratio) {
+        int lw = 1024, lh = Math.max(1, Math.round(lw / ratio));
+        if (layer == null || layer.getHeight() != lh) { layer = new BufferedImage(lw, lh, BufferedImage.TYPE_INT_ARGB); layerDirty = true; }
+        long now = System.currentTimeMillis();
+        if (!layerDirty || now - layerAt < 33) return;
+        layerAt = now;
+        layerDirty = false;
+        Graphics2D g = layer.createGraphics();
+        g.setComposite(java.awt.AlphaComposite.Clear);
+        g.fillRect(0, 0, lw, lh);
+        g.setComposite(java.awt.AlphaComposite.SrcOver);
+        paint(g, strokes, lw, lh);
+        g.dispose();
+        Gfx.texture("ssl", layer, true);
+    }
+
+    /** The original at full size with the strokes, then cropped. Worker thread. */
+    private static BufferedImage compose(String name, List<Stroke> list, float[] cr) throws Exception {
+        BufferedImage src = javax.imageio.ImageIO.read(dir().resolve(name).toFile());
+        if (src == null) throw new IllegalStateException("unreadable");
+        int w = src.getWidth(), h = src.getHeight();
+        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = out.createGraphics();
+        g.drawImage(src, 0, 0, null);
+        paint(g, list, w, h);
+        g.dispose();
+        if (cr == null) return out;
+        int x0 = Math.round(cr[0] * w), y0 = Math.round(cr[1] * h), x1 = Math.round(cr[2] * w), y1 = Math.round(cr[3] * h);
+        x0 = Math.max(0, Math.min(w - 1, x0)); y0 = Math.max(0, Math.min(h - 1, y0));
+        BufferedImage c = new BufferedImage(Math.max(1, Math.min(w, x1) - x0), Math.max(1, Math.min(h, y1) - y0), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2 = c.createGraphics();
+        g2.drawImage(out, -x0, -y0, null);
+        g2.dispose();
+        return c;
+    }
+
+    private static void write(BufferedImage img, Path to) throws Exception {
+        String n = to.getFileName().toString().toLowerCase(Locale.ROOT);
+        boolean jpg = n.endsWith(".jpg") || n.endsWith(".jpeg");
+        BufferedImage o = img;
+        if (jpg) { o = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_RGB); Graphics2D g = o.createGraphics(); g.drawImage(img, 0, 0, null); g.dispose(); }
+        Path tmp = to.resolveSibling(to.getFileName() + ".tmp");
+        if (!javax.imageio.ImageIO.write(o, jpg ? "jpg" : "png", tmp.toFile())) throw new IllegalStateException("no writer");
+        Files.move(tmp, to, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    /** 0 copy to clipboard, 1 save as a new picture, 2 replace the original. */
+    private static void finish(int how) {
+        if (saving) return;
+        saving = true;
+        final String name = editName;
+        final List<Stroke> list = new ArrayList<>(strokes);
+        final float[] cr = crop == null ? null : crop.clone();
+        final String place = where(name);
+        say(how == 0 ? "Copying..." : "Saving...");
+        POOL.submit(() -> {
+            try {
+                BufferedImage img = compose(name, list, cr);
+                if (how == 0) {
+                    java.awt.Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new Pic(img), null);
+                    say("Copied the edited picture. Paste it anywhere.");
+                } else if (how == 1) {
+                    int dot = name.lastIndexOf('.');
+                    String base = dot < 0 ? name : name.substring(0, dot);
+                    Path to = dir().resolve(base + "_edited.png");
+                    for (int i = 2; Files.exists(to); i++) to = dir().resolve(base + "_edited_" + i + ".png");
+                    write(img, to);
+                    String nn = to.getFileName().toString();
+                    edits.add(new String[] {nn, place});
+                    say("Saved as " + nn);
+                } else {
+                    write(img, dir().resolve(name));
+                    edits.add(new String[] {name, null});
+                    say("Picture replaced");
+                }
+                if (how != 0) done = true;
+            } catch (Throwable t) {
+                say("Couldn't " + (how == 0 ? "copy" : "save") + " it: " + (t.getMessage() == null ? t : t.getMessage()));
+                System.out.println("[nether-agent] screenshot edit: " + t);
+            } finally { saving = false; }
+        });
+    }
+
+    /** Saved edits waiting for the render thread: {file, where} (where null = replaced: drop its textures). */
+    private static final List<String[]> edits = java.util.Collections.synchronizedList(new ArrayList<>());
+    private static volatile boolean done;
+
+    private static void afterEdits() {
+        while (!edits.isEmpty()) {
+            String[] e = edits.remove(0);
+            if (e[1] == null) { Gfx.dropTexture("sst:" + e[0]); Gfx.dropTexture("ssf:" + e[0]); }
+            else if (!e[1].isEmpty()) { entry(e[0], true).put("where", e[1]); saveMeta(); }
+            newest = Math.max(newest, dir().resolve(e[0]).toFile().lastModified()); // our own file is not a new screenshot
+            rescan();
+            filter = 0;
+            view = 0; // the saved picture is the newest now: show it
+            vt = 0;
+        }
+        if (done) { done = false; stopEdit(); }
+    }
+
+    private static void editor(Shot s, float x, float y, float w, float h) {
+        // toolbar
+        float ty = y + 60;
+        if (Menu.button("sscancel", "CANCEL", x + 24, ty, 86, 28, false)) { stopEdit(); return; }
+        float bx = x + 122;
+        String[] tools = {"DRAW", "CROP"};
+        for (int i = 0; i < 2; i++) {
+            float bw = 70;
+            boolean on = tool == i, hv = Menu.in(bx, ty, bw, 28);
+            float hh = Menu.an("sstool" + i, hv);
+            Gfx.rect(bx, ty, bw, 28, 6, on ? Gfx.a(Th.ac, 0.22f) : Gfx.a(Th.ov, 0.035f + 0.05f * hh));
+            Gfx.ring(bx, ty, bw, 28, 6, 1, on ? Gfx.a(Th.ac2, 0.7f) : Th.ln);
+            Gfx.textC(Gfx.SEMI, 11, bx + bw / 2, ty + 14, on ? Th.tx : Gfx.mix(Th.dim, Th.tx, hh), tools[i], 1.2f);
+            if (Menu.hit(bx, ty, bw, 28)) tool = i;
+            bx += bw + 6;
+        }
+        bx += 14;
+        if (tool == 0) {
+            for (int i = 0; i < COLORS.length; i++) {
+                float cx = bx + i * 26 + 11, cy = ty + 14;
+                boolean on = ink == i;
+                if (on) Gfx.ring(cx - 11, cy - 11, 22, 22, 11, 2, Th.tx);
+                Gfx.rect(cx - 8, cy - 8, 16, 16, 8, COLORS[i]);
+                if (i == 1) Gfx.ring(cx - 8, cy - 8, 16, 16, 8, 1, Th.ln2);
+                if (Menu.hit(cx - 11, cy - 11, 22, 22)) ink = i;
+            }
+            bx += COLORS.length * 26 + 12;
+            for (int i = 0; i < SIZES.length; i++) {
+                float cx = bx + i * 26 + 11, cy = ty + 14, d = 4 + i * 4;
+                boolean on = size == i, hv = Menu.in(cx - 11, cy - 11, 22, 22);
+                Gfx.rect(cx - 11, cy - 11, 22, 22, 6, on ? Gfx.a(Th.ov, 0.12f) : Gfx.a(Th.ov, hv ? 0.06f : 0));
+                Gfx.rect(cx - d / 2, cy - d / 2, d, d, d / 2, on ? Th.tx : Th.dim);
+                if (Menu.hit(cx - 11, cy - 11, 22, 22)) size = i;
+            }
+            bx += SIZES.length * 26 + 12;
+        } else if (crop != null && Menu.button("sscropr", "WHOLE PICTURE", bx, ty, 130, 28, false)) crop = null;
+        boolean undo = !strokes.isEmpty();
+        if (Menu.button("ssundo", "UNDO", x + w - 24 - 76, ty, 76, 28, false) && undo) { strokes.remove(strokes.size() - 1); layerDirty = true; }
+
+        // picture with the stroke layer and the crop box
+        float top = y + 100, bot = y + h - 64, ah = bot - top, aw = w - 48;
+        String full = full(s.name), key = full != null ? full : thumb(s.name);
+        int[] sz = key == null ? null : Gfx.textureSize(key);
+        float ratio = sz == null ? 16 / 9f : sz[0] / (float) sz[1];
+        float pw = Math.min(aw, ah * ratio), ph = pw / ratio, px = x + (w - pw) / 2, py = top + (ah - ph) / 2;
+        if (key != null) Gfx.image(key, px, py, pw, ph, 0xFFFFFFFF, 0); else Gfx.rect(px, py, pw, ph, 0, Th.s2);
+        syncLayer(ratio);
+        if (!strokes.isEmpty() && Gfx.hasTexture("ssl")) Gfx.image("ssl", px, py, pw, ph, 0xFFFFFFFF, 0);
+        float u = Math.max(0, Math.min(1, (Menu.L - px) / pw)), v = Math.max(0, Math.min(1, (Menu.T - py) / ph));
+        if (tool == 0) {
+            if (Menu.dragging("sspen", px, py, pw, ph)) {
+                if (!penDown) { penDown = true; strokes.add(new Stroke(COLORS[ink], SIZES[size])); }
+                Stroke st = strokes.get(strokes.size() - 1);
+                float[] last = st.pts.isEmpty() ? null : st.pts.get(st.pts.size() - 1);
+                if (last == null || Math.abs(last[0] - u) + Math.abs(last[1] - v) > 0.0015f) { st.pts.add(new float[] {u, v}); layerDirty = true; }
+            } else if (penDown) { penDown = false; layerDirty = true; layerAt = 0; }
+            if (Menu.in(px, py, pw, ph)) { float d = Math.max(3, SIZES[size] * pw); Gfx.ring(Menu.L - d / 2, Menu.T - d / 2, d, d, d / 2, 1, Gfx.a(COLORS[ink], 0.9f)); }
+        } else {
+            if (Menu.dragging("sscrop", px, py, pw, ph)) {
+                if (!cropDown) { cropDown = true; cropU = u; cropV = v; }
+                crop = new float[] {Math.min(cropU, u), Math.min(cropV, v), Math.max(cropU, u), Math.max(cropV, v)};
+            } else if (cropDown) {
+                cropDown = false;
+                if (crop != null && (crop[2] - crop[0] < 0.02f || crop[3] - crop[1] < 0.02f)) crop = null; // a click, not a box
+            }
+        }
+        if (crop != null) {
+            float cx0 = px + crop[0] * pw, cy0 = py + crop[1] * ph, cx1 = px + crop[2] * pw, cy1 = py + crop[3] * ph;
+            int dim = Gfx.a(0xFF000000, 0.6f);
+            Gfx.rect(px, py, pw, cy0 - py, 0, dim);
+            Gfx.rect(px, cy1, pw, py + ph - cy1, 0, dim);
+            Gfx.rect(px, cy0, cx0 - px, cy1 - cy0, 0, dim);
+            Gfx.rect(cx1, cy0, px + pw - cx1, cy1 - cy0, 0, dim);
+            Gfx.ring(cx0, cy0, cx1 - cx0, cy1 - cy0, 0, 1.5f, 0xFFFFFFFF);
+            if (sz != null) {
+                String dims = Math.round((crop[2] - crop[0]) * sz[0] * (full != null ? 1 : 1)) + " x " + Math.round((crop[3] - crop[1]) * sz[1]);
+                Gfx.text(Gfx.MONO, 9, cx0 + 6, cy0 + 12, 0xFFFFFFFF, dims, true, 1.2f);
+            }
+        } else if (tool == 1) Gfx.textC(Gfx.UI, 11, x + w / 2, bot + 6, Th.mut, "Drag over the picture to choose the part to keep", 0);
+
+        // save
+        float by = y + h - 48;
+        if (replaceAsk) {
+            Gfx.text(Gfx.UI, 12, x + 24, by + 15, Th.tx, "Replace the original? The old picture can't be brought back.");
+            if (Menu.button("ssrep2", "REPLACE", x + w - 24 - 100, by, 100, 30, true)) { replaceAsk = false; finish(2); }
+            if (Menu.button("ssrepno", "CANCEL", x + w - 24 - 100 - 8 - 90, by, 90, 30, false)) replaceAsk = false;
+            return;
+        }
+        boolean any = changed() && !saving;
+        Gfx.alpha *= any ? 1 : 0.5f;
+        if (Menu.button("sseditcopy", "COPY", x + 24, by, 80, 30, false) && any) finish(0);
+        if (Menu.button("ssreplace", "REPLACE ORIGINAL", x + w - 24 - 150 - 8 - 160, by, 160, 30, false) && any) replaceAsk = true;
+        if (Menu.button("sssave", "SAVE AS COPY", x + w - 24 - 150, by, 150, 30, true) && any) finish(1);
+        Gfx.alpha /= any ? 1 : 0.5f;
+    }
+
+    /** Dev captures: -Dnether.shotsEdit=<s>,<copy|replace|none> opens the first picture in the editor with a sample drawing and crop. */
+    private static String devPending;
+
+    private static void devEdit(String mode) {
+        if (!open) show();
+        List<Shot> l = list();
+        if (l.isEmpty()) { devPending = mode; return; } // the folder is still being read
+        devPending = null;
+        view = 0;
+        startEdit(l.get(0).name);
+        Stroke a = new Stroke(COLORS[2], SIZES[2]);
+        for (int i = 0; i <= 40; i++) { float t0 = i / 40f; a.pts.add(new float[] {0.2f + 0.5f * t0, 0.35f + 0.15f * (float) Math.sin(t0 * 12)}); }
+        strokes.add(a);
+        Stroke b = new Stroke(COLORS[3], SIZES[1]);
+        for (int i = 0; i <= 30; i++) { double an = i / 30.0 * Math.PI * 2; b.pts.add(new float[] {0.5f + 0.08f * (float) Math.cos(an), 0.6f + 0.12f * (float) Math.sin(an)}); }
+        strokes.add(b);
+        layerDirty = true;
+        crop = new float[] {0.1f, 0.15f, 0.85f, 0.85f};
+        if ("copy".equals(mode)) devSave = System.currentTimeMillis() + 2500;
+        else if ("replace".equals(mode)) devSave = -(System.currentTimeMillis() + 2500);
+    }
+    private static long devSave;
 }
