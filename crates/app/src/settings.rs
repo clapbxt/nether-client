@@ -136,7 +136,7 @@ pub fn check_updates(ui: &AppWindow, sh: &Arc<Shared>, manual: bool) {
     let (weak, sh) = (ui.as_weak(), sh.clone());
     std::thread::spawn(move || {
         let c = nether_core::download::client();
-        let r = nether_core::update::latest(&c, env!("CARGO_PKG_VERSION"));
+        let r = nether_core::update::latest(&c, env!("CARGO_PKG_VERSION"), crate::prefs::load(&sh.paths).beta);
         let done = |ui: &AppWindow| { WANT_INSTALL.store(false, std::sync::atomic::Ordering::Relaxed); ui.global::<Backend>().set_update_gate_busy(false); };
         match r {
             Ok(Some(rel)) if installed => {

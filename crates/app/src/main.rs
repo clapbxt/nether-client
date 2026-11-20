@@ -1024,7 +1024,8 @@ fn main() -> Result<(), slint::PlatformError> {
     // settings: storage & about
     {
         let b = ui.global::<Backend>();
-        b.set_app_version(format!("{} beta", env!("CARGO_PKG_VERSION")).into());
+        let v = env!("CARGO_PKG_VERSION");
+        b.set_app_version(if v.contains('-') { v.to_string() } else { format!("{v} beta") }.into());
         b.set_data_path(shared.paths.root.display().to_string().into());
         let cache = shared.paths.root.join("cache");
         // measured on a worker: the cache holds thousands of files and must not hold up the first frame
@@ -1092,6 +1093,7 @@ fn main() -> Result<(), slint::PlatformError> {
         backend.set_lp_discord(p.discord);
         backend.set_lp_auto_update(p.auto_update);
         backend.set_lp_sounds(p.sounds);
+        backend.set_lp_beta(p.beta);
         sfx::set_level(p.sounds);
         ui.global::<Sound>().on_play(|n| { if let Some(k) = sfx::Sfx::from_i32(n) { sfx::play(k); } });
         backend.set_discord_ready(discord::app_id(&shared.paths).is_some());
@@ -1106,7 +1108,7 @@ fn main() -> Result<(), slint::PlatformError> {
             let Some(ui) = weak.upgrade() else { return };
             let b = ui.global::<Backend>();
             let old = prefs::load(&sh.paths);
-            let p = prefs::LauncherPrefs { gpu: b.get_lp_gpu(), autostart: b.get_lp_autostart(), on_launch: b.get_lp_on_launch(), on_close: b.get_lp_on_close(), calm: b.get_calm(), accent: b.get_lp_accent(), theme: b.get_lp_theme(), text: b.get_lp_text(), capes: b.get_lp_capes(), discord: b.get_lp_discord(), auto_update: b.get_lp_auto_update(), ram: old.ram, setup_done: old.setup_done, sounds: b.get_lp_sounds() };
+            let p = prefs::LauncherPrefs { gpu: b.get_lp_gpu(), autostart: b.get_lp_autostart(), on_launch: b.get_lp_on_launch(), on_close: b.get_lp_on_close(), calm: b.get_calm(), accent: b.get_lp_accent(), theme: b.get_lp_theme(), text: b.get_lp_text(), capes: b.get_lp_capes(), discord: b.get_lp_discord(), auto_update: b.get_lp_auto_update(), ram: old.ram, setup_done: old.setup_done, sounds: b.get_lp_sounds(), beta: b.get_lp_beta() };
             sfx::set_level(p.sounds);
             settings::apply_look(&ui, p.accent, p.text);
             settings::apply_theme(&ui, p.theme);
@@ -1119,6 +1121,7 @@ fn main() -> Result<(), slint::PlatformError> {
             if let Err(e) = prefs::save(&sh.paths, &p) { show_toast(&ui, &sh, &format!("Couldn't save the setting: {e}")); }
             skin::wake();
             if p.gpu != old.gpu { show_toast(&ui, &sh, "Restart the launcher to switch renderer"); }
+            if p.beta && !old.beta { settings::check_updates(&ui, &sh, false); }
         });
     }
     {

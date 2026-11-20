@@ -273,6 +273,8 @@ export global Backend {
     callback update-now();
     callback update-exit();
     in-out property <bool> lp-auto-update: true;
+    // opt in to beta updates (GitHub prereleases)
+    in-out property <bool> lp-beta: false;
     // interface sounds: 0 off, 1 quiet, 2 normal
     in-out property <int> lp-sounds: 1;
     // Settings > Support: launcher log folder, system info to the clipboard

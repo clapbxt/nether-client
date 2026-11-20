@@ -34,21 +34,40 @@ pub struct Ready {
     sig: String,
 }
 
-/// Numeric parts of a version tag ("v0.2.0-beta" -> [0, 2, 0]).
-fn parts(v: &str) -> Vec<u32> {
-    v.trim().trim_start_matches(['v', 'V']).split(['-', '+', ' ']).next().unwrap_or("").split('.').map(|p| p.parse().unwrap_or(0)).collect()
+/// Numeric core and prerelease numbers of a version tag ("v0.4.0-beta.2" -> ([0, 4, 0], Some([2]))).
+fn parts(v: &str) -> (Vec<u32>, Option<Vec<u32>>) {
+    let v = v.trim().trim_start_matches(['v', 'V']).split(['+', ' ']).next().unwrap_or("");
+    let (core, pre) = match v.split_once('-') { Some((c, p)) => (c, Some(p)), None => (v, None) };
+    let nums = |s: &str| s.split(|c: char| !c.is_ascii_digit()).filter(|p| !p.is_empty()).map(|p| p.parse().unwrap_or(0)).collect::<Vec<u32>>();
+    (core.split('.').map(|p| p.parse().unwrap_or(0)).collect(), pre.map(nums))
 }
+/// `tag` is a higher version than `current`; a prerelease sorts below its release ("0.4.0-beta.2" < "0.4.0").
 pub fn newer(tag: &str, current: &str) -> bool {
-    let (a, b) = (parts(tag), parts(current));
+    use std::cmp::Ordering::*;
+    let ((a, ap), (b, bp)) = (parts(tag), parts(current));
     let at = |v: &[u32], i: usize| v.get(i).copied().unwrap_or(0);
-    (0..a.len().max(b.len())).map(|i| at(&a, i).cmp(&at(&b, i))).find(|o| o.is_ne()) == Some(std::cmp::Ordering::Greater)
+    let core = (0..a.len().max(b.len())).map(|i| at(&a, i).cmp(&at(&b, i))).find(|o| o.is_ne()).unwrap_or(Equal);
+    let ord = core.then(match (ap, bp) { (None, Some(_)) => Greater, (Some(_), None) => Less, (Some(x), Some(y)) => x.cmp(&y), (None, None) => Equal });
+    ord == Greater
 }
 
-/// The latest release if it is newer than `current` (None = up to date or nothing published yet).
-pub fn latest(c: &Client, current: &str) -> Result<Option<Release>> {
-    let r = c.get(format!("https://api.github.com/repos/{RELEASES_REPO}/releases/latest")).header("Accept", "application/vnd.github+json").send()?;
-    if r.status().as_u16() == 404 { return Ok(None); }
-    let v: serde_json::Value = r.error_for_status()?.json()?;
+/// The newest release if it is newer than `current` (None = up to date or nothing published yet). `beta` also
+/// considers GitHub prereleases (Settings > Updates > beta updates); otherwise only the latest full release counts.
+pub fn latest(c: &Client, current: &str, beta: bool) -> Result<Option<Release>> {
+    let get = |u: String| c.get(u).header("Accept", "application/vnd.github+json").send();
+    let v: serde_json::Value = if beta {
+        let all: serde_json::Value = get(format!("https://api.github.com/repos/{RELEASES_REPO}/releases?per_page=20"))?.error_for_status()?.json()?;
+        let list = all.as_array().cloned().unwrap_or_default();
+        let best = list.into_iter().filter(|r| !r["draft"].as_bool().unwrap_or(false)).fold(None::<serde_json::Value>, |best, r| {
+            let t = r["tag_name"].as_str().unwrap_or_default();
+            match &best { Some(b) if !newer(t, b["tag_name"].as_str().unwrap_or_default()) => best, _ => Some(r) }
+        });
+        match best { Some(b) => b, None => return Ok(None) }
+    } else {
+        let r = get(format!("https://api.github.com/repos/{RELEASES_REPO}/releases/latest"))?;
+        if r.status().as_u16() == 404 { return Ok(None); }
+        r.error_for_status()?.json()?
+    };
     let tag = v["tag_name"].as_str().unwrap_or_default();
     let version = tag.trim_start_matches(['v', 'V']).to_string();
     if version.is_empty() || !newer(tag, current) { return Ok(None); }
@@ -116,7 +135,7 @@ mod tests {
         let tmp = std::env::temp_dir().join(format!("nether-update-test-{}", std::process::id()));
         std::env::set_var("NETHER_HOME", &tmp);
         let c = crate::download::client();
-        let rel = latest(&c, &from).unwrap().expect("a newer release");
+        let rel = latest(&c, &from, std::env::var("NETHER_UPDATE_BETA").is_ok()).unwrap().expect("a newer release");
         let r = download(&c, &Paths::new(), &rel).unwrap();
         println!("{from} -> {} verified: {} ({} bytes)", rel.version, r.path.display(), std::fs::metadata(&r.path).unwrap().len());
         let _ = std::fs::remove_dir_all(&tmp);
@@ -128,6 +147,10 @@ mod tests {
         assert!(newer("0.10.0", "0.9.3"));
         assert!(!newer("v0.1.0", "0.1.0"));
         assert!(!newer("0.1.0-beta", "0.1.0"));
+        assert!(newer("0.4.0", "0.4.0-beta.3"), "the release replaces its betas");
+        assert!(newer("v0.4.0-beta.2", "0.4.0-beta.1") && !newer("0.4.0-beta.1", "0.4.0-beta.1"));
+        assert!(newer("0.4.0-beta.1", "0.3.5") && !newer("0.3.5", "0.4.0-beta.1"));
+        assert!(newer("0.4.0-beta.10", "0.4.0-beta.9"));
     }
 
     #[test]

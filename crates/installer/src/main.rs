@@ -60,11 +60,19 @@ fn reg_dword(key: &str, name: &str, value: u32) -> Result<()> { reg(&["add", key
 
 fn installed_dir() -> Option<PathBuf> { reg_get(UNINSTALL_KEY, "InstallLocation").map(PathBuf::from).filter(|d| d.join(APP_EXE).exists()) }
 fn installed_version() -> Option<String> { installed_dir().and(reg_get(UNINSTALL_KEY, "DisplayVersion")) }
-/// `a` is a higher version than `b` ("0.10.0" > "0.9.3"; numeric parts only).
+/// `a` is a higher version than `b` ("0.10.0" > "0.9.3"; a beta sorts below its release: "0.4.0-beta.2" < "0.4.0").
+/// Same rule as nether_core::update::newer.
 fn newer(a: &str, b: &str) -> bool {
-    let parts = |v: &str| v.trim().trim_start_matches(['v', 'V']).split(['-', '+', ' ']).next().unwrap_or("").split('.').map(|p| p.parse::<u32>().unwrap_or(0)).collect::<Vec<_>>();
-    let (a, b) = (parts(a), parts(b));
-    (0..a.len().max(b.len())).map(|i| a.get(i).unwrap_or(&0).cmp(b.get(i).unwrap_or(&0))).find(|o| o.is_ne()) == Some(std::cmp::Ordering::Greater)
+    use std::cmp::Ordering::*;
+    let parts = |v: &str| {
+        let v = v.trim().trim_start_matches(['v', 'V']).split(['+', ' ']).next().unwrap_or("");
+        let (core, pre) = match v.split_once('-') { Some((c, p)) => (c, Some(p)), None => (v, None) };
+        let pre = pre.map(|s| s.split(|c: char| !c.is_ascii_digit()).filter(|p| !p.is_empty()).map(|p| p.parse::<u32>().unwrap_or(0)).collect::<Vec<_>>());
+        (core.split('.').map(|p| p.parse::<u32>().unwrap_or(0)).collect::<Vec<_>>(), pre)
+    };
+    let ((a, ap), (b, bp)) = (parts(a), parts(b));
+    let core = (0..a.len().max(b.len())).map(|i| a.get(i).unwrap_or(&0).cmp(b.get(i).unwrap_or(&0))).find(|o| o.is_ne()).unwrap_or(Equal);
+    core.then(match (ap, bp) { (None, Some(_)) => Greater, (Some(_), None) => Less, (Some(x), Some(y)) => x.cmp(&y), (None, None) => Equal }) == Greater
 }
 fn default_dir() -> PathBuf { PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap_or_default()).join("Programs").join("Nether Client") }
 fn data_dir() -> PathBuf { PathBuf::from(std::env::var_os("APPDATA").unwrap_or_default()).join("NetherClient") }
