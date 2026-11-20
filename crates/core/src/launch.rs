@@ -438,7 +438,9 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
 
     let mut jvm: Vec<String> = vec![format!("-Xmx{}M", opts.ram_mb), "-Xms512M".into()];
     jvm.extend(gc_args(&opts.extra_jvm));
-    jvm.extend(perf_args(major));
+    // dev benchmarks: NETHER_STOCK=1 launches like a stock launcher (no JIT tuning, normal priority, Windows defaults)
+    let stock = cfg!(feature = "dev") && std::env::var_os("NETHER_STOCK").is_some();
+    if !stock { jvm.extend(perf_args(major)); }
     jvm.extend(opts.extra_jvm.iter().cloned());
     // Log4Shell: no message lookups or JNDI codebases on any version, plus Mojang's patched log4j config when the
     // version ships one (needed on 1.7 to 1.18.1, where the lookup flag alone is not honoured by old log4j)
@@ -513,8 +515,8 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
     #[cfg(windows)]
     {
         // no console window; above-normal priority so background programs don't take the game's CPU time
-        cmd.creation_flags(0x0800_0000 | 0x0000_8000);
-        prefer_fast_gpu(&java);
+        cmd.creation_flags(if stock { 0x0800_0000 } else { 0x0800_0000 | 0x0000_8000 });
+        if !stock { prefer_fast_gpu(&java); }
     }
     let child = cmd
         .args(&jvm)
@@ -526,7 +528,7 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
         .spawn()
         .with_context(|| format!("starting {}", java.display()))?;
     #[cfg(windows)]
-    full_speed(&child);
+    if !stock { full_speed(&child); }
     progress("Minecraft started", 1.0);
     Ok(child)
 }
