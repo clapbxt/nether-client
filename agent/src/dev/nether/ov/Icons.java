@@ -26,12 +26,6 @@ final class Icons {
         if (g != gen) { gen = g; cache.clear(); }
     }
 
-    /** First of these item ids that has a texture (module icons: newer items first, older fallbacks after), or null. */
-    static int[] first(String... ids) {
-        for (String id : ids) { int[] px = get(id); if (px != null) return px; }
-        return null;
-    }
-
     /** n*n ARGB pixels (n <= 32) for an item id like "minecraft:diamond_helmet", or null. */
     static int[] get(String id) {
         if (id == null) return null;
@@ -198,6 +192,24 @@ final class Icons {
         }
     }
 
+    /**
+     * The shield's front face (12 x 22 at (1, 1) of the 64-wide entity texture, resource packs apply), centred on a
+     * transparent square. 1.9+; 1.8.9 has no shield texture (null).
+     */
+    private static int[] shieldFace() {
+        BufferedImage img = image("assets/minecraft/textures/entity/shield_base_nopattern.png"); // 1.9 - 1.21.x
+        if (img == null) img = image("assets/minecraft/textures/entity/shield/shield_base_nopattern.png");
+        if (img == null || img.getWidth() < 64) return null;
+        int u = img.getWidth() / 64, fw = 12 * u, fh = 22 * u, side = fh, n = Math.min(side, MAX), ox = (side - fw) / 2;
+        if ((23 * u) > img.getHeight()) return null;
+        int[] px = new int[n * n];
+        for (int y = 0; y < n; y++) for (int x = 0; x < n; x++) {
+            int sx = x * side / n - ox, sy = y * side / n;
+            px[y * n + x] = sx < 0 || sx >= fw ? 0 : img.getRGB(u + sx, u + sy);
+        }
+        return px;
+    }
+
     /** size*size square at (x, y), resampled to at most MAX pixels a side. */
     private static int[] crop(BufferedImage img, int x0, int y0, int size) {
         if (size < 1 || x0 + size > img.getWidth() || y0 + size > img.getHeight()) return null;
@@ -209,6 +221,7 @@ final class Icons {
 
     private static int[] load(String id) throws Exception {
         if (id.startsWith("head:")) return head(id.substring(5));
+        if (id.equals("shield:face")) return shieldFace();
         int tint = LEATHER, hash = id.indexOf('#');
         if (hash > 0) { tint = Integer.parseInt(id.substring(hash + 1), 16); id = id.substring(0, hash); }
         int c = id.indexOf(':');

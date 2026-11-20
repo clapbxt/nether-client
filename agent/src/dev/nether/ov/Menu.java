@@ -884,7 +884,7 @@ final class Menu {
         if (hit(sx + 12, cy - 14, 28, 28)) toHub();
         float tx = sx + 50;
         if (icon == null) { Logo.draw(tx, cy - 12, 24); tx += Logo.width(24) + 10; }
-        else { ModIcons.draw(icon, tx, cy - 9, 18, Th.ac2); tx += 28; }
+        else { if (!ModIcons.drawItem(icon, tx, cy - 9, 18)) ModIcons.draw(icon, tx, cy - 9, 18, Th.ac2); tx += 28; }
         float tw = Gfx.text(Gfx.HEAD, 16, tx, cy, Th.tx, title);
         float cx = sx + pw - 16 - 28;
         float xt = an("close", in(cx, cy - 14, 28, 28));

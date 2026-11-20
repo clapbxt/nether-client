@@ -1139,7 +1139,7 @@ impl Actor {
         let friends_v: Vec<Value> = friends::list().unwrap_or_default().iter().map(|f| {
             let on = f.online();
             json!({ "uuid": f.uuid, "name": friends::name(&f.uuid), "online": on, "status": if on { u8::from(f.status) } else { 0 },
-                "act": if on { friends::game_line(f) } else { "Offline".into() }, "party": if on { f.party } else { 0 },
+                "act": if on { friends::game_line(f) } else { friends::offline_line(f) }, "party": if on { f.party } else { 0 }, "seen": f.seen,
                 "nether": on && !f.peer.is_empty(), "here": in_party.contains(f.uuid.as_str()), "asked": asked.contains(&f.uuid.as_str()) })
         }).collect();
         let invites: Vec<Value> = self.invites.iter().map(|i| json!({ "id": i.id, "from": i.from, "from_name": i.from_name, "leader_name": i.leader_name, "size": i.size, "age": i.at.elapsed().as_secs() })).collect();

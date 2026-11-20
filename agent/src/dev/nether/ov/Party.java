@@ -43,7 +43,7 @@ final class Party {
         double vol = 1;
         long seq;
     }
-    private static final class Fr { String uuid = "", name = "", act = ""; boolean online, nether, here, asked; int party, status; }
+    private static final class Fr { String uuid = "", name = "", act = ""; boolean online, nether, here, asked; int party, status; long seen; }
     private static final class Inv { long id; String from = "", fromName = "", leaderName = ""; int size; }
     private static final class Req { String uuid = "", name = "", via = ""; }
     private static final class Line { long id, at; String from = "", name = "", text = ""; boolean me; }
@@ -196,7 +196,7 @@ final class Party {
     }
 
     private static boolean demoDone;
-    /** Dev: -Dnether.partyDemo=1 (party of four), 2 (solo + invite), 3 (drawer), 4 (voice settings): sample people, no launcher. */
+    /** Dev: -Dnether.partyDemo=1 (party of four), 2 (solo + invite), 3 (drawer), 4 (voice settings), 5 (solo drawer): sample people, no launcher. */
     private static void demo(String v) {
         if (demoDone) return;
         demoDone = true;
@@ -235,10 +235,18 @@ final class Party {
             invites = Collections.singletonList(iv);
         }
         List<Fr> fl = new ArrayList<>();
-        String[][] fr = {{"5f8eb73b25be4c5aa50fd27d65e30ca0", "Grian", "3"}, {"c06f89064c8a49119c29ea1dbd1aab82", "MHF_Steve", "1"}, {"d8d5a9237b2043d8883b1150148d6955", "TangoTek", "0"}};
-        for (String[] f : fr) { Fr x = new Fr(); x.uuid = f[0]; x.name = f[1]; x.online = !"0".equals(f[2]); x.nether = x.online; x.party = Integer.parseInt(f[2]); x.act = x.online ? "Playing 1.21.11 Fabric" : "Offline"; fl.add(x); }
+        String[][] fr = {{"5f8eb73b25be4c5aa50fd27d65e30ca0", "Grian", "3", "0"}, {"c06f89064c8a49119c29ea1dbd1aab82", "MHF_Steve", "1", "0"},
+            {"d8d5a9237b2043d8883b1150148d6955", "TangoTek", "0", "7200"}, {"7125ba8b1c864508b92bb5c042ccfe2b", "xisumavoid", "0", "300"}};
+        long now = System.currentTimeMillis() / 1000;
+        for (String[] f : fr) {
+            Fr x = new Fr(); x.uuid = f[0]; x.name = f[1]; x.online = !"0".equals(f[2]); x.nether = x.online; x.party = Integer.parseInt(f[2]);
+            x.seen = x.online ? now : now - Long.parseLong(f[3]);
+            x.act = x.online ? "Playing 1.21.11 Fabric" : "Offline \u00b7 seen " + (now - x.seen < 3600 ? (now - x.seen) / 60 + " min ago" : (now - x.seen) / 3600 + " h ago");
+            fl.add(x);
+        }
+        fl.sort(FRIEND_ORDER);
         friends = fl;
-        if ("3".equals(v)) drawerOpen = true;
+        if ("3".equals(v) || "5".equals(v)) drawerOpen = true;
         if ("4".equals(v)) voiceOpen = true;
         say("Invited TangoTek");
     }
@@ -387,11 +395,11 @@ final class Party {
             Map<?, ?> r = (Map<?, ?>) o;
             Fr f = new Fr();
             f.uuid = str(r.get("uuid")); f.name = str(r.get("name")); f.act = str(r.get("act")); f.online = yes(r.get("online")); f.nether = yes(r.get("nether"));
-            f.here = yes(r.get("here")); f.asked = yes(r.get("asked")); f.party = num(r.get("party")); f.status = num(r.get("status"));
+            f.here = yes(r.get("here")); f.asked = yes(r.get("asked")); f.party = num(r.get("party")); f.status = num(r.get("status")); f.seen = (long) dbl(r.get("seen"), 0);
             if (f.name.isEmpty()) f.name = f.uuid.length() > 8 ? f.uuid.substring(0, 8) : f.uuid;
             fl.add(f);
         }
-        fl.sort((a, b) -> a.nether != b.nether ? (a.nether ? -1 : 1) : a.online != b.online ? (a.online ? -1 : 1) : a.name.compareToIgnoreCase(b.name));
+        fl.sort(FRIEND_ORDER);
         friends = fl;
         Map<?, ?> v = m.get("voice") instanceof Map ? (Map<?, ?>) m.get("voice") : Collections.emptyMap();
         vMode = num(v.get("mode")); vDeaf = yes(v.get("deaf")); vTest = yes(v.get("test"));
@@ -408,6 +416,10 @@ final class Party {
         if (o instanceof List) for (Object e : (List<?>) o) if (e instanceof List && ((List<?>) e).size() == 2) l.add(new String[] {str(((List<?>) e).get(0)), str(((List<?>) e).get(1))});
         return l;
     }
+
+    /** Friends below the party: everyone online A-Z, then the rest by when they were last online (most recent first). */
+    private static final java.util.Comparator<Fr> FRIEND_ORDER = (a, b) -> a.online != b.online ? (a.online ? -1 : 1)
+        : !a.online && a.seen != b.seen ? Long.compare(b.seen, a.seen) : a.name.compareToIgnoreCase(b.name);
 
     private static void say(String s) { note = s == null ? "" : s; noteAt = System.currentTimeMillis(); }
 
@@ -677,7 +689,7 @@ final class Party {
                 Gfx.ring(cx - pr, py - pr, pr * 2, pr * 2, pr, 1, Gfx.mix(Gfx.LN2, Gfx.a(Th.ac2, 0.8f), hv));
                 ModIcons.draw("plus", cx - pr * 0.55f, py - pr * 0.55f, pr * 1.1f, Gfx.mix(Gfx.DIM, 0xFFFFFFFF, hv));
                 Gfx.textC(Gfx.SEMI, 10, cx, fy + 16, Gfx.mix(Gfx.SUB, Gfx.ICE, hv), "INVITE", 1.4f);
-                if (MainMenu.hit(bx + tw * 0.2f, by, tw * 0.6f, th)) { drawerOpen = true; drawerTab = 1; }
+                if (MainMenu.hit(bx + tw * 0.2f, by, tw * 0.6f, th)) { drawerOpen = true; toFriends = true; }
                 continue;
             }
             boolean talk = talking.contains(m.uuid) || (m.me && sending);
@@ -716,7 +728,7 @@ final class Party {
             boolean hv = MainMenu.over(mx, my, mw2, 24);
             Gfx.rect(mx, my, mw2, 24, 12, Gfx.mix(Gfx.a(Gfx.CARD, 0.8f), Gfx.CARD2, MainMenu.an("pmore", hv)));
             Gfx.textC(Gfx.SEMI, 10, mx + mw2 / 2, my + 12, Gfx.ICE, more, 1.2f);
-            if (MainMenu.hit(mx, my, mw2, 24)) { drawerOpen = true; drawerTab = 0; }
+            if (MainMenu.hit(mx, my, mw2, 24)) { drawerOpen = true; scroll = scrollT = 0; }
         }
     }
 
@@ -747,7 +759,9 @@ final class Party {
     // ---------------------------------------------------------------- overlays on every title layout
 
     static boolean drawerOpen;
-    private static int drawerTab; // 0 party, 1 invite friends
+    /** One column: the party (invites, requests, members) on top, friends to invite below; true = scroll to the friends. */
+    private static boolean toFriends;
+    private static float friendsAt;
     private static boolean voiceOpen;
     private static float drawerA, voiceA;
     private static float scroll, scrollT;
@@ -819,7 +833,7 @@ final class Party {
             Gfx.textC(Gfx.SEMI, 9.5f, bx + 8, y + h / 2, 0xFFFFFFFF, String.valueOf(Math.min(9, b)), 0);
         }
         MainMenu.box(x, y, w, h);
-        if (MainMenu.hit(x, y, w, h)) { drawerOpen = !drawerOpen; drawerTab = 0; popFor = null; }
+        if (MainMenu.hit(x, y, w, h)) { drawerOpen = !drawerOpen; scroll = scrollT = 0; popFor = null; }
         return w;
     }
 
@@ -850,7 +864,7 @@ final class Party {
             boolean hv = MainMenu.over(W - 16 - w, y, w, 22);
             Gfx.rect(W - 16 - w, y, w, 22, 11, Gfx.mix(Gfx.a(Gfx.CARD, 0.85f), Gfx.CARD2, MainMenu.an("pcm", hv)));
             Gfx.textC(Gfx.SEMI, 9.5f, W - 16 - w / 2, y + 11, Gfx.ICE, s, 1.2f);
-            if (MainMenu.hit(W - 16 - w, y, w, 22)) { drawerOpen = true; drawerTab = 0; }
+            if (MainMenu.hit(W - 16 - w, y, w, 22)) { drawerOpen = true; scroll = scrollT = 0; }
         }
     }
 
@@ -1310,33 +1324,24 @@ final class Party {
         String sz = members.size() <= 1 ? "JUST YOU" : members.size() + " MEMBERS";
         Gfx.text(Gfx.MONO, 8.5f, x + 18 + Gfx.width(Gfx.HEAD, 18, "PARTY") + 10, y + 27, Gfx.SUB, sz, false, 1.4f);
         if (iconBtn("dclose", "close", x + w - 38, y + 12, 24, false, 0, null)) drawerOpen = false;
-        // tabs
-        String[] tabs = {"PARTY", "INVITE FRIENDS"};
-        float tx = x + 14;
-        for (int i = 0; i < 2; i++) {
-            float tw = Gfx.width(Gfx.SEMI, 10, tabs[i], 1.2f) + 22;
-            boolean sel = drawerTab == i, hv = MainMenu.over(tx, y + 44, tw, 24);
-            Gfx.rect(tx, y + 44, tw, 24, 12, sel ? Gfx.a(Th.ac, 0.9f) : Gfx.a(Gfx.ICE, hv ? 0.08f : 0.04f));
-            Gfx.textC(Gfx.SEMI, 10, tx + tw / 2, y + 56, sel ? 0xFFFFFFFF : hv ? Gfx.ICE : Gfx.DIM, tabs[i], 1.2f);
-            if (MainMenu.hit(tx, y + 44, tw, 24)) { drawerTab = i; scroll = scrollT = 0; }
-            tx += tw + 6;
-        }
-        float top = y + 78, foot = drawerTab == 0 ? 92 : 12, bottom = y + h - foot;
-        // content (scrolls)
+        Gfx.rect(x, y + 48, w, 1, 0, Gfx.LN);
+        float top = y + 58, foot = 92, bottom = y + h - foot;
+        // one column (scrolls): the party, a divider, then friends to invite
         if (MainMenu.overRaw(x, top, w, bottom - top)) scrollT -= wheel * 36;
-        float total = drawerTab == 0 ? partyList(x, top - scroll, w, top, bottom, true) : friendList(x, top - scroll, w, top, bottom, true);
+        float total = column(x, top - scroll, w, top, bottom, true);
+        if (toFriends) { toFriends = false; scrollT = scroll = friendsAt; }
         scrollT = Math.max(0, Math.min(Math.max(0, total - (bottom - top)), scrollT));
         scroll += (scrollT - scroll) * Math.min(1, Gfx.dt * 14);
         int[] clip = Gfx.clipIn(x + 1, top, w - 2, bottom - top);
-        if (drawerTab == 0) partyList(x, top - scroll, w, top, bottom, false); else friendList(x, top - scroll, w, top, bottom, false);
+        column(x, top - scroll, w, top, bottom, false);
         Gfx.reclip(clip);
-        // footer (party tab): leave, voice, privacy, follow
-        if (drawerTab == 0) {
+        // footer: leave, voice, privacy, follow
+        {
             float fy = y + h - foot;
             Gfx.rect(x, fy, w, 1, 0, Gfx.LN);
             float bw = (w - 36 - 8) / 2;
             if (members.size() > 1) { if (pill("dleave", "LEAVE PARTY", x + 18, fy + 12, bw, 26, false)) act("leave"); }
-            else if (pill("dinv", "INVITE FRIENDS", x + 18, fy + 12, bw, 26, true)) drawerTab = 1;
+            else if (pill("dinv", "INVITE FRIENDS", x + 18, fy + 12, bw, 26, true)) scrollT = friendsAt;
             if (pill("dvoice", "VOICE SETTINGS", x + 18 + bw + 8, fy + 12, bw, 26, false)) voiceOpen = true;
             float ty = fy + 48;
             if (toggle("drelay", "Hide my IP (relay)", relay, x + 18, ty, (w - 36) / 2 + 10)) act("relay", "on", !relay);
@@ -1360,7 +1365,16 @@ final class Party {
 
     private static void header(String s, float x, float y) { Gfx.text(Gfx.MONO, 8.5f, x + 18, y + 10, Gfx.SUB, s, false, 1.5f); }
 
-    /** Party tab rows. measure = only return the height. */
+    /** The drawer's column: party rows, a divider, friend rows; remembers where the friends start. measure = only return the height. */
+    private static float column(float x, float y0, float w, float top, float bottom, boolean measure) {
+        float y = y0 + partyList(x, y0, w, top, bottom, measure);
+        if (!measure) Gfx.rect(x + 18, y + 4, w - 36, 1, 0, Gfx.LN2);
+        y += 18;
+        if (measure) friendsAt = y - y0;
+        return y - y0 + friendList(x, y, w, top, bottom, measure);
+    }
+
+    /** Party rows. measure = only return the height. */
     private static float partyList(float x, float y0, float w, float top, float bottom, boolean measure) {
         float y = y0;
         boolean vis;
@@ -1387,7 +1401,7 @@ final class Party {
                 y += 52;
             }
         }
-        if (!measure) header("IN PARTY", x, y);
+        if (!measure) header(members.size() > 1 ? "IN PARTY \u00b7 " + members.size() : "IN PARTY", x, y);
         y += 22;
         List<M> ms = new ArrayList<>(members);
         ms.sort((a, b) -> a.leader != b.leader ? (a.leader ? -1 : 1) : Long.compare(a.seq, b.seq));
@@ -1398,13 +1412,15 @@ final class Party {
             y += 52;
         }
         if (members.size() <= 1 && !measure) {
-            Gfx.text(Gfx.UI, 10.5f, x + 18, y + 10, Gfx.SUB, "Invite friends to play together. Friends of");
-            Gfx.text(Gfx.UI, 10.5f, x + 18, y + 24, Gfx.SUB, "anyone in your party can ask to join.");
+            Gfx.text(Gfx.UI, 10.5f, x + 18, y + 10, Gfx.SUB, "Invite friends below to play together. Friends");
+            Gfx.text(Gfx.UI, 10.5f, x + 18, y + 24, Gfx.SUB, "of anyone in your party can ask to join.");
         }
-        y += 36;
-        if (!measure && lost) Gfx.text(Gfx.UI, 10.5f, x + 18, y, 0xFFE3B341, "Lost the leader: reconnecting...");
-        if (!measure && joining) Gfx.text(Gfx.UI, 10.5f, x + 18, y, Gfx.SUB, "Joining...");
-        return y - y0 + 12;
+        if (members.size() <= 1) y += 36;
+        if (lost || joining) {
+            if (!measure) Gfx.text(Gfx.UI, 10.5f, x + 18, y + 10, lost ? 0xFFE3B341 : Gfx.SUB, lost ? "Lost the leader: reconnecting..." : "Joining...");
+            y += 24;
+        }
+        return y - y0;
     }
 
     private static void memberRow(float x, float y, float w, M m) {
@@ -1438,7 +1454,7 @@ final class Party {
         }
     }
 
-    /** Friends tab: online Nether friends first. */
+    /** Friends: online A-Z, then offline by most recently online ({@link #FRIEND_ORDER}); people in the party are skipped. */
     private static float friendList(float x, float y0, float w, float top, float bottom, boolean measure) {
         float y = y0;
         if (!ok || "signin".equals(service)) {
@@ -1453,16 +1469,16 @@ final class Party {
             return 40;
         }
         int online = 0;
-        for (Fr f : friends) if (f.online) online++;
-        if (!measure) header("ONLINE · " + online, x, y);
+        for (Fr f : friends) if (f.online && !f.here) online++;
+        if (!measure) header("FRIENDS · " + online + " ONLINE", x, y);
         y += 22;
         boolean offHdr = false;
         for (Fr f : friends) {
             if (f.here) continue;
-            if (!f.online && !offHdr) { offHdr = true; if (!measure) header("OFFLINE", x, y + 4); y += 26; }
+            if (!f.online && !offHdr) { offHdr = true; if (!measure) header("RECENTLY ONLINE", x, y + 4); y += 26; }
             boolean vis = !measure && y + 48 > top && y < bottom;
             if (vis) {
-                String sub = !f.online ? "Offline" : !f.nether ? f.act + " · not on a Nether launcher that has parties yet" : f.party > 1 ? "In a party of " + f.party + " · " + f.act : f.act;
+                String sub = !f.online ? f.act : !f.nether ? f.act + " · not on a Nether launcher that has parties yet" : f.party > 1 ? "In a party of " + f.party + " · " + f.act : f.act;
                 String[] a = null, b = null;
                 Runnable ra = null, rb = null;
                 if (f.online && f.nether) {

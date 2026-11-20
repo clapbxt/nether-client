@@ -328,6 +328,11 @@ fn ago(t: i64) -> String {
     }
 }
 
+/// "Offline · seen 5 min ago", or "Offline" when never seen.
+pub fn offline_line(f: &Friend) -> String {
+    if f.seen > 0 { format!("Offline · seen {}", ago(f.seen)) } else { "Offline".into() }
+}
+
 pub fn game_line(f: &Friend) -> String {
     let game = match (f.ver.is_empty(), f.loader.as_str()) {
         (true, _) => "Minecraft".to_string(),
@@ -584,7 +589,7 @@ fn game_state() -> Value {
             let on = f.online();
             json!({
                 "uuid": f.uuid, "name": nm(&f.uuid), "status": if on { u8::from(f.status) } else { 0 },
-                "act": if on { game_line(f) } else if f.seen > 0 { format!("Offline · seen {}", ago(f.seen)) } else { "Offline".into() },
+                "act": if on { game_line(f) } else { offline_line(f) },
                 "join": if on { f.address.as_str() } else { "" }, "ver": f.ver, "loader": f.loader,
                 "here": s.game.as_ref().is_some_and(|(v, l)| *v == f.ver && l.eq_ignore_ascii_case(if f.loader.is_empty() { "Vanilla" } else { &f.loader })),
                 "invite": on && mine && f.address != s.me.address, "ask": on && f.kind != Kind::Launcher && f.address.is_empty(),
