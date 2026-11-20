@@ -1,10 +1,11 @@
 import { Theme } from "theme.slint";
 import { Backend, Inst } from "structs.slint";
 import { Btn, LinkBtn, Ico, Icon, Pulse, SpinArea, GroundShadow } from "components.slint";
+import { Friends, FColor, Head } from "friends.slint";
 
 // Home (Lunar-style, 2026-11-14): a hero banner (the launch target's wallpaper, the player on the right, one big
-// accent LAUNCH button in the middle with an instance picker), then LATEST NEWS cards on the left and an INSTANCES
-// list on the right (Lunar's friends column).
+// accent LAUNCH button in the middle with an instance picker), then LATEST NEWS cards on the left and, on the right,
+// PROFILES or FRIENDS (Lunar's friends column): it follows who is online until you pick one.
 export component HomeScreen inherits Rectangle {
     callback open-instance(int);
     // L2: the crash page of an instance (its Logs tab on the crash report)
@@ -177,11 +178,55 @@ export component HomeScreen inherits Rectangle {
         nta := TouchArea { mouse-cursor: pointer; clicked => { Backend.open-url(n.url); } }
     }
 
-    // ---------- instances: list, right (Lunar's friends column) ----------
+    // ---------- right column: PROFILES | FRIENDS (Lunar's friends column) ----------
     property <length> side-x: root.width - root.m - root.side-w;
-    Text { x: root.side-x; y: root.low-y; height: 24px; vertical-alignment: center; text: "PROFILES"; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; }
-    LinkBtn { x: root.side-x + root.side-w - self.width; y: root.low-y + 2px; text: "ALL"; clicked => { root.go-play(); } }
-    Rectangle {
+    // -1 = not picked: FRIENDS while any friend is online, else PROFILES
+    property <int> side-pick: -1;
+    property <int> side: root.side-pick >= 0 ? root.side-pick : (Friends.online > 0 ? 1 : 0);
+    for t[i] in ["PROFILES", "FRIENDS"]: Rectangle {
+        x: root.side-x + (i == 0 ? 0px : 128px); y: root.low-y; height: 24px; width: tt.preferred-width + (i == 1 && Friends.online > 0 ? 34px : 0px);
+        tt := Text { x: 0px; height: parent.height; vertical-alignment: center; text: t; font-family: Theme.disp; font-size: 24px; font-weight: 700;
+            color: root.side == i ? Theme.tx : (ta.has-hover ? Theme.dim : Theme.mut); animate color { duration: Theme.fast; } }
+        if i == 1 && Friends.online > 0: Rectangle {
+            x: tt.preferred-width + 10px; y: 8px; width: 8px; height: 8px; border-radius: 4px; background: FColor.dot[1]; }
+        if i == 1 && Friends.online > 0: Text { x: tt.preferred-width + 22px; height: parent.height; vertical-alignment: center; text: Friends.online;
+            color: Theme.dim; font-family: Theme.mono; font-size: 12px * Theme.ts; font-weight: 600; }
+        ta := TouchArea { mouse-cursor: pointer; clicked => { root.side-pick = i; } }
+    }
+    LinkBtn { x: root.side-x + root.side-w - self.width; y: root.low-y + 2px; text: "ALL";
+        clicked => { if root.side == 0 { root.go-play(); } else { Friends.open = true; Backend.acct-open = false; Friends.refresh(); } } }
+    if root.side == 1: Rectangle {
+        x: root.side-x; y: root.low-y + 40px; width: root.side-w; height: root.card-h; border-radius: Theme.r3; clip: true;
+        background: Theme.s1; border-width: 1px; border-color: Theme.ln;
+        // not signed in / nobody yet: what friends are for, one way in
+        if !Friends.ready || Friends.total == 0: Rectangle {
+            Text { x: 20px; y: 18px; text: "Play together"; color: Theme.tx; font-family: Theme.disp; font-size: 20px; font-weight: 700; }
+            Text { x: 20px; y: 48px; width: parent.width - 40px; wrap: word-wrap; color: Theme.dim; font-family: Theme.ui; font-size: 12px * Theme.ts;
+                text: !Friends.ready ? "Sign in with your Microsoft account to add friends, see where they play and join them in one click."
+                    : "Add friends by their Minecraft name. See where they play, join in one click, and party up on the title screen in game."; }
+            if Friends.ready: Btn { x: 20px; y: parent.height - 20px - 34px; height: 34px; text: "ADD A FRIEND";
+                clicked => { Friends.open = true; Backend.acct-open = false; Friends.tab = 0; Friends.refresh(); } }
+        }
+        if Friends.ready && Friends.total > 0: Flickable {
+            y: 6px; height: parent.height - 12px; content-height: Friends.friends.length * 48px;
+            for r[i] in Friends.friends: Rectangle {
+                y: i * 48px; x: 6px; width: parent.width - 12px; height: 46px; border-radius: Theme.r2;
+                background: ft.has-hover ? Theme.hov : transparent;
+                animate background { duration: Theme.fast; }
+                Head { x: 6px; y: 5px; img: r.head; has-img: r.has-head; status: r.status; }
+                Text { x: 52px; y: 5px; width: parent.width - 52px - (ft.has-hover && (r.can-join || r.can-invite) ? 84px : 8px); text: r.name; overflow: elide;
+                    color: r.status > 0 ? Theme.tx : Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; }
+                Text { x: 52px; y: 25px; width: parent.width - 52px - (ft.has-hover && (r.can-join || r.can-invite) ? 84px : 8px); overflow: elide;
+                    text: r.activity + (r.detail != "" ? " · " + r.detail : ""); color: r.status > 0 ? Theme.dim : Theme.mut; font-family: Theme.ui; font-size: 11px * Theme.ts; }
+                ft := TouchArea { mouse-cursor: pointer; clicked => { Friends.open = true; Backend.acct-open = false; Friends.refresh(); } }
+                // the drawer's own actions, on hover: JOIN where they are, else INVITE them where you are
+                if ft.has-hover && (r.can-join || r.can-invite): Btn { x: parent.width - self.width - 8px; y: 8px; height: 30px;
+                    text: r.can-join ? "JOIN" : "INVITE"; solid: r.can-join;
+                    clicked => { Friends.act(r.can-join ? "join" : "invite", r.uuid); } }
+            }
+        }
+    }
+    if root.side == 0: Rectangle {
         x: root.side-x; y: root.low-y + 40px; width: root.side-w; height: root.card-h; border-radius: Theme.r3; clip: true;
         background: Theme.s1; border-width: 1px; border-color: Theme.ln;
         if !root.any: Text { text: "Your profiles show up here."; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }

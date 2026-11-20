@@ -402,6 +402,8 @@ fn apply(ui: &AppWindow) {
     g.set_everyone(if st.online > 0 { group(st.online).into() } else { "".into() });
     g.set_pending((st.incoming.len() + st.asks.len()) as i32);
     g.set_badge((st.incoming.len() + st.asks.len()) as i32);
+    let faces: Vec<Image> = fr.iter().filter(|f| f.online()).filter_map(|f| head(&f.uuid)).take(3).collect();
+    g.set_faces(ModelRc::new(VecModel::from(faces)));
     g.set_friends(ModelRc::new(VecModel::from(friends)));
     g.set_requests(ModelRc::new(VecModel::from(req)));
     g.set_blocked(ModelRc::new(VecModel::from(blocked)));
@@ -610,7 +612,8 @@ fn game_state() -> Value {
     })
 }
 
-/// Dev captures (`NC_SNAP_STATE=friends|friends-req|friends-set`): the drawer open with sample people.
+/// Dev captures (`NC_SNAP_STATE=friends|friends-req|friends-set|friends-home`): the drawer open with sample people
+/// (friends-home: drawer closed, for Home's FRIENDS column and the top-bar faces).
 pub fn snap(ui: &AppWindow, state: &str) {
     if !state.starts_with("friends") { return; }
     let id = |c: char| c.to_string().repeat(32);
@@ -639,13 +642,26 @@ pub fn snap(ui: &AppWindow, state: &str) {
             s.prefs.names.insert(id(c), n.into());
         }
         s.prefs.stars = vec![id('c')];
+        // simple 8x8 faces (hair, skin, eyes) so heads and the top-bar faces show in captures
+        for (k, c) in ['a', 'b', 'c', 'd', 'e', 'f', '1', '2', '3'].into_iter().enumerate() {
+            let skin = [[0xC6, 0x8E, 0x6A], [0xE0, 0xAC, 0x8A], [0x8D, 0x5A, 0x3B], [0xF1, 0xC2, 0x9E]][k % 4];
+            let hair = [[0x3B, 0x24, 0x14], [0x1A, 0x1A, 0x1A], [0xB0, 0x6A, 0x2A], [0x6E, 0x4B, 0x2A], [0xD9, 0xC0, 0x7A]][k % 5];
+            let mut rgba = Vec::with_capacity(32 * 32 * 4);
+            for y in 0..32 { for x in 0..32 {
+                let (fx, fy) = (x / 4, y / 4);
+                let px = if fy < 2 || (fy == 2 && (fx == 0 || fx == 7)) { hair } else if fy == 4 && (fx == 1 || fx == 6) { [0xFF, 0xFF, 0xFF] }
+                    else if fy == 4 && (fx == 2 || fx == 5) { [0x3A, 0x5B, 0xC9] } else if fy == 6 && (2..6).contains(&fx) { [0x7A, 0x45, 0x30] } else { skin };
+                rgba.extend_from_slice(&[px[0], px[1], px[2], 0xFF]);
+            } }
+            s.heads.insert(id(c), Head { rgba, at: Instant::now() });
+        }
         s.me = Presence { kind: Kind::Server, address: "play.example.net:25565".into(), ..Default::default() };
         s.state = Some(st);
     });
     apply(ui);
     let g = ui.global::<Friends>();
     g.set_ready(true);
-    g.set_open(true);
+    g.set_open(state != "friends-home");
     if state == "friends-req" { g.set_tab(1); }
     if state == "friends-set" { g.set_settings(true); }
 }

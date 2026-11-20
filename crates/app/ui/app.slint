@@ -262,11 +262,20 @@ export component AppWindow inherits Window {
                 }
             }
             // friends: icon + online count, badge for requests / asks to join
+            // labelled (FRIENDS) until someone is online, then their faces (up to 3) and the count
             fbtn := BarBtn {
-                x: chip.x - 8px - self.width; y: 8px; height: 40px; width: Friends.online > 0 ? 40px + fon.preferred-width + 4px : 40px; active: Friends.open;
+                property <int> nf: Math.min(Friends.faces.length, 3);
+                property <length> faces-w: self.nf > 0 ? (self.nf - 1) * 14px + 20px + 8px : 0px;
+                x: chip.x - 8px - self.width; y: 8px; height: 40px; width: fon.x + fon.preferred-width + 12px; active: Friends.open;
                 clicked => { Friends.open = !Friends.open; if Friends.open { Backend.acct-open = false; Friends.refresh(); } }
                 Icon { x: 14px; y: 14px; d: FIco.users; tint: fbtn.hot || Friends.open ? Theme.tx : Theme.dim; }
-                fon := Text { x: 34px; height: parent.height; vertical-alignment: center; visible: Friends.online > 0; text: Friends.online; color: Theme.dim; font-family: Theme.mono; font-size: 12px * Theme.ts; }
+                for f[i] in Friends.faces: Rectangle {
+                    visible: i < 3; x: 36px + i * 14px; y: 10px; width: 20px; height: 20px; border-radius: 5px; background: Theme.s1;
+                    Image { x: 2px; y: 2px; width: 16px; height: 16px; source: f; image-rendering: pixelated; }
+                }
+                fon := Text { x: 34px + fbtn.faces-w; height: parent.height; vertical-alignment: center;
+                    text: Friends.online > 0 ? Friends.online : "FRIENDS"; color: fbtn.hot || Friends.open ? Theme.tx : Theme.dim;
+                    font-family: Friends.online > 0 ? Theme.mono : Theme.ui; font-size: (Friends.online > 0 ? 12px : 11px) * Theme.ts; font-weight: 600; letter-spacing: Friends.online > 0 ? 0px : 0.6px; }
                 if Friends.badge > 0: Rectangle { x: 25px; y: 3px; width: Math.max(16px, bt.preferred-width + 8px); height: 16px; border-radius: 8px; background: Theme.red;
                     bt := Text { text: Friends.badge > 9 ? "9+" : Friends.badge; color: white; font-family: Theme.ui; font-size: 10px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; } }
             }

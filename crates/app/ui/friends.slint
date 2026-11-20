@@ -25,6 +25,8 @@ export global Friends {
     in-out property <[FriendRow]> blocked;
     in-out property <int> total;
     in-out property <int> online;
+    // heads of friends online now (top bar face pile, up to 3)
+    in-out property <[image]> faces;
     // Nether players online now, everyone ("1,234"; "" = unknown, hidden)
     in-out property <string> everyone;
     // incoming requests + asks to join (top-bar badge)
@@ -62,7 +64,7 @@ export global FColor {
     out property <[string]> label: ["Invisible", "Online", "Away", "Do not disturb"];
 }
 
-component Head inherits Rectangle {
+export component Head inherits Rectangle {
     in property <image> img;
     in property <bool> has-img;
     in property <int> status: -1;
