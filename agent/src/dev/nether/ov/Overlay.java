@@ -87,6 +87,7 @@ public final class Overlay {
                     Input.setMenu(true);
                     if (Menu.hudEdit) Menu.hudEdit = true;
                     if ("1".equals(System.getProperty("nether.friends"))) { Menu.hub = false; Menu.tab = Menu.T_FRIENDS; } // dev: the Friends screen
+                    if ("1".equals(System.getProperty("nether.splashes"))) { Menu.hub = false; Menu.tab = Menu.TABS.length - 1; Menu.page = "menu"; Splashes.show(); } // dev: the splash texts dialog
                     if ("0".equals(System.getProperty("nether.hub"))) { Menu.hub = false; if (tb != null) Menu.tab = Math.max(0, Math.min(Menu.TABS.length - 1, Integer.parseInt(tb))); } // dev: skip the hub (with -Dnether.tab)
                 }
             }

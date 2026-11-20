@@ -52,7 +52,7 @@ final class Menu {
     static boolean editing() { return hudEdit && Input.menuOpen; }
     static boolean capturing() { return capture != null; }
     /** Typed characters go to a text field (search with text or focus, a waypoint name): a letter menu key types there. */
-    static boolean textFocus() { return WpDialog.open || WorldShare.open || PackBrowser.open || PackMixer.open || (!hub && tab == T_FRIENDS && Friends.typing) || fieldFocus() || (!hudEdit && !hub && tab < T_WARDROBE && (searchFocus || !search.isEmpty())); }
+    static boolean textFocus() { return WpDialog.open || Splashes.open || WorldShare.open || PackBrowser.open || PackMixer.open || (!hub && tab == T_FRIENDS && Friends.typing) || fieldFocus() || (!hudEdit && !hub && tab < T_WARDROBE && (searchFocus || !search.isEmpty())); }
     /** A waypoint name, a text setting, a slider value, a hex colour or a profile name is being typed into. */
     static boolean fieldFocus() { return editWp >= 0 || editSet != null; }
 
@@ -87,6 +87,7 @@ final class Menu {
         searchFocus = false;
         hudEdit = false;
         WpDialog.open = false;
+        Splashes.open = false;
         WorldShare.open = false;
         PackBrowser.open = false;
         PackMixer.open = false;
@@ -579,6 +580,12 @@ final class Menu {
             evs.clear();
             typed = "";
         }
+        if (Splashes.open) { // the splash texts dialog takes every key while it is up
+            for (int[] ev : evs) Splashes.key(ev[0], ev[1] == 1, shift, ctrl);
+            if (!typed.isEmpty() && Splashes.open) Splashes.type(typed);
+            evs.clear();
+            typed = "";
+        }
         if (WpDialog.open) { // the waypoint dialog takes every key while it is up
             for (int[] ev : evs) WpDialog.key(ev[0], ev[1] == 1, shift, ctrl);
             if (!typed.isEmpty() && WpDialog.open) WpDialog.type(typed);
@@ -614,7 +621,14 @@ final class Menu {
                 if (PackBrowser.open) PackBrowser.draw(e, wheel);
                 else if (PackMixer.open) PackMixer.draw(e, wheel);
                 else if (WorldShare.open) WorldShare.draw(e, wheel);
-                else if (WpDialog.open) {
+                else if (Splashes.open) { // over the Main Menu settings page, which gets no clicks
+                    boolean c0 = click, c1 = clickRt;
+                    click = clickRt = false;
+                    if (hub) hub(e); else panel(0, e);
+                    click = c0;
+                    clickRt = c1;
+                    Splashes.draw(e, wheel);
+                } else if (WpDialog.open) {
                     if (!WpDialog.fromWorld()) { // opened from the menu: it stays behind the dialog, without clicks
                         boolean c0 = click, c1 = clickRt;
                         click = clickRt = false;

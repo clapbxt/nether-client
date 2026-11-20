@@ -49,6 +49,10 @@ final class MainMenu {
         m.add(Setting.choice("buttons", "Button style", "Solid", STYLES));
         m.add(Setting.choice("logo", "Logo", "Wordmark", LOGOS));
         m.add(Setting.bool("splash", "Splash text", true));
+        java.util.function.BooleanSupplier sp = () -> m.bool("splash");
+        m.add(Setting.choice("splashSource", "Splashes", "Minecraft", Splashes.SOURCES).hint("Mine: only yours. Mix: yours half the time, Minecraft's otherwise.").when(sp));
+        m.add(Setting.bool("holidays", "Holiday splashes", true).hint("Minecraft's Christmas, New Year and Halloween splashes still show on their day.").when(sp).when(() -> !m.str("splashSource").equals("Minecraft")));
+        m.add(Setting.action("splashEdit", "Your splashes", "EDIT", Splashes::show).hint("Add, edit or remove, or restore Minecraft's. Saved in client/splashes.txt.").when(sp));
         m.add(Setting.bool("clock", "Clock", true).hint("Follows the Clock module's 24-hour setting."));
         m.add(Setting.bool("account", "Account", true).hint("Your name and skin head (skin from Mojang's profile service)."));
         m.add(Setting.header("Quick join"));
@@ -68,6 +72,21 @@ final class MainMenu {
     /** the title screen whose widgets we removed (rebuilt by {@link #restoreVanilla}) and the splash vanilla picked for it */
     private static Object stripped, splashOf;
     private static String splash;
+    /** what the title screen shows (Splashes.pick of vanilla's splash), picked again when either changes */
+    private static String shown, shownFor, shownSrc;
+    private static int shownGen = -1;
+
+    static String shownSplash() {
+        String src = Splashes.source();
+        if (shownGen != Splashes.gen || shownFor != splash || !src.equals(shownSrc)) {
+            shownSrc = src;
+            Splashes.list(); // may bump gen when the file changed on disk
+            shownFor = splash;
+            shownGen = Splashes.gen;
+            shown = Splashes.pick(splash);
+        }
+        return shown;
+    }
 
     static final int SINGLE = 0, MULTI = 1, MODS = 2, OPTIONS = 3, QUIT = 4, NETHER = 5;
     // MODS (the Fabric mod list) reads MOD MENU, so it never competes with the Nether MODS in the actions row
@@ -381,7 +400,7 @@ final class MainMenu {
         String mode = MODULE.str("logo");
         if (mode.equals("Hidden")) return 0;
         float h = mode.equals("Mark") ? 70 : 122;
-        if (MODULE.bool("splash") && splash != null) h += 18;
+        if (MODULE.bool("splash") && shownSplash() != null) h += 18;
         return h * sc;
     }
 
@@ -400,8 +419,8 @@ final class MainMenu {
             Logo.brand(centred ? x - Logo.brandWidth(h) / 2 : x, y, h);
             sy = y + 122 * sc;
         }
-        if (MODULE.bool("splash") && splash != null) {
-            String sp = fit(Gfx.UI, 11, splash, 0, 300);
+        if (MODULE.bool("splash") && shownSplash() != null) {
+            String sp = fit(Gfx.UI, 11, shownSplash(), 0, Splashes.FIT_W);
             if (centred) Gfx.textC(Gfx.UI, 11, x, sy + 6, Gfx.DIM, sp, 0);
             else Gfx.text(Gfx.UI, 11, x + 2, sy + 6, Gfx.DIM, sp);
         }
