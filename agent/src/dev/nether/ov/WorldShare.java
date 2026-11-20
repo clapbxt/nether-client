@@ -47,7 +47,7 @@ final class WorldShare {
     // launcher state
     private static Map<?, ?> host;
     private static List<Map<?, ?>> invites = Collections.emptyList();
-    private static long mtime, nextCheck, nextTick;
+    private static long nextTick;
     private static double pendingSeq;
     private static long pendingAt;
     private static String note = "";
@@ -77,6 +77,8 @@ final class WorldShare {
     private static final Map<Class<?>, Boolean> lanScreens = new java.util.HashMap<>();
 
     private static Path dir() { return Data.dir("share"); }
+    /** the launcher's state.json, read off the render thread */
+    private static final FileWatch STATE = new FileWatch(() -> { Path d = dir(); return d == null ? null : d.resolve("state.json"); }, 500);
 
     // ---------------------------------------------------------------- game state
 
@@ -155,15 +157,11 @@ final class WorldShare {
     private static void reload(long now) {
         if (pendingSeq != 0 && now - pendingAt > 8000) { pendingSeq = 0; say("The launcher didn't answer. Is it open?", false); }
         if (joinWait >= 0 && now - joinWaitAt > 40000) { joinWait = -1; Toast.show("Couldn't reach the world. Is the launcher open?"); }
-        if (now < nextCheck) return;
-        nextCheck = now + 500;
         try {
-            Path f = dir() == null ? null : dir().resolve("state.json");
-            if (f == null || !Files.isRegularFile(f)) { host = null; invites = Collections.emptyList(); return; }
-            long m = Files.getLastModifiedTime(f).toMillis();
-            if (m == mtime) return;
-            mtime = m;
-            Object o = Json.parse(new String(Files.readAllBytes(f), StandardCharsets.UTF_8));
+            if (!STATE.exists()) { host = null; invites = Collections.emptyList(); return; }
+            byte[] b = STATE.take();
+            if (b == null) return;
+            Object o = Json.parse(new String(b, StandardCharsets.UTF_8));
             if (!(o instanceof Map)) return;
             Map<?, ?> st = (Map<?, ?>) o;
             Map<?, ?> h = st.get("host") instanceof Map ? (Map<?, ?>) st.get("host") : null;
@@ -306,7 +304,7 @@ final class WorldShare {
             Config.set("share", "cheats", cheats);
             openedAt = System.currentTimeMillis();
             host = null;
-            mtime = 0;
+            STATE.again();
             Map<String, Object> o = new LinkedHashMap<>();
             o.put("port", (double) p);
             o.put("world", worldName());

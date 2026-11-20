@@ -34,7 +34,7 @@ final class Friends {
     private static int status = 1;
     private static boolean share = true, open = true, notify = true, joinable, loaded;
     private static String msg = "";
-    private static long mtime, nextCheck, lastEvent = -1;
+    private static long lastEvent = -1;
     private static final Map<String, BufferedImage> heads = new HashMap<>();
     private static final Map<String, Long> headTimes = new HashMap<>();
     /** the request waiting for the launcher (seq, 0 = none) */
@@ -55,6 +55,8 @@ final class Friends {
     private static long actAt;
 
     private static Path dir() { return Data.dir("friends"); }
+    /** the launcher's state.json, read off the render thread */
+    private static final FileWatch STATE = new FileWatch(() -> { Path d = dir(); return d == null ? null : d.resolve("state.json"); }, 700);
     private static String str(Object o) { return o instanceof String ? (String) o : ""; }
     private static boolean yes(Object o) { return Boolean.TRUE.equals(o); }
     private static int num(Object o) { return o instanceof Number ? ((Number) o).intValue() : 0; }
@@ -71,8 +73,6 @@ final class Friends {
         long now = System.currentTimeMillis();
         if (pendingSeq != 0 && now - pendingAt > 20000) { pendingSeq = 0; say("The launcher didn't answer. Is it still open?", false); }
         if (now - actAt > 2000) { actAt = now; activity(); }
-        if (now < nextCheck) return;
-        nextCheck = now + 700;
         reload();
     }
 
@@ -96,12 +96,10 @@ final class Friends {
 
     private static void reload() {
         try {
-            Path f = dir().resolve("state.json");
-            if (!Files.isRegularFile(f)) { loaded = false; return; }
-            long m = Files.getLastModifiedTime(f).toMillis();
-            if (m == mtime) return;
-            mtime = m;
-            Object o = Json.parse(new String(Files.readAllBytes(f), StandardCharsets.UTF_8));
+            if (!STATE.exists()) { loaded = false; return; }
+            byte[] raw = STATE.take();
+            if (raw == null) return;
+            Object o = Json.parse(new String(raw, StandardCharsets.UTF_8));
             if (!(o instanceof Map)) return;
             Map<?, ?> st = (Map<?, ?>) o;
             loaded = yes(st.get("loaded"));
