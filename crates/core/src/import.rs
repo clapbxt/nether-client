@@ -38,6 +38,8 @@ pub struct MissingFile {
 pub struct Imported {
     pub data: InstanceData,
     pub missing: Vec<MissingFile>,
+    /// what was not carried over (launcher imports: jar mods, a modified version imported as vanilla...)
+    pub notes: Vec<String>,
 }
 
 fn norm(n: &str) -> String { n.replace('\\', "/") }
@@ -69,7 +71,7 @@ pub fn detect(path: &Path) -> Result<Format> {
 /// Import any supported format (auto-detected) as a new instance named `name` (None = the pack's own name).
 pub fn import(c: &Client, paths: &Paths, path: &Path, name: Option<&str>, progress: &Progress) -> Result<Imported> {
     match detect(path)? {
-        Format::Mrpack => Ok(Imported { data: crate::modpack::install_file(c, paths, path, name, progress)?, missing: vec![] }),
+        Format::Mrpack => Ok(Imported { data: crate::modpack::install_file(c, paths, path, name, progress)?, missing: vec![], notes: vec![] }),
         Format::Prism => import_prism(paths, path, name, progress),
         Format::CurseForge => import_curseforge(paths, path, name, progress),
     }
@@ -80,7 +82,7 @@ fn parse_cfg(s: &str) -> std::collections::HashMap<String, String> {
 }
 
 /// (minecraft version, loader, loader version) from a Prism `mmc-pack.json`.
-fn parse_mmc_pack(s: &str) -> Result<(String, Loader, String)> {
+pub(crate) fn parse_mmc_pack(s: &str) -> Result<(String, Loader, String)> {
     let v: Value = serde_json::from_str(s).context("mmc-pack.json is invalid")?;
     let comps = v["components"].as_array().ok_or_else(|| anyhow!("mmc-pack.json has no components"))?;
     let ver = |uid: &str| comps.iter().find(|c| c["uid"] == uid).and_then(|c| c["version"].as_str()).map(String::from);
@@ -91,7 +93,7 @@ fn parse_mmc_pack(s: &str) -> Result<(String, Loader, String)> {
     Ok((mc, Loader::Vanilla, String::new()))
 }
 
-fn copy_tree(from: &Path, to: &Path, skip: &[&str]) -> Result<()> {
+pub(crate) fn copy_tree(from: &Path, to: &Path, skip: &[&str]) -> Result<()> {
     fs::create_dir_all(to)?;
     for e in fs::read_dir(from)? {
         let e = e?;
@@ -145,7 +147,7 @@ pub fn import_prism(paths: &Paths, path: &Path, name: Option<&str>, progress: &P
         Ok(data)
     })();
     if res.is_err() { let _ = fs::remove_dir_all(&dir); }
-    Ok(Imported { data: res?, missing: vec![] })
+    Ok(Imported { data: res?, missing: vec![], notes: vec![] })
 }
 
 /// (minecraft, loader, loader version, name, override folder, missing files) from a CurseForge `manifest.json`.
@@ -190,7 +192,7 @@ pub fn import_curseforge(paths: &Paths, zip_path: &Path, name: Option<&str>, pro
         Ok(d)
     })();
     if res.is_err() { let _ = fs::remove_dir_all(&dir); }
-    Ok(Imported { data: res?, missing })
+    Ok(Imported { data: res?, missing, notes: vec![] })
 }
 
 #[cfg(test)]

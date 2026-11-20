@@ -21,6 +21,7 @@ pub mod netherpack;
 pub mod optifine;
 pub mod news;
 pub mod import;
+pub mod launchers;
 pub mod worlds;
 pub mod crash;
 pub mod java;

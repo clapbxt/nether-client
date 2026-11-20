@@ -574,7 +574,91 @@ fn wait_exit(pid: u32, max: std::time::Duration) -> bool {
 fn wait_exit(_pid: u32, max: std::time::Duration) -> bool { std::thread::sleep(max); false }
 
 /// Import a modpack file (.mrpack, CurseForge zip, Prism export) or a Prism/MultiMC instance folder.
+thread_local! {
+    /// What the IMPORT dialog lists, in row order (UI thread only).
+    static FOUND: std::cell::RefCell<Vec<nether_core::launchers::Found>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+pub(crate) fn import_rows(ui: &AppWindow, sh: &Arc<Shared>, found: Vec<nether_core::launchers::Found>) {
+    let done = nether_core::launchers::imported(&sh.paths);
+    let rows: Vec<crate::ImportRow> = found.iter().map(|f| {
+        let lv = if f.loader == nether_core::launch::Loader::Vanilla { String::new() } else { format!(" {}", f.loader_version) };
+        let sub = format!("{} · {}{lv}", f.mc, f.loader.label());
+        crate::ImportRow { launcher: f.kind.label().into(), name: f.name.as_str().into(), sub: sub.into(), done: done.contains(&f.source), on: false }
+    }).collect();
+    FOUND.with(|x| *x.borrow_mut() = found);
+    ui.global::<Backend>().set_import_rows(slint::ModelRc::new(slint::VecModel::from(rows)));
+}
+
+/// IMPORT dialog opened: look for other launchers' instances (worker thread).
 pub fn import_instance(ui: &AppWindow, sh: &Arc<Shared>) {
+    let b = ui.global::<Backend>();
+    b.set_import_scanning(true);
+    let (weak, sh) = (ui.as_weak(), sh.clone());
+    std::thread::spawn(move || {
+        let found = nether_core::launchers::scan();
+        ui_do(&weak, move |ui| { ui.global::<Backend>().set_import_scanning(false); import_rows(ui, &sh, found); });
+    });
+}
+
+/// LAUNCHER FOLDER: a launcher's data folder (ATLauncher, portable Prism / MultiMC, moved data) or one instance folder.
+pub fn import_dir(ui: &AppWindow, sh: &Arc<Shared>) {
+    let Some(dir) = rfd::FileDialog::new().set_title("Choose a launcher or instance folder").pick_folder() else { return };
+    let mut found = nether_core::launchers::scan_dir(&dir);
+    if found.is_empty() {
+        // a Prism / MultiMC instance or modpack folder the old way
+        if nether_core::import::detect(&dir).is_ok() { ui.global::<Backend>().set_import_open(false); import_path(ui, sh, dir); return; }
+        show_toast(ui, sh, "No instances in that folder");
+        return;
+    }
+    let n = found.len();
+    // new ones first, picked; the rest of the list stays
+    FOUND.with(|x| { let old = x.borrow(); found.extend(old.iter().filter(|o| !found.iter().any(|f| f.source == o.source)).cloned().collect::<Vec<_>>()); });
+    import_rows(ui, sh, found);
+    let rows = ui.global::<Backend>().get_import_rows();
+    for i in 0..n { if let Some(mut r) = rows.row_data(i) { if !r.done { r.on = true; rows.set_row_data(i, r); } } }
+}
+
+/// IMPORT: copy the picked instances, one after another (worker thread, progress in the deck).
+pub fn import_go(ui: &AppWindow, sh: &Arc<Shared>) {
+    let rows = ui.global::<Backend>().get_import_rows();
+    let picked: Vec<nether_core::launchers::Found> = FOUND.with(|x| x.borrow().iter().enumerate().filter(|(i, _)| rows.row_data(*i).is_some_and(|r| r.on)).map(|(_, f)| f.clone()).collect());
+    if picked.is_empty() { show_toast(ui, sh, "Pick the instances to import"); return; }
+    ui.global::<Backend>().set_import_open(false);
+    let (weak, sh) = (ui.as_weak(), sh.clone());
+    std::thread::spawn(move || {
+        let (mut ok, mut notes, mut errs) = (vec![], vec![], vec![]);
+        for f in &picked {
+            let key = format!("import:{}", f.source);
+            let (w2, k2, label) = (weak.clone(), key.clone(), f.name.clone());
+            ui_do(&weak, { let (k, t) = (key.clone(), format!("Importing {label}…")); move |ui| crate::job(ui, &k, &t, 0.0) });
+            let progress: Progress = Arc::new(move |m, p| { let (t, k) = (format!("Importing {label} · {m}"), k2.clone()); ui_do(&w2, move |ui| crate::job(ui, &k, &t, p)); });
+            let res = nether_core::launchers::import(&sh.paths, f, None, &progress);
+            match res {
+                Ok(r) => { notes.extend(r.notes.iter().map(|n| format!("{}: {n}", r.data.name))); ok.push(r.data); }
+                Err(e) => errs.push(format!("{}: {e}", f.name)),
+            }
+            ui_do(&weak, move |ui| crate::job_end(ui, &key));
+        }
+        let sh2 = sh.clone();
+        ui_do(&weak, move |ui| {
+            let m = ui.global::<Backend>().get_instances();
+            if let Some(v) = m.as_any().downcast_ref::<VecModel<Inst>>() {
+                for d in &ok { v.push(crate::inst_from(d)); }
+                crate::persist(&sh2.paths, v);
+            }
+            crate::refilter(ui);
+            crate::artui::refresh(ui, &sh2);
+            let mut msg = match ok.len() { 0 => String::new(), 1 => format!("Imported {}", ok[0].name), n => format!("Imported {n} instances") };
+            if let Some(e) = errs.first() { msg = if msg.is_empty() { format!("Couldn't import {e}") } else { format!("{msg} · couldn't import {e}") }; }
+            if let Some(n) = notes.first() { msg = format!("{msg} ({n})"); }
+            show_toast(ui, &sh2, &msg);
+        });
+    });
+}
+
+/// MODPACK FILE: a .mrpack / CurseForge zip / Prism export (or instance.cfg inside an instance folder).
+pub fn import_file(ui: &AppWindow, sh: &Arc<Shared>) {
     let Some(file) = rfd::FileDialog::new()
         .set_title("Import an instance or modpack")
         .set_directory(dirs_downloads())
@@ -585,6 +669,7 @@ pub fn import_instance(ui: &AppWindow, sh: &Arc<Shared>) {
         Some("instance.cfg" | "mmc-pack.json") => file.parent().map(|p| p.to_path_buf()).unwrap_or(file),
         _ => file,
     };
+    ui.global::<Backend>().set_import_open(false);
     import_path(ui, sh, path);
 }
 

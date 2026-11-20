@@ -1,4 +1,6 @@
 // java: index into Auto/8/17/21/25; secs: total play time; last-ts: unix time of the last launch
+// an instance another launcher has (IMPORT dialog): launcher label, name, "1.20.1 · Fabric", already imported, picked
+export struct ImportRow { launcher: string, name: string, sub: string, done: bool, on: bool }
 export struct Inst { name: string, title: string, kind: string, ver: string, loader: string, hours: int, mods: int, ram: int, client: string, last: string, running: bool, java: int, secs: int, last-ts: int,
     // icon = block texture key ("" = grass), cover = wallpaper version ("" = own version); images filled in by Rust
     icon: string, cover: string, icon-img: image, cover-img: image, has-cover: bool, shared: bool,
@@ -338,6 +340,13 @@ export global Backend {
     callback crash-relaunch();
     // import an instance from a file or another launcher folder; stop a running game
     callback import-instance();
+    // IMPORT dialog: instances found in other launchers (Rust: instpage.rs import_*)
+    in-out property <bool> import-open: false;
+    in-out property <bool> import-scanning: false;
+    in-out property <[ImportRow]> import-rows;
+    callback import-file();
+    callback import-dir();
+    callback import-go();
     callback stop(string);
     // content kind for the opened instance lists: 0 mods, 1 resource packs, 2 shaders
     in-out property <int> pack-kind: 0;

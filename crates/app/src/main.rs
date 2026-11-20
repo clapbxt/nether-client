@@ -1440,6 +1440,12 @@ fn main() -> Result<(), slint::PlatformError> {
         let (weak, sh) = (ui.as_weak(), shared.clone());
         backend.on_import_instance(move || if let Some(ui) = weak.upgrade() { instpage::import_instance(&ui, &sh) });
         let (weak, sh) = (ui.as_weak(), shared.clone());
+        backend.on_import_file(move || if let Some(ui) = weak.upgrade() { instpage::import_file(&ui, &sh) });
+        let (weak, sh) = (ui.as_weak(), shared.clone());
+        backend.on_import_dir(move || if let Some(ui) = weak.upgrade() { instpage::import_dir(&ui, &sh) });
+        let (weak, sh) = (ui.as_weak(), shared.clone());
+        backend.on_import_go(move || if let Some(ui) = weak.upgrade() { instpage::import_go(&ui, &sh) });
+        let (weak, sh) = (ui.as_weak(), shared.clone());
         backend.on_stop(move |n| if let Some(ui) = weak.upgrade() { instpage::stop(&ui, &sh, &n) });
         let (weak, sh) = (ui.as_weak(), shared.clone());
         backend.on_measure_inst(move || if let Some(ui) = weak.upgrade() { instpage::measure_inst(&ui, &sh) });
@@ -1620,6 +1626,13 @@ java.lang.OutOfMemoryError: Java heap space
         }
         if let Some((w, h)) = std::env::var("NC_SNAP_SIZE").ok().and_then(|s| s.split_once('x').map(|(w, h)| (w.parse::<u32>().unwrap_or(1440), h.parse::<u32>().unwrap_or(900)))) {
             ui.window().set_size(slint::PhysicalSize::new(w, h));
+        }
+        // NC_SNAP_IMPORT=<folder>: the IMPORT dialog listing that launcher folder's instances (first two picked)
+        if let Ok(d) = std::env::var("NC_SNAP_IMPORT") {
+            ui.global::<Backend>().set_import_open(true);
+            instpage::import_rows(&ui, &shared, nether_core::launchers::scan_dir(std::path::Path::new(&d)));
+            let rows = ui.global::<Backend>().get_import_rows();
+            for i in 0..rows.row_count().min(2) { if let Some(mut r) = rows.row_data(i) { r.on = true; rows.set_row_data(i, r); } }
         }
         if let Some(n) = std::env::var("NC_SNAP_STEP").ok().and_then(|n| n.parse::<i32>().ok()) { ui.global::<Wizard>().set_snap_step(n); }
         // NC_SNAP_PLAYTAB=n: Play page tab (0 Nether, 1 Vanilla, 2 Modpacks); NC_SNAP_VANILLA=1: the create wizard makes a Vanilla profile

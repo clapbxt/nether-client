@@ -1,5 +1,5 @@
 import { Theme } from "theme.slint";
-import { Backend, Row, Inst, Art, Wizard, Combiner } from "structs.slint";
+import { Backend, Row, Inst, Art, Wizard, Combiner, ImportRow } from "structs.slint";
 import { Glass, PlayButton, Eyebrow, Heading, Slot, Chip, Btn, ModIcon, Seg, UTabs, Toggle, Dropdown, VerTag, Icon, Ico, Page, IconBtn, Hatch, Ticks, Slash, SectionHead, Stat, LinkBtn, Slider, Field, Scrim, SetRow, Pulse } from "components.slint";
 import { ModDetail } from "moddetail.slint";
 import { CardGrid, CardPanel } from "play.slint";
@@ -161,7 +161,7 @@ export component InstancesScreen inherits Rectangle {
     // ---------- instance list + preview ----------
     if root.sel < 0: Page {
         Heading { x: 56px; y: 28px; text: "PLAY"; font-size: 32px; }
-        im := Btn { x: ni.x - 10px - self.width; y: 40px; height: 34px; text: "IMPORT"; icon: Ico.download; clicked => { Backend.import-instance(); } }
+        im := Btn { x: ni.x - 10px - self.width; y: 40px; height: 34px; text: "IMPORT"; icon: Ico.download; clicked => { Backend.import-open = true; Backend.import-instance(); } }
         if Backend.play-tab == 2: Btn { x: im.x - 10px - self.width; y: 40px; height: 34px; text: "BROWSE MODPACKS"; clicked => { root.go-discover(); } }
         // Nether (default) / Vanilla (plain Minecraft, any loader) / Modpacks
         tabs := Seg { x: 56px; y: 84px; items: ["NETHER", "VANILLA", "MODPACKS"]; current <=> Backend.play-tab;
@@ -285,7 +285,7 @@ export component InstancesScreen inherits Rectangle {
                 if !es.searched: Rectangle {
                     eb1 := Btn { x: 18px; y: 110px; text: "NEW PROFILE"; solid: true; icon: Ico.plus; clicked => { root.new-profile(); } }
                     eb2 := Btn { x: eb1.x + eb1.width + 10px; y: 110px; text: Backend.play-tab == 2 ? "BROWSE MODPACKS" : "IMPORT"; icon: Backend.play-tab == 2 ? Ico.chev : Ico.download;
-                        clicked => { if Backend.play-tab == 2 { root.go-discover(); } else { Backend.import-instance(); } } }
+                        clicked => { if Backend.play-tab == 2 { root.go-discover(); } else { Backend.import-open = true; Backend.import-instance(); } } }
                 }
             }
         }
@@ -849,6 +849,52 @@ export component InstancesScreen inherits Rectangle {
             cb := Btn { x: parent.width - 28px - self.width - db.width - 10px; y: parent.height - 64px; text: "KEEP IT"; clicked => { root.confirm-del = false; } }
             db := Btn { x: parent.width - 28px - self.width; y: parent.height - 64px; text: "DELETE"; danger: true; solid: true; icon: Ico.trash;
                 clicked => { root.confirm-del = false; Backend.inst-action(root.del-idx, 3); root.sel = -1; root.pick = 0; } }
+        }
+    }
+
+    // ---------- IMPORT: instances found in other launchers (copied; the originals are never changed), or a file / folder ----------
+    if Backend.import-open: Scrim {
+        dismiss => { Backend.import-open = false; }
+        idl := Rectangle {
+            x: (parent.width - 760px) / 2; y: 60px; width: 760px; height: 640px;
+            background: Theme.s1; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
+            TouchArea { }
+            Heading { x: 30px; y: 30px; text: "IMPORT"; font-size: 40px; }
+            Text { x: 32px; y: 84px; width: parent.width - 64px; text: "Copies instances from your other launchers: mods, worlds, settings and memory. Nothing in them is changed.";
+                color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
+            IconBtn { x: parent.width - 30px - 34px; y: 26px; size: 34px; d: Ico.close; tip: "Close"; clicked => { Backend.import-open = false; } }
+            Eyebrow { x: 32px; y: 128px; text: Backend.import-scanning ? "LOOKING FOR LAUNCHERS…" : "FOUND ON THIS PC  ·  \{Backend.import-rows.length}"; }
+            Rectangle {
+                x: 24px; y: 150px; width: parent.width - 48px; height: parent.height - 150px - 84px;
+                border-radius: Theme.r1; background: Theme.bg; border-width: 1px; border-color: Theme.ln; clip: true;
+                if Backend.import-rows.length == 0 && !Backend.import-scanning: Text {
+                    x: 24px; width: parent.width - 48px; height: parent.height; vertical-alignment: center; horizontal-alignment: center; wrap: word-wrap;
+                    text: "No Prism, CurseForge, Modrinth, ATLauncher or Minecraft Launcher instances found.\nPick a modpack file, or a launcher folder if yours lives somewhere else.";
+                    color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts;
+                }
+                Flickable {
+                    content-height: Backend.import-rows.length * 56px + 8px;
+                    for r[i] in Backend.import-rows: Rectangle {
+                        x: 6px; y: 4px + i * 56px; width: parent.width - 12px; height: 52px; border-radius: Theme.r1;
+                        background: r.on ? Theme.red.with-alpha(0.10) : (irta.has-hover ? Theme.hov : transparent);
+                        animate background { duration: Theme.fast; }
+                        irta := TouchArea { mouse-cursor: pointer; clicked => { Backend.import-rows[i].on = !r.on; } }
+                        // check box
+                        Rectangle { x: 14px; y: 16px; width: 20px; height: 20px; border-radius: 4px; border-width: 1px;
+                            border-color: r.on ? Theme.red : Theme.ln2; background: r.on ? Theme.red : transparent;
+                            if r.on: Icon { x: 4px; y: 4px; width: 12px; height: 12px; d: Ico.check; tint: white; } }
+                        Text { x: 48px; y: 8px; width: parent.width - 48px - 170px; text: r.name; overflow: elide; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; }
+                        Text { x: 48px; y: 29px; width: parent.width - 48px - 170px; text: r.sub; overflow: elide; color: Theme.dim; font-family: Theme.ui; font-size: 12px * Theme.ts; }
+                        if r.done: Text { x: parent.width - 170px; width: 60px; height: parent.height; vertical-alignment: center; horizontal-alignment: right; text: "IMPORTED";
+                            color: Theme.mut; font-family: Theme.mono; font-size: 10px * Theme.ts; letter-spacing: 1px; }
+                        Chip { x: parent.width - self.width - 14px; y: (parent.height - self.height) / 2; text: r.launcher; }
+                    }
+                }
+            }
+            Btn { x: 24px; y: parent.height - 58px; height: 36px; text: "MODPACK FILE"; icon: Ico.download; clicked => { Backend.import-file(); } }
+            Btn { x: 24px + 172px; y: parent.height - 58px; height: 36px; text: "LAUNCHER FOLDER"; icon: Ico.folder; clicked => { Backend.import-dir(); } }
+            go := Btn { x: parent.width - 24px - self.width; y: parent.height - 60px; height: 40px; solid: true;
+                text: "IMPORT"; enabled: !Backend.import-scanning; clicked => { Backend.import-go(); } }
         }
     }
 
