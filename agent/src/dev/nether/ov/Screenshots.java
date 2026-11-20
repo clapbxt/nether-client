@@ -172,7 +172,7 @@ final class Screenshots extends Module {
         newest = top;
         String place = place();
         if (!place.isEmpty()) { entry(name, true).put("where", place); saveMeta(); }
-        if (bool("preview")) { card = name; cardAt = now; }
+        if (bool("preview")) { card = name; cardAt = now; cardCopied = bool("autoCopy"); }
         if (bool("autoCopy")) copy(name, false);
         if (open) rescan();
     }
@@ -192,8 +192,8 @@ final class Screenshots extends Module {
         if (key != null) Gfx.image(key, x + 4, y + 4, w - 8, ih - 8, 0xFFFFFFFF, 5);
         else Gfx.rect(x + 4, y + 4, w - 8, ih - 8, 5, Gfx.S3);
         Gfx.text(Gfx.SEMI, 11, x + 12, y + ih + 9, Gfx.ICE, "SCREENSHOT SAVED", false, 1.2f);
-        String hint = bool("autoCopy") ? "Copied · " : "";
-        hint += enabled() ? Menu.keyName((int) num("openKey")) + " to view" : "";
+        String hint = cardCopied ? "Copied  ·  " : "Ctrl+C copy  ·  ";
+        hint += Menu.keyName((int) num("openKey")) + " to view";
         Gfx.text(Gfx.UI, 10, x + 12, y + ih + 25, Gfx.DIM, hint);
         Gfx.s = s0;
         Gfx.alpha = a0;
@@ -201,10 +201,15 @@ final class Screenshots extends Module {
 
     /** Key press from {@link Modules#onKey} (in a world); true = used. */
     boolean key(int k) {
-        if (!enabled() || k != (int) num("openKey")) return false;
+        if (!enabled()) return false;
+        // Ctrl+C while the preview card is up: that picture to the clipboard
+        if (k == 67 && card != null && !cardCopied && (Input.keys[341] || Input.keys[345])) { copy(card, false); cardCopied = true; cardAt = Math.max(cardAt, System.currentTimeMillis() - 2500); return true; }
+        if (k != (int) num("openKey")) return false;
         show();
         return true;
     }
+
+    private static boolean cardCopied;
 
     // ---------------------------------------------------------------- images
 
@@ -248,13 +253,51 @@ final class Screenshots extends Module {
             try {
                 BufferedImage img = javax.imageio.ImageIO.read(dir().resolve(name).toFile());
                 if (img == null) throw new IllegalStateException("unreadable");
-                java.awt.Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new Pic(img), null);
+                clip(img, name.toLowerCase(Locale.ROOT).endsWith(".png") ? dir().resolve(name) : null);
                 if (tell) say("Copied. Paste it anywhere.");
             } catch (Throwable t) {
                 if (tell) say("Couldn't copy the picture here. Use SHOW IN FOLDER instead.");
                 System.out.println("[nether-agent] screenshot copy: " + t);
             }
         });
+    }
+
+    /**
+     * A picture on the system clipboard. Java's own clipboard where AWT runs (1.8.9 - 1.12.2); modern games run AWT
+     * headless, so there the OS does it: PowerShell's Clipboard.SetImage (kept after it exits), osascript, wl-copy or
+     * xclip. png = the picture as a PNG file already on disk (else a temporary one is written). Worker thread.
+     */
+    private static void clip(BufferedImage img, Path png) throws Exception {
+        if (!java.awt.GraphicsEnvironment.isHeadless()) {
+            try { java.awt.Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new Pic(img), null); return; }
+            catch (Throwable t) { System.out.println("[nether-agent] awt clipboard: " + t); }
+        }
+        Path tmp = null;
+        if (png == null) {
+            tmp = Files.createTempFile("nether-shot", ".png");
+            javax.imageio.ImageIO.write(img, "png", tmp.toFile());
+            png = tmp;
+        }
+        try {
+            String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT), p = png.toAbsolutePath().toString();
+            List<String[]> cmds = new ArrayList<>();
+            if (os.contains("win")) cmds.add(new String[] {"powershell", "-NoProfile", "-NonInteractive", "-STA", "-Command",
+                "Add-Type -AssemblyName System.Windows.Forms,System.Drawing; $i = [System.Drawing.Image]::FromFile('" + p.replace("'", "''") + "'); [System.Windows.Forms.Clipboard]::SetImage($i); $i.Dispose()"});
+            else if (os.contains("mac")) cmds.add(new String[] {"osascript", "-e", "set the clipboard to (read (POSIX file \"" + p.replace("\\", "\\\\").replace("\"", "\\\"") + "\") as «class PNGf»)"});
+            else { cmds.add(new String[] {"wl-copy", "--type", "image/png"}); cmds.add(new String[] {"xclip", "-selection", "clipboard", "-t", "image/png", "-i", p}); }
+            for (String[] c : cmds) {
+                try {
+                    ProcessBuilder pb = new ProcessBuilder(c).redirectErrorStream(true);
+                    if (c[0].equals("wl-copy")) pb.redirectInput(png.toFile());
+                    Process pr = pb.start();
+                    if (!c[0].equals("wl-copy") && !pr.waitFor(15, java.util.concurrent.TimeUnit.SECONDS)) { pr.destroy(); continue; }
+                    if (c[0].equals("wl-copy") || pr.exitValue() == 0) return;
+                } catch (java.io.IOException notThere) { /* next tool */ }
+            }
+            throw new IllegalStateException("no clipboard tool");
+        } finally {
+            if (tmp != null) { final Path t = tmp; new Thread(() -> { try { Thread.sleep(20000); Files.deleteIfExists(t); } catch (Throwable ignored) { } }).start(); }
+        }
     }
 
     private static final class Pic implements Transferable {
@@ -658,7 +701,7 @@ final class Screenshots extends Module {
             try {
                 BufferedImage img = compose(name, list, cr);
                 if (how == 0) {
-                    java.awt.Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new Pic(img), null);
+                    clip(img, null);
                     say("Copied the edited picture. Paste it anywhere.");
                 } else if (how == 1) {
                     int dot = name.lastIndexOf('.');

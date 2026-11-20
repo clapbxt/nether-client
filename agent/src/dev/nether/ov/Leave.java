@@ -118,6 +118,53 @@ final class Leave {
         return false;
     }
 
+    /**
+     * The pause screen's Save and Quit / Disconnect button as {x, y, width, height} in GUI px, or null. 1.8.9 / 1.12.2:
+     * buttonList[0] (GuiButton xPosition, yPosition, width, height). 1.14+: the widget that says menu.returnToMenu /
+     * menu.disconnect; its class's first four int fields are width, height, x, y (AbstractWidget, every version).
+     */
+    static int[] quitRect(Object s) {
+        try {
+            if (Game.legacy()) {
+                Object l = Game.fld(s, Game.l("n", "field_146292_n"));
+                if (!(l instanceof List) || ((List<?>) l).isEmpty()) return null;
+                Object b = ((List<?>) l).get(0);
+                int[] r = {num(Game.fld(b, Game.l("h", "field_146128_h"))), num(Game.fld(b, Game.l("i", "field_146129_i"))),
+                    num(Game.fld(b, Game.l("f", "field_146120_f"))), num(Game.fld(b, Game.l("g", "field_146121_g")))};
+                return r[2] >= 50 && r[3] > 0 ? r : null;
+            }
+            List<Object> widgets = new ArrayList<>();
+            for (Class<?> k = s.getClass(); k != null && k != Object.class; k = k.getSuperclass()) {
+                for (Field f : k.getDeclaredFields()) {
+                    if (Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive()) continue;
+                    f.setAccessible(true);
+                    Object v = f.get(s);
+                    if (v instanceof Collection) { for (Object o : (Collection<?>) v) if (o != null && !widgets.contains(o)) widgets.add(o); }
+                    else if (v != null && press(v) != null && !widgets.contains(v)) widgets.add(v);
+                }
+            }
+            Object quit = null, last = null;
+            for (Object w : widgets) {
+                if (press(w) == null) continue;
+                last = w;
+                if (says(w, "'menu.returnToMenu'") || says(w, "'menu.disconnect'")) { quit = w; break; }
+            }
+            if (quit == null && !anyKey(widgets)) quit = last;
+            if (quit == null) return null;
+            for (Class<?> k = quit.getClass(); k != null && k != Object.class; k = k.getSuperclass()) {
+                List<Field> ints = new ArrayList<>();
+                for (Field f : k.getDeclaredFields()) if (f.getType() == int.class && !Modifier.isStatic(f.getModifiers())) ints.add(f);
+                if (ints.size() < 4) continue;
+                int[] v = new int[4];
+                for (int i = 0; i < 4; i++) { ints.get(i).setAccessible(true); v[i] = ints.get(i).getInt(quit); }
+                if (v[0] >= 50 && v[1] >= 16 && v[1] <= 24) return new int[] {v[2], v[3], v[0], v[1]};
+            }
+        } catch (Throwable ignored) { }
+        return null;
+    }
+
+    private static int num(Object o) { return o instanceof Number ? ((Number) o).intValue() : -1; }
+
     private static boolean anyKey(List<Object> ws) {
         for (Object w : ws) if (says(w, "'menu.")) return true;
         return false;

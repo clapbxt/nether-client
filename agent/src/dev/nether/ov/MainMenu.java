@@ -165,6 +165,7 @@ final class MainMenu {
                         if (chip("invite", 12 + chipW("NETHER", keyName(), true) + 8, 12, 32, on ? "SHARING" : "INVITE", null, false, on, true)) WorldShare.show();
                     }
                     WorldShare.card(Gfx.fbW / Gfx.s, 12);
+                    galleryButton(s);
                 }
             }
         } finally {
@@ -559,12 +560,17 @@ final class MainMenu {
      * friends (the hub's order), with the live player count under it when `online`.
      */
     private static void actions(float x, float y, float w, boolean online, boolean centred) {
-        float gap = 6, sq = ACT_H, mw = w - 3 * sq - 3 * gap;
+        boolean shots = Modules.SHOTS.enabled();
+        float gap = 6, sq = ACT_H, mw = w - (shots ? 4 : 3) * (sq + gap);
         int go = -1;
         if (actBtn("as", x, y, sq, sq, "settings", null, "Nether settings")) go = Menu.T_SETTINGS;
         if (actBtn("am", x + sq + gap, y, mw, sq, null, "MODS", "Nether mods and HUD  \u00b7  " + keyName())) go = Menu.lastCat;
         if (actBtn("aw", x + sq + mw + gap * 2, y, sq, sq, "wardrobe", null, "Wardrobe")) go = Menu.T_WARDROBE;
         float fx = x + sq * 2 + mw + gap * 3;
+        if (shots) {
+            if (actBtn("ap", fx, y, sq, sq, "screenshots", null, "Screenshots")) { panelOpen = false; Screenshots.show(); }
+            fx += sq + gap;
+        }
         if (actBtn("af", fx, y, sq, sq, "friends", null, "Friends")) go = Menu.T_FRIENDS;
         int badge = Friends.badge();
         if (badge > 0) { // requests + asks to join
@@ -584,6 +590,29 @@ final class MainMenu {
             Gfx.text(Gfx.UI, 10.5f, lx + 12 + tw, ly, Gfx.DIM, u);
         }
         if (go >= 0) { panelOpen = false; Menu.openAt(go); }
+    }
+
+    /**
+     * Pause screen: a square button in the game's own style right of Save and Quit / Disconnect (vanilla's language and
+     * accessibility buttons sit the same way), with the screenshots icon; opens the Screenshots browser.
+     */
+    private static void galleryButton(Object s) {
+        if (!Modules.SHOTS.enabled()) return;
+        int[] q = Leave.quitRect(s);
+        if (q == null) return;
+        float x = (q[0] + q[2] + 4) * 2, y = q[1] * 2, sz = q[3] * 2;
+        float a0 = Gfx.alpha;
+        Gfx.alpha = 1; // drawn like the game's own buttons, never faded
+        boolean hov = over(x, y, sz, sz);
+        if (!Vanilla.button(x, y, sz, hov)) {
+            Gfx.rect(x, y, sz, sz, 0, hov ? 0xFF6F6F6F : 0xFF4A4A4A);
+            Gfx.ring(x, y, sz, sz, 0, 2, hov ? 0xFFFFFFFF : 0xFF000000);
+        }
+        ModIcons.draw("screenshots", x + sz / 2 - 12, y + sz / 2 - 12, 24, legacy && hov ? 0xFFFFFFA0 : 0xFFFFFFFF);
+        box(x, y, sz, sz);
+        Gfx.alpha = a0;
+        if (hov) tip("Screenshots  \u00b7  " + Menu.keyName((int) Modules.SHOTS.num("openKey")));
+        if (hit(x, y, sz, sz)) Screenshots.show();
     }
 
     /** An actions-row button: the title buttons' glass with a line icon or a label, and a tooltip on hover. */

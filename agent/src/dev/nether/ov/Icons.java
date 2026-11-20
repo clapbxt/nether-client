@@ -161,6 +161,25 @@ final class Icons {
     static BufferedImage decode(InputStream in) throws java.io.IOException { return decode(in, MAX_PX); }
 
     /**
+     * ImageIO reads greyscale PNGs into Java's linear grey colour space, so getRGB() comes out much brighter than the
+     * file (the game's button sprite: 111 -> 176). The stored samples are what the game shows: copy them as they are.
+     */
+    static BufferedImage gray(BufferedImage b) {
+        if (b == null || b.getColorModel().getColorSpace().getType() != java.awt.color.ColorSpace.TYPE_GRAY) return b;
+        java.awt.image.Raster r = b.getRaster();
+        java.awt.image.ColorModel cm = b.getColorModel();
+        int w = b.getWidth(), h = b.getHeight(), n = r.getNumBands();
+        boolean alpha = cm.hasAlpha() && n > 1;
+        int gm = (1 << cm.getComponentSize(0)) - 1, am = alpha ? (1 << cm.getComponentSize(n - 1)) - 1 : 1;
+        BufferedImage o = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) {
+            int g = r.getSample(x, y, 0) * 255 / gm, a = alpha ? r.getSample(x, y, n - 1) * 255 / am : 255;
+            o.setRGB(x, y, a << 24 | g << 16 | g << 8 | g);
+        }
+        return o;
+    }
+
+    /**
      * Decode, but read the size from the header first: a small file that claims a huge picture (a decompression bomb
      * from a server favicon, a resource pack, album art) is refused (null) before anything is allocated.
      */
@@ -185,7 +204,7 @@ final class Icons {
                 r.setInput(iis, true, true);
                 long w = r.getWidth(0), h = r.getHeight(0);
                 if (w <= 0 || h <= 0 || w * h > maxPx) return null;
-                return r.read(0);
+                return gray(r.read(0));
             } finally {
                 r.dispose();
             }
