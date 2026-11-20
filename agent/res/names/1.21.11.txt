@@ -100,8 +100,11 @@ method_1562	R	()Lhig;
 method_1576	aa	()Liqa;
 method_1592	u	()V
 method_1676	c	()Ljava/lang/String;
+method_16914	i_	()Z
 method_17165	d	()Lgzm;
 method_1743	e	()Lgjf;
+method_17681	dF	()F
+method_17682	dG	()F
 method_17783	d	()Lftk$a;
 method_1812	a	(Lyh;)V
 method_18456	E	()Ljava/util/List;
@@ -122,6 +125,7 @@ method_23760	c	()Lfzm$a;
 method_23761	a	()Lorg/joml/Matrix4f;
 method_23767	g	()Lorg/joml/Quaternionf;
 method_23919	a	(FFFIFFIIFFF)V
+method_26216	s	()Z
 method_27693	f	(Ljava/lang/String;)Lyw;
 method_27704	a	(Lym;)Lzf;
 method_27728	bb	()Lfnt;
@@ -173,6 +177,7 @@ method_5591	f	()Z
 method_5628	aA	()I
 method_5667	cY	()Ljava/util/UUID;
 method_5767	cG	()Z
+method_5851	cF	()Z
 method_5854	dz	()Lcgk;
 method_5864	ay	()Lcgu;
 method_5872	b	(DD)V
@@ -200,6 +205,7 @@ method_7947	N	()I
 method_7960	f	()Z
 method_7963	m	()Z
 method_7964	y	()Lyh;
+method_8320	a_	(Lis;)Leoh;
 method_8532	al	()J
 method_9249	a	(Lcom/mojang/brigadier/ParseResults;Ljava/lang/String;)V
 net.minecraft.class_1011	fyh	
@@ -244,4 +250,5 @@ net.minecraft.class_6599	gwj
 net.minecraft.class_757	hob	
 net.minecraft.class_759	hof	
 net.minecraft.class_897	hwp	
+net.minecraft.class_898	hwo	
 net.minecraft.class_922	hxs	

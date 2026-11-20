@@ -4,6 +4,8 @@ field_150901_e	g
 field_151456_ac	ap	
 field_178879_v	x	
 field_70125_A	w	
+field_70130_N	G	
+field_70131_O	H	
 field_70161_v	r	
 field_70163_u	q	
 field_70165_t	p	
@@ -53,6 +55,7 @@ func_110579_a	a	(Lnf;Lcds;)Z
 func_111285_a	c	()Ljava/lang/String;
 func_135052_a	a	(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
 func_145748_c_	i_	()Lhh;
+func_145818_k_	n_	()Z
 func_146158_b	d	()Lbjb;
 func_146227_a	a	(Lhh;)V
 func_147104_D	C	()Lbse;
@@ -69,6 +72,9 @@ func_175140_cp	do	()Z
 func_177774_c	b	(Ljava/lang/Object;)Ljava/lang/Object;
 func_178845_a	a	()Lcom/mojang/authlib/GameProfile;
 func_178853_c	c	()I
+func_180495_p	o	(Let;)Lawt;
+func_184202_aL	aW	()Z
+func_185914_p	p	()Z
 func_188419_a	a	()Luz;
 func_190926_b	b	()Z
 func_70651_bq	ca	()Ljava/util/Collection;

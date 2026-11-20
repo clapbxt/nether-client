@@ -372,6 +372,33 @@ public final class Hook {
         return true;
     }
 
+    // ---------------------------------------------------------------- entity occlusion culling (Performance module)
+
+    /** Answers "is this entity hidden behind opaque blocks?" from the overlay's culling worker; render thread. */
+    public interface Cull { boolean hidden(Object entity, double camX, double camY, double camZ); }
+    public static volatile Cull cull;
+    /** EntityRenderDispatcher.shouldRender (RenderManager on 1.8.9 / 1.12.2) was hooked. */
+    public static volatile boolean cullHooked;
+    /** dev: -Dnether.benchCull=1 (with bench) turns culling off and on every other 5 s window. */
+    private static final boolean BENCH_CULL = "1".equals(System.getProperty("nether.benchCull"));
+    private static volatile boolean cullOff;
+    private static int cullErrors, cullAsked, cullHidden;
+
+    /** Start of EntityRenderDispatcher.shouldRender(entity, frustum, camX, camY, camZ[, partial]): true = the game skips the entity. */
+    public static boolean cull(Object e, double x, double y, double z) {
+        Cull c = cull;
+        if (c == null || cullOff) return false;
+        try {
+            boolean h = c.hidden(e, x, y, z);
+            if (BENCH) { cullAsked++; if (h) cullHidden++; }
+            return h;
+        } catch (Throwable t) {
+            if (cullErrors++ == 0) { System.out.println("[nether-agent] culling error: " + t); t.printStackTrace(System.out); }
+            if (cullErrors >= 50) { cull = null; System.out.println("[nether-agent] culling disabled after repeated errors"); }
+            return false;
+        }
+    }
+
     /** dev: -Dnether.bench=1 prints frame-rate stats every 5 s from the swap hook itself, so it also measures -Dnether.bare=1 (overlay and game hooks off). */
     static final boolean BENCH = "1".equals(System.getProperty("nether.bench"));
     private static long benchAt, benchLast;
@@ -401,6 +428,9 @@ public final class Hook {
             ab = target != null ? " ab on" : " ab off";
             target = target != null ? null : benchSaved;
         }
+        if (cullHooked) ab += String.format(java.util.Locale.ROOT, " cull%s %.0f/%.0f", cullOff ? "off" : "on", cullHidden / (double) benchN, cullAsked / (double) benchN);
+        if (BENCH_CULL) cullOff = !cullOff;
+        cullAsked = cullHidden = 0;
         System.out.println(String.format(java.util.Locale.ROOT, "[nether-bench] fps %.1f low1 %.1f low01 %.1f frames %d ov %.1fus ovmax %.1fus%s", avg, p99, p999, benchN, benchOv / 1e3 / benchN, benchOvMax / 1e3, ab));
         benchN = 0;
         benchOv = benchOvMax = 0;
@@ -410,7 +440,11 @@ public final class Hook {
     /** True once the agent wrapped LWJGL's GL calls (so the shadow above is being kept). */
     public static volatile boolean glShadowed;
 
+    /** Swapped frames (render thread), counted even when the overlay is off. */
+    public static long frames;
+
     public static void frame(long window) {
+        frames++;
         if (glThread == null) glThread = Thread.currentThread();
         if (BENCH) bench();
         LongConsumer t = target;

@@ -192,6 +192,23 @@ final class Game {
         throw new NoSuchMethodException(c.getName() + "." + name);
     }
 
+    /**
+     * Method `name` (the code's name, mapped as in call) of c or a supertype with argc parameters and, unless null, that
+     * return type; accessible. For callers that invoke it themselves (off the render thread: Culling). Null when absent.
+     */
+    static Method named(Class<?> c, String name, int argc, Class<?> ret) {
+        String want = want(name);
+        for (Class<?> k = c; k != null; k = k.getSuperclass())
+            for (Method d : k.getDeclaredMethods())
+                if (d.getParameterTypes().length == argc && (ret == null || d.getReturnType() == ret) && is(d.getName(), name) && (want == null || want.equals(desc(d)))) { open(d); return d; }
+        for (Method d : c.getMethods())
+            if (d.getParameterTypes().length == argc && (ret == null || d.getReturnType() == ret) && is(d.getName(), name) && (want == null || want.equals(desc(d)))) { open(d); return d; }
+        return null;
+    }
+
+    /** The client world (Level / WorldClient), or null. */
+    static Object level() { return !supported() || !resolved ? null : legacy ? fld(mc, l("f", "field_71441_e")) : fld(mc, "field_1687"); }
+
     /** Calls a method by name and arg count; null when anything is missing (never throws). */
     static Object call(Object o, String name, Object... a) {
         if (o == null) return null;
@@ -611,7 +628,7 @@ final class Game {
 
     // ---------------------------------------------------------------- dev only: join a world, run commands as the server
 
-    private static int devStep = System.getProperty("nether.world") == null && System.getProperty("nether.cmd") == null ? -1 : 0;
+    private static int devStep = System.getProperty("nether.world") == null && System.getProperty("nether.cmd") == null && System.getProperty("nether.cmdFile") == null ? -1 : 0;
 
     /**
      * -Dnether.world=<save folder> on 1.8.9 loads that singleplayer world from the title screen (1.20+: the agent adds
@@ -623,7 +640,10 @@ final class Game {
 
     static void devTick() {
         if (devStep < 0 || !supported() || !resolved) return;
-        final String w = prop("nether.world"), cmd = prop("nether.cmd");
+        final String w = prop("nether.world"), cf = System.getProperty("nether.cmdFile");
+        String cmd = prop("nether.cmd");
+        // -Dnether.cmdFile=<file>: the same list from a file (Java 8 drops a JAVA_TOOL_OPTIONS longer than ~2 KB)
+        if (cmd == null && cf != null) try { cmd = new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(cf)), java.nio.charset.StandardCharsets.UTF_8).replace('+', ' ').trim(); } catch (Throwable t) { }
         devStep++;
         try {
             if (legacy && w != null && devStep == 60 && player0() == null) {
