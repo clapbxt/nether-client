@@ -13,6 +13,8 @@ import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL33;
 
+import dev.nether.agent.Hook;
+
 /** LWJGL3 backend: its own GL 150 core program + VAO; the whole touched state is saved and restored by hand. */
 final class GlCore extends GlBackend {
     private static final String VS = "#version 150 core\n"
@@ -103,42 +105,79 @@ final class GlCore extends GlBackend {
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, pTex);
     }
 
-    @Override void save(int fw, int fh) {
-        h = fh;
-        unit1 = false;
-        prevProg = geti(GL20.GL_CURRENT_PROGRAM);
-        prevVao = geti(GL30.GL_VERTEX_ARRAY_BINDING);
-        prevBuf = geti(GL15.GL_ARRAY_BUFFER_BINDING);
-        prevFb = geti(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
-        prevActive = geti(GL13.GL_ACTIVE_TEXTURE);
-        GL13.glActiveTexture(GL13.GL_TEXTURE0);
-        prevTex = geti(GL11.GL_TEXTURE_BINDING_2D);
-        prevSampler = samplers ? geti(GL33.GL_SAMPLER_BINDING) : 0;
+    /** this frame's state source: Hook's shadow (no driver stall) or a real query */
+    private boolean shadow;
+    private final int[] q = new int[Hook.G_N], qt = new int[2], qs = new int[2];
+
+    /** The whole state the overlay touches, from the driver (stalls until the driver caught up): seeds / checks the shadow. */
+    private void query() {
+        q[Hook.G_PROG] = geti(GL20.GL_CURRENT_PROGRAM);
+        q[Hook.G_VAO] = geti(GL30.GL_VERTEX_ARRAY_BINDING);
+        q[Hook.G_ABUF] = geti(GL15.GL_ARRAY_BUFFER_BINDING);
+        q[Hook.G_DFB] = geti(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int act = q[Hook.G_ACTIVE] = geti(GL13.GL_ACTIVE_TEXTURE);
+        for (int u = 0; u < 2; u++) {
+            GL13.glActiveTexture(GL13.GL_TEXTURE0 + u);
+            qt[u] = geti(GL11.GL_TEXTURE_BINDING_2D);
+            qs[u] = samplers ? geti(GL33.GL_SAMPLER_BINDING) : 0;
+        }
+        GL13.glActiveTexture(act);
         ib.clear();
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, ib);
-        for (int i = 0; i < 4; i++) vp[i] = ib.get(i);
+        for (int i = 0; i < 4; i++) q[Hook.G_VP + i] = ib.get(i);
         ib.clear();
         GL11.glGetIntegerv(GL11.GL_SCISSOR_BOX, ib);
-        for (int i = 0; i < 4; i++) sb[i] = ib.get(i);
+        for (int i = 0; i < 4; i++) q[Hook.G_SB + i] = ib.get(i);
         ib.clear();
         ib.put(0, GL11.GL_FILL).put(1, GL11.GL_FILL);
         GL11.glGetIntegerv(GL11.GL_POLYGON_MODE, ib); // wireframe debug views must not turn our quads into lines
-        polyF = ib.get(0);
-        polyB = ib.get(1);
-        blend = GL11.glIsEnabled(GL11.GL_BLEND);
-        depth = GL11.glIsEnabled(GL11.GL_DEPTH_TEST);
-        cull = GL11.glIsEnabled(GL11.GL_CULL_FACE);
-        scissor = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
-        stencil = GL11.glIsEnabled(GL11.GL_STENCIL_TEST);
-        srgb = GL11.glIsEnabled(GL30.GL_FRAMEBUFFER_SRGB);
-        depthMask = GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK);
-        srcRgb = geti(0x80C9); dstRgb = geti(0x80C8); srcA = geti(0x80CB); dstA = geti(0x80CA);
-        eqRgb = geti(0x8009); eqA = geti(0x883D);
-        align = geti(GL11.GL_UNPACK_ALIGNMENT);
+        q[Hook.G_POLYF] = ib.get(0);
+        q[Hook.G_POLYB] = ib.get(1);
+        q[Hook.G_CAPS] = (GL11.glIsEnabled(GL11.GL_BLEND) ? Hook.C_BLEND : 0) | (GL11.glIsEnabled(GL11.GL_DEPTH_TEST) ? Hook.C_DEPTH : 0)
+            | (GL11.glIsEnabled(GL11.GL_CULL_FACE) ? Hook.C_CULL : 0) | (GL11.glIsEnabled(GL11.GL_SCISSOR_TEST) ? Hook.C_SCISSOR : 0)
+            | (GL11.glIsEnabled(GL11.GL_STENCIL_TEST) ? Hook.C_STENCIL : 0) | (GL11.glIsEnabled(GL30.GL_FRAMEBUFFER_SRGB) ? Hook.C_SRGB : 0);
+        q[Hook.G_DMASK] = GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK) ? 1 : 0;
+        q[Hook.G_SRC_RGB] = geti(0x80C9); q[Hook.G_DST_RGB] = geti(0x80C8); q[Hook.G_SRC_A] = geti(0x80CB); q[Hook.G_DST_A] = geti(0x80CA);
+        q[Hook.G_EQ_RGB] = geti(0x8009); q[Hook.G_EQ_A] = geti(0x883D);
         ib.clear();
         GL11.glGetIntegerv(0x0C23, ib); // GL_COLOR_WRITEMASK
-        for (int i = 0; i < 4; i++) cm[i] = ib.get(i) != 0;
+        q[Hook.G_CMASK] = (ib.get(0) != 0 ? 1 : 0) | (ib.get(1) != 0 ? 2 : 0) | (ib.get(2) != 0 ? 4 : 0) | (ib.get(3) != 0 ? 8 : 0);
+        for (int i = 0; i < 4; i++) q[Hook.G_ALIGN + i] = geti(PS[i]);
+        q[Hook.G_UPBO] = geti(0x88EF);
+        queried(q, qt, qs);
+    }
 
+    @Override void save(int fw, int fh) {
+        h = fh;
+        unit1 = false;
+        shadow = useShadow();
+        if (!shadow) query();
+        int[] s = shadow ? Hook.gs : q;
+        prevProg = s[Hook.G_PROG];
+        prevVao = s[Hook.G_VAO];
+        prevBuf = s[Hook.G_ABUF];
+        prevFb = s[Hook.G_DFB];
+        prevActive = s[Hook.G_ACTIVE];
+        prevTex = shadow ? Hook.gtex[0] : qt[0];
+        prevSampler = shadow ? Hook.gsmp[0] : qs[0];
+        prevTex1 = shadow ? Hook.gtex[1] : qt[1];
+        prevSampler1 = shadow ? Hook.gsmp[1] : qs[1];
+        for (int i = 0; i < 4; i++) { vp[i] = s[Hook.G_VP + i]; sb[i] = s[Hook.G_SB + i]; cm[i] = (s[Hook.G_CMASK] & (1 << i)) != 0; }
+        polyF = s[Hook.G_POLYF];
+        polyB = s[Hook.G_POLYB];
+        int caps = s[Hook.G_CAPS];
+        blend = (caps & Hook.C_BLEND) != 0;
+        depth = (caps & Hook.C_DEPTH) != 0;
+        cull = (caps & Hook.C_CULL) != 0;
+        scissor = (caps & Hook.C_SCISSOR) != 0;
+        stencil = (caps & Hook.C_STENCIL) != 0;
+        srgb = (caps & Hook.C_SRGB) != 0;
+        depthMask = s[Hook.G_DMASK] != 0;
+        srcRgb = s[Hook.G_SRC_RGB]; dstRgb = s[Hook.G_DST_RGB]; srcA = s[Hook.G_SRC_A]; dstA = s[Hook.G_DST_A];
+        eqRgb = s[Hook.G_EQ_RGB]; eqA = s[Hook.G_EQ_A];
+        align = s[Hook.G_ALIGN];
+
+        GL13.glActiveTexture(GL13.GL_TEXTURE0);
         GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, 0);
         GL11.glViewport(0, 0, fw, fh);
         GL11.glDisable(GL11.GL_DEPTH_TEST);
@@ -206,9 +245,15 @@ final class GlCore extends GlBackend {
         GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, verts);
     }
 
+    /** unpack state (alignment, row length, skip rows, skip pixels) into ps; returns the bound pixel-unpack buffer */
+    private int unpack() {
+        for (int i = 0; i < 4; i++) ps[i] = shadow ? Hook.gs[Hook.G_ALIGN + i] : geti(PS[i]);
+        return shadow ? Hook.gs[Hook.G_UPBO] : geti(0x88EF);
+    }
+
     @Override void upload(int x, int y, int w, int hh, ByteBuffer px) {
-        for (int i = 0; i < 4; i++) { ps[i] = geti(PS[i]); GL11.glPixelStorei(PS[i], i == 0 ? 1 : 0); }
-        int prevPbo = geti(0x88EF);
+        int prevPbo = unpack();
+        for (int i = 0; i < 4; i++) GL11.glPixelStorei(PS[i], i == 0 ? 1 : 0);
         if (prevPbo != 0) GL15.glBindBuffer(0x88EC, 0);
         GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, x, y, w, hh, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, px);
         if (prevPbo != 0) GL15.glBindBuffer(0x88EC, prevPbo);
@@ -219,9 +264,7 @@ final class GlCore extends GlBackend {
     private void unit1() {
         GL13.glActiveTexture(GL13.GL_TEXTURE1);
         if (unit1) return;
-        unit1 = true;
-        prevTex1 = geti(GL11.GL_TEXTURE_BINDING_2D);
-        prevSampler1 = samplers ? geti(GL33.GL_SAMPLER_BINDING) : 0;
+        unit1 = true; // prevTex1 / prevSampler1 were taken by save
         if (samplers) GL33.glBindSampler(1, 0);
     }
 
@@ -234,8 +277,8 @@ final class GlCore extends GlBackend {
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, f);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, CLAMP_TO_EDGE);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, CLAMP_TO_EDGE);
-        for (int i = 0; i < 4; i++) { ps[i] = geti(PS[i]); GL11.glPixelStorei(PS[i], i == 0 ? 1 : 0); }
-        int prevPbo = geti(0x88EF);
+        int prevPbo = unpack();
+        for (int i = 0; i < 4; i++) GL11.glPixelStorei(PS[i], i == 0 ? 1 : 0);
         if (prevPbo != 0) GL15.glBindBuffer(0x88EC, 0);
         GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, w, hh, 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, rgba);
         if (prevPbo != 0) GL15.glBindBuffer(0x88EC, prevPbo);

@@ -13,6 +13,8 @@ import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GLContext;
 
+import dev.nether.agent.Hook;
+
 /**
  * LWJGL2 / compatibility-context backend (Minecraft 1.8.9 draws with fixed function). Compiled against LWJGL2, in a
  * separate javac pass. GLSL 120 program, plain vertex attribute arrays on a VBO (no VAO in 2.1), alpha-only atlas
@@ -96,15 +98,41 @@ final class GlCompat extends GlBackend {
         else if (fboExt) EXTFramebufferObject.glBindFramebufferEXT(EXTFramebufferObject.GL_FRAMEBUFFER_EXT, id);
     }
 
+    /** this frame's state source: Hook's shadow (no driver stall) or a real query */
+    private boolean shadow;
+    private final int[] q = new int[Hook.G_N], qt = new int[2], qs = new int[2];
+
+    /** The bindings the overlay reads, from the driver (a stall): seeds / checks the shadow. Fields not asked keep the shadow's values. */
+    private void query() {
+        System.arraycopy(Hook.gs, 0, q, 0, q.length);
+        q[Hook.G_PROG] = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+        q[Hook.G_ABUF] = GL11.glGetInteger(GL15.GL_ARRAY_BUFFER_BINDING);
+        int act = q[Hook.G_ACTIVE] = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
+        q[Hook.G_DFB] = fbo30 || fboExt ? GL11.glGetInteger(FRAMEBUFFER_BINDING) : 0;
+        // unit 0's binding comes back with the attrib pop (behind the shadow's back), so it is neither read nor checked
+        qt[0] = Hook.gtex[0];
+        GL13.glActiveTexture(GL13.GL_TEXTURE1);
+        qt[1] = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        GL13.glActiveTexture(act);
+        int[] ps = {GL11.GL_UNPACK_ALIGNMENT, GL11.GL_UNPACK_ROW_LENGTH, GL11.GL_UNPACK_SKIP_ROWS, GL11.GL_UNPACK_SKIP_PIXELS};
+        for (int i = 0; i < 4; i++) q[Hook.G_ALIGN + i] = GL11.glGetInteger(ps[i]);
+        q[Hook.G_UPBO] = GL11.glGetInteger(0x88EF);
+        queried(q, qt, qs);
+    }
+
     @Override void save(int fw, int fh) {
         GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
         GL11.glPushClientAttrib(0xFFFFFFFF); // GL_CLIENT_ALL_ATTRIB_BITS
         unit1 = false;
         // bindings the attrib stacks do not cover
-        prevProg = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
-        prevBuf = GL11.glGetInteger(GL15.GL_ARRAY_BUFFER_BINDING);
-        prevActive = GL11.glGetInteger(GL13.GL_ACTIVE_TEXTURE);
-        prevFb = fbo30 || fboExt ? GL11.glGetInteger(FRAMEBUFFER_BINDING) : 0;
+        shadow = useShadow();
+        if (!shadow) query();
+        int[] s = shadow ? Hook.gs : q;
+        prevProg = s[Hook.G_PROG];
+        prevBuf = s[Hook.G_ABUF];
+        prevActive = s[Hook.G_ACTIVE];
+        prevFb = s[Hook.G_DFB];
+        prevTex1 = shadow ? Hook.gtex[1] : qt[1];
 
         if (prevFb != 0) bindFb(0);
         GL11.glViewport(0, 0, fw, fh);
@@ -166,8 +194,8 @@ final class GlCompat extends GlBackend {
     @Override void upload(int x, int y, int w, int h, ByteBuffer px) {
         int[] ps = {GL11.GL_UNPACK_ALIGNMENT, GL11.GL_UNPACK_ROW_LENGTH, GL11.GL_UNPACK_SKIP_ROWS, GL11.GL_UNPACK_SKIP_PIXELS};
         int[] old = new int[4];
-        for (int i = 0; i < 4; i++) { old[i] = GL11.glGetInteger(ps[i]); GL11.glPixelStorei(ps[i], i == 0 ? 1 : 0); }
-        int prevPbo = GL11.glGetInteger(0x88EF);
+        int prevPbo = unpack(ps, old);
+        for (int i = 0; i < 4; i++) GL11.glPixelStorei(ps[i], i == 0 ? 1 : 0);
         if (prevPbo != 0) GL15.glBindBuffer(0x88EC, 0);
         GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, x, y, w, h, GL11.GL_ALPHA, GL11.GL_UNSIGNED_BYTE, px);
         if (prevPbo != 0) GL15.glBindBuffer(0x88EC, prevPbo);
@@ -176,9 +204,13 @@ final class GlCompat extends GlBackend {
 
     private void unit1() {
         GL13.glActiveTexture(GL13.GL_TEXTURE1);
-        if (unit1) return;
-        unit1 = true;
-        prevTex1 = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        unit1 = true; // prevTex1 was taken by save
+    }
+
+    /** unpack state (alignment, row length, skip rows, skip pixels) into old; returns the bound pixel-unpack buffer */
+    private int unpack(int[] ps, int[] old) {
+        for (int i = 0; i < 4; i++) old[i] = shadow ? Hook.gs[Hook.G_ALIGN + i] : GL11.glGetInteger(ps[i]);
+        return shadow ? Hook.gs[Hook.G_UPBO] : GL11.glGetInteger(0x88EF);
     }
 
     @Override int texCreate(int w, int h, ByteBuffer rgba, boolean smooth) {
@@ -192,8 +224,8 @@ final class GlCompat extends GlBackend {
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, CLAMP_TO_EDGE);
         int[] ps = {GL11.GL_UNPACK_ALIGNMENT, GL11.GL_UNPACK_ROW_LENGTH, GL11.GL_UNPACK_SKIP_ROWS, GL11.GL_UNPACK_SKIP_PIXELS};
         int[] old = new int[4];
-        for (int i = 0; i < 4; i++) { old[i] = GL11.glGetInteger(ps[i]); GL11.glPixelStorei(ps[i], i == 0 ? 1 : 0); }
-        int prevPbo = GL11.glGetInteger(0x88EF);
+        int prevPbo = unpack(ps, old);
+        for (int i = 0; i < 4; i++) GL11.glPixelStorei(ps[i], i == 0 ? 1 : 0);
         if (prevPbo != 0) GL15.glBindBuffer(0x88EC, 0);
         GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, 0x8058, w, h, 0, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, rgba); // GL_RGBA8
         if (prevPbo != 0) GL15.glBindBuffer(0x88EC, prevPbo);

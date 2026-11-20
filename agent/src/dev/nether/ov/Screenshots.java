@@ -139,6 +139,10 @@ final class Screenshots extends Module {
     // ---------------------------------------------------------------- new screenshots (preview card)
 
     private static long watchAt, newest = -1;
+    /** newest picture found by the last folder watch on the worker (watched = a result waits for the render thread) */
+    private static volatile long watchTop;
+    private static volatile String watchName;
+    private static volatile boolean watching, watched;
     private static String card;
     private static long cardAt;
 
@@ -161,12 +165,27 @@ final class Screenshots extends Module {
             if (Game.devT() > Integer.parseInt(p[0].trim())) { devAt = -1; show(); if (p.length > 1) view = Integer.parseInt(p[1].trim()); }
         }
         if (open && now - scanAt > 2000) rescan();
-        if (!enabled() || now - watchAt < 500) return;
-        watchAt = now;
-        File[] fs = dir().toFile().listFiles();
-        long top = 0;
-        String name = null;
-        if (fs != null) for (File f : fs) if (f.isFile() && image(f.getName()) && f.lastModified() > top) { top = f.lastModified(); name = f.getName(); }
+        if (!enabled()) return;
+        // the folder is listed on the worker (a stat per file: milliseconds with many pictures), never on the render thread
+        if (now - watchAt >= 500 && !watching) {
+            watchAt = now;
+            watching = true;
+            POOL.submit(() -> {
+                try {
+                    File[] fs = dir().toFile().listFiles();
+                    long t = 0;
+                    String n = null;
+                    if (fs != null) for (File f : fs) if (f.isFile() && image(f.getName())) { long m = f.lastModified(); if (m > t) { t = m; n = f.getName(); } }
+                    watchTop = t;
+                    watchName = n;
+                    watched = true;
+                } finally { watching = false; }
+            });
+        }
+        if (!watched) return;
+        watched = false;
+        long top = watchTop;
+        String name = watchName;
         if (newest < 0) { newest = top; return; } // what was there when the game started is not new
         if (top <= newest || name == null) return;
         newest = top;

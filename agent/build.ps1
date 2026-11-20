@@ -76,7 +76,7 @@ $boot = Join-Path $out "boot\dev\nether\agent"; New-Item -ItemType Directory -Fo
 Move-Item (Join-Path $cls "dev\nether\agent\Hook*.class"), (Join-Path $cls "dev\nether\agent\Tiny*.class") $boot # Tiny: Legacy Fabric 1.8.9 names, shared by the agent and the overlay
 & jar cf (Join-Path $out "nether-agent-boot.jar") -C (Join-Path $out "boot") .
 if ($LASTEXITCODE -ne 0) { throw "boot jar failed" }
-Set-Content (Join-Path $out "manifest.txt") "Premain-Class: dev.nether.agent.Agent`nBoot-Class-Path: nether-agent-boot.jar`n" -Encoding ascii
+Set-Content (Join-Path $out "manifest.txt") "Premain-Class: dev.nether.agent.Agent`nBoot-Class-Path: nether-agent-boot.jar`nCan-Set-Native-Method-Prefix: true`n" -Encoding ascii
 & jar cfm (Join-Path $out "nether-agent.jar") (Join-Path $out "manifest.txt") -C $cls .
 if ($LASTEXITCODE -ne 0) { throw "agent jar failed" }
 # success: swap the finished build in (a failed build above leaves the previous one untouched)

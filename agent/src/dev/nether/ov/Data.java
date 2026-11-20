@@ -38,12 +38,20 @@ final class Data {
     private static boolean wantsExtra(String id) { return id.startsWith("minecraft:leather_") || id.equals("minecraft:player_head"); }
 
     private static final java.util.Map<Class<?>, Field[]> dataFields = new java.util.HashMap<>();
+    /** stack -> {time, its field values, extra text}; weak, so dropped stacks go with the GC */
+    private static final java.util.Map<Object, Object[]> extraCache = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
     /**
      * The stack's own data as text: its component patch (1.20.5+) or NBT tag (older), whichever fields of the stack print
      * as "{...}". Found by type, not by name, so it needs no name table and works on every version and loader; read by
      * {@link Icons#of} for the dye colour and the head's owner. "" when there is none.
      */
+    private static boolean same(Object[] a, Object[] b) {
+        if (a.length != b.length) return false;
+        for (int i = 0; i < a.length; i++) if (a[i] != b[i]) return false;
+        return true;
+    }
+
     static String extra(Object st) {
         try {
             Field[] fs = dataFields.get(st.getClass());
@@ -57,15 +65,24 @@ final class Data {
                     }
                 dataFields.put(st.getClass(), fs = l.toArray(new Field[0]));
             }
+            // printing a stack's tag is costly (whole NBT trees, every 250 ms per HUD module): reuse the last text while the
+            // stack holds the very same field objects, for up to 2 s (a tag edited in place shows within that)
+            Object[] vals = new Object[fs.length];
+            for (int i = 0; i < fs.length; i++) vals[i] = fs[i].get(st);
+            long now = System.currentTimeMillis();
+            Object[] c = extraCache.get(st);
+            if (c != null && now - (Long) c[0] < 2000 && same((Object[]) c[1], vals)) return (String) c[2];
             StringBuilder b = new StringBuilder();
-            for (Field f : fs) {
-                Object v = f.get(st);
+            for (int i = 0; i < fs.length; i++) {
+                Object v = vals[i];
                 if (v == null || v == st) continue;
                 String t = String.valueOf(v);
                 if (t.startsWith("{") && t.length() > 2) t = deep(v, t);
                 if (t.startsWith("{") && t.length() > 2) b.append(t.length() > 16384 ? t.substring(0, 16384) : t).append(' ');
             }
-            return b.toString();
+            String r = b.toString();
+            extraCache.put(st, new Object[] {now, vals, r});
+            return r;
         } catch (Throwable t) {
             return "";
         }

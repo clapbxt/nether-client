@@ -67,8 +67,11 @@ public final class Overlay {
             Input.window = window;
             Input.ww = Math.max(1, sz[2]);
             Input.wh = Math.max(1, sz[3]);
+            Slow.start();
             Plat.cur.tick();
+            Slow.mark("Plat");
             Discord.tick();
+            Slow.mark("Discord");
 
             // dev: open the menu / HUD editor after -Dnether.menuAt seconds (default at once), so in-world shots come first
             if (menuAt == 0) menuAt = now + Long.getLong("nether.menuAt", 0L) * 1_000_000_000L;
@@ -92,10 +95,14 @@ public final class Overlay {
                 }
             }
             Config.tick();
+            Slow.mark("Config");
             Th.tick();
             Keybind.tick();
+            Slow.mark("Th+Keybind");
             Capes.tick();
+            Slow.mark("Capes");
             Cosmetics.tick();
+            Slow.mark("Cosmetics");
             try { Game.devTick(); Game.devInput(); } catch (Throwable t) { System.out.println("[nether-agent] dev hooks: " + t); } // a bad dev property never kills the overlay
             if (Plat.cur.closing(window)) { Modules.shutdown(); Gfx.freeTextures(); } // game is quitting: it saves options right after this frame
 
@@ -109,11 +116,14 @@ public final class Overlay {
             Gfx.dt = dt;
             Hits.frame();
             Menu.frame(fw, fh, dt);
+            Slow.mark("Menu");
             devImage();
             Gfx.minPx = 0;
             Gfx.flush();
             snapshot(fw, fh);
             Gfx.end();
+            Slow.mark("GL end");
+            Slow.end();
         } catch (Throwable t) {
             Gfx.abort();
             System.out.println("[nether-agent] overlay disabled: " + t);

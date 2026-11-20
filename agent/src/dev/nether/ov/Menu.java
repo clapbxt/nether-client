@@ -545,9 +545,13 @@ final class Menu {
         fbW0 = fbW;
         fbH0 = fbH;
         Party.tick();
+        Slow.mark("Party");
         MainMenu.frame(fbW, fbH);
+        Slow.mark("MainMenu");
         WorldShare.tick();
+        Slow.mark("WorldShare");
         Friends.tick();
+        Slow.mark("Friends");
         Gfx.minPx = 0;
         Gfx.s = Gfx.base;
         boolean want = Input.menuOpen;

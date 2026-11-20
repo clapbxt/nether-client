@@ -282,15 +282,147 @@ public final class Hook {
         return b;
     }
 
+    // ---------------------------------------------------------------- GL state shadow
+    // The overlay draws on the game's finished frame and must leave the GL state exactly as it found it. Asking the
+    // driver (glGet*) stalls the CPU until the driver's worker thread has drained the whole frame (NVIDIA "threaded
+    // optimization"), which cost up to half the frame. Instead the agent wraps LWJGL's GL entry points (natives through a
+    // method prefix on LWJGL3, Java methods on LWJGL2) and records, from the render thread only, the state the overlay
+    // touches. The overlay seeds it with one real query and re-checks it now and then; a mismatch turns it off for good.
+
+    /** Only calls from this thread are recorded (the game's render thread, set by the first frame). */
+    public static volatile Thread glThread;
+    public static final int G_PROG = 0, G_VAO = 1, G_ABUF = 2, G_DFB = 3, G_ACTIVE = 4, G_VP = 5, G_SB = 9, G_POLYF = 13, G_POLYB = 14,
+        G_CAPS = 15, G_DMASK = 16, G_SRC_RGB = 17, G_DST_RGB = 18, G_SRC_A = 19, G_DST_A = 20, G_EQ_RGB = 21, G_EQ_A = 22, G_CMASK = 23,
+        G_ALIGN = 24, G_ROW = 25, G_SKIP_ROWS = 26, G_SKIP_PIX = 27, G_UPBO = 28, G_N = 29;
+    /** cap bits in gs[G_CAPS] */
+    public static final int C_BLEND = 1, C_DEPTH = 2, C_CULL = 4, C_SCISSOR = 8, C_STENCIL = 16, C_SRGB = 32;
+    public static final int[] gs = new int[G_N];
+    /** TEXTURE_BINDING_2D and SAMPLER_BINDING per texture unit */
+    public static final int[] gtex = new int[32], gsmp = new int[32];
+
+    private static boolean onGl() { return Thread.currentThread() == glThread; }
+    private static int unit() { int u = gs[G_ACTIVE] - 0x84C0; return u < 0 || u >= 32 ? 0 : u; }
+    private static int capBit(int cap) {
+        switch (cap) {
+            case 0x0BE2: return C_BLEND;
+            case 0x0B71: return C_DEPTH;
+            case 0x0B44: return C_CULL;
+            case 0x0C11: return C_SCISSOR;
+            case 0x0B90: return C_STENCIL;
+            case 0x8DB9: return C_SRGB;
+            default: return 0;
+        }
+    }
+
+    public static void glEnable(int cap) { if (onGl()) gs[G_CAPS] |= capBit(cap); }
+    public static void glDisable(int cap) { if (onGl()) gs[G_CAPS] &= ~capBit(cap); }
+    public static void glViewport(int x, int y, int w, int h) { if (onGl()) { gs[G_VP] = x; gs[G_VP + 1] = y; gs[G_VP + 2] = w; gs[G_VP + 3] = h; } }
+    public static void glScissor(int x, int y, int w, int h) { if (onGl()) { gs[G_SB] = x; gs[G_SB + 1] = y; gs[G_SB + 2] = w; gs[G_SB + 3] = h; } }
+    public static void glBindTexture(int target, int id) { if (target == 0x0DE1 && onGl()) gtex[unit()] = id; }
+    public static void glActiveTexture(int u) { if (onGl()) gs[G_ACTIVE] = u; }
+    public static void glActiveTextureARB(int u) { glActiveTexture(u); }
+    public static void glBindSampler(int u, int s) { if (u >= 0 && u < 32 && onGl()) gsmp[u] = s; }
+    public static void glDepthMask(boolean m) { if (onGl()) gs[G_DMASK] = m ? 1 : 0; }
+    public static void glColorMask(boolean r, boolean g, boolean b, boolean a) { if (onGl()) gs[G_CMASK] = (r ? 1 : 0) | (g ? 2 : 0) | (b ? 4 : 0) | (a ? 8 : 0); }
+    public static void glBlendFunc(int s, int d) { glBlendFuncSeparate(s, d, s, d); }
+    public static void glBlendFuncSeparate(int sr, int dr, int sa, int da) { if (onGl()) { gs[G_SRC_RGB] = sr; gs[G_DST_RGB] = dr; gs[G_SRC_A] = sa; gs[G_DST_A] = da; } }
+    public static void glBlendEquation(int e) { glBlendEquationSeparate(e, e); }
+    public static void glBlendEquationSeparate(int rgb, int a) { if (onGl()) { gs[G_EQ_RGB] = rgb; gs[G_EQ_A] = a; } }
+    public static void glPolygonMode(int face, int mode) {
+        if (!onGl()) return;
+        if (face == 0x0408 || face == 0x0404) gs[G_POLYF] = mode;
+        if (face == 0x0408 || face == 0x0405) gs[G_POLYB] = mode;
+    }
+    public static void glPixelStorei(int p, int v) {
+        if (!onGl()) return;
+        if (p == 0x0CF5) gs[G_ALIGN] = v; else if (p == 0x0CF2) gs[G_ROW] = v; else if (p == 0x0CF3) gs[G_SKIP_ROWS] = v; else if (p == 0x0CF4) gs[G_SKIP_PIX] = v;
+    }
+    public static void glBindBuffer(int target, int id) { if (!onGl()) return; if (target == 0x8892) gs[G_ABUF] = id; else if (target == 0x88EC) gs[G_UPBO] = id; }
+    public static void glBindBufferARB(int target, int id) { glBindBuffer(target, id); }
+    public static void glUseProgram(int p) { if (onGl()) gs[G_PROG] = p; }
+    public static void glUseProgramObjectARB(int p) { glUseProgram(p); }
+    public static void glBindVertexArray(int v) { if (onGl()) gs[G_VAO] = v; }
+    public static void glBindFramebuffer(int target, int id) { if ((target == 0x8D40 || target == 0x8CA9) && onGl()) gs[G_DFB] = id; }
+    public static void glBindFramebufferEXT(int target, int id) { glBindFramebuffer(target, id); }
+    // deleting a bound object unbinds it
+    public static void glDeleteTextures(int id) { if (id != 0 && onGl()) for (int i = 0; i < 32; i++) if (gtex[i] == id) gtex[i] = 0; }
+    public static void glDeleteBuffers(int id) { if (id != 0 && onGl()) { if (gs[G_ABUF] == id) gs[G_ABUF] = 0; if (gs[G_UPBO] == id) gs[G_UPBO] = 0; } }
+    public static void glDeleteVertexArrays(int id) { if (id != 0 && onGl() && gs[G_VAO] == id) gs[G_VAO] = 0; }
+    public static void glDeleteFramebuffers(int id) { if (id != 0 && onGl() && gs[G_DFB] == id) gs[G_DFB] = 0; }
+    public static void glDeleteFramebuffersEXT(int id) { glDeleteFramebuffers(id); }
+    public static void glDeleteSamplers(int id) { if (id != 0 && onGl()) for (int i = 0; i < 32; i++) if (gsmp[i] == id) gsmp[i] = 0; }
+
+    // ---------------------------------------------------------------- GPU error-check pairs (Performance module)
+
+    /** Skip vanilla's clearGlErrors() + _getError() out-of-memory probe (each glGetError waits for the driver). Set by ov.Performance. */
+    public static volatile boolean glErrSkip = true;
+    private static boolean errPending;
+
+    /** Start of GlStateManager.clearGlErrors(): true = return at once (and let the next _getError report "no error"). */
+    public static boolean glErrClear() {
+        if (!glErrSkip) return false;
+        errPending = true;
+        return true;
+    }
+
+    /** Start of GlStateManager._getError(): true = return 0 without asking the driver (only right after a skipped clear). */
+    public static boolean glErrRead() {
+        if (!errPending) return false;
+        errPending = false;
+        return true;
+    }
+
+    /** dev: -Dnether.bench=1 prints frame-rate stats every 5 s from the swap hook itself, so it also measures -Dnether.bare=1 (overlay and game hooks off). */
+    static final boolean BENCH = "1".equals(System.getProperty("nether.bench"));
+    private static long benchAt, benchLast;
+    private static final long[] benchDt = new long[200_000];
+    private static int benchN;
+    /** time spent in the overlay (all of Hook.target) this window, and its longest single frame */
+    private static long benchOv, benchOvMax;
+    /** dev: -Dnether.benchAB=1 (with bench) turns the overlay off and on every other window */
+    private static final boolean BENCH_AB = "1".equals(System.getProperty("nether.benchAB"));
+    private static LongConsumer benchSaved;
+
+    /** One line per 5 s window: average FPS, 1 % and 0.1 % lows (FPS at the 99th / 99.9th percentile frame time). */
+    private static void bench() {
+        long now = System.nanoTime();
+        if (benchLast != 0 && benchN < benchDt.length) benchDt[benchN++] = now - benchLast;
+        benchLast = now;
+        if (benchAt == 0) benchAt = now;
+        if (now - benchAt < 5_000_000_000L || benchN == 0) return;
+        long[] d = java.util.Arrays.copyOf(benchDt, benchN);
+        java.util.Arrays.sort(d);
+        double avg = benchN / ((now - benchAt) / 1e9);
+        double p99 = 1e9 / d[Math.min(benchN - 1, (int) (benchN * 0.99))], p999 = 1e9 / d[Math.min(benchN - 1, (int) (benchN * 0.999))];
+        String ab = "";
+        if (BENCH_AB) {
+            // the overlay alternates on / off every window, so both halves see the same world, clocks and load
+            if (benchSaved == null) benchSaved = target;
+            ab = target != null ? " ab on" : " ab off";
+            target = target != null ? null : benchSaved;
+        }
+        System.out.println(String.format(java.util.Locale.ROOT, "[nether-bench] fps %.1f low1 %.1f low01 %.1f frames %d ov %.1fus ovmax %.1fus%s", avg, p99, p999, benchN, benchOv / 1e3 / benchN, benchOvMax / 1e3, ab));
+        benchN = 0;
+        benchOv = benchOvMax = 0;
+        benchAt = now;
+    }
+
+    /** True once the agent wrapped LWJGL's GL calls (so the shadow above is being kept). */
+    public static volatile boolean glShadowed;
+
     public static void frame(long window) {
+        if (glThread == null) glThread = Thread.currentThread();
+        if (BENCH) bench();
         LongConsumer t = target;
         if (t == null) return;
+        long t0 = BENCH ? System.nanoTime() : 0;
         try {
             t.accept(window);
         } catch (Throwable e) {
             target = null;
             System.out.println("[nether-agent] hook disabled: " + e);
         }
+        if (BENCH) { long d = System.nanoTime() - t0; benchOv += d; if (d > benchOvMax) benchOvMax = d; }
     }
 
     public static Object wrap(long window, Object cb, int kind) {

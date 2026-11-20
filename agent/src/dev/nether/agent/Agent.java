@@ -44,6 +44,8 @@ public final class Agent {
     private static Instrumentation inst;
     private static boolean overlayDefined;
     private static final String HOOK = "dev/nether/agent/Hook";
+    /** dev (benchmarks): -Dnether.bare=1 keeps only the LWJGL hooks, which pass everything through; no overlay, no game-class hook. */
+    private static final boolean BARE = "1".equals(System.getProperty("nether.bare"));
 
     public static void premain(String args, Instrumentation instrumentation) {
         inst = instrumentation;
@@ -59,7 +61,12 @@ public final class Agent {
         Hook.file = p -> { try { return read("/" + p); } catch (Throwable t) { return null; } };
         Hook.layerClass = Agent::layerClass;
         nameTargets();
-        inst.addTransformer(new LwjglTransformer());
+        LwjglTransformer tf = new LwjglTransformer();
+        inst.addTransformer(tf);
+        // GL shadow (see Hook): LWJGL3's GL natives are renamed with this prefix and wrapped
+        if (!BARE && !"0".equals(System.getProperty("nether.glShadow")) && inst.isNativeMethodPrefixSupported()) {
+            try { inst.setNativeMethodPrefix(tf, GL_PREFIX); Hook.glShadowed = true; } catch (Throwable t) { System.out.println("[nether-agent] GL shadow off: " + t); }
+        }
         System.out.println("[nether-agent] loaded (java " + System.getProperty("java.version") + ")");
     }
 
@@ -404,14 +411,133 @@ public final class Agent {
         };
     }
 
+    /** LWJGL GL classes whose state-setting entry points feed Hook's GL shadow (LWJGL3 core *C classes, LWJGL 3.1 / LWJGL2 GLxx, extensions). */
+    private static final Set<String> GL_CLASSES = new HashSet<>(java.util.Arrays.asList("GL11", "GL11C", "GL13", "GL13C", "GL14", "GL14C",
+        "GL15", "GL15C", "GL20", "GL20C", "GL30", "GL30C", "GL33", "GL33C", "ARBShaderObjects", "ARBBufferObject", "ARBVertexBufferObject",
+        "EXTFramebufferObject", "ARBFramebufferObject", "ARBMultitexture", "ARBVertexArrayObject", "ARBSamplerObjects"));
+    /** name + descriptor -> Hook method (same descriptor) */
+    private static final Map<String, String> GL_HOOKS = new HashMap<>();
+    static {
+        for (String s : new String[] {"glEnable(I)V", "glDisable(I)V", "glViewport(IIII)V", "glScissor(IIII)V", "glBindTexture(II)V", "glActiveTexture(I)V",
+            "glActiveTextureARB(I)V", "glBindSampler(II)V", "glDepthMask(Z)V", "glColorMask(ZZZZ)V", "glBlendFunc(II)V", "glBlendFuncSeparate(IIII)V",
+            "glBlendEquation(I)V", "glBlendEquationSeparate(II)V", "glPolygonMode(II)V", "glPixelStorei(II)V", "glBindBuffer(II)V", "glBindBufferARB(II)V",
+            "glUseProgram(I)V", "glUseProgramObjectARB(I)V", "glBindVertexArray(I)V", "glBindFramebuffer(II)V", "glBindFramebufferEXT(II)V",
+            "glDeleteTextures(I)V", "glDeleteBuffers(I)V", "glDeleteVertexArrays(I)V", "glDeleteFramebuffers(I)V", "glDeleteFramebuffersEXT(I)V", "glDeleteSamplers(I)V"})
+            GL_HOOKS.put(s, s.substring(0, s.indexOf('(')));
+    }
+    static final String GL_PREFIX = "nether$";
+
+    /**
+     * GL shadow: every listed static entry point first reports its arguments to Hook. A native one (LWJGL3) is renamed
+     * with GL_PREFIX (the JVM still binds it to the original JNI symbol, Instrumentation.setNativeMethodPrefix) and a Java
+     * method of the original name reports, then calls it; a Java one (LWJGL2, delete helpers) gets the report at its start.
+     */
+    private static byte[] glShadow(final String owner, byte[] bytes) {
+        try {
+            ClassReader cr = new ClassReader(bytes);
+            ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+            final List<String[]> wrap = new ArrayList<>();
+            final boolean[] hit = {false};
+            final boolean prefix = Hook.glShadowed; // natives are only renamed when the JVM accepted the prefix
+            cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
+                @Override
+                public MethodVisitor visitMethod(int access, String mname, String desc, String sig, String[] ex) {
+                    final String hook = (access & Opcodes.ACC_STATIC) != 0 ? GL_HOOKS.get(mname + desc) : null;
+                    if (hook == null) return super.visitMethod(access, mname, desc, sig, ex);
+                    hit[0] = true;
+                    if ((access & Opcodes.ACC_NATIVE) != 0) {
+                        if (!prefix) return super.visitMethod(access, mname, desc, sig, ex);
+                        wrap.add(new String[] {mname, desc, hook, Integer.toString(access)});
+                        return super.visitMethod(access, GL_PREFIX + mname, desc, sig, ex);
+                    }
+                    final String d = desc;
+                    return new MethodVisitor(Opcodes.ASM9, super.visitMethod(access, mname, desc, sig, ex)) {
+                        @Override
+                        public void visitCode() {
+                            super.visitCode();
+                            loadArgs(this, d);
+                            super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, hook, d, false);
+                        }
+                    };
+                }
+
+                @Override
+                public void visitEnd() {
+                    for (String[] w : wrap) {
+                        MethodVisitor mv = super.visitMethod(Integer.parseInt(w[3]) & ~Opcodes.ACC_NATIVE, w[0], w[1], null, null);
+                        mv.visitCode();
+                        loadArgs(mv, w[1]);
+                        mv.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, w[2], w[1], false);
+                        loadArgs(mv, w[1]);
+                        mv.visitMethodInsn(Opcodes.INVOKESTATIC, owner, GL_PREFIX + w[0], w[1], false);
+                        mv.visitInsn(Opcodes.RETURN);
+                        mv.visitMaxs(0, 0);
+                        mv.visitEnd();
+                    }
+                    super.visitEnd();
+                }
+            }, 0);
+            return hit[0] ? cw.toByteArray() : null;
+        } catch (Throwable t) {
+            System.out.println("[nether-agent] GL shadow failed on " + owner + ": " + t);
+            Hook.glShadowed = false;
+            return null;
+        }
+    }
+
+    /**
+     * GlStateManager.clearGlErrors()V starts with "if (Hook.glErrClear()) return;" and _getError()I with
+     * "if (Hook.glErrRead()) return 0;": vanilla's allocate-then-check pairs no longer stall on glGetError (Performance).
+     */
+    private static byte[] glErrors(byte[] bytes) {
+        try {
+            ClassReader cr = new ClassReader(bytes);
+            ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+            final int[] n = {0};
+            cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
+                @Override
+                public MethodVisitor visitMethod(int access, String mname, String desc, String sig, String[] ex) {
+                    MethodVisitor mv = super.visitMethod(access, mname, desc, sig, ex);
+                    final boolean clear = "clearGlErrors".equals(mname) && "()V".equals(desc), read = "_getError".equals(mname) && "()I".equals(desc);
+                    if ((access & Opcodes.ACC_STATIC) == 0 || !clear && !read) return mv;
+                    n[0]++;
+                    return new MethodVisitor(Opcodes.ASM9, mv) {
+                        @Override
+                        public void visitCode() {
+                            super.visitCode();
+                            dev.nether.shaded.asm.Label go = new dev.nether.shaded.asm.Label();
+                            super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, clear ? "glErrClear" : "glErrRead", "()Z", false);
+                            super.visitJumpInsn(Opcodes.IFEQ, go);
+                            if (read) { super.visitInsn(Opcodes.ICONST_0); super.visitInsn(Opcodes.IRETURN); } else super.visitInsn(Opcodes.RETURN);
+                            super.visitLabel(go);
+                            super.visitFrame(Opcodes.F_SAME, 0, null, 0, null); // both take no arguments: the entry frame
+                            super.visitInsn(Opcodes.NOP); // never two frames at one offset if the original body starts with a loop target
+                        }
+                    };
+                }
+            }, 0);
+            if (n[0] < 2) return null; // older GlStateManager without the pair: leave it alone
+            System.out.println("[nether-agent] hooked GPU error checks");
+            return cw.toByteArray();
+        } catch (Throwable t) {
+            System.out.println("[nether-agent] GPU error checks hook failed: " + t);
+            return null;
+        }
+    }
+
+    private static void loadArgs(MethodVisitor mv, String desc) {
+        int slot = 0;
+        for (Type t : Type.getArgumentTypes(desc)) { mv.visitVarInsn(t.getOpcode(Opcodes.ILOAD), slot); slot += t.getSize(); }
+    }
+
     static final class LwjglTransformer implements ClassFileTransformer {
         @Override
         public byte[] transform(ClassLoader loader, String name, Class<?> redefined, ProtectionDomain pd, byte[] bytes) {
             if ("net/minecraft/client/main/Main".equals(name) && System.getProperty("nether.world") != null) return devArgs(bytes);
             if (name == null) return null;
-            String[] nh = NAME_HOOKS.get(name), lh = LABEL_HOOKS.get(name), fh = FLOAT_HOOKS.get(name), vh = VIEW_HOOKS.get(name), lk = LOOK_HOOKS.get(name);
+            String[] nh = BARE ? null : NAME_HOOKS.get(name), lh = LABEL_HOOKS.get(name), fh = FLOAT_HOOKS.get(name), vh = VIEW_HOOKS.get(name), lk = LOOK_HOOKS.get(name);
             String ct = CHAT_HOOKS.get(name);
-            if (nh != null || lh != null || fh != null || vh != null || lk != null || ct != null) {
+            if (!BARE && (nh != null || lh != null || fh != null || vh != null || lk != null || ct != null)) {
                 // one class can carry several hooks (RendererLivingEntity: nametag + ride fade): each patch works on the last one's result
                 byte[] b = bytes, r;
                 if (nh != null && (r = playerName(b, nh[0], nh[1])) != null) b = r;
@@ -422,14 +548,16 @@ public final class Agent {
                 if (lk != null && (r = look(b, lk)) != null) b = r;
                 return b == bytes ? null : b;
             }
+            if (!BARE && ("com/mojang/blaze3d/opengl/GlStateManager".equals(name) || "com/mojang/blaze3d/platform/GlStateManager".equals(name))) return glErrors(bytes);
             if (!name.startsWith("org/lwjgl/")) return null;
+            if (!BARE && name.startsWith("org/lwjgl/opengl/") && GL_CLASSES.contains(name.substring(17))) return glShadow(name, bytes);
             final boolean glfw = "org/lwjgl/glfw/GLFW".equals(name);
             final boolean display = "org/lwjgl/opengl/Display".equals(name);
             final boolean kb = "org/lwjgl/input/Keyboard".equals(name), ms = "org/lwjgl/input/Mouse".equals(name);
             final boolean sdl = name.startsWith("org/lwjgl/sdl/SDL") && (name.endsWith("/SDLVideo") || name.endsWith("/SDLEvents") || name.endsWith("/SDLKeyboard") || name.endsWith("/SDLMouse"));
             if (!glfw && !display && !kb && !ms && !sdl) return null;
             try {
-                installOverlay(loader, glfw ? 0 : sdl ? 2 : 1);
+                if (!BARE) installOverlay(loader, glfw ? 0 : sdl ? 2 : 1);
                 ClassReader cr = new ClassReader(bytes);
                 ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
                 cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {

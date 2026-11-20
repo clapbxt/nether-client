@@ -127,12 +127,46 @@ pub fn quick_play_args(q: &QuickPlay, modern: bool) -> Vec<String> {
     }
 }
 
+/// Windows "Graphics performance preference" = High performance for this Java, unless the user already chose one for
+/// it (Settings > System > Display > Graphics). On a laptop with integrated + dedicated graphics the game otherwise
+/// often lands on the integrated GPU. Per user and per program, the same value Windows' own settings page writes.
+#[cfg(windows)]
+fn prefer_fast_gpu(exe: &std::path::Path) {
+    use windows_sys::Win32::System::Registry::{RegCloseKey, RegCreateKeyExW, RegQueryValueExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER, KEY_READ, KEY_WRITE, REG_SZ};
+    fn w(s: &str) -> Vec<u16> { s.encode_utf16().chain(Some(0)).collect() }
+    let name = w(&exe.to_string_lossy());
+    let mut key: HKEY = std::ptr::null_mut();
+    unsafe {
+        if RegCreateKeyExW(HKEY_CURRENT_USER, w(r"Software\Microsoft\DirectX\UserGpuPreferences").as_ptr(), 0, std::ptr::null(), 0, KEY_READ | KEY_WRITE, std::ptr::null(), &mut key, std::ptr::null_mut()) != 0 { return; }
+        let exists = RegQueryValueExW(key, name.as_ptr(), std::ptr::null(), std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut()) == 0;
+        if !exists {
+            let v = w("GpuPreference=2;");
+            RegSetValueExW(key, name.as_ptr(), 0, REG_SZ, v.as_ptr() as *const u8, (v.len() * 2) as u32);
+        }
+        RegCloseKey(key);
+    }
+}
+
 /// The vanilla launcher's G1 tuning, unless the user picked a collector themselves.
 pub fn gc_args(extra: &[String]) -> Vec<String> {
     let custom = extra.iter().any(|a| a.starts_with("-XX:+Use") && a.ends_with("GC"));
     if custom { return vec![]; }
     ["-XX:+UnlockExperimentalVMOptions", "-XX:+UseG1GC", "-XX:G1NewSizePercent=20", "-XX:G1ReservePercent=20", "-XX:MaxGCPauseMillis=50", "-XX:G1HeapRegionSize=32M"]
         .iter().map(|s| s.to_string()).collect()
+}
+
+/// JIT and runtime tuning for every Java the game runs on (the user's own arguments come after these and win).
+/// Huge methods are compiled (Minecraft's render loops are past HotSpot's 8000-byte limit and otherwise stay
+/// interpreted), a larger code cache with C2 allowed bigger inlining graphs (brucethemoose/Minecraft-Performance-Flags-
+/// Benchmarks), System.gc() from the game (1.8.9 on every world change) runs concurrently instead of a full pause, no
+/// hsperfdata file, and from Java 24 compact 8-byte object headers (JEP 519: smaller heap, fewer collections).
+/// IgnoreUnrecognizedVMOptions keeps a custom or older Java starting even if it lacks one of them.
+pub fn perf_args(major: u32) -> Vec<String> {
+    let mut a: Vec<String> = ["-XX:+IgnoreUnrecognizedVMOptions", "-XX:+UnlockExperimentalVMOptions", "-XX:+UnlockDiagnosticVMOptions", "-XX:-DontCompileHugeMethods",
+        "-XX:ReservedCodeCacheSize=400M", "-XX:MaxNodeLimit=240000", "-XX:NodeLimitFudgeFactor=8000", "-XX:+ExplicitGCInvokesConcurrent",
+        "-XX:+AlwaysActAsServerClassMachine", "-XX:+PerfDisableSharedMem"].iter().map(|s| s.to_string()).collect();
+    if major >= 24 { a.push("-XX:+UseCompactObjectHeaders".into()); }
+    a
 }
 
 /// Split a user-typed argument line, keeping "quoted parts" together.
@@ -160,6 +194,7 @@ mod arg_tests {
         assert_eq!(quick_play_args(&QuickPlay::World("New World".into()), true), ["--quickPlaySingleplayer", "New World"]);
         assert!(quick_play_args(&QuickPlay::World("w".into()), false).is_empty());
         assert!(gc_args(&["-XX:+UseZGC".into()]).is_empty());
+        assert!(perf_args(25).contains(&"-XX:+UseCompactObjectHeaders".to_string()) && !perf_args(21).iter().any(|a| a.contains("CompactObjectHeaders")));
         assert!(gc_args(&["-Dfoo=1".into()]).contains(&"-XX:+UseG1GC".to_string()));
         assert_eq!(split_args(r#"-Xss2M  "-Dname=a b" -Dx"#), ["-Xss2M", "-Dname=a b", "-Dx"]);
     }
@@ -392,6 +427,7 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
 
     let mut jvm: Vec<String> = vec![format!("-Xmx{}M", opts.ram_mb), "-Xms512M".into()];
     jvm.extend(gc_args(&opts.extra_jvm));
+    jvm.extend(perf_args(major));
     jvm.extend(opts.extra_jvm.iter().cloned());
     // Log4Shell: no message lookups or JNDI codebases on any version, plus Mojang's patched log4j config when the
     // version ships one (needed on 1.7 to 1.18.1, where the lookup flag alone is not honoured by old log4j)
@@ -464,7 +500,11 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
     use std::os::windows::process::CommandExt;
     let mut cmd = Command::new(&java);
     #[cfg(windows)]
-    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    {
+        // no console window; above-normal priority so background programs don't take the game's CPU time
+        cmd.creation_flags(0x0800_0000 | 0x0000_8000);
+        prefer_fast_gpu(&java);
+    }
     let child = cmd
         .args(&jvm)
         .arg(&v.main_class)

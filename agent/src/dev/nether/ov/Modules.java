@@ -58,6 +58,7 @@ final class Modules {
         all.add(SELFTAG);
         all.add(new BackgroundReload());
         all.add(BackgroundFps.M);
+        all.add(Performance.M);
         all.add(MainMenu.MODULE);
         Runtime.getRuntime().addShutdownHook(new Thread(Modules::exitHook));
     }
@@ -293,9 +294,11 @@ final class Modules {
     }
 
     private static void hud(int fbW, int fbH, float[] chat) {
-        for (Module m : all) m.tick();
+        Slow.mark("hud start");
+        for (Module m : all) { m.tick(); Slow.mark2("tick ", m.id); }
         CROSSHAIR.sync();
         place(fbW, fbH);
+        Slow.mark("place");
         for (Module m : all) {
             if (!m.placed || !m.visible()) continue;
             float k = m.lk, bot = m.by + m.h * k;
@@ -303,6 +306,7 @@ final class Modules {
             if (chat != null && m.bx < chat[0] && bot > chat[1]) continue;
             Gfx.s = k;
             m.draw(m.bx / k, m.by / k);
+            Slow.mark2("draw ", m.id);
         }
         boolean world = Input.inWorld() && !Game.hudHidden();
         if (WAYPOINTS.enabled() && world) WAYPOINTS.drawMarkers(fbW, fbH);

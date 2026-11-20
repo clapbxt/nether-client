@@ -3,6 +3,8 @@ package dev.nether.ov;
 import java.nio.ByteBuffer;
 import java.nio.FloatBuffer;
 
+import dev.nether.agent.Hook;
+
 /**
  * The GL surface the overlay needs, in two flavours: {@link GlCore} (LWJGL3, GL 3.2 core program with VAO, 1.13+) and
  * {@code GlCompat} (LWJGL2, compatibility context: GLSL 120 program, no VAO, attrib stacks, 1.8.9). Both draw the same
@@ -11,6 +13,38 @@ import java.nio.FloatBuffer;
  */
 abstract class GlBackend {
     static GlBackend cur;
+
+    // ---------------------------------------------------------------- GL shadow (dev.nether.agent.Hook): no driver stall per frame
+
+    /** Frames between checks of the shadow against a real query (one stall each). */
+    private static final int CHECK = 2000;
+    private static boolean seeded, shadowDead;
+    private static int checkN;
+
+    /** This frame reads the game's state from Hook.gs / gtex / gsmp (true) or queries the driver and passes it to {@link #queried}. */
+    static boolean useShadow() {
+        if (!Hook.glShadowed || shadowDead || !seeded) return false;
+        return ++checkN % CHECK != 0;
+    }
+
+    /** A real query of the state (q indexed like Hook.gs; tex / smp for units 0 and 1): seeds the shadow, or checks it. */
+    static void queried(int[] q, int[] tex, int[] smp) {
+        if (!Hook.glShadowed || shadowDead) return;
+        if (!seeded) {
+            System.arraycopy(q, 0, Hook.gs, 0, q.length);
+            for (int u = 0; u < 2; u++) { Hook.gtex[u] = tex[u]; Hook.gsmp[u] = smp[u]; }
+            seeded = true;
+            System.out.println("[nether-agent] GL state shadow on");
+            return;
+        }
+        StringBuilder bad = new StringBuilder();
+        for (int i = 0; i < q.length; i++) if (q[i] != Hook.gs[i]) bad.append(" s").append(i).append('=').append(Hook.gs[i]).append("/gl ").append(q[i]);
+        for (int u = 0; u < 2; u++) {
+            if (tex[u] != Hook.gtex[u]) bad.append(" tex").append(u).append('=').append(Hook.gtex[u]).append("/gl ").append(tex[u]);
+            if (smp[u] != Hook.gsmp[u]) bad.append(" smp").append(u).append('=').append(Hook.gsmp[u]).append("/gl ").append(smp[u]);
+        }
+        if (bad.length() > 0) { shadowDead = true; System.out.println("[nether-agent] GL state shadow off (mismatch:" + bad + ")"); }
+    }
 
     abstract String name();
 

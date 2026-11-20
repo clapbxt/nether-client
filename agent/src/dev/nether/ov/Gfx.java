@@ -218,23 +218,48 @@ final class Gfx {
     }
 
     /** Pixel-art image (n x n ARGB) drawn as crisp colour runs, no texture needed. size in logical units. */
+    // icons: one nearest-filtered RGBA atlas (CPU copy re-uploaded when an icon is added), shelf-packed, 1 px apart
+    private static final int IA = 512;
+    private static final String ICONS = "icon-atlas";
+    private static BufferedImage iconImg;
+    private static boolean iconDirty;
+    private static int shelfX, shelfY, shelfH;
+    /** icon pixel array (by identity: Icons caches them) -> {x, y, edge} in the atlas */
+    private static final java.util.Map<int[], int[]> iconAt = new java.util.IdentityHashMap<>();
+
+    /**
+     * An n x n ARGB icon (pixel art: hard edges) in a size x size box: one quad from the icon atlas (HD pack textures are
+     * box-filtered down to the drawn size when packed), so icons batch with each other instead of a quad per pixel run.
+     */
     static void icon(int[] px, float x, float y, float size) {
         int n = (int) Math.round(Math.sqrt(px.length));
-        float x0 = Math.round(x * s), y0 = Math.round(y * s), sz = Math.max(1, Math.round(size * s));
-        if (n > sz) { px = shrink(px, n, (int) sz); n = (int) sz; } // HD pack textures keep the asked size
-        for (int r = 0; r < n; r++) {
-            float ya = y0 + Math.round(r * sz / n), yb = y0 + Math.round((r + 1) * sz / n);
-            for (int c = 0; c < n; ) {
-                int col = px[r * n + c], e = c + 1;
-                while (e < n && px[r * n + e] == col) e++;
-                if ((col >>> 24) != 0) {
-                    float xa = x0 + Math.round(c * sz / n), xb = x0 + Math.round(e * sz / n);
-                    quad(xa, ya, xb - xa, yb - ya, 0, 0, 0, 0, col, col, 0, 0);
-                }
-                c = e;
-            }
-        }
+        if (n == 0 || n * n != px.length) return;
+        int m = Math.min(n, Math.max(1, Math.round(size * s)));
+        int[] at = iconAt.get(px);
+        if (at == null || at[2] != m) at = packIcon(px, n, m);
+        if (at == null) return;
+        if (iconDirty || !hasTexture(ICONS)) { texture(ICONS, iconImg, false); iconDirty = false; }
+        image(ICONS, x, y, size, size, at[0] / (float) IA, at[1] / (float) IA, (at[0] + at[2]) / (float) IA, (at[1] + at[2]) / (float) IA, 0xFFFFFFFF, 0);
     }
+
+    private static int[] packIcon(int[] px, int n, int m) {
+        if (m > IA - 2) return null;
+        if (iconImg == null) iconImg = new BufferedImage(IA, IA, BufferedImage.TYPE_INT_ARGB);
+        if (shelfX + m + 1 > IA) { shelfX = 0; shelfY += shelfH + 1; shelfH = 0; }
+        if (shelfY + m + 1 > IA) { // full (packs changed many times): start over
+            iconAt.clear();
+            iconImg = new BufferedImage(IA, IA, BufferedImage.TYPE_INT_ARGB);
+            shelfX = shelfY = shelfH = 0;
+        }
+        iconImg.setRGB(shelfX, shelfY, m, m, m < n ? shrink(px, n, m) : px, 0, m);
+        int[] at = {shelfX, shelfY, m};
+        shelfX += m + 1;
+        shelfH = Math.max(shelfH, m);
+        iconAt.put(px, at);
+        iconDirty = true;
+        return at;
+    }
+
 
     /** n x n ARGB box-averaged down to m x m (alpha-weighted, so transparent edges don't darken). */
     private static int[] shrink(int[] px, int n, int m) {
