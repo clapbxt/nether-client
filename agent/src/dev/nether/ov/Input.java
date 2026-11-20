@@ -38,6 +38,8 @@ final class Input {
     // events for the menu UI, consumed once per frame
     static boolean clickL, clickR, upL;
     static double scrollY;
+    /** Counts key, button and scroll events (a cached HUD rebuilds when it moves). */
+    static int events;
     static final StringBuilder chars = new StringBuilder();
     static final ArrayList<int[]> keyEv = new ArrayList<>();
 
@@ -106,6 +108,7 @@ final class Input {
     // ---------------------------------------------------------------- filters (true = swallow)
 
     static boolean onKey(long w, int key, int action) {
+        events++;
         window = w;
         if (dead) return false;
         if (key >= 0 && key < keys.length) {
@@ -157,6 +160,7 @@ final class Input {
     private static boolean typing(int key) { return key >= 32 && key <= 162 && gameMode == NORMAL; }
 
     static boolean onButton(long w, int b, int action) {
+        events++;
         window = w;
         if (dead) return false;
         if (b < 0 || b >= btn.length) return menuOpen;
@@ -187,6 +191,7 @@ final class Input {
     }
 
     static boolean onScroll(double y) {
+        events++;
         if (dead) return false;
         if (menuOpen) { scrollY += y; return true; }
         if (MainMenu.title) { Party.wheel += (float) y; return true; }

@@ -297,22 +297,60 @@ final class Modules {
         Slow.mark("hud start");
         for (Module m : all) { m.tick(); Slow.mark2("tick ", m.id); }
         CROSSHAIR.sync();
-        place(fbW, fbH);
-        Slow.mark("place");
-        for (Module m : all) {
-            if (!m.placed || !m.visible()) continue;
-            float k = m.lk, bot = m.by + m.h * k;
-            if (chat != null && bot > chat[2]) continue;
-            if (chat != null && m.bx < chat[0] && bot > chat[1]) continue;
-            Gfx.s = k;
-            m.draw(m.bx / k, m.by / k);
-            Slow.mark2("draw ", m.id);
-        }
+        boxes(fbW, fbH, chat);
         boolean world = Input.inWorld() && !Game.hudHidden();
         if (WAYPOINTS.enabled() && world) WAYPOINTS.drawMarkers(fbW, fbH);
         if (LYRICS.enabled() && world) LYRICS.drawWorld(fbW, fbH);
         SELFTAG.drawWorld(fbW, fbH, SELFTAG.enabled() && world);
         if (world) { Toast.draw(fbW); SHOTS.drawCard(fbW); menuHint(fbW); }
+    }
+
+    // ---------------------------------------------------------------- HUD boxes, cached (Performance "Cache HUD")
+
+    private static final Gfx.Rec boxRec = new Gfx.Rec();
+    private static long boxNs;
+    private static int boxEv, boxW, boxH, boxKey;
+    private static float boxDt;
+    /** Rebuilds per second at most while nothing else asks for one (above most monitors' refresh, so no visible step). */
+    static final long BOX_NS = 1_000_000_000L / 144;
+
+    /**
+     * The HUD boxes. With Performance "Cache HUD" on, their geometry is built at most ~144 times a second and the recorded
+     * GL ops are replayed on the frames between; any key / button / scroll, a window or GUI-scale change, chat opening, the
+     * menu or a theme change rebuilds at once. Animations get the time of the skipped frames (Gfx.dt summed).
+     * World-anchored markers (waypoints, lyrics, self tag) and toasts are drawn live every frame, outside this.
+     */
+    private static void boxes(int fbW, int fbH, float[] chat) {
+        boxDt += Gfx.dt;
+        boolean cache = Performance.M.hudCache() && !Input.menuOpen;
+        long now = System.nanoTime();
+        int key = (chat == null ? 0 : 1) | (Gfx.round ? 2 : 0) | (Gfx.pixel ? 4 : 0) | Float.floatToIntBits(Gfx.gui) << 3;
+        if (cache && now - boxNs < BOX_NS && boxEv == Input.events && boxW == fbW && boxH == fbH && boxKey == key && Gfx.replay(boxRec)) {
+            Slow.mark("hud replay");
+            return;
+        }
+        float dt0 = Gfx.dt;
+        Gfx.dt = Math.min(0.1f, boxDt);
+        boxDt = 0;
+        boxNs = now; boxEv = Input.events; boxW = fbW; boxH = fbH; boxKey = key;
+        if (cache) Gfx.record(boxRec);
+        try {
+            place(fbW, fbH);
+            Slow.mark("place");
+            for (Module m : all) {
+                if (!m.placed || !m.visible()) continue;
+                float k = m.lk, bot = m.by + m.h * k;
+                if (chat != null && bot > chat[2]) continue;
+                if (chat != null && m.bx < chat[0] && bot > chat[1]) continue;
+                Gfx.s = k;
+                m.draw(m.bx / k, m.by / k);
+                Slow.mark2("draw ", m.id);
+            }
+        } finally {
+            if (cache) Gfx.recordEnd();
+            else boxRec.gen = -1;
+            Gfx.dt = dt0;
+        }
     }
 
     // ---------------------------------------------------------------- first-run hint: where the menu is

@@ -252,3 +252,10 @@ net.minecraft.class_759	hof
 net.minecraft.class_897	hwp	
 net.minecraft.class_898	hwo	
 net.minecraft.class_922	hxs	
+net.minecraft.class_824	hrh	
+method_11016	aD_	()Lis;
+method_10263	u	()I
+method_10264	v	()I
+method_10260	w	()I
+method_3550	a	(Lelb;)Lhri;
+method_3563	bk_	()Z

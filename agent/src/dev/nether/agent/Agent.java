@@ -110,8 +110,13 @@ public final class Agent {
      * found by shape, (Entity, Frustum, double camX, camY, camZ[, float partial])Z, the only such method of the class.
      */
     private static final Map<String, String> CULL_HOOKS = new HashMap<>();
+    /** Block entity culling: the block entity render dispatcher in every naming (method found by shape, see beShape). */
+    private static final Map<String, String> BECULL_HOOKS = new HashMap<>();
 
     private static void nameTargets() {
+        BECULL_HOOKS.put("net/minecraft/class_824", ""); // Fabric BlockEntityRenderDispatcher (shape matches 1.21.9+ only)
+        BECULL_HOOKS.put("net/minecraft/client/renderer/blockentity/BlockEntityRenderDispatcher", ""); // NeoForge, 26.x (26.3 adds the boolean)
+        BECULL_HOOKS.put("net/minecraft/client/renderer/tileentity/TileEntityRendererDispatcher", ""); // Forge 1.8.9 / 1.12.2
         CULL_HOOKS.put("net/minecraft/class_898", ""); // Fabric EntityRenderDispatcher (1.14+)
         CULL_HOOKS.put("net/minecraft/client/renderer/entity/EntityRenderDispatcher", ""); // Forge/NeoForge 1.17+, 26.x (26.3 adds the float)
         CULL_HOOKS.put("net/minecraft/client/renderer/entity/RenderManager", ""); // Forge 1.8.9 / 1.12.2
@@ -163,11 +168,14 @@ public final class Agent {
         if (v == null) return;
         // Legacy Fabric (1.8.9 / 1.12.2) runs the game on Legacy intermediary, which reuses modern Fabric's class_N numbers
         // for unrelated classes: drop the modern Fabric rows there.
-        if ((v.startsWith("1.8") || v.startsWith("1.12")) && Tiny.on()) for (Map<String, ?> t : java.util.Arrays.<Map<String, ?>>asList(NAME_HOOKS, LABEL_HOOKS, FLOAT_HOOKS, LOOK_HOOKS, VIEW_HOOKS, CHAT_HOOKS, CULL_HOOKS))
+        if ((v.startsWith("1.8") || v.startsWith("1.12")) && Tiny.on()) for (Map<String, ?> t : java.util.Arrays.<Map<String, ?>>asList(NAME_HOOKS, LABEL_HOOKS, FLOAT_HOOKS, LOOK_HOOKS, VIEW_HOOKS, CHAT_HOOKS, CULL_HOOKS, BECULL_HOOKS))
             t.keySet().removeIf(k -> k.startsWith("net/minecraft/class_"));
         // RenderManager.shouldRender (notch names, checked with javap): 1.8.9 biu.a(pk, bia, DDD)Z, 1.12.2 bzf.a(vg, bxy, DDD)Z
         if (v.equals("1.8.9")) CULL_HOOKS.put(Tiny.on() ? Tiny.cls("biu") : "biu", "");
         if (v.equals("1.12.2")) CULL_HOOKS.put(Tiny.on() ? Tiny.cls("bzf") : "bzf", "");
+        // TileEntityRendererDispatcher.renderTileEntity(te, partial, destroyStage): 1.8.9 bhc.a(akw, F, I)V, 1.12.2 bwx.a(avj, F, I)V
+        if (v.equals("1.8.9")) BECULL_HOOKS.put(Tiny.on() ? Tiny.cls("bhc") : "bhc", "");
+        if (v.equals("1.12.2")) BECULL_HOOKS.put(Tiny.on() ? Tiny.cls("bwx") : "bwx", "");
         if (v.equals("1.8.9")) {
             // vanilla notch names; on Legacy Fabric put189 maps them through Tiny.
             put189(NAME_HOOKS, "wn", 0, "f_", "()Leu;"); // EntityPlayer.getDisplayName
@@ -207,6 +215,8 @@ public final class Agent {
         if (chat != null && comp != null) CHAT_HOOKS.put(slash(chat), slash(comp));
         String[] erd = rows.get("net.minecraft.class_898");
         if (erd != null) CULL_HOOKS.put(slash(erd), "");
+        String[] berd = rows.get("net.minecraft.class_824");
+        if (berd != null) BECULL_HOOKS.put(slash(berd), "");
         if (cls != null && m != null && !m[2].isEmpty()) NAME_HOOKS.put(slash(cls), new String[] {m[1], m[2]});
         if (lr != null && lm != null && lm[2].length() > 1) LABEL_HOOKS.put(slash(lr), new String[] {lm[1], lm[2].substring(0, lm[2].indexOf(';') + 1)});
         if (ent != null && turn != null) LOOK_HOOKS.put(slash(ent), new String[] {turn[1], "(DD)V", "turn"});
@@ -551,8 +561,8 @@ public final class Agent {
             if (name == null) return null;
             String[] nh = BARE ? null : NAME_HOOKS.get(name), lh = LABEL_HOOKS.get(name), fh = FLOAT_HOOKS.get(name), vh = VIEW_HOOKS.get(name), lk = LOOK_HOOKS.get(name);
             String ct = CHAT_HOOKS.get(name);
-            boolean cu = CULL_HOOKS.containsKey(name);
-            if (!BARE && (nh != null || lh != null || fh != null || vh != null || lk != null || ct != null || cu)) {
+            boolean cu = CULL_HOOKS.containsKey(name), bc = BECULL_HOOKS.containsKey(name);
+            if (!BARE && (nh != null || lh != null || fh != null || vh != null || lk != null || ct != null || cu || bc)) {
                 // one class can carry several hooks (RendererLivingEntity: nametag + ride fade): each patch works on the last one's result
                 byte[] b = bytes, r;
                 if (nh != null && (r = playerName(b, nh[0], nh[1])) != null) b = r;
@@ -562,6 +572,7 @@ public final class Agent {
                 if (ct != null && (r = chat(b, ct)) != null) b = r;
                 if (lk != null && (r = look(b, lk)) != null) b = r;
                 if (cu && (r = cull(b)) != null) b = r;
+                if (bc && (r = becull(b)) != null) b = r;
                 return b == bytes ? null : b;
             }
             if (!BARE && ("com/mojang/blaze3d/opengl/GlStateManager".equals(name) || "com/mojang/blaze3d/platform/GlStateManager".equals(name))) return glErrors(bytes);
@@ -608,6 +619,66 @@ public final class Agent {
          * Entity occlusion culling: the should-render test starts with "if (Hook.cull(entity, camX, camY, camZ)) return
          * false;". Only when the class has exactly one method of that shape (else nothing is patched).
          */
+        /**
+         * The block entity dispatcher's per-block-entity method: 1.8.9 / 1.12.2 renderTileEntity(te, partial, destroyStage)V,
+         * 1.21.9+ / 26.x tryExtractRenderState(be, partial, crumbling[, boolean]) returning the render state (null = skip).
+         */
+        private static boolean beShape(int access, String desc) {
+            if ((access & (Opcodes.ACC_STATIC | Opcodes.ACC_ABSTRACT)) != 0) return false;
+            Type[] a = Type.getArgumentTypes(desc);
+            Type r = Type.getReturnType(desc);
+            if (a.length < 3 || a[0].getSort() != Type.OBJECT || a[1] != Type.FLOAT_TYPE) return false;
+            if (a.length == 3 && a[2] == Type.INT_TYPE && r == Type.VOID_TYPE) return true;
+            return (a.length == 3 || (a.length == 4 && a[3] == Type.BOOLEAN_TYPE)) && a[2].getSort() == Type.OBJECT && r.getSort() == Type.OBJECT;
+        }
+
+        /** Block entity occlusion culling: the method starts with "if (Hook.becull(this, be)) return [null];" (one candidate only). */
+        private static byte[] becull(byte[] bytes) {
+            try {
+                ClassReader cr = new ClassReader(bytes);
+                final int[] n = {0};
+                cr.accept(new ClassVisitor(Opcodes.ASM9) {
+                    @Override
+                    public MethodVisitor visitMethod(int access, String mname, String desc, String sig, String[] ex) {
+                        if (beShape(access, desc)) n[0]++;
+                        return null;
+                    }
+                }, ClassReader.SKIP_CODE);
+                if (n[0] != 1) { System.out.println("[nether-agent] block entity culling: " + n[0] + " candidates in " + cr.getClassName() + ", not hooked"); return null; }
+                ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+                cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
+                    @Override
+                    public MethodVisitor visitMethod(int access, String mname, String desc, String sig, String[] ex) {
+                        MethodVisitor mv = super.visitMethod(access, mname, desc, sig, ex);
+                        if (!beShape(access, desc)) return mv;
+                        final boolean isVoid = Type.getReturnType(desc) == Type.VOID_TYPE;
+                        return new MethodVisitor(Opcodes.ASM9, mv) {
+                            @Override
+                            public void visitCode() {
+                                super.visitCode();
+                                dev.nether.shaded.asm.Label go = new dev.nether.shaded.asm.Label();
+                                super.visitVarInsn(Opcodes.ALOAD, 0);
+                                super.visitVarInsn(Opcodes.ALOAD, 1);
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "becull", "(Ljava/lang/Object;Ljava/lang/Object;)Z", false);
+                                super.visitJumpInsn(Opcodes.IFEQ, go);
+                                if (isVoid) super.visitInsn(Opcodes.RETURN);
+                                else { super.visitInsn(Opcodes.ACONST_NULL); super.visitInsn(Opcodes.ARETURN); }
+                                super.visitLabel(go);
+                                super.visitFrame(Opcodes.F_SAME, 0, null, 0, null);
+                                super.visitInsn(Opcodes.NOP);
+                            }
+                        };
+                    }
+                }, 0);
+                Hook.beCullHooked = true;
+                System.out.println("[nether-agent] hooked block entity culling (" + cr.getClassName() + ")");
+                return cw.toByteArray();
+            } catch (Throwable t) {
+                System.out.println("[nether-agent] block entity culling hook failed: " + t);
+                return null;
+            }
+        }
+
         private static byte[] cull(byte[] bytes) {
             try {
                 ClassReader cr = new ClassReader(bytes);
@@ -1243,6 +1314,27 @@ public final class Agent {
                         super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "wrap", "(JLjava/lang/Object;I)Ljava/lang/Object;", false);
                         super.visitTypeInsn(Opcodes.CHECKCAST, cbType);
                         super.visitVarInsn(Opcodes.ASTORE, 2);
+                    }
+                };
+            }
+            if ("glfwWaitEventsTimeout".equals(mname) && "(D)V".equals(desc)) {
+                // frame cap (Performance "Precise frame cap"): timeout = Hook.waitTimeout(timeout); below 0 = already waited
+                return new MethodVisitor(Opcodes.ASM9, mv) {
+                    @Override
+                    public void visitCode() {
+                        super.visitCode();
+                        dev.nether.shaded.asm.Label go = new dev.nether.shaded.asm.Label();
+                        super.visitVarInsn(Opcodes.DLOAD, 0);
+                        super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "waitTimeout", "(D)D", false);
+                        super.visitInsn(Opcodes.DUP2);
+                        super.visitVarInsn(Opcodes.DSTORE, 0);
+                        super.visitInsn(Opcodes.DCONST_0);
+                        super.visitInsn(Opcodes.DCMPG);
+                        super.visitJumpInsn(Opcodes.IFGE, go);
+                        super.visitInsn(Opcodes.RETURN);
+                        super.visitLabel(go);
+                        super.visitFrame(Opcodes.F_SAME, 0, null, 0, null);
+                        super.visitInsn(Opcodes.NOP);
                     }
                 };
             }

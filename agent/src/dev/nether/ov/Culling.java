@@ -30,6 +30,9 @@ final class Culling implements Hook.Cull {
     private static final class Rec {
         final Object e;
         final boolean player;
+        /** a block entity at bx, by, bz (its position never changes) */
+        boolean block;
+        int bx, by, bz;
         long seen;
         volatile boolean hidden;
         Rec(Object e, boolean player) { this.e = e; this.player = player; }
@@ -72,7 +75,13 @@ final class Culling implements Hook.Cull {
     private static Thread worker;
 
     /** Each overlay frame (Performance.tick): on/off, world, third person, pruning, the worker's entity list. */
-    static void tick(boolean want) {
+    /** Entities are culled (Performance "Skip hidden entities"); else the entity test only records the camera. */
+    private static volatile boolean entities;
+
+    static void tick(boolean ents, boolean blocks) {
+        Hook.beCull = blocks;
+        if (ents != entities) { entities = ents; for (Rec r : recs.values()) if (!r.block) r.hidden = false; }
+        boolean want = ents || blocks && Hook.beCullHooked;
         boolean ok = want && Hook.cullHooked && bound >= 0;
         if (ok != on) { on = ok; Hook.cull = ok ? C : null; if (!ok) { recs.clear(); snap = new Rec[0]; passValid = false; } }
         if (!ok) return;
@@ -107,6 +116,7 @@ final class Culling implements Hook.Cull {
             camX = x; camY = cy; camZ = z;
             camSeq = f;
         }
+        if (!entities) return false; // block entities only: this call just gave the camera
         Rec r = recs.get(e);
         if (r == null) {
             if (recs.size() >= 8192 || e == null) return false;
@@ -116,6 +126,91 @@ final class Culling implements Hook.Cull {
         r.seen = f;
         return active && r.hidden;
     }
+
+    // ---- block entities (same worker, same camera: the entity test of this frame records it)
+    private static int beBound; // 0 not yet, 1 bound, -1 unsupported
+    private static Method bePos, posX, posY, posZ, beRenderer, offScreen;
+    private static boolean offScreenArg;
+    /** A rec that is never hidden (renderer draws off screen / beacon beam, or no renderer). */
+    private static final Rec NEVER = new Rec(null, true);
+
+    @Override
+    public boolean hiddenBlock(Object d, Object be) {
+        if (bound != 1 || be == null) return false;
+        long f = Hook.frames;
+        Rec r = recs.get(be);
+        if (r == null) {
+            if (recs.size() >= 8192 || (beBound != 1 && !bindBlock(d))) return false;
+            r = blockRec(d, be);
+            recs.put(be, r);
+            if (r != NEVER) dirty = true;
+        }
+        if (r == NEVER) return false;
+        r.seen = f;
+        return camFrame == f && active && r.hidden; // no entity test yet this frame: camera unknown, draw it
+    }
+
+    private static Rec blockRec(Object d, Object be) {
+        try {
+            Object rd = beRenderer.invoke(d, be);
+            if (rd == null) return NEVER;
+            boolean off = offScreenArg ? (Boolean) offScreen.invoke(rd, be) : (Boolean) offScreen.invoke(rd);
+            if (off) return NEVER;
+            Object p = bePos.invoke(be);
+            Rec r = new Rec(be, false);
+            r.block = true;
+            r.bx = (Integer) posX.invoke(p);
+            r.by = (Integer) posY.invoke(p);
+            r.bz = (Integer) posZ.invoke(p);
+            return r;
+        } catch (Throwable t) {
+            return NEVER;
+        }
+    }
+
+    /** Block entity names, resolved from the hooked dispatcher method's types (render thread). */
+    private static boolean bindBlock(Object d) {
+        if (beBound < 0) return false;
+        try {
+            boolean v189 = legacy && String.valueOf(Game.version()).startsWith("1.8");
+            Class<?> base = null;
+            for (Class<?> k = d.getClass(); k != null && base == null; k = k.getSuperclass())
+                for (Method m : k.getDeclaredMethods()) {
+                    Class<?>[] p = m.getParameterTypes();
+                    if (p.length >= 3 && p[1] == float.class && !p[0].isPrimitive() && (p.length == 3 && p[2] == int.class && m.getReturnType() == void.class
+                        || !p[2].isPrimitive() && !m.getReturnType().isPrimitive() && (p.length == 3 || p.length == 4 && p[3] == boolean.class))) { base = p[0]; break; }
+                }
+            if (base == null) throw new NoSuchMethodException("block entity type");
+            String rn = !legacy ? "method_3550" : Game.l(v189 ? "b" : "a", "func_147547_b");
+            for (Method m : d.getClass().getMethods())
+                if (m.getParameterTypes().length == 1 && m.getParameterTypes()[0] != Class.class && m.getParameterTypes()[0].isAssignableFrom(base)
+                    && Game.named(d.getClass(), rn, 1, m.getReturnType()) != null && sameName(m, Game.named(d.getClass(), rn, 1, m.getReturnType()))) { beRenderer = m; break; }
+            if (beRenderer == null) throw new NoSuchMethodException("getRenderer");
+            beRenderer.setAccessible(true);
+            Class<?> rc = beRenderer.getReturnType();
+            if (!legacy) offScreen = Game.named(rc, "method_3563", 0, boolean.class); // shouldRenderOffScreen (beacon, end gateway, structure block ...)
+            else if (v189) offScreen = Game.named(rc, Game.l("a", "func_181055_a"), 0, boolean.class); // forceTileEntityRender (beacon)
+            else { offScreen = Game.named(rc, Game.l("a", "func_188185_a"), 1, boolean.class); offScreenArg = true; } // isGlobalRenderer(te)
+            bePos = Game.named(base, !legacy ? "method_11016" : Game.l(v189 ? "v" : "w", "func_174877_v"), 0, null);
+            Class<?> pc = bePos == null ? null : bePos.getReturnType();
+            if (pc != null) {
+                posX = Game.named(pc, !legacy ? "method_10263" : Game.l(v189 ? "n" : "p", "func_177958_n"), 0, int.class);
+                posY = Game.named(pc, !legacy ? "method_10264" : Game.l(v189 ? "o" : "q", "func_177956_o"), 0, int.class);
+                posZ = Game.named(pc, !legacy ? "method_10260" : Game.l(v189 ? "p" : "r", "func_177952_p"), 0, int.class);
+            }
+            String miss = offScreen == null ? "shouldRenderOffScreen" : bePos == null ? "getBlockPos" : posX == null || posY == null || posZ == null ? "BlockPos x/y/z" : null;
+            if (miss != null) throw new NoSuchMethodException(miss);
+            beBound = 1;
+            System.out.println("[nether-agent] block entity culling bound (" + base.getName() + ")");
+            return true;
+        } catch (Throwable t) {
+            beBound = -1;
+            System.out.println("[nether-agent] block entity culling unavailable: " + t);
+            return false;
+        }
+    }
+
+    private static boolean sameName(Method a, Method b) { return b != null && a.getName().equals(b.getName()); }
 
     /** Resolves the game's names once (render thread, inside the world render). False = culling stays off. */
     private static boolean bind() {
@@ -217,11 +312,20 @@ final class Culling implements Hook.Cull {
         if (r.player) return false;
         Object e = r.e;
         try {
-            double w = gw.d(e), h = gh.d(e);
-            if (w > 6 || h > 6) return false;
-            if (named.b(e) || (glow != null && glow.b(e))) return false;
-            double x = gx.d(e), y = gy.d(e), z = gz.d(e), hw = w / 2 + 0.5;
-            double x0 = x - hw, x1 = x + hw, y0 = y - 0.5, y1 = y + h + 0.5, z0 = z - hw, z1 = z + hw;
+            double x, y, z, h, x0, x1, y0, y1, z0, z1;
+            if (r.block) {
+                // the block grown by half a block, and a block more up and down (banners hang below / stand above theirs)
+                x = r.bx + 0.5; y = r.by; z = r.bz + 0.5; h = 1;
+                x0 = r.bx - 0.5; x1 = r.bx + 1.5; y0 = r.by - 1.5; y1 = r.by + 2.5; z0 = r.bz - 0.5; z1 = r.bz + 1.5;
+            } else {
+                double w = gw.d(e);
+                h = gh.d(e);
+                if (w > 6 || h > 6) return false;
+                if (named.b(e) || (glow != null && glow.b(e))) return false;
+                x = gx.d(e); y = gy.d(e); z = gz.d(e);
+                double hw = w / 2 + 0.5;
+                x0 = x - hw; x1 = x + hw; y0 = y - 0.5; y1 = y + h + 0.5; z0 = z - hw; z1 = z + hw;
+            }
             double dx = Math.max(0, Math.max(x0 - cx, cx - x1)), dy = Math.max(0, Math.max(y0 - cy, cy - y1)), dz = Math.max(0, Math.max(z0 - cz, cz - z1));
             double d2 = dx * dx + dy * dy + dz * dz;
             if (d2 < 9 || d2 > 256 * 256) return false;

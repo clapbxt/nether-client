@@ -123,6 +123,7 @@ final class Gfx {
     static void flush() {
         if (verts == 0) return;
         buf.flip();
+        if (rec != null) { Rec.Op o = rec.op(0, buf.limit()); buf.get(o.data, 0, o.n); buf.rewind(); }
         GlBackend.cur.draw(buf, verts);
         buf.clear();
         verts = 0;
@@ -133,7 +134,7 @@ final class Gfx {
         flush();
         int px = Math.round(x * s), py = Math.round(y * s), pw = Math.max(0, Math.round(w * s)), ph = Math.max(0, Math.round(h * s));
         clipPx = new int[] {px, py, pw, ph};
-        GlBackend.cur.clip(true, px, fbH - (py + ph), pw, ph);
+        glClip(true, px, fbH - (py + ph), pw, ph);
     }
 
     /** active scissor {x, y from top, w, h} in pixels, null = none */
@@ -147,7 +148,7 @@ final class Gfx {
         int x0 = Math.round(x * s), y0 = Math.round(y * s), x1 = x0 + Math.max(0, Math.round(w * s)), y1 = y0 + Math.max(0, Math.round(h * s));
         if (prev != null) { x0 = Math.max(x0, prev[0]); y0 = Math.max(y0, prev[1]); x1 = Math.min(x1, prev[0] + prev[2]); y1 = Math.min(y1, prev[1] + prev[3]); }
         clipPx = new int[] {x0, y0, Math.max(0, x1 - x0), Math.max(0, y1 - y0)};
-        GlBackend.cur.clip(true, x0, fbH - (y0 + clipPx[3]), clipPx[2], clipPx[3]);
+        glClip(true, x0, fbH - (y0 + clipPx[3]), clipPx[2], clipPx[3]);
         return prev;
     }
 
@@ -156,14 +157,92 @@ final class Gfx {
         if (prev == null) { unclip(); return; }
         flush();
         clipPx = prev;
-        GlBackend.cur.clip(true, prev[0], fbH - (prev[1] + prev[3]), prev[2], prev[3]);
+        glClip(true, prev[0], fbH - (prev[1] + prev[3]), prev[2], prev[3]);
     }
 
     static void unclip() {
         clipPx = null;
         if (!ready) return;
         flush();
-        GlBackend.cur.clip(false, 0, 0, 0, 0);
+        glClip(false, 0, 0, 0, 0);
+    }
+
+    private static void glClip(boolean on, int x, int y, int w, int h) {
+        GlBackend.cur.clip(on, x, y, w, h);
+        if (rec == null) return;
+        int[] a = rec.op(2, 0).a, c = clipPx;
+        a[0] = on ? 1 : 0; a[1] = x; a[2] = y; a[3] = w; a[4] = h;
+        if (c != null) { a[5] = c[0]; a[6] = c[1]; a[7] = c[2]; a[8] = c[3]; }
+    }
+
+    // ---------------------------------------------------------------- recorded GL ops (Performance "Cache HUD")
+
+    /**
+     * The GL work of one HUD build: vertex batches, image binds and clips, in order. {@link #replay} draws it again
+     * without rebuilding any geometry. It is only valid while {@link #gen} is unchanged (no texture freed, glyph atlas
+     * not restarted), since the ops hold texture ids and atlas coordinates.
+     */
+    static final class Rec {
+        static final class Op { int kind; float[] data = new float[0]; int n; final int[] a = new int[9]; }
+        private final java.util.ArrayList<Op> ops = new java.util.ArrayList<>();
+        int size, gen = -1;
+
+        Op op(int kind, int floats) {
+            if (size == ops.size()) ops.add(new Op());
+            Op o = ops.get(size++);
+            o.kind = kind;
+            o.n = floats;
+            if (o.data.length < floats) o.data = new float[floats + floats / 2];
+            return o;
+        }
+    }
+
+    /** Bumped whenever recorded ops could point at something gone (texture freed, glyph atlas restarted). */
+    static int gen;
+    private static Rec rec;
+    private static int recGen;
+
+    /** Starts recording into r (the frame's batch so far is drawn first; the image bind is recorded fresh). */
+    static void record(Rec r) {
+        flush();
+        r.size = 0;
+        r.gen = -1;
+        rec = r;
+        recGen = gen;
+        boundImg = 0;
+    }
+
+    /** Ends recording; the ops are replayable only if nothing they use changed while recording. */
+    static void recordEnd() {
+        flush();
+        Rec r = rec;
+        rec = null;
+        if (r != null && gen == recGen) r.gen = gen;
+    }
+
+    /** Draws recorded ops again. False (nothing drawn) when they are stale. */
+    static boolean replay(Rec r) {
+        if (r.gen != gen) return false;
+        if (r.size == 0) return true;
+        ensure();
+        flush();
+        for (int i = 0; i < r.size; i++) {
+            Rec.Op o = r.ops.get(i);
+            if (o.kind == 0) {
+                buf.clear();
+                buf.put(o.data, 0, o.n).flip();
+                GlBackend.cur.draw(buf, o.n / FLOATS);
+                buf.clear();
+            } else if (o.kind == 1) {
+                GlBackend.cur.texBind(o.a[0]);
+                boundImg = o.a[0];
+            } else {
+                int[] a = o.a;
+                GlBackend.cur.clip(a[0] == 1, a[1], a[2], a[3], a[4]);
+                clipPx = a[0] == 1 ? new int[] {a[5], a[6], a[7], a[8]} : null;
+            }
+        }
+        return true;
     }
 
     // ---------------------------------------------------------------- colours
@@ -309,6 +388,7 @@ final class Gfx {
         t.w = w;
         t.h = h;
         boundImg = t.id;
+        if (rec != null) rec.op(1, 0).a[0] = t.id; // texCreate leaves it bound
         texs.put(key, t);
         texBytes += 4L * w * h;
         for (Iterator<Map.Entry<String, Tex>> it = texs.entrySet().iterator(); it.hasNext() && (texs.size() > TEX_MAX || texBytes > TEX_BYTES); ) {
@@ -332,6 +412,7 @@ final class Gfx {
     private static void free(Tex t) {
         if (ready) flush(); // queued quads may still sample it
         if (boundImg == t.id) boundImg = 0;
+        gen++; // a cached HUD may still bind it
         texBytes -= 4L * t.w * t.h;
         GlBackend.cur.texDelete(t.id);
     }
@@ -358,6 +439,7 @@ final class Gfx {
             flush();
             GlBackend.cur.texBind(t.id);
             boundImg = t.id;
+            if (rec != null) rec.op(1, 0).a[0] = t.id;
         }
         float px = Math.round(x * s), py = Math.round(y * s), pw = Math.max(1, Math.round(w * s)), ph = Math.max(1, Math.round(h * s));
         quad(px, py, pw, ph, u0, v0, u1, v1, tint, tint, Math.max(0, Math.min(r * s, Math.min(pw, ph) / 2)), -1);
@@ -434,6 +516,7 @@ final class Gfx {
             masks.clear();
             java.util.Arrays.fill(fast, null);
             penX = penY = rowH = 0;
+            gen++; // cached HUD quads point at the old cells
         }
         ByteBuffer bb = BufferUtils.createByteBuffer(w * h);
         for (int i = 0; i < argb.length; i++) bb.put((byte) (argb[i] >>> 24));

@@ -375,7 +375,31 @@ public final class Hook {
     // ---------------------------------------------------------------- entity occlusion culling (Performance module)
 
     /** Answers "is this entity hidden behind opaque blocks?" from the overlay's culling worker; render thread. */
-    public interface Cull { boolean hidden(Object entity, double camX, double camY, double camZ); }
+    public interface Cull {
+        boolean hidden(Object entity, double camX, double camY, double camZ);
+        /** Block entity behind opaque blocks (camera of this frame from the entity test). */
+        boolean hiddenBlock(Object dispatcher, Object blockEntity);
+    }
+    /** The block entity render dispatcher's per-block-entity method was hooked. */
+    public static volatile boolean beCullHooked;
+    /** Block entity culling on (Performance "Skip hidden block entities"); Culling also needs cull set. */
+    public static volatile boolean beCull;
+    private static int beAsked, beHidden;
+
+    /** Start of the block entity dispatcher's render / extract method: true = the game skips that block entity this frame. */
+    public static boolean becull(Object dispatcher, Object be) {
+        Cull c = cull;
+        if (c == null || !beCull) return false;
+        try {
+            boolean h = c.hiddenBlock(dispatcher, be);
+            if (BENCH) { beAsked++; if (h) beHidden++; }
+            return h;
+        } catch (Throwable t) {
+            if (cullErrors++ == 0) { System.out.println("[nether-agent] block entity culling error: " + t); t.printStackTrace(System.out); }
+            if (cullErrors >= 50) { cull = null; System.out.println("[nether-agent] culling disabled after repeated errors"); }
+            return false;
+        }
+    }
     public static volatile Cull cull;
     /** EntityRenderDispatcher.shouldRender (RenderManager on 1.8.9 / 1.12.2) was hooked. */
     public static volatile boolean cullHooked;
@@ -409,6 +433,9 @@ public final class Hook {
     /** dev: -Dnether.benchAB=1 (with bench) turns the overlay off and on every other window */
     private static final boolean BENCH_AB = "1".equals(System.getProperty("nether.benchAB"));
     private static LongConsumer benchSaved;
+    /** dev: -Dnether.benchFeat=<hud|becull|...> (with bench): that Performance feature is off in every other window. */
+    public static final String BENCH_FEAT = BENCH ? System.getProperty("nether.benchFeat") : null;
+    public static volatile boolean featOff;
 
     /** One line per 5 s window: average FPS, 1 % and 0.1 % lows (FPS at the 99th / 99.9th percentile frame time). */
     private static void bench() {
@@ -430,11 +457,39 @@ public final class Hook {
         }
         if (cullHooked) ab += String.format(java.util.Locale.ROOT, " cull%s %.0f/%.0f", cullOff ? "off" : "on", cullHidden / (double) benchN, cullAsked / (double) benchN);
         if (BENCH_CULL) cullOff = !cullOff;
-        cullAsked = cullHidden = 0;
+        if (BENCH_FEAT != null) { ab += " " + BENCH_FEAT + (featOff ? "off" : "on"); featOff = !featOff; }
+        if (beCullHooked) ab += String.format(java.util.Locale.ROOT, " be %.0f/%.0f", beHidden / (double) benchN, beAsked / (double) benchN);
+        if (waitN > 0) ab += String.format(java.util.Locale.ROOT, " oswait late avg %.0fus max %.0fus", lateSum / 1e3 / waitN, lateMax / 1e3);
+        waitN = 0; lateSum = lateMax = 0;
+        cullAsked = cullHidden = beAsked = beHidden = 0;
         System.out.println(String.format(java.util.Locale.ROOT, "[nether-bench] fps %.1f low1 %.1f low01 %.1f frames %d ov %.1fus ovmax %.1fus%s", avg, p99, p999, benchN, benchOv / 1e3 / benchN, benchOvMax / 1e3, ab));
         benchN = 0;
         benchOv = benchOvMax = 0;
         benchAt = now;
+    }
+
+    // ---------------------------------------------------------------- precise frame cap (Performance module)
+
+    /** Performance "Precise frame cap": the game's limiter waits through glfwWaitEventsTimeout (1.13 - 26.2). */
+    public static volatile boolean preciseWait;
+    /** OS wait ends this long before the deadline; the rest is spun (Windows wakes a wait up to a timer tick late). */
+    private static final double SPIN_S = Double.parseDouble(System.getProperty("nether.spinMs", "1.5")) / 1000;
+
+    /**
+     * glfwWaitEventsTimeout(timeout) starts with timeout = waitTimeout(timeout). The vanilla limiter calls it in a loop
+     * until its deadline, so a wait ending early just comes back with the rest: the OS wait stops SPIN_S short and the
+     * last call spins to the deadline (returns -1: no GLFW wait; the game polls events itself right after the frame).
+     */
+    private static long wakeAt, lateSum, lateMax;
+    private static int waitN;
+
+    public static double waitTimeout(double t) {
+        if (!preciseWait || !(t > 0) || t > 1 || Thread.currentThread() != glThread) return t;
+        if (BENCH && wakeAt != 0) { long late = System.nanoTime() - wakeAt; waitN++; lateSum += late; if (late > lateMax) lateMax = late; wakeAt = 0; }
+        if (t > SPIN_S + 0.0005) { if (BENCH) wakeAt = System.nanoTime() + (long) ((t - SPIN_S) * 1e9); return t - SPIN_S; }
+        long end = System.nanoTime() + (long) (t * 1e9);
+        while (System.nanoTime() < end) { } // under ~2 ms: spin (Java 8 has no onSpinWait)
+        return -1;
     }
 
     /** True once the agent wrapped LWJGL's GL calls (so the shadow above is being kept). */
