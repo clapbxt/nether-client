@@ -1,5 +1,5 @@
 import { Theme } from "theme.slint";
-import { Backend, Art, Acct, JavaRt, Link } from "structs.slint";
+import { Backend, Art, Acct, JavaRt, Link, Sound } from "structs.slint";
 import { Eyebrow, Heading, Btn, Toggle, Dropdown, IconBtn, Ico, Icon, SectionHead, SetRow, Slash, Seg, Chip } from "components.slint";
 
 // A row with a switch on the right. A disabled row must not flip (the change would never be saved).
@@ -119,7 +119,7 @@ export component SettingsScreen inherits Rectangle {
     property <length> y2: 540px;
     property <length> y3: root.y2 + 40px + root.nacc * 64px + 68px;
     property <length> y4: root.y3 + 40px + Backend.javas.length * 64px + 40px;
-    property <length> y5: root.y4 + 40px + 6 * 64px + 40px;
+    property <length> y5: root.y4 + 40px + 7 * 64px + 40px;
     property <length> y6: root.y5 + 40px + 3 * 64px + 190px + ic.height + wp.height + 40px;
     property <length> py: root.y5 + 256px;
     property <length> sy: root.y6 + 24px + Backend.folders.length * 64px;
@@ -213,7 +213,11 @@ export component SettingsScreen inherits Rectangle {
         ChoiceRow { x: 0px; y: root.y4 + 152px; width: root.cw; title: "When a game starts"; sub: "The launcher comes back when the game closes."; items: ["Keep launcher open", "Minimize launcher", "Hide to tray"]; current <=> Backend.lp-on-launch; changed => { Backend.save-launcher(); } }
         ChoiceRow { x: 0px; y: root.y4 + 216px; width: root.cw; title: "Close button"; sub: "Quit, or keep running in the system tray."; items: ["Quit the launcher", "Hide to tray"]; current <=> Backend.lp-on-close; changed => { Backend.save-launcher(); } }
         SyncRow { x: 0px; y: root.y4 + 280px; width: root.cw; title: "Reduce motion"; sub: "Turn off page transitions and pulsing indicators; saves power on laptops."; on <=> Backend.calm; toggled => { Backend.save-launcher(); } }
-        SetRow { x: 0px; y: root.y4 + 344px; width: root.cw; reserve: 0px; title: "Keyboard shortcuts"; sub: "Ctrl+K search everything  ·  Ctrl+1-5 pages  ·  Ctrl+, settings  ·  Ctrl+N new instance  ·  Esc closes"; }
+        SetRow { x: 0px; y: root.y4 + 344px; width: root.cw; reserve: 340px; title: "Interface sounds"; sub: "Soft clicks in the launcher and the in-game menus, a chime on PLAY.";
+            Seg { x: parent.width - self.width; y: 15px; items: ["OFF", "QUIET", "NORMAL"]; current: Backend.lp-sounds;
+                changed(i) => { Backend.lp-sounds = i; Backend.save-launcher(); Sound.play(0); } }
+        }
+        SetRow { x: 0px; y: root.y4 + 408px; width: root.cw; reserve: 0px; title: "Keyboard shortcuts"; sub: "Ctrl+K search everything  ·  Ctrl+1-5 pages  ·  Ctrl+, settings  ·  Ctrl+N new instance  ·  Esc closes"; }
 
         // ---------- 05 personalization ----------
         SectionHead { x: 0px; y: root.y5; width: root.cw; idx: "05"; title: "PERSONALIZATION"; }

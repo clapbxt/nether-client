@@ -9,8 +9,8 @@ import "fonts/JetBrainsMono-Bold.ttf";
 
 import { Theme } from "theme.slint";
 export { Theme }
-import { Backend, Setup, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat } from "structs.slint";
-export { Backend, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat, Setup }
+import { Backend, Setup, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat, Sound } from "structs.slint";
+export { Backend, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat, Setup, Sound }
 import { Btn, Eyebrow, Page, Slash, Hatch, PlayButton, Icon, Ico, Pulse, LinkBtn, Heading, Scrim, WinButtons, Field, FocusTrap, Toggle, Dropdown } from "components.slint";
 import { HomeScreen } from "home.slint";
 import { SetupFlow } from "setup.slint";
@@ -32,9 +32,9 @@ component BarBtn inherits Rectangle {
     background: root.active ? Theme.ln2 : (ta.has-hover ? Theme.hov : transparent);
     animate background { duration: Theme.fast; }
     @children
-    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { Sound.play(0); root.clicked(); } }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
-        key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
+        key-pressed(e) => { if e.text == " " || e.text == Key.Return { Sound.play(0); root.clicked(); return accept; } return reject; } }
     if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-width: 2px; border-color: Theme.ice; }
 }
 
@@ -56,9 +56,9 @@ component RailBtn inherits Rectangle {
         stroke: root.active ? Theme.red2 : (ta.has-hover ? Theme.tx : Theme.dim);
         opacity: root.filled && !ta.has-hover ? 0.62 : 1;
     }
-    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { Sound.play(0); root.clicked(); } }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
-        key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
+        key-pressed(e) => { if e.text == " " || e.text == Key.Return { Sound.play(0); root.clicked(); return accept; } return reject; } }
     if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-radius: Theme.r3; border-width: 2px; border-color: Theme.ice; }
     if ta.has-hover || fs.has-focus: Rectangle {
         x: parent.width + 16px; y: (parent.height - 28px) / 2; width: tl.preferred-width + 20px; height: 28px; border-radius: Theme.r1;

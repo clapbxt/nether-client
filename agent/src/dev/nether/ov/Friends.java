@@ -419,7 +419,7 @@ final class Friends {
         Gfx.rect(x, y + 6, 26, 14, 7, Gfx.mix(Gfx.a(Th.ov, 0.15f), Th.ac, t));
         Gfx.rect(x + 2 + 12 * t, y + 8, 10, 10, 5, 0xFFFFFFFF);
         Gfx.text(Gfx.UI, 12, x + 34, y + 13, hv ? Th.tx : Th.dim, label);
-        if (Menu.hit(x, y, w, 26)) flip.run();
+        if (Menu.hit(x, y, w, 26)) { flip.run(); Sfx.toggle(!on); }
         return x + w + 18;
     }
 

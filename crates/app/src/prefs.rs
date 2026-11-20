@@ -38,10 +38,12 @@ pub struct LauncherPrefs {
     pub ram: i32,
     /// the first-run setup walkthrough was finished or skipped (it never shows again)
     pub setup_done: bool,
+    /// interface sounds, launcher and in-game menus: 0 off, 1 quiet (default), 2 normal (app/sfx.rs, agent Sfx.java)
+    pub sounds: i32,
 }
 
 impl Default for LauncherPrefs {
-    fn default() -> Self { LauncherPrefs { gpu: true, autostart: false, on_launch: 1, on_close: 0, calm: false, accent: 0, theme: 0, text: 0, capes: true, discord: true, auto_update: true, ram: 0, setup_done: false } }
+    fn default() -> Self { LauncherPrefs { gpu: true, autostart: false, on_launch: 1, on_close: 0, calm: false, accent: 0, theme: 0, text: 0, capes: true, discord: true, auto_update: true, ram: 0, setup_done: false, sounds: 1 } }
 }
 
 /// Memory a new profile gets on a PC with `sys_gb` of RAM: enough for Nether profiles and light packs, never more

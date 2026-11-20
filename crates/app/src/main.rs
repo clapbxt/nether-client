@@ -42,6 +42,7 @@ mod presets;
 mod perfui;
 mod setup;
 mod voice;
+mod sfx;
 slint::include_modules!();
 
 #[allow(clippy::too_many_arguments)]
@@ -308,6 +309,7 @@ pub(crate) fn toast_action(ui: &AppWindow, sh: &Arc<Shared>, msg: &str, err: boo
 
 fn toast(ui: &AppWindow, sh: &Arc<Shared>, msg: &str, err: bool, act: Option<(String, UiAction)>) {
     let b = ui.global::<Backend>();
+    if err { sfx::play(sfx::Sfx::Error); }
     b.set_toast_text(msg.into());
     b.set_toast_err(err);
     b.set_toast_action(act.as_ref().map(|a| a.0.as_str()).unwrap_or("").into());
@@ -1089,6 +1091,9 @@ fn main() -> Result<(), slint::PlatformError> {
         backend.set_lp_capes(p.capes);
         backend.set_lp_discord(p.discord);
         backend.set_lp_auto_update(p.auto_update);
+        backend.set_lp_sounds(p.sounds);
+        sfx::set_level(p.sounds);
+        ui.global::<Sound>().on_play(|n| { if let Some(k) = sfx::Sfx::from_i32(n) { sfx::play(k); } });
         backend.set_discord_ready(discord::app_id(&shared.paths).is_some());
         discord::enable(&shared.paths, p.discord);
         settings::apply_look(&ui, p.accent, p.text);
@@ -1101,7 +1106,8 @@ fn main() -> Result<(), slint::PlatformError> {
             let Some(ui) = weak.upgrade() else { return };
             let b = ui.global::<Backend>();
             let old = prefs::load(&sh.paths);
-            let p = prefs::LauncherPrefs { gpu: b.get_lp_gpu(), autostart: b.get_lp_autostart(), on_launch: b.get_lp_on_launch(), on_close: b.get_lp_on_close(), calm: b.get_calm(), accent: b.get_lp_accent(), theme: b.get_lp_theme(), text: b.get_lp_text(), capes: b.get_lp_capes(), discord: b.get_lp_discord(), auto_update: b.get_lp_auto_update(), ram: old.ram, setup_done: old.setup_done };
+            let p = prefs::LauncherPrefs { gpu: b.get_lp_gpu(), autostart: b.get_lp_autostart(), on_launch: b.get_lp_on_launch(), on_close: b.get_lp_on_close(), calm: b.get_calm(), accent: b.get_lp_accent(), theme: b.get_lp_theme(), text: b.get_lp_text(), capes: b.get_lp_capes(), discord: b.get_lp_discord(), auto_update: b.get_lp_auto_update(), ram: old.ram, setup_done: old.setup_done, sounds: b.get_lp_sounds() };
+            sfx::set_level(p.sounds);
             settings::apply_look(&ui, p.accent, p.text);
             settings::apply_theme(&ui, p.theme);
             client::set_look(&sh, settings::THEME_NAMES[p.theme.clamp(0, 3) as usize], settings::accent_hex(p.accent));

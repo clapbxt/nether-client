@@ -132,7 +132,13 @@ final class Config {
         if (lc == null) return;
         Object l = lc.get("launcher");
         launcherCalm = l instanceof Map<?, ?> && Boolean.TRUE.equals(((Map<?, ?>) l).get("calm"));
+        Object snd = l instanceof Map<?, ?> ? ((Map<?, ?>) l).get("sounds") : null;
+        launcherSounds = snd instanceof Number ? ((Number) snd).intValue() : 1;
     }
+
+    /** The launcher's Interface sounds: 0 off, 1 quiet (default), 2 normal (Sfx). */
+    private static volatile int launcherSounds = 1;
+    static int launcherSounds() { return launcherSounds; }
 
     /** Reduce motion: menu animations snap, nothing blinks (client.calm, or the launcher's own setting). */
     static boolean calm() { return launcherCalm || bool("client", "calm", false); }

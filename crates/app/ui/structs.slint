@@ -273,6 +273,8 @@ export global Backend {
     callback update-now();
     callback update-exit();
     in-out property <bool> lp-auto-update: true;
+    // interface sounds: 0 off, 1 quiet, 2 normal
+    in-out property <int> lp-sounds: 1;
     // Settings > Support: launcher log folder, system info to the clipboard
     callback open-logs();
     callback copy-sysinfo();
@@ -582,4 +584,9 @@ export global Combiner {
     // (category, value); category -1 = the base pack
     callback pick(int, int);
     callback create();
+}
+
+// Interface sounds (Rust: sfx.rs). 0 press, 1 toggle on, 2 toggle off, 3 panel open, 4 launch, 5 error.
+export global Sound {
+    callback play(int);
 }

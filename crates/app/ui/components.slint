@@ -1,5 +1,5 @@
 import { Theme } from "theme.slint";
-import { Backend } from "structs.slint";
+import { Backend, Sound } from "structs.slint";
 
 // ---------- surfaces ----------
 
@@ -195,9 +195,9 @@ export component Btn inherits Rectangle {
     property <length> cw: t.preferred-width + (root.icon == "" ? 0px : 22px);
     if root.icon != "": Icon { x: (parent.width - root.cw) / 2; y: (parent.height - 12px) / 2 + (ta.pressed ? 1px : 0px); d: root.icon; tint: root.fg; }
     t := Text { x: (parent.width - root.cw) / 2 + (root.icon == "" ? 0px : 22px); y: ta.pressed ? 1px : 0px; width: self.preferred-width; height: parent.height; text: root.text; color: root.fg; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; }
-    ta := TouchArea { mouse-cursor: root.enabled ? pointer : default; clicked => { if root.enabled { root.clicked(); } } }
+    ta := TouchArea { mouse-cursor: root.enabled ? pointer : default; clicked => { if root.enabled { Sound.play(0); root.clicked(); } } }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false; enabled: root.enabled;
-        key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
+        key-pressed(e) => { if e.text == " " || e.text == Key.Return { Sound.play(0); root.clicked(); return accept; } return reject; } }
     // keyboard focus ring (Tab only; mouse clicks never show it)
     if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-width: 2px; border-color: Theme.ice; }
 }
@@ -224,9 +224,10 @@ export component PlayButton inherits Rectangle {
             Path { width: root.text-size * 0.4; height: root.text-size * 0.46; commands: "M 0 0 L 10 6 L 0 12 Z"; fill: root.enabled ? white : Theme.mut; stroke-width: 0px; }
         }
     }
-    ta := TouchArea { mouse-cursor: root.enabled ? pointer : default; clicked => { if root.enabled { root.clicked(); } } }
+    // PLAY gets the launch chime; other actions on this slab (STOP) a plain press
+    ta := TouchArea { mouse-cursor: root.enabled ? pointer : default; clicked => { if root.enabled { Sound.play(root.arrow ? 4 : 0); root.clicked(); } } }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false; enabled: root.enabled;
-        key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
+        key-pressed(e) => { if e.text == " " || e.text == Key.Return { Sound.play(root.arrow ? 4 : 0); root.clicked(); return accept; } return reject; } }
     if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-radius: Theme.r3; border-width: 2px; border-color: Theme.ice; }
 }
 
@@ -248,9 +249,9 @@ export component IconBtn inherits Rectangle {
     border-color: root.danger && ta.has-hover ? Theme.red2 : (ta.has-hover ? Theme.mut : Theme.ln2);
     animate background, border-color { duration: Theme.fast; }
     Icon { x: (parent.width - 12px) / 2; y: (parent.height - 12px) / 2 + (ta.pressed ? 1px : 0px); d: root.d; solid: root.solid || root.hot; tint: root.solid || (root.hot && ta.has-hover) ? white : (root.danger && ta.has-hover ? Theme.redtx : (ta.has-hover ? Theme.tx : Theme.dim)); }
-    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { Sound.play(0); root.clicked(); } }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false; enabled: true;
-        key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
+        key-pressed(e) => { if e.text == " " || e.text == Key.Return { Sound.play(0); root.clicked(); return accept; } return reject; } }
     // keyboard focus ring (Tab only; mouse clicks never show it)
     if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-width: 2px; border-color: Theme.ice; }
     // hover label, to the left so row clipping never hides it (also shown on keyboard focus)
@@ -272,9 +273,9 @@ export component LinkBtn inherits Rectangle {
     if root.back: Icon { x: ta.has-hover ? -3px : 0px; y: 8px; d: Ico.back; tint: ta.has-hover ? Theme.tx : Theme.dim; animate x { duration: Theme.fast; } }
     t := Text { x: root.back ? 20px : 0px; height: parent.height; text: root.text; color: ta.has-hover ? Theme.tx : Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.6px; vertical-alignment: center; animate color { duration: Theme.fast; } }
     if !root.back: Icon { x: t.preferred-width + 8px + (ta.has-hover ? 3px : 0px); y: 8px; d: Ico.chev; tint: ta.has-hover ? Theme.red2 : Theme.dim; animate x { duration: Theme.fast; } }
-    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { Sound.play(0); root.clicked(); } }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false; enabled: true;
-        key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
+        key-pressed(e) => { if e.text == " " || e.text == Key.Return { Sound.play(0); root.clicked(); return accept; } return reject; } }
     if fs.has-focus: Rectangle { x: -6px; y: 0px; width: parent.width + 6px; height: parent.height; border-width: 2px; border-color: Theme.ice; }
 }
 
@@ -308,7 +309,7 @@ export component Seg inherits Rectangle {
                 horizontal-alignment: center; vertical-alignment: center;
                 animate color { duration: Theme.mid; }
             }
-            st := TouchArea { mouse-cursor: pointer; clicked => { root.current = i; root.changed(i); } }
+            st := TouchArea { mouse-cursor: pointer; clicked => { if root.current != i { Sound.play(0); } root.current = i; root.changed(i); } }
         }
     }
     // keyboard: Left/Right move the thumb
@@ -337,9 +338,9 @@ export component Toggle inherits Rectangle {
         animate x { duration: Theme.mid; easing: ease-out-quint; }
         animate background { duration: Theme.mid; }
     }
-    ta := TouchArea { x: -8px; y: -8px; width: parent.width + 16px; height: parent.height + 16px; mouse-cursor: pointer; clicked => { if root.enabled { root.on = !root.on; root.toggled(root.on); } } }
+    ta := TouchArea { x: -8px; y: -8px; width: parent.width + 16px; height: parent.height + 16px; mouse-cursor: pointer; clicked => { if root.enabled { root.on = !root.on; Sound.play(root.on ? 1 : 2); root.toggled(root.on); } } }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false; enabled: root.enabled;
-        key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.on = !root.on; root.toggled(root.on); return accept; } return reject; } }
+        key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.on = !root.on; Sound.play(root.on ? 1 : 2); root.toggled(root.on); return accept; } return reject; } }
     // keyboard focus ring (Tab only; mouse clicks never show it)
     if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-width: 2px; border-color: Theme.ice; }
 }
@@ -486,7 +487,7 @@ export component UTabs inherits Rectangle {
             }
             Rectangle { y: parent.height - 2px; height: 2px; border-radius: 1px; background: Theme.red2; opacity: root.current == i ? 1 : 0; animate opacity { duration: Theme.mid; } }
             if fs.has-focus && root.current == i: Rectangle { x: -6px; y: 2px; width: parent.width + 12px; height: parent.height - 4px; border-width: 2px; border-color: Theme.ice; }
-            t := TouchArea { mouse-cursor: pointer; clicked => { root.current = i; } }
+            t := TouchArea { mouse-cursor: pointer; clicked => { if root.current != i { Sound.play(0); } root.current = i; } }
         }
     }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
@@ -555,7 +556,7 @@ export component FocusTrap inherits FocusScope {
 export component Scrim inherits Rectangle {
     callback dismiss();
     property <bool> shown: false;
-    init => { root.shown = true; }
+    init => { root.shown = true; Sound.play(3); }
     background: #000000c4;
     opacity: root.shown ? 1 : 0;
     animate opacity { duration: Theme.mid; easing: ease-out; }

@@ -1360,7 +1360,9 @@ final class Party {
         Gfx.text(Gfx.UI, 10.5f, x + 36, y + h / 2, Gfx.mix(Gfx.DIM, Gfx.ICE, Math.max(t, s * 0.7f)), MainMenu.fit(Gfx.UI, 10.5f, label, 0, w - 38));
         Gfx.rect(x, y + 4, 28, 16, 8, Gfx.mix(Gfx.S3, Th.ac, s));
         Gfx.rect(x + 3 + 12 * s, y + 7, 10, 10, 5, Gfx.mix(Gfx.DIM, 0xFFFFFFFF, s));
-        return MainMenu.hit(x, y, w, h);
+        boolean h2 = MainMenu.hit(x, y, w, h);
+        if (h2) Sfx.toggle(!on);
+        return h2;
     }
 
     private static void header(String s, float x, float y) { Gfx.text(Gfx.MONO, 8.5f, x + 18, y + 10, Gfx.SUB, s, false, 1.5f); }

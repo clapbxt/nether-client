@@ -70,6 +70,7 @@ final class Menu {
     }
 
     static void opened() {
+        Sfx.open();
         tS = gridT = 0; tDir = 0; pillX = -1; hub = true; drag = capture = null; searchFocus = false; scroll = scrollT = 0; fCur = -1; kbNav = false;
         // the title screen shows the hub's actions itself (MainMenu.actions): the menu key goes straight to the mods
         if (MainMenu.title) { hub = false; page = null; if (tab != lastCat) setTab(lastCat); }
@@ -140,7 +141,7 @@ final class Menu {
     }
 
     static boolean hit(float x, float y, float w, float h) {
-        if (click && in(x, y, w, h)) { click = false; return true; }
+        if (click && in(x, y, w, h)) { click = false; Sfx.click(); return true; }
         return false;
     }
 
@@ -1089,7 +1090,7 @@ final class Menu {
         int u = used(f);
         if (starHit) Config.set(m.id, "fav", !fav);
         else if (cogHit || u == 257 || (clickRt && hv)) { if (clickRt && hv) clickRt = false; ColorPicker.close(); openPage(m.id); }
-        else if (!lock && (u == 32 || hit(x, y, w, CARD_H))) Config.set(m.id, "enabled", !on);
+        else if (!lock && (u == 32 || hit(x, y, w, CARD_H))) { Config.set(m.id, "enabled", !on); Sfx.toggle(!on); }
     }
 
     /** One list row: icon box, name + description, star, key chip, toggle. Click the name = settings, the pill = on / off. */
@@ -1141,7 +1142,7 @@ final class Menu {
         Gfx.alpha = a0;
         if (lock && in(x, y, w, ROW) && m.lockNote() != null) tip = m.lockNote();
         int u = used(f), a = adjust(f);
-        if (!lock && (pillHit || u != 0)) Config.set(m.id, "enabled", !on);
+        if (!lock && (pillHit || u != 0)) { Config.set(m.id, "enabled", !on); Sfx.toggle(!on); }
         else if (hit(x, y, w, ROW) || a > 0) { commitEdit(); ColorPicker.close(); page = open && a <= 0 ? null : m.id; }
         else if (a < 0 && open) { commitEdit(); ColorPicker.close(); page = null; }
     }
@@ -1210,7 +1211,7 @@ final class Menu {
                     boolean v = Config.bool(m.id, s.key, (Boolean) s.def);
                     pill("s" + id, xr - 30, y + (rowH - 17) / 2, v);
                     int a = adjust(f);
-                    if (hit(xr - 40, y + 6, 44, 34) || used(f) != 0) Config.set(m.id, s.key, !v);
+                    if (hit(xr - 40, y + 6, 44, 34) || used(f) != 0) { Config.set(m.id, s.key, !v); Sfx.toggle(!v); }
                     else if (a != 0 && (a > 0) != v) Config.set(m.id, s.key, a > 0);
                     cw = 44;
                     break;

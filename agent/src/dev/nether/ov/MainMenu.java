@@ -306,6 +306,7 @@ final class MainMenu {
     static boolean hit(float x, float y, float w, float h) {
         if (!click || !over(x, y, w, h)) return false;
         click = false;
+        Sfx.click();
         return true;
     }
 
@@ -888,7 +889,9 @@ final class MainMenu {
         float px = x + w - 36, py = y + (h - 17) / 2;
         Gfx.rect(px, py, 30, 17, 8.5f, Gfx.mix(Gfx.S3, Th.ac, s));
         Gfx.rect(px + 3 + 13 * s, py + 3, 11, 11, 5.5f, Gfx.mix(Gfx.DIM, 0xFFFFFFFF, s));
-        return hit(x, y, w, h);
+        boolean h2 = hit(x, y, w, h);
+        if (h2) Sfx.toggle(!on);
+        return h2;
     }
 
     // ---------------------------------------------------------------- marks + actions
