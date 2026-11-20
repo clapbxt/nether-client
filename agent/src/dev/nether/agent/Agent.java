@@ -44,7 +44,7 @@ public final class Agent {
     private static Instrumentation inst;
     private static boolean overlayDefined;
     private static final String HOOK = "dev/nether/agent/Hook";
-    /** dev (benchmarks): -Dnether.bare=1 keeps only the LWJGL hooks, which pass everything through; no overlay, no game-class hook. */
+    /** dev (benchmarks): -Dnether.bare=1 keeps only the LWJGL hooks, which pass everything through, and the dev world loader; no overlay, no game-class hook. */
     private static final boolean BARE = "1".equals(System.getProperty("nether.bare"));
 
     public static void premain(String args, Instrumentation instrumentation) {
@@ -584,7 +584,7 @@ public final class Agent {
             final boolean sdl = name.startsWith("org/lwjgl/sdl/SDL") && (name.endsWith("/SDLVideo") || name.endsWith("/SDLEvents") || name.endsWith("/SDLKeyboard") || name.endsWith("/SDLMouse"));
             if (!glfw && !display && !kb && !ms && !sdl) return null;
             try {
-                if (!BARE) installOverlay(loader, glfw ? 0 : sdl ? 2 : 1);
+                installOverlay(loader, glfw ? 0 : sdl ? 2 : 1); // bare: only its dev world loader runs (Overlay.bareFrame)
                 ClassReader cr = new ClassReader(bytes);
                 ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
                 cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {

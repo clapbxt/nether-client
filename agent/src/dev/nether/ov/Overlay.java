@@ -31,11 +31,17 @@ public final class Overlay {
     public static void install(int platform) throws Exception {
         boolean legacy = platform == 1;
         Plat.cur = (Plat) Class.forName(platform == 1 ? "dev.nether.ov.PlatLwjgl2" : platform == 2 ? "dev.nether.ov.PlatSdl" : "dev.nether.ov.InputGlfw").newInstance();
+        if ("1".equals(System.getProperty("nether.bare"))) { Hook.target = Overlay::bareFrame; return; } // benchmarks: vanilla + the dev world loader (no input hooks installed)
         GlBackend.cur = (GlBackend) Class.forName(legacy ? "dev.nether.ov.GlCompat" : "dev.nether.ov.GlCore").newInstance();
         Plat.cur.install();
         Hook.target = Overlay::frame;
         Hook.name = Capes::name;
         Hook.chat = Capes::chat;
+    }
+
+    /** -Dnether.bare=1 (benchmark baseline): no overlay at all, only -Dnether.world loading (1.8.9 has no quick play). */
+    private static void bareFrame(long window) {
+        try { Game.frame++; Game.devTick(); } catch (Throwable t) { }
     }
 
     private static void init() {
