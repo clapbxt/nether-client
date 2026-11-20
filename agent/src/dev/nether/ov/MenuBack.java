@@ -19,7 +19,7 @@ import java.util.Random;
 final class MenuBack {
     private MenuBack() {}
 
-    static final String[] KINDS = {"Panorama", "Obsidian", "Gradient", "Ember", "Grid", "Image"};
+    static final String[] KINDS = {"Panorama", "Vanilla", "Obsidian", "Gradient", "Ember", "Grid", "Image"};
 
     /** seconds of background motion (frozen while motion is off or reduce motion is on) */
     private static float clock;
@@ -36,6 +36,8 @@ final class MenuBack {
         py += ((anim ? my / H * 2 - 1 : 0) - py) * e;
         float dim = (float) m.num("dim");
         if (kind.equals("Image") && !image(W, H, anim)) kind = "Gradient";
+        // Nether's own panoramas; vanilla's keeps running underneath until the picture has loaded
+        if (kind.equals("Panorama") && Pano.title(W, H, m.str("pano"), anim, px, py)) kind = "Image";
         switch (kind) {
             case "Obsidian":
                 Gfx.rectG(0, 0, W, H, 0, 0xFF0B0B0F, Gfx.BG);
@@ -56,7 +58,7 @@ final class MenuBack {
             case "Image":
                 Gfx.rect(0, 0, W, H, 0, Gfx.a(Gfx.BLACK, dim));
                 break;
-            default: // panorama: the game draws it underneath; the title screen's own logo is faded out (modern) or covered (1.8.9)
+            default: // vanilla panorama (also while ours loads): the game draws it underneath; the title screen's own logo is faded out (modern) or covered (1.8.9)
                 Gfx.rect(0, 0, W, H, 0, Gfx.a(Gfx.BLACK, dim));
                 if (legacy) {
                     // the logo ends 74 GUI px down; 1.12's "Java Edition" banner under it ends at 81 (2 units per GUI px)

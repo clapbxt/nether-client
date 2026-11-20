@@ -71,6 +71,8 @@ Copy-Item (Join-Path $root "res\names") (Join-Path $cls "names") -Recurse
 Copy-Item (Join-Path $root "res\brand") (Join-Path $cls "brand") -Recurse
 # line icons (res/icons/<id>.svg, read by ov/ModIcons)
 Copy-Item (Join-Path $root "res\icons") (Join-Path $cls "icons") -Recurse
+# title panoramas (res/pano/<name>.jpg cylindrical strips, read by ov/Pano)
+Copy-Item (Join-Path $root "res\pano") (Join-Path $cls "pano") -Recurse
 # Hook must sit on the bootstrap class path so every loader (incl. Fabric Knot) can see it
 $boot = Join-Path $out "boot\dev\nether\agent"; New-Item -ItemType Directory -Force $boot | Out-Null
 Move-Item (Join-Path $cls "dev\nether\agent\Hook*.class"), (Join-Path $cls "dev\nether\agent\Tiny*.class") $boot # Tiny: Legacy Fabric 1.8.9 names, shared by the agent and the overlay

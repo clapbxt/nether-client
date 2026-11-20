@@ -629,6 +629,8 @@ final class Game {
     // ---------------------------------------------------------------- dev only: join a world, run commands as the server
 
     private static int devStep = System.getProperty("nether.world") == null && System.getProperty("nether.cmd") == null && System.getProperty("nether.cmdFile") == null ? -1 : 0;
+    private static String devCmdLeft;
+    private static boolean devCmdAt;
 
     /**
      * -Dnether.world=<save folder> on 1.8.9 loads that singleplayer world from the title screen (1.20+: the agent adds
@@ -659,10 +661,24 @@ final class Game {
                         call(call(mc, "method_41735"), "method_41899", scr, w, false, false);
                 });
             }
-            if (cmd != null && devStep % 60 == 0 && (legacy ? player0() : me()) != null) {
+            if (cmd != null && devStep % (devCmdAt ? 1 : 60) == 0 && (legacy ? player0() : me()) != null) {
                 final Object srv = call(mc, legacy ? l("G", "func_71401_C") : "method_1576");
                 if (srv == null) return;
-                final String[] cs = cmd.split(";");
+                // "@<sec>:<command>" runs that many seconds after joining (devT), the others at once (panorama captures turn the camera)
+                java.util.List<String> now = new java.util.ArrayList<>(), later = new java.util.ArrayList<>();
+                for (String c : (devCmdLeft != null ? devCmdLeft : cmd).split(";")) {
+                    if (c.trim().isEmpty()) continue;
+                    if (c.startsWith("@")) {
+                        int k = c.indexOf(':');
+                        if (devT() < Double.parseDouble(c.substring(1, k))) { later.add(c); continue; }
+                        c = c.substring(k + 1);
+                    }
+                    now.add(c);
+                }
+                devCmdLeft = String.join(";", later);
+                devCmdAt = !later.isEmpty();
+                if (now.isEmpty()) { if (!devCmdAt) devStep = -1; return; }
+                final String[] cs = now.toArray(new String[0]);
                 Runnable run = () -> {
                     for (String c : cs) {
                         Object r;
@@ -677,7 +693,7 @@ final class Game {
                 };
                 call(srv, legacy ? l("a", "func_152344_a") : "execute", run); // on the server thread
                 System.out.println("[nether-agent] dev commands sent");
-                devStep = -1;
+                if (!devCmdAt) devStep = -1;
             }
         } catch (Throwable t) {
             devStep = -1;

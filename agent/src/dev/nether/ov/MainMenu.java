@@ -33,7 +33,8 @@ final class MainMenu {
         Module m = MODULE;
         m.needs(4);
         m.add(Setting.header("Background"));
-        m.add(Setting.choice("bg", "Background", "Panorama", MenuBack.KINDS));
+        m.add(Setting.choice("bg", "Background", "Panorama", MenuBack.KINDS).hint("Panorama: Nether's own shader-lit scenes. Vanilla: the game's own panorama."));
+        m.add(Setting.choice("pano", "Panorama", "Random", Pano.CHOICES).when(() -> m.str("bg").equals("Panorama")).hint("Random picks a different one each time the game starts."));
         m.add(Setting.slider("dim", "Dim", 0, 0.8, 0.05, 0.3).hint("Darkens the panorama or image behind the menu."));
         m.add(Setting.bool("motion", "Animate background", true).hint("Ember drift, grid sweep, slow pan on images. Reduce motion stops it."));
         java.util.function.BooleanSupplier img = () -> m.str("bg").equals("Image");
