@@ -147,6 +147,17 @@ fn prefer_fast_gpu(exe: &std::path::Path) {
     }
 }
 
+/// Opts the game out of Windows power throttling (EcoQoS: efficiency cores, lower clocks), which Windows 11 applies to
+/// processes it thinks are in the background. Microsoft: StateMask 0 with the execution-speed bit in ControlMask = always
+/// high QoS ("SetProcessInformation", ProcessPowerThrottling). Ignored where unsupported.
+#[cfg(windows)]
+fn full_speed(child: &Child) {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::System::Threading::{ProcessPowerThrottling, SetProcessInformation, PROCESS_POWER_THROTTLING_CURRENT_VERSION, PROCESS_POWER_THROTTLING_EXECUTION_SPEED, PROCESS_POWER_THROTTLING_STATE};
+    let st = PROCESS_POWER_THROTTLING_STATE { Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION, ControlMask: PROCESS_POWER_THROTTLING_EXECUTION_SPEED, StateMask: 0 };
+    unsafe { SetProcessInformation(child.as_raw_handle() as _, ProcessPowerThrottling, &st as *const _ as *const _, std::mem::size_of::<PROCESS_POWER_THROTTLING_STATE>() as u32); }
+}
+
 /// The vanilla launcher's G1 tuning, unless the user picked a collector themselves.
 pub fn gc_args(extra: &[String]) -> Vec<String> {
     let custom = extra.iter().any(|a| a.starts_with("-XX:+Use") && a.ends_with("GC"));
@@ -514,6 +525,8 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
         .stderr(Stdio::from(log))
         .spawn()
         .with_context(|| format!("starting {}", java.display()))?;
+    #[cfg(windows)]
+    full_speed(&child);
     progress("Minecraft started", 1.0);
     Ok(child)
 }
