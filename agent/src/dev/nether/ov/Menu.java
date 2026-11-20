@@ -90,6 +90,7 @@ final class Menu {
         Splashes.open = false;
         WorldShare.open = false;
         PackBrowser.open = false;
+        Screenshots.open = false;
         PackMixer.open = false;
         Wardrobe.ask = false;
         ColorPicker.close();
@@ -562,6 +563,11 @@ final class Menu {
         tip = null;
         act = adj = 0;
         boolean shift = Input.keys[340] || Input.keys[344], ctrl = Input.keys[341] || Input.keys[345];
+        if (Screenshots.open) { // the screenshot browser takes every key while it is up
+            for (int[] ev : evs) Screenshots.key(ev[0], ev[1] == 1, shift, ctrl);
+            evs.clear();
+            typed = "";
+        }
         if (PackBrowser.open) { // the pack browser takes every key while it is up
             for (int[] ev : evs) PackBrowser.key(ev[0], ev[1] == 1, shift, ctrl);
             if (!typed.isEmpty() && PackBrowser.open) PackBrowser.type(typed);
@@ -618,7 +624,8 @@ final class Menu {
             Gfx.minPx = MIN_PX;
             Gfx.round = Th.round(); // rounded panel, rows and controls (HUD modules stay square)
             try {
-                if (PackBrowser.open) PackBrowser.draw(e, wheel);
+                if (Screenshots.open) Screenshots.drawBrowser(e, wheel);
+                else if (PackBrowser.open) PackBrowser.draw(e, wheel);
                 else if (PackMixer.open) PackMixer.draw(e, wheel);
                 else if (WorldShare.open) WorldShare.draw(e, wheel);
                 else if (Splashes.open) { // over the Main Menu settings page, which gets no clicks

@@ -21,6 +21,7 @@ final class Modules {
     static final MediaPlayer MEDIA = new MediaPlayer();
     static final Lyrics LYRICS = new Lyrics();
     static final Stopwatch STOPWATCH = new Stopwatch();
+    static final Screenshots SHOTS = new Screenshots();
     static final SelfTag SELFTAG = new SelfTag();
 
     static {
@@ -53,6 +54,7 @@ final class Modules {
         all.add(new Combo());
         all.add(new Items());
         all.add(STOPWATCH);
+        all.add(SHOTS);
         all.add(SELFTAG);
         all.add(new BackgroundReload());
         all.add(BackgroundFps.M);
@@ -306,7 +308,7 @@ final class Modules {
         if (WAYPOINTS.enabled() && world) WAYPOINTS.drawMarkers(fbW, fbH);
         if (LYRICS.enabled() && world) LYRICS.drawWorld(fbW, fbH);
         SELFTAG.drawWorld(fbW, fbH, SELFTAG.enabled() && world);
-        if (world) { Toast.draw(fbW); menuHint(fbW); }
+        if (world) { Toast.draw(fbW); SHOTS.drawCard(fbW); menuHint(fbW); }
     }
 
     // ---------------------------------------------------------------- first-run hint: where the menu is
@@ -375,7 +377,7 @@ final class Modules {
         Waypoints wp = WAYPOINTS;
         if (action == 1 && wp.enabled() && key == (int) wp.num("addKey")) { Input.eatChar(); wp.addHere(true); return true; }
         if (action == 1 && wp.enabled() && key == (int) wp.num("toggleKey")) { wp.flip(); return true; }
-        if (action == 1 && (MEDIA.key(key) || LYRICS.key(key) || STOPWATCH.key(key))) return true;
+        if (action == 1 && (MEDIA.key(key) || LYRICS.key(key) || STOPWATCH.key(key) || SHOTS.key(key))) return true;
         return false;
     }
 
