@@ -219,7 +219,11 @@ fn capture(global: &mut Vec<(String, String)>, from: &[(String, String)], legacy
 /// First run: start the shared settings from the official launcher's game settings, if there are any.
 fn seed(paths: &Paths, prefs: &SyncPrefs) -> Vec<(String, String)> {
     let official = dirs::data_dir().map(|d| d.join(".minecraft").join("options.txt"));
-    let src = official.map(|p| read(&p)).unwrap_or_default();
+    seed_from(paths, prefs, official.as_deref())
+}
+
+fn seed_from(paths: &Paths, prefs: &SyncPrefs, file: Option<&Path>) -> Vec<(String, String)> {
+    let src = file.map(read).unwrap_or_default();
     // data version 1519 = 1.13; files without one are older
     let legacy = src.iter().find(|(k, _)| k == "version").and_then(|(_, v)| v.parse::<u32>().ok()).map(|d| d < 1519).unwrap_or(!src.is_empty());
     let mut g = vec![];
@@ -233,6 +237,16 @@ pub fn import_official(paths: &Paths) -> Result<usize> {
     let prefs = load_prefs(paths);
     let _ = std::fs::remove_file(global_file(paths));
     Ok(seed(paths, &prefs).len())
+}
+
+/// Replace the shared settings with another game's `options.txt` (another client's or launcher's): its keybinds,
+/// video and audio then follow into every instance. Returns how many settings were imported; nothing changes when
+/// the file has none.
+pub fn import_from(paths: &Paths, options: &Path) -> Result<usize> {
+    if read(options).is_empty() { return Ok(0); }
+    let prefs = load_prefs(paths);
+    let _ = std::fs::remove_file(global_file(paths));
+    Ok(seed_from(paths, &prefs, Some(options)).len())
 }
 
 /// Merge the shared settings into an instance's options.txt (call before launching).

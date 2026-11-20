@@ -623,7 +623,9 @@ pub fn import_go(ui: &AppWindow, sh: &Arc<Shared>) {
     let rows = ui.global::<Backend>().get_import_rows();
     let picked: Vec<nether_core::launchers::Found> = FOUND.with(|x| x.borrow().iter().enumerate().filter(|(i, _)| rows.row_data(*i).is_some_and(|r| r.on)).map(|(_, f)| f.clone()).collect());
     if picked.is_empty() { show_toast(ui, sh, "Pick the instances to import"); return; }
+    let settings = ui.global::<Backend>().get_import_use_settings().then(|| picked.iter().find_map(|f| f.options())).flatten();
     ui.global::<Backend>().set_import_open(false);
+    ui.global::<Backend>().set_import_use_settings(false);
     let (weak, sh) = (ui.as_weak(), sh.clone());
     std::thread::spawn(move || {
         let (mut ok, mut notes, mut errs) = (vec![], vec![], vec![]);
@@ -639,6 +641,8 @@ pub fn import_go(ui: &AppWindow, sh: &Arc<Shared>) {
             }
             ui_do(&weak, move |ui| crate::job_end(ui, &key));
         }
+        // after the copies, so a failed import never leaves the shared settings half changed
+        let set = settings.map(|p| nether_core::gamesettings::import_from(&sh.paths, &p));
         let sh2 = sh.clone();
         ui_do(&weak, move |ui| {
             let m = ui.global::<Backend>().get_instances();
@@ -650,6 +654,11 @@ pub fn import_go(ui: &AppWindow, sh: &Arc<Shared>) {
             crate::artui::refresh(ui, &sh2);
             let mut msg = match ok.len() { 0 => String::new(), 1 => format!("Imported {}", ok[0].name), n => format!("Imported {n} instances") };
             if let Some(e) = errs.first() { msg = if msg.is_empty() { format!("Couldn't import {e}") } else { format!("{msg} · couldn't import {e}") }; }
+            match set {
+                Some(Ok(n)) if n > 0 => msg = format!("{msg} · {n} game settings now shared"),
+                Some(Err(e)) => msg = format!("{msg} · settings not imported: {e}"),
+                _ => {}
+            }
             if let Some(n) = notes.first() { msg = format!("{msg} ({n})"); }
             show_toast(ui, &sh2, &msg);
         });

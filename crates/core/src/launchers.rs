@@ -1,5 +1,6 @@
-//! Instances of other launchers on this PC: Prism / MultiMC, the CurseForge app, the Modrinth App, ATLauncher and
-//! the vanilla launcher. [`scan`] lists them from each launcher's usual place, [`scan_dir`] from a folder the player
+//! Instances of other launchers on this PC: Prism / MultiMC, the CurseForge app, the Modrinth App, ATLauncher, the
+//! vanilla launcher, and the profiles of the Lunar, NoRisk, OneClient and River clients (their game data and the mods
+//! the player added; never the client's own mods or module settings). [`scan`] lists them from each launcher's usual place, [`scan_dir`] from a folder the player
 //! picks (portable installs, ATLauncher, moved data), [`import`] copies one into a new instance. The source is only
 //! read, never changed. On-disk formats: vault `research/Launcher instance formats.md`.
 use std::collections::BTreeSet;
@@ -17,13 +18,14 @@ use crate::paths::Paths;
 use crate::Progress;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Kind { Prism, MultiMC, CurseForge, Modrinth, ATLauncher, Vanilla }
+pub enum Kind { Prism, MultiMC, CurseForge, Modrinth, ATLauncher, Vanilla, Lunar, NoRisk, OneClient, River }
 
 impl Kind {
     pub fn label(self) -> &'static str {
         match self {
             Kind::Prism => "Prism Launcher", Kind::MultiMC => "MultiMC", Kind::CurseForge => "CurseForge",
             Kind::Modrinth => "Modrinth App", Kind::ATLauncher => "ATLauncher", Kind::Vanilla => "Minecraft Launcher",
+            Kind::Lunar => "Lunar Client", Kind::NoRisk => "NoRisk Client", Kind::OneClient => "OneClient", Kind::River => "River Client",
         }
     }
 }
@@ -35,6 +37,11 @@ pub enum Copy {
     Skip(Vec<String>),
     /// only these top-level names (a shared `.minecraft`: never versions / libraries / assets)
     Only(Vec<String>),
+}
+
+impl Found {
+    /// Its game settings (keybinds, video, audio), when it has any: can become the shared settings.
+    pub fn options(&self) -> Option<PathBuf> { Some(self.game_dir.join("options.txt")).filter(|p| p.is_file()) }
 }
 
 /// One instance another launcher has.
@@ -50,6 +57,8 @@ pub struct Found {
     /// what identifies it (instance folder, or `launcher_profiles.json#<id>`): remembered so the list can say IMPORTED
     pub source: String,
     pub copy: Copy,
+    /// more to copy: (file or folder, where in the new instance); folders merge into what is there
+    pub extra: Vec<(PathBuf, String)>,
     pub ram_mb: Option<u32>,
     pub jvm_args: String,
     /// what is not carried over (shown after the import)
@@ -133,7 +142,7 @@ fn prism_one(dir: &Path, kind: Kind) -> Option<Found> {
     let mut notes = vec![];
     if dir.join("jarmods").read_dir().is_ok_and(|mut r| r.next().is_some()) { notes.push("jar mods are not supported".into()); }
     let name = c.get("name").filter(|n| !n.is_empty()).cloned().unwrap_or_else(|| dir.file_name().unwrap_or_default().to_string_lossy().into());
-    Some(Found { kind, name, mc, loader, loader_version: lv, game_dir, source: dir.display().to_string(), copy: skip(&[]), ram_mb, jvm_args, notes })
+    Some(Found { extra: vec![], kind, name, mc, loader, loader_version: lv, game_dir, source: dir.display().to_string(), copy: skip(&[]), ram_mb, jvm_args, notes })
 }
 
 // ---------------------------------------------------------------- CurseForge app
@@ -160,7 +169,7 @@ pub(crate) fn curseforge_in(root: &Path) -> Vec<Found> {
         let ram_mb = if v["isMemoryOverride"].as_bool() == Some(true) { v["allocatedMemory"].as_u64().map(|m| m as u32) } else { None };
         let jvm_args = split_mem(&s(&v["javaArgsOverride"])).0;
         let name = Some(s(&v["name"])).filter(|n| !n.is_empty()).unwrap_or_else(|| e.file_name().to_string_lossy().into());
-        out.push(Found { kind: Kind::CurseForge, name, mc: mc.clone(), loader, loader_version: bare_lv(&lv, &mc), game_dir: dir.clone(), source: dir.display().to_string(),
+        out.push(Found { extra: vec![], kind: Kind::CurseForge, name, mc: mc.clone(), loader, loader_version: bare_lv(&lv, &mc), game_dir: dir.clone(), source: dir.display().to_string(),
             copy: skip(&["minecraftinstance.json", "profileImage", ".curseclient"]), ram_mb, jvm_args, notes: vec![] });
     }
     out
@@ -189,23 +198,37 @@ fn modrinth_found(dir: &Path, name: &str, mc: &str, loader: &str, lv: &str, ram_
     if mc.is_empty() || !dir.is_dir() { return None; }
     let loader = loader_named(loader)?;
     let name = if name.is_empty() { dir.file_name()?.to_string_lossy().to_string() } else { name.to_string() };
-    Some(Found { kind: Kind::Modrinth, name, mc: mc.into(), loader, loader_version: bare_lv(lv, mc), game_dir: dir.into(), source: dir.display().to_string(),
+    Some(Found { extra: vec![], kind: Kind::Modrinth, name, mc: mc.into(), loader, loader_version: bare_lv(lv, mc), game_dir: dir.into(), source: dir.display().to_string(),
         copy: skip(&["profile.json"]), ram_mb, jvm_args: split_mem(args).0, notes: vec![] })
 }
 
-fn modrinth_db(config: &Path, db: &Path) -> Result<Vec<Found>> {
-    let tmp = std::env::temp_dir().join(format!("nether-mr-{}", std::process::id()));
+/// Open a copy of another app's SQLite database (with its -wal / -shm), so a running app's lock or a half-written
+/// journal never matters and its file is never touched.
+fn with_db<T>(db: &Path, f: impl FnOnce(&rusqlite::Connection) -> Result<T>) -> Result<T> {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static N: AtomicU32 = AtomicU32::new(0);
+    let tmp = std::env::temp_dir().join(format!("nether-db-{}-{}", std::process::id(), N.fetch_add(1, Ordering::Relaxed)));
     fs::create_dir_all(&tmp)?;
-    for ext in ["", "-wal", "-shm"] {
-        let src = PathBuf::from(format!("{}{ext}", db.display()));
-        if src.is_file() { fs::copy(&src, tmp.join(format!("app.db{ext}")))?; }
-    }
-    let res = (|| -> Result<Vec<Found>> {
-        let c = rusqlite::Connection::open(tmp.join("app.db"))?;
+    let res = (|| {
+        for ext in ["", "-wal", "-shm"] {
+            let src = PathBuf::from(format!("{}{ext}", db.display()));
+            if src.is_file() { fs::copy(&src, tmp.join(format!("app.db{ext}")))?; }
+        }
+        f(&rusqlite::Connection::open(tmp.join("app.db"))?)
+    })();
+    let _ = fs::remove_dir_all(&tmp);
+    res
+}
+
+/// A text column of any type (numbers as text, NULL / blobs as "").
+fn col(r: &rusqlite::Row, i: usize) -> String {
+    match r.get_ref(i) { Ok(rusqlite::types::ValueRef::Text(t)) => String::from_utf8_lossy(t).into(), Ok(rusqlite::types::ValueRef::Integer(n)) => n.to_string(), _ => String::new() }
+}
+
+fn modrinth_db(config: &Path, db: &Path) -> Result<Vec<Found>> {
+    with_db(db, |c| {
         let has = |t: &str| c.query_row("SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?1", [t], |r| r.get::<_, i64>(0)).unwrap_or(0) > 0;
-        let text = |r: &rusqlite::Row, i: usize| -> String {
-            match r.get_ref(i) { Ok(rusqlite::types::ValueRef::Text(t)) => String::from_utf8_lossy(t).into(), Ok(rusqlite::types::ValueRef::Integer(n)) => n.to_string(), _ => String::new() }
-        };
+        let text = col;
         // settings.custom_dir moves profiles/ (app.db stays put)
         let custom: Option<String> = if has("settings") { c.query_row("SELECT custom_dir FROM settings LIMIT 1", [], |r| r.get::<_, Option<String>>(0)).ok().flatten() } else { None };
         let root = custom.filter(|d| !d.is_empty() && Path::new(d).is_dir()).map(PathBuf::from).unwrap_or_else(|| config.to_path_buf()).join("profiles");
@@ -234,9 +257,7 @@ fn modrinth_db(config: &Path, db: &Path) -> Result<Vec<Found>> {
             })?.flatten().collect();
         }
         Ok(rows.into_iter().filter(|r| !r.0.is_empty() && !r.0.contains("..")).filter_map(|(path, name, mc, l, lv, ram, args)| modrinth_found(&root.join(&path), &name, &mc, &l, &lv, ram, &args)).collect())
-    })();
-    let _ = fs::remove_dir_all(&tmp);
-    res
+    })
 }
 
 // ---------------------------------------------------------------- ATLauncher
@@ -255,7 +276,7 @@ pub(crate) fn atlauncher_in(base: &Path) -> Vec<Found> {
         let mut notes = vec![];
         if dir.join("jarmods").read_dir().is_ok_and(|mut r| r.next().is_some()) { notes.push("jar mods are not supported".into()); }
         let name = Some(s(&l["name"])).filter(|n| !n.is_empty()).unwrap_or_else(|| e.file_name().to_string_lossy().into());
-        out.push(Found { kind: Kind::ATLauncher, name, mc: mc.clone(), loader, loader_version: bare_lv(&s(&lvo["version"]), &mc), game_dir: dir.clone(),
+        out.push(Found { extra: vec![], kind: Kind::ATLauncher, name, mc: mc.clone(), loader, loader_version: bare_lv(&s(&lvo["version"]), &mc), game_dir: dir.clone(),
             source: dir.display().to_string(), copy: skip(&["instance.json", "instance.png", "jarmods", "disabledmods", "loaders"]),
             ram_mb: l["maximumMemory"].as_u64().map(|m| m as u32), jvm_args: split_mem(&s(&l["javaArguments"])).0, notes });
     }
@@ -306,8 +327,160 @@ pub(crate) fn vanilla_in(mc_dir: &Path) -> Vec<Found> {
         } else { (PathBuf::from(&gd), skip(&[])) };
         let (jvm_args, ram_mb) = split_mem(&s(&p["javaArgs"]));
         let name = Some(s(&p["name"])).filter(|n| !n.is_empty()).unwrap_or_else(|| ver.clone());
-        out.push(Found { kind: Kind::Vanilla, name, mc, loader, loader_version: lv, game_dir, source: format!("{}#{id}", mc_dir.join("launcher_profiles.json").display()),
+        out.push(Found { extra: vec![], kind: Kind::Vanilla, name, mc, loader, loader_version: lv, game_dir, source: format!("{}#{id}", mc_dir.join("launcher_profiles.json").display()),
             copy, ram_mb, jvm_args, notes: note.into_iter().collect() });
+    }
+    out
+}
+
+// ---------------------------------------------------------------- clients (Lunar, NoRisk, OneClient, River)
+// Their game data comes over (settings, servers, worlds, packs, screenshots) and the mods the player added; the
+// client's own mods and module / HUD settings stay behind (proprietary, and Nether has its own). Formats: vault
+// `research/Client profile formats.md`.
+
+/// Per-game data a client keeps in a shared folder, without mods (the client's own) and config (theirs).
+const CLIENT_DATA: &[&str] = &["saves", "resourcepacks", "shaderpacks", "screenshots", "schematics", "options.txt", "optionsof.txt", "optionsshaders.txt", "servers.dat"];
+const NOT_THEIR_MODS: &str = "the client's own mods and settings stay behind";
+
+fn client_only() -> Copy { Copy::Only(CLIENT_DATA.iter().map(|s| s.to_string()).collect()) }
+
+/// Has the player used this folder (settings or worlds in it)?
+fn played(dir: &Path) -> bool {
+    dir.join("options.txt").is_file() || dir.join("saves").read_dir().is_ok_and(|mut r| r.next().is_some())
+}
+
+/// Every jar of `mods_dir` as an extra copy into `mods/`.
+fn jars(mods_dir: &Path) -> Vec<(PathBuf, String)> {
+    fs::read_dir(mods_dir).into_iter().flatten().flatten().map(|e| e.path())
+        .filter(|p| p.is_file() && p.extension().is_some_and(|x| x.eq_ignore_ascii_case("jar")))
+        .map(|p| { let n = format!("mods/{}", p.file_name().unwrap_or_default().to_string_lossy()); (p, n) }).collect()
+}
+
+/// Lunar Client (`~/.lunarclient`): the profiles in `db/profiles.db`, or, without any, the game folder its
+/// launcher settings name (by default the official `.minecraft`) as one entry.
+pub(crate) fn lunar_in(base: &Path) -> Vec<Found> {
+    let gd = read_json(&base.join("settings/launcher.json")).map(|v| s(&v["settings"]["gameDirectory"])).filter(|d| !d.is_empty()).map(PathBuf::from)
+        .or_else(minecraft_dir).filter(|d| d.is_dir());
+    let db = base.join("db/profiles.db");
+    let rows: Vec<[String; 9]> = if db.is_file() {
+        with_db(&db, |c| {
+            let mut q = c.prepare("SELECT id, name, path, type, game_version, loaders, loader_version, game_directory, jvm_arguments FROM profiles")?;
+            let v = q.query_map([], |r| Ok(std::array::from_fn(|i| col(r, i))))?.flatten().collect();
+            Ok(v)
+        }).unwrap_or_default()
+    } else { vec![] };
+    let mut out = vec![];
+    for [id, name, path, kind, mc, loaders, lv, gdir, args] in rows {
+        if mc.is_empty() { continue; }
+        // loaders: ["fabric"] or [{"type": "fabric", ...}]
+        let l = serde_json::from_str::<Value>(&loaders).ok().and_then(|v| v.as_array().and_then(|a| a.first().cloned()))
+            .map(|x| if x.is_string() { s(&x) } else { ["type", "name", "id"].iter().map(|k| s(&x[*k])).find(|v| !v.is_empty()).unwrap_or_default() }).unwrap_or_default();
+        let Some(loader) = loader_named(&l) else { continue };
+        let own = if Path::new(&path).is_absolute() { PathBuf::from(&path) } else { base.join("profiles").join(&path) };
+        let dir = Some(PathBuf::from(&gdir)).filter(|_| !gdir.is_empty()).or_else(|| (kind != "lunar" && own.is_dir()).then_some(own)).or_else(|| gd.clone());
+        let Some(dir) = dir.filter(|d| d.is_dir()) else { continue };
+        // Lunar's own profiles run its mods from elsewhere; a shared folder is the official launcher's too
+        let shared = kind == "lunar" || gd.as_deref() == Some(dir.as_path()) || minecraft_dir().as_deref() == Some(dir.as_path());
+        let (jvm_args, ram_mb) = split_mem(&args);
+        out.push(Found { kind: Kind::Lunar, name: if name.is_empty() { format!("Lunar {mc}") } else { name }, mc: mc.clone(), loader, loader_version: bare_lv(&lv, &mc),
+            game_dir: dir, source: format!("{}#{id}", db.display()), copy: if shared { client_only() } else { skip(&[]) }, extra: vec![],
+            ram_mb, jvm_args, notes: if shared { vec![NOT_THEIR_MODS.into()] } else { vec![] } });
+    }
+    if out.is_empty() {
+        // no profiles: the version it last installed, the settings and worlds of its game folder
+        let newest = fs::read_dir(base.join("shared/versions")).into_iter().flatten().flatten()
+            .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.file_name().to_string_lossy().to_string()))).max().map(|x| x.1);
+        if let (Some(dir), Some(mc)) = (gd.filter(|d| played(d)), newest) {
+            out.push(Found { kind: Kind::Lunar, name: format!("Lunar Client {mc}"), mc, loader: Loader::Vanilla, loader_version: String::new(), game_dir: dir.clone(),
+                source: format!("{}#default", base.display()), copy: client_only(), extra: vec![], ram_mb: None, jvm_args: String::new(),
+                notes: vec![NOT_THEIR_MODS.into()] });
+        }
+    }
+    out
+}
+
+/// NoRisk Client (`…/norisk/NoRiskClientV3`): `meta/app.db` profiles that were played. Their folder is
+/// `<game dir>/profiles/<path>`; the mods the player added are in `mods/nrc-<mc>-<loader>[-id]/` (the NoRisk mod
+/// itself is not there).
+pub(crate) fn norisk_in(base: &Path) -> Vec<Found> {
+    let db = base.join("meta/app.db");
+    if !db.is_file() { return vec![]; }
+    let custom = read_json(&base.join("launcher_config.json")).map(|v| s(&v["custom_game_directory"])).filter(|d| !d.is_empty()).map(PathBuf::from);
+    let root = custom.unwrap_or_else(|| base.join("data")).join("profiles");
+    let rows: Vec<[String; 8]> = with_db(&db, |c| {
+        let mut q = c.prepare("SELECT id, name, path, game_version, loader, loader_version, ifnull(last_played, ''), ifnull(settings, '') FROM profiles")?;
+        let v = q.query_map([], |r| Ok(std::array::from_fn(|i| col(r, i))))?.flatten().collect();
+        Ok(v)
+    }).unwrap_or_default();
+    let mut out = vec![];
+    for [id, name, path, mc, l, lv, last, settings] in rows {
+        if mc.is_empty() || path.is_empty() || path.contains("..") || Path::new(&path).is_absolute() { continue; }
+        let Some(loader) = loader_named(&l) else { continue };
+        let dir = root.join(&path);
+        // built-in "NRC x" profiles all exist; only the ones played have anything to bring
+        if last.is_empty() || !dir.is_dir() { continue; }
+        let pre = format!("nrc-{mc}-{}", l.to_ascii_lowercase());
+        let mut extra = vec![];
+        for e in fs::read_dir(dir.join("mods")).into_iter().flatten().flatten() {
+            let n = e.file_name().to_string_lossy().to_string();
+            if e.path().is_dir() && (n == pre || n.strip_prefix(&pre).is_some_and(|r| r.starts_with('-'))) { extra.extend(jars(&e.path())); }
+        }
+        let set: Value = serde_json::from_str(&settings).unwrap_or_default();
+        let args = set["custom_jvm_args"].as_str().unwrap_or_default();
+        out.push(Found { kind: Kind::NoRisk, name, mc: mc.clone(), loader, loader_version: bare_lv(&lv, &mc), game_dir: dir, source: format!("{}#{id}", db.display()),
+            copy: skip(&["mods"]), extra, ram_mb: set["memory"]["max"].as_u64().map(|m| m as u32), jvm_args: split_mem(args).0, notes: vec![NOT_THEIR_MODS.into()] });
+    }
+    out
+}
+
+/// OneClient (`…/Polyfrost/OneClient`): `user_data.db` clusters. Settings, servers and worlds are in one shared
+/// `.minecraft`; packs and worlds also per cluster in `clusters/<folder>`. Its mods are Polyfrost's bundle: not copied.
+pub(crate) fn oneclient_in(base: &Path) -> Vec<Found> {
+    let (db, shared) = (base.join("user_data.db"), base.join(".minecraft"));
+    if !db.is_file() || !shared.is_dir() { return vec![]; }
+    let rows: Vec<[String; 6]> = with_db(&db, |c| {
+        // OneClient makes a cluster per version up front: only the played ones have anything of the player's
+        let mut q = c.prepare("SELECT id, name, folder_name, mc_version, mc_loader, ifnull(mc_loader_version, '') FROM clusters WHERE last_played IS NOT NULL")?;
+        let v = q.query_map([], |r| Ok(std::array::from_fn(|i| col(r, i))))?.flatten().collect();
+        Ok(v)
+    }).unwrap_or_default();
+    let mut out = vec![];
+    for [id, name, folder, mc, l, lv] in rows {
+        if mc.is_empty() || folder.contains("..") || folder.contains(['/', '\\']) { continue; }
+        // GameLoader: 0 vanilla, 1 Forge, 2 NeoForge, 3 Quilt, 4 Fabric, 5 Ornithe (old versions; its mods only run on Ornithe)
+        let (loader, mut notes) = match l.as_str() {
+            "1" => (Loader::Forge, vec![]), "2" => (Loader::NeoForge, vec![]), "3" => (Loader::Quilt, vec![]), "4" => (Loader::Fabric, vec![]),
+            "5" => (Loader::LegacyFabric, vec!["Ornithe became Legacy Fabric".to_string()]), _ => (Loader::Vanilla, vec![]),
+        };
+        notes.push(NOT_THEIR_MODS.into());
+        let c = base.join("clusters").join(&folder);
+        let extra = [("resourcepacks", "resourcepacks"), ("shaderpacks", "shaderpacks"), ("worlds", "saves"), ("datapacks", "datapacks")]
+            .iter().map(|(a, b)| (c.join(a), b.to_string())).filter(|(p, _)| p.is_dir()).collect();
+        // the loader version matters only to OneClient (it picks the newest); ours does the same when empty
+        let lv = if loader == Loader::LegacyFabric { String::new() } else { lv };
+        out.push(Found { kind: Kind::OneClient, name, mc, loader, loader_version: lv, game_dir: shared.clone(), source: format!("{}#{id}", db.display()),
+            copy: client_only(), extra, ram_mb: None, jvm_args: String::new(), notes });
+    }
+    out
+}
+
+/// River Client (`…/River Client`): `instances/<x>/riv3r-instance.json` (Fabric). `riv3r-mods.json` says which
+/// mods are River's own (`source: river`): the others are copied.
+pub(crate) fn river_in(base: &Path) -> Vec<Found> {
+    let mut out = vec![];
+    for e in fs::read_dir(base.join("instances")).into_iter().flatten().flatten() {
+        let dir = e.path();
+        let Some(v) = read_json(&dir.join("riv3r-instance.json")) else { continue };
+        let mc = s(&v["minecraft"]);
+        if mc.is_empty() { continue; }
+        let list = read_json(&dir.join("riv3r-mods.json")).unwrap_or_default();
+        let theirs: BTreeSet<String> = list["mods"].as_object().into_iter().flatten()
+            .filter(|(_, m)| s(&m["source"]) == "river").map(|(k, m)| Some(s(&m["file"])).filter(|f| !f.is_empty()).unwrap_or_else(|| k.clone())).collect();
+        let extra = jars(&dir.join("mods")).into_iter().filter(|(p, _)| !theirs.contains(&*p.file_name().unwrap_or_default().to_string_lossy())).collect();
+        let name = Some(s(&v["name"])).filter(|n| !n.is_empty()).unwrap_or_else(|| e.file_name().to_string_lossy().into());
+        out.push(Found { kind: Kind::River, name, mc: mc.clone(), loader: Loader::Fabric, loader_version: bare_lv(&s(&v["loader"]), &mc), game_dir: dir.clone(),
+            source: dir.display().to_string(), copy: skip(&["mods", "river", "river-runtime", "riv3r-instance.json", "riv3r-mods.json", "downloads"]), extra,
+            ram_mb: None, jvm_args: String::new(), notes: vec![NOT_THEIR_MODS.into()] });
     }
     out
 }
@@ -337,6 +510,12 @@ pub fn scan() -> Vec<Found> {
         dirs::download_dir().map(|d| d.join("ATLauncher")), data.as_ref().map(|d| d.join(".atlauncher"))];
     for d in at.into_iter().flatten().filter(|d| d.join("instances").is_dir() && d.join("configs").is_dir()) { out.extend(atlauncher_in(&d)); }
     if let Some(m) = minecraft_dir() { out.extend(vanilla_in(&m)); }
+    if let Some(d) = home.as_ref().map(|h| h.join(".lunarclient")).filter(|d| d.is_dir()) { out.extend(lunar_in(&d)); }
+    if let Some(d) = data.as_ref() {
+        out.extend(norisk_in(&d.join("norisk/NoRiskClientV3")));
+        out.extend(oneclient_in(&d.join("Polyfrost/OneClient")));
+        out.extend(river_in(&d.join("River Client")));
+    }
     dedup(out)
 }
 
@@ -350,6 +529,11 @@ pub fn scan_dir(dir: &Path) -> Vec<Found> {
     if is("app.db") || (is("profiles") && is("meta")) { out.extend(modrinth_in(dir)); }
     if is("instances") && is("configs") { out.extend(atlauncher_in(dir)); }
     if is("launcher_profiles.json") { out.extend(vanilla_in(dir)); }
+    if is("db/profiles.db") || is("settings/launcher.json") { out.extend(lunar_in(dir)); }
+    if is("meta/app.db") && is("launcher_config.json") { out.extend(norisk_in(dir)); }
+    if is("user_data.db") && is("clusters") { out.extend(oneclient_in(dir)); }
+    if is("instances") { out.extend(river_in(dir)); }
+    if is("riv3r-instance.json") { if let Some(p) = dir.parent().and_then(Path::parent) { out.extend(river_in(p).into_iter().filter(|f| f.game_dir == dir)); } }
     if out.is_empty() {
         out.extend(curseforge_in(dir));
         for e in fs::read_dir(dir).into_iter().flatten().flatten() { if let Some(f) = prism_one(&e.path(), Kind::Prism) { out.push(f); } }
@@ -405,6 +589,16 @@ pub fn import(paths: &Paths, f: &Found, name: Option<&str>, progress: &Progress)
                 let Ok(t) = fs::symlink_metadata(&p) else { continue };
                 if t.is_dir() { copy_tree(&p, &dir.join(n), &[])?; } else if t.is_file() { fs::copy(&p, dir.join(n)).with_context(|| format!("copying {n}"))?; }
             },
+        }
+        // top-level extras may be links (OneClient links shared pack folders): follow them; copy_tree skips links inside
+        for (p, to) in &f.extra {
+            if to.split(['/', '\\']).any(|c| c == "..") { continue; }
+            let Ok(t) = fs::metadata(p) else { continue };
+            let to = dir.join(to);
+            if t.is_dir() { copy_tree(p, &to, &[])?; } else {
+                if let Some(d) = to.parent() { fs::create_dir_all(d)?; }
+                fs::copy(p, &to).with_context(|| format!("copying {}", p.display()))?;
+            }
         }
         progress("Setting up", 0.9);
         let mut d = new_instance(paths, &name, &f.mc, f.loader, &f.loader_version)?;
@@ -530,6 +724,80 @@ mod tests {
     }
 
     fn f_at(r: &Path) -> Found { atlauncher_in(r).remove(0) }
+
+    fn sql(db: &Path, script: &str) {
+        fs::create_dir_all(db.parent().unwrap()).unwrap();
+        rusqlite::Connection::open(db).unwrap().execute_batch(script).unwrap();
+    }
+
+    #[test]
+    fn clients() {
+        let r = tmpdir("l-clients");
+        let root = tmpdir("l-clients-paths");
+        let paths = Paths { root: root.clone() };
+
+        // River: its own clientcore jar stays behind, user mods come along
+        let rv = r.join("River Client/instances/default");
+        w(&rv.join("riv3r-instance.json"), r#"{"name":"River Client","minecraft":"1.21.11","loader":"0.19.2"}"#);
+        w(&rv.join("riv3r-mods.json"), r#"{"mods":{"clientcore.jar":{"file":"clientcore.jar","source":"river"},"sodium.jar":{"file":"sodium.jar","source":"modrinth"}}}"#);
+        w(&rv.join("mods/clientcore.jar"), "c"); w(&rv.join("mods/sodium.jar"), "s");
+        w(&rv.join("options.txt"), "fov:0.25"); w(&rv.join("saves/W/level.dat"), "w"); w(&rv.join("river-runtime/x"), "x");
+        let f = scan_dir(&r.join("River Client"));
+        assert_eq!((f.len(), f[0].kind, f[0].loader, f[0].loader_version.as_str()), (1, Kind::River, Loader::Fabric, "0.19.2"));
+        let d = paths.instance(&import(&paths, &f[0], None, &quiet()).unwrap().data.name);
+        assert!(d.join("mods/sodium.jar").exists() && !d.join("mods/clientcore.jar").exists() && !d.join("river-runtime").exists());
+        assert!(d.join("saves/W/level.dat").exists() && f[0].options().is_some());
+
+        // NoRisk: played profiles only; user mods from mods/nrc-<mc>-fabric
+        let nr = r.join("NoRiskClientV3");
+        w(&nr.join("launcher_config.json"), r#"{"custom_game_directory":null}"#);
+        sql(&nr.join("meta/app.db"), r#"CREATE TABLE profiles (id TEXT, name TEXT, path TEXT, game_version TEXT, loader TEXT, loader_version TEXT, last_played INTEGER, settings TEXT);
+            INSERT INTO profiles VALUES ('a', 'NRC 1.21.11', 'noriskclient/new', '1.21.11', 'fabric', '0.18.3', 17000, '{"memory":{"min":1024,"max":6144},"custom_jvm_args":"-Dx=1"}');
+            INSERT INTO profiles VALUES ('b', 'NRC 1.21.4', 'noriskclient/new', '1.21.4', 'fabric', '0.16.14', NULL, '{}');"#);
+        let pd = nr.join("data/profiles/noriskclient/new");
+        w(&pd.join("mods/nrc-1.21.11-fabric/iris.jar"), "i"); w(&pd.join("mods/nrc-1.21.4-fabric/old.jar"), "o"); w(&pd.join("options.txt"), "fov:0");
+        let f = scan_dir(&nr);
+        assert_eq!((f.len(), f[0].kind, f[0].mc.as_str(), f[0].ram_mb, f[0].jvm_args.as_str()), (1, Kind::NoRisk, "1.21.11", Some(6144), "-Dx=1"));
+        let d = paths.instance(&import(&paths, &f[0], None, &quiet()).unwrap().data.name);
+        assert!(d.join("mods/iris.jar").exists() && !d.join("mods/old.jar").exists() && !d.join("mods/nrc-1.21.11-fabric").exists() && d.join("options.txt").exists());
+
+        // OneClient: shared .minecraft settings + the cluster's packs and worlds; Ornithe becomes Legacy Fabric
+        let oc = r.join("OneClient");
+        sql(&oc.join("user_data.db"), "CREATE TABLE clusters (id INTEGER, name TEXT, folder_name TEXT, mc_version TEXT, mc_loader INTEGER, mc_loader_version TEXT, last_played TEXT);
+            INSERT INTO clusters VALUES (1, '1.21.11 Fabric', '1.21.11 Fabric', '1.21.11', 4, '0.18.3', 'x');
+            INSERT INTO clusters VALUES (2, '1.8.9 Fabric', '1.8.9 Fabric', '1.8.9', 5, NULL, 'x');
+            INSERT INTO clusters VALUES (3, '26.2 Fabric', '26.2 Fabric', '26.2', 4, NULL, NULL);");
+        w(&oc.join(".minecraft/options.txt"), "fov:0"); w(&oc.join(".minecraft/servers.dat"), "s"); w(&oc.join(".minecraft/mods/bundle.jar"), "b");
+        w(&oc.join("clusters/1.21.11 Fabric/worlds/W2/level.dat"), "w"); w(&oc.join("clusters/1.21.11 Fabric/resourcepacks/p.zip"), "p");
+        let f = scan_dir(&oc);
+        let by = |n: &str| f.iter().find(|x| x.name == n).unwrap().clone();
+        assert_eq!(f.len(), 2, "unplayed cluster skipped");
+        assert_eq!((by("1.21.11 Fabric").loader, by("1.8.9 Fabric").loader), (Loader::Fabric, Loader::LegacyFabric));
+        let d = paths.instance(&import(&paths, &by("1.21.11 Fabric"), None, &quiet()).unwrap().data.name);
+        assert!(d.join("saves/W2/level.dat").exists() && d.join("resourcepacks/p.zip").exists() && d.join("servers.dat").exists() && !d.join("mods").exists());
+
+        // Lunar: a modrinth-type profile in its own folder (mods kept) and a lunar one in the shared folder
+        let lu = r.join(".lunarclient");
+        let shared = r.join("mc");
+        w(&lu.join("settings/launcher.json"), &format!(r#"{{"settings":{{"gameDirectory":{}}}}}"#, serde_json::to_string(&shared.display().to_string()).unwrap()));
+        w(&shared.join("options.txt"), "fov:0"); w(&shared.join("mods/x.jar"), "x");
+        sql(&lu.join("db/profiles.db"), r#"CREATE TABLE profiles (id TEXT, name TEXT, path TEXT, type TEXT, game_version TEXT, loaders TEXT, loader_version TEXT, game_directory TEXT, jvm_arguments TEXT);
+            INSERT INTO profiles VALUES ('1', 'Lunar 1.8', 'l18', 'lunar', '1.8.9', '[]', NULL, NULL, NULL);
+            INSERT INTO profiles VALUES ('2', 'Fabby', 'fab', 'modrinth', '1.21.11', '["fabric"]', '0.18.3', NULL, '-Xmx4G');"#);
+        w(&lu.join("profiles/fab/mods/m.jar"), "m");
+        let f = scan_dir(&lu);
+        let by = |n: &str| f.iter().find(|x| x.name == n).unwrap().clone();
+        assert_eq!((by("Fabby").loader, by("Fabby").ram_mb, by("Lunar 1.8").game_dir.clone()), (Loader::Fabric, Some(4096), shared.clone()));
+        let d = paths.instance(&import(&paths, &by("Lunar 1.8"), None, &quiet()).unwrap().data.name);
+        assert!(d.join("options.txt").exists() && !d.join("mods").exists(), "lunar's shared folder: no mods");
+        let d = paths.instance(&import(&paths, &by("Fabby"), None, &quiet()).unwrap().data.name);
+        assert!(d.join("mods/m.jar").exists());
+
+        // its settings can become the shared ones
+        assert!(crate::gamesettings::import_from(&paths, &shared.join("options.txt")).unwrap() > 0);
+        assert!(fs::read_to_string(crate::gamesettings::global_file(&paths)).unwrap().contains("fov:0"));
+        for x in [r, root] { let _ = fs::remove_dir_all(x); }
+    }
 
     #[test]
     fn mem_and_versions() {

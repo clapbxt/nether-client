@@ -1627,10 +1627,12 @@ java.lang.OutOfMemoryError: Java heap space
         if let Some((w, h)) = std::env::var("NC_SNAP_SIZE").ok().and_then(|s| s.split_once('x').map(|(w, h)| (w.parse::<u32>().unwrap_or(1440), h.parse::<u32>().unwrap_or(900)))) {
             ui.window().set_size(slint::PhysicalSize::new(w, h));
         }
-        // NC_SNAP_IMPORT=<folder>: the IMPORT dialog listing that launcher folder's instances (first two picked)
+        // NC_SNAP_IMPORT=<folder>: the IMPORT dialog listing that launcher folder's instances (first two picked, settings ticked)
         if let Ok(d) = std::env::var("NC_SNAP_IMPORT") {
             ui.global::<Backend>().set_import_open(true);
-            instpage::import_rows(&ui, &shared, nether_core::launchers::scan_dir(std::path::Path::new(&d)));
+            // "*" = what this PC has
+            instpage::import_rows(&ui, &shared, if d == "*" { nether_core::launchers::scan() } else { nether_core::launchers::scan_dir(std::path::Path::new(&d)) });
+            ui.global::<Backend>().set_import_use_settings(true);
             let rows = ui.global::<Backend>().get_import_rows();
             for i in 0..rows.row_count().min(2) { if let Some(mut r) = rows.row_data(i) { r.on = true; rows.set_row_data(i, r); } }
         }

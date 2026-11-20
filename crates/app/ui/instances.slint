@@ -860,16 +860,16 @@ export component InstancesScreen inherits Rectangle {
             background: Theme.s1; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
             TouchArea { }
             Heading { x: 30px; y: 30px; text: "IMPORT"; font-size: 40px; }
-            Text { x: 32px; y: 84px; width: parent.width - 64px; text: "Copies instances from your other launchers: mods, worlds, settings and memory. Nothing in them is changed.";
+            Text { x: 32px; y: 84px; width: parent.width - 64px; text: "Copies profiles from your other launchers and clients: worlds, settings, packs, memory and the mods you added (a client's own mods stay behind). Nothing in them is changed.";
                 color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
             IconBtn { x: parent.width - 30px - 34px; y: 26px; size: 34px; d: Ico.close; tip: "Close"; clicked => { Backend.import-open = false; } }
             Eyebrow { x: 32px; y: 128px; text: Backend.import-scanning ? "LOOKING FOR LAUNCHERS…" : "FOUND ON THIS PC  ·  \{Backend.import-rows.length}"; }
             Rectangle {
-                x: 24px; y: 150px; width: parent.width - 48px; height: parent.height - 150px - 84px;
+                x: 24px; y: 150px; width: parent.width - 48px; height: parent.height - 150px - 132px;
                 border-radius: Theme.r1; background: Theme.bg; border-width: 1px; border-color: Theme.ln; clip: true;
                 if Backend.import-rows.length == 0 && !Backend.import-scanning: Text {
                     x: 24px; width: parent.width - 48px; height: parent.height; vertical-alignment: center; horizontal-alignment: center; wrap: word-wrap;
-                    text: "No Prism, CurseForge, Modrinth, ATLauncher or Minecraft Launcher instances found.\nPick a modpack file, or a launcher folder if yours lives somewhere else.";
+                    text: "No profiles from Prism, CurseForge, Modrinth, ATLauncher, the Minecraft Launcher, Lunar, NoRisk, OneClient or River found.\nPick a modpack file, or a launcher folder if yours lives somewhere else.";
                     color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts;
                 }
                 Flickable {
@@ -890,6 +890,18 @@ export component InstancesScreen inherits Rectangle {
                         Chip { x: parent.width - self.width - 14px; y: (parent.height - self.height) / 2; text: r.launcher; }
                     }
                 }
+            }
+            // its game settings everywhere (the shared settings would otherwise replace them at launch)
+            Rectangle {
+                x: 24px; y: parent.height - 122px; width: parent.width - 48px; height: 44px; border-radius: Theme.r1;
+                background: ista.has-hover ? Theme.hov : transparent;
+                animate background { duration: Theme.fast; }
+                ista := TouchArea { mouse-cursor: pointer; clicked => { Backend.import-use-settings = !Backend.import-use-settings; } }
+                Rectangle { x: 14px; y: 12px; width: 20px; height: 20px; border-radius: 4px; border-width: 1px;
+                    border-color: Backend.import-use-settings ? Theme.red : Theme.ln2; background: Backend.import-use-settings ? Theme.red : transparent;
+                    if Backend.import-use-settings: Icon { x: 4px; y: 4px; width: 12px; height: 12px; d: Ico.check; tint: white; } }
+                Text { x: 48px; y: 4px; width: parent.width - 60px; text: "Use its keybinds and game settings"; overflow: elide; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; }
+                Text { x: 48px; y: 23px; width: parent.width - 60px; text: "Controls, video and sound of the first one picked become your shared settings in every profile."; overflow: elide; color: Theme.dim; font-family: Theme.ui; font-size: 12px * Theme.ts; }
             }
             Btn { x: 24px; y: parent.height - 58px; height: 36px; text: "MODPACK FILE"; icon: Ico.download; clicked => { Backend.import-file(); } }
             Btn { x: 24px + 172px; y: parent.height - 58px; height: 36px; text: "LAUNCHER FOLDER"; icon: Ico.folder; clicked => { Backend.import-dir(); } }

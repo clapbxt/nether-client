@@ -344,6 +344,8 @@ export global Backend {
     in-out property <bool> import-open: false;
     in-out property <bool> import-scanning: false;
     in-out property <[ImportRow]> import-rows;
+    // also make the first picked one's options.txt (keybinds, video, audio) the shared game settings
+    in-out property <bool> import-use-settings: false;
     callback import-file();
     callback import-dir();
     callback import-go();
