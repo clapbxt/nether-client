@@ -361,9 +361,12 @@ final class MainMenu {
         float t = Config.calm() ? 1 : Math.min(1, (System.nanoTime() - shownAt) / 3.5e8f);
         float e = 1 - (float) Math.pow(1 - t, 3);
         if (t < 0.6f) click = false;
-        modal = panelOpen ? new float[] {12, 52, PW, PH} : Party.modal(W, H);
+        boolean nav = navOn();
+        panelX = nav ? W - PW - 18 : 12;
+        panelY = nav ? TitleNav.H + 4 : 52;
+        modal = panelOpen ? new float[] {panelX, panelY, PW, PH} : Party.modal(W, H);
         tip = null;
-        boolean inPanel = MX >= 12 && MY >= 52 && MX < 12 + PW && MY < 52 + PH; // raw test: over() is false under the open panel
+        boolean inPanel = MX >= panelX && MY >= panelY && MX < panelX + PW && MY < panelY + PH; // raw test: over() is false under the open panel
         if (panelOpen && click && !inPanel && !inside(custBox)) { panelOpen = false; click = false; modal = null; }
         account();
 
@@ -373,6 +376,7 @@ final class MainMenu {
         Gfx.alpha = a0 * e;
         float rise = (1 - e) * 8;
         String layout = MODULE.str("layout");
+        if (nav) { navLobby(fbW, fbH, W, H, screen, rise, a0, t); return; }
         boolean accTop = true;
         // where the party chat and the PLAY card may go in this layout
         float chatX = 30, chatBottom = H - 30, playBottom = H - 36;
@@ -427,9 +431,160 @@ final class MainMenu {
         }
     }
 
+    /** The Lobby layout: the top-bar lobby with pages (TitleNav). */
+    static boolean navOn() { return title && MODULE.str("layout").equals("Lobby"); }
+
+    static boolean hasModMenu() { return cMods != null; }
+
+    /** The quick customise panel (TitleNav's gear menu). */
+    static void customise() { panelOpen = true; Party.drawerOpen = false; }
+
+    static void setPartyChip(float[] b) { partyChip = b; }
+
+    private static float panelX = 12, panelY = 52;
+
     /**
-     * Lobby: logo and buttons in a left column, your party on the stage to the right (Party.stage), quick join (solo) or
-     * the party's PLAY card bottom right.
+     * PLAY page (2026-11-20 redesign, Valorant / Fortnite lobbies): the top bar (TitleNav) over everything; your party
+     * on the stage in the middle; splash under the bar; quick join bottom left when solo (the party chat there in a
+     * party); bottom right a big PLAY with the chosen mode above it (Fortnite), or the party's PLAY / READY card with
+     * SINGLEPLAYER / MULTIPLAYER above it in a party. While a page is open (Menu / Screenshots draw it, with the bar)
+     * only the background shows here.
+     */
+    private static void navLobby(int fbW, int fbH, float W, float H, Object scr, float rise, float a0, float t) {
+        if (Input.menuOpen) { Gfx.alpha = a0; return; } // a page is up: Menu draws it and the bar
+        boolean party = Party.active();
+        // floor shade so the bottom controls read on any background
+        Gfx.rectG(0, H - 190, W, 190, 0, Gfx.a(Gfx.BG, 0), Gfx.a(Gfx.BG, 0.6f));
+        float top = TitleNav.H;
+        if (MODULE.bool("splash") && shownSplash() != null) {
+            String sp = fit(Gfx.UI, 11, shownSplash(), 0, Math.min(Splashes.FIT_W, W * 0.4f));
+            Gfx.text(Gfx.UI, 11, 24, top + 22 + rise, Gfx.a(Gfx.ICE, 0.7f), sp);
+        }
+        float pw = 250, px = W - 16 - pw, bottom = H - 44;
+        float colTop = party ? bottom - 96 - 8 - 30 : bottom - 112;
+        float sx = 230, sw = party ? W - 16 - sx : Math.max(220, W - 16 - pw - 12 - sx);
+        float stageBottom = party ? colTop - 10 : H - 52;
+        if (MODULE.bool("partyStage")) Party.stage(sx, top + 24, sw, stageBottom - top - 24, scr);
+        if (!party) QuickJoin.card(24, bottom, Math.min(240, sx - 24 - 12 + 8), top + 60, scr);
+        playBlock(px, bottom, pw, scr, party);
+        footer(W, H, false);
+        // the bar before the party panels: its PARTY chip toggles the drawer, which closes on clicks elsewhere
+        if (TitleNav.draw(fbW, fbH, fx(), fy(), click, true)) click = false;
+        Party.title(W, H, 24, bottom, bottom - 30 - 8, scr);
+        Gfx.alpha = a0;
+        if (panelOpen) panel(W, H);
+        else panelA = 0;
+        if (tip != null && !panelOpen) tooltip(W, H);
+        TitleNav.drawOver(fbW, fbH);
+        units(Gfx.s);
+        String dev = System.getProperty("nether.titleClick");
+        if (dev != null && t >= 1 && (System.nanoTime() - shownAt) > 2e9) { System.clearProperty("nether.titleClick"); act(Integer.parseInt(dev), scr); }
+        if ("1".equals(System.getProperty("nether.titlePanel"))) { System.clearProperty("nether.titlePanel"); panelOpen = true; }
+        String pg = System.getProperty("nether.titlePage"); // dev: -Dnether.titlePage=<0..5> opens that page once settled
+        if (pg != null && t >= 1 && (System.nanoTime() - shownAt) > 2e9) { System.clearProperty("nether.titlePage"); TitleNav.go(Integer.parseInt(pg)); }
+        if ("1".equals(System.getProperty("nether.playModes"))) { System.clearProperty("nether.playModes"); modesOpen = true; }
+    }
+
+    // ---------------------------------------------------------------- PLAY (bottom right)
+
+    private static boolean modesOpen;
+    private static float modesA;
+
+    /** Modes: {key, title, subtitle}; key "single", "multi" or "srv:<address>". */
+    private static java.util.List<String[]> modes() {
+        java.util.List<String[]> l = new java.util.ArrayList<>();
+        l.add(new String[] {"single", "Singleplayer", "Your worlds"});
+        l.add(new String[] {"multi", "Multiplayer", "Server list"});
+        int n = 0;
+        for (String[] s : QuickJoin.list()) {
+            if (n++ >= 3) break;
+            l.add(new String[] {"srv:" + s[1], s[0].isEmpty() ? s[1] : s[0], s[1]});
+        }
+        return l;
+    }
+
+    private static String[] mode() {
+        String k = Config.str("menu", "playMode", "single");
+        for (String[] m : modes()) if (m[0].equals(k)) return m;
+        return modes().get(0);
+    }
+
+    private static void play(String[] m, Object scr) {
+        Config.set("menu", "playMode", m[0]);
+        if (m[0].equals("single")) act(SINGLE, scr);
+        else if (m[0].equals("multi")) act(MULTI, scr);
+        else QuickJoin.join(m[1], m[0].substring(4), scr);
+    }
+
+    /** Solo: mode card + big PLAY. Party: SINGLEPLAYER / MULTIPLAYER over the party's own card (Party.title draws it). */
+    private static void playBlock(float x, float bottom, float w, Object scr, boolean party) {
+        if (party) {
+            float hw = (w - 6) / 2, y = bottom - 96 - 8 - 30;
+            if (smallBtn("psg", "SINGLEPLAYER", x, y, hw, 30)) act(SINGLE, scr);
+            if (smallBtn("pmu", "MULTIPLAYER", x + hw + 6, y, hw, 30)) act(MULTI, scr);
+            modesOpen = false;
+            return;
+        }
+        String[] m = mode();
+        float ph = 64, mh = 42, my = bottom - ph - 8 - mh;
+        // mode card: what PLAY starts; opens the list of modes
+        boolean mhv = over(x, my, w, mh);
+        float mt = an("pmode", mhv || modesOpen);
+        Gfx.rect(x, my, w, mh, 8, Gfx.mix(Gfx.a(Gfx.CARD, 0.82f), Gfx.CARD2, mt));
+        Gfx.ring(x, my, w, mh, 8, 1, Gfx.mix(Gfx.a(Gfx.ICE, 0.1f), Gfx.LN2, mt));
+        Gfx.text(Gfx.SEMI, 8.5f, x + 14, my + 13, Gfx.SUB, "MODE", false, 1.4f);
+        Gfx.text(Gfx.SEMI, 13, x + 14, my + 28, Gfx.ICE, fit(Gfx.SEMI, 13, m[1], 0, w - 60));
+        float cx = x + w - 22, cyy = my + mh / 2;
+        Menu.drawChev(cx, cyy, modesOpen, Gfx.mix(Gfx.DIM, Gfx.ICE, mt));
+        if (mhv) tip("Change what PLAY starts");
+        if (hit(x, my, w, mh)) modesOpen = !modesOpen;
+        // PLAY
+        float py = bottom - ph;
+        boolean hv = over(x, py, w, ph), down = hv && Input.btn[0];
+        float t = an("pplay", hv);
+        Gfx.rect(x - 4, py - 2 + 6, w + 8, ph, 12, Gfx.a(Th.ac, 0.18f * (0.5f + 0.5f * t)));
+        Gfx.rectG(x, py + (down ? 1 : 0), w, ph, 8, Gfx.mix(Th.ac2, 0xFFFFFFFF, 0.12f * t), down ? Gfx.mix(Th.ac, Gfx.BLACK, 0.2f) : Th.ac);
+        Gfx.textC(Gfx.HEAD, 30, x + w / 2, py + ph / 2 + (down ? 1 : 0), 0xFFFFFFFF, "PLAY", 3f);
+        if (hit(x, py, w, ph)) { modesOpen = false; play(m, scr); }
+        // modes list, rising from the mode card
+        modesA = Config.calm() ? (modesOpen ? 1 : 0) : Math.max(0, Math.min(1, modesA + (modesOpen ? 1 : -1) * Gfx.dt * 10));
+        if (modesA <= 0) return;
+        java.util.List<String[]> l = modes();
+        float rh = 44, lh = l.size() * rh + 12, ly = my - 8 - lh + (1 - modesA) * 8;
+        float a0 = Gfx.alpha;
+        Gfx.alpha = a0 * modesA;
+        Gfx.rect(x, ly + 4, w, lh, 10, Gfx.a(Gfx.BLACK, 0.4f));
+        Gfx.rect(x, ly, w, lh, 10, Gfx.a(Gfx.CARD, 0.97f));
+        Gfx.ring(x, ly, w, lh, 10, 1, Gfx.LN2);
+        boolean inList = over(x, ly, w, lh);
+        for (int i = 0; i < l.size(); i++) {
+            String[] o = l.get(i);
+            float ry = ly + 6 + i * rh;
+            boolean rv = over(x + 6, ry, w - 12, rh), sel = o[0].equals(m[0]);
+            float rt = an("pm" + i, rv);
+            if (rt > 0.01f || sel) Gfx.rect(x + 6, ry, w - 12, rh, 6, Gfx.a(Gfx.ICE, 0.05f * rt + (sel ? 0.05f : 0)));
+            if (sel) Gfx.rect(x + 6, ry + 10, 3, rh - 20, 1.5f, Th.ac);
+            if (i == 2) Gfx.rect(x + 14, ry - 1, w - 28, 1, 0, Gfx.LN);
+            Gfx.text(Gfx.SEMI, 12, x + 18, ry + 16, Gfx.ICE, fit(Gfx.SEMI, 12, o[1], 0, w - 40));
+            Gfx.text(Gfx.UI, 10, x + 18, ry + 31, Gfx.DIM, fit(Gfx.UI, 10, o[2], 0, w - 40));
+            if (modesOpen && hit(x + 6, ry, w - 12, rh)) { Config.set("menu", "playMode", o[0]); modesOpen = false; }
+        }
+        Gfx.alpha = a0;
+        if (modesOpen && click && !inList && !over(x, my, w, mh)) { modesOpen = false; click = false; }
+    }
+
+    private static boolean smallBtn(String id, String label, float x, float y, float w, float h) {
+        boolean hv = over(x, y, w, h), down = hv && Input.btn[0];
+        float t = an(id, hv);
+        Gfx.rect(x, y, w, h, 6, down ? Gfx.S3 : Gfx.mix(Gfx.a(Gfx.CARD, 0.82f), Gfx.CARD2, t));
+        Gfx.ring(x, y, w, h, 6, 1, Gfx.mix(Gfx.a(Gfx.ICE, 0.1f), Gfx.LN2, t));
+        Gfx.textC(Gfx.SEMI, 10.5f, x + w / 2, y + h / 2 + (down ? 1 : 0), Gfx.mix(Gfx.DIM, Gfx.ICE, 0.5f + 0.5f * t), label, 1.2f);
+        return hit(x, y, w, h);
+    }
+
+    /**
+     * Lobby (before the 2026-11-20 redesign; no longer reachable from the layout setting, kept for the Center / Left /
+     * Bottom building blocks it shares): logo and buttons in a left column, the party on the stage to the right.
      */
     private static void lobby(float W, float H, Object scr, float rise) {
         boolean mods = cMods != null;
@@ -892,7 +1047,7 @@ final class MainMenu {
 
     private static void panel(float W, float H) {
         panelA = Config.calm() ? 1 : Math.min(1, panelA + Gfx.dt * 8);
-        float x = 12, y = 52 - (1 - panelA) * 6, w = PW, h = PH;
+        float x = panelX, y = panelY - (1 - panelA) * 6, w = PW, h = PH;
         inModal = true;
         float a0 = Gfx.alpha;
         Gfx.alpha = a0 * panelA;

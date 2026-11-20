@@ -465,6 +465,11 @@ final class Menu {
         BACK = st.createStrokedShape(b);
     }
 
+    /** Small chevron, up when open (MainMenu's PLAY mode card). */
+    static void drawChev(float cx, float cy, boolean up, int col) {
+        Gfx.mask(up ? "chevu" : "chevd", up ? CHEV_U : CHEV_D, 16, cx - 8, cy - 8, 16, col);
+    }
+
     static void drawX(float cx, float cy, float r, int col) {
         float size = r * 2 * 16 / 12f;
         Gfx.mask("x", X_SHAPE, 16, cx - size / 2, cy - size / 2, size, col);
@@ -525,7 +530,20 @@ final class Menu {
         Input.setMenu(true);
     }
 
+    /** Title screen with the top bar: every Menu screen is a page under it (TitleNav). */
+    static boolean pageMode() { return MainMenu.navOn() && !hudEdit; }
+
+    private static int fbW0 = 1, fbH0 = 1;
+
+    /** Bottom of the title bar in menu units. */
+    static float navH() { return TitleNav.bottomPx(fbW0, fbH0) / sc; }
+
+    /** A screen's panel height, kept under the title bar in page mode. */
+    private static float pageH(float ph) { return pageMode() ? Math.min(ph, H - navH() - 30) : ph; }
+
     static void frame(int fbW, int fbH, float dt) {
+        fbW0 = fbW;
+        fbH0 = fbH;
         Party.tick();
         MainMenu.frame(fbW, fbH);
         WorldShare.tick();
@@ -624,6 +642,11 @@ final class Menu {
             Gfx.minPx = MIN_PX;
             Gfx.round = Th.round(); // rounded panel, rows and controls (HUD modules stay square)
             try {
+                if (want && pageMode()) { // the title bar stays over every page (its own scale and input)
+                    if (TitleNav.draw(fbW, fbH, L * sc, T * sc, click, false)) click = false;
+                    Gfx.s = sc;
+                    Gfx.alpha = e;
+                }
                 if (Screenshots.open) Screenshots.drawBrowser(e, wheel);
                 else if (PackBrowser.open) PackBrowser.draw(e, wheel);
                 else if (PackMixer.open) PackMixer.draw(e, wheel);
@@ -656,6 +679,7 @@ final class Menu {
                     clickRt = c1;
                     Wardrobe.askDraw(e);
                 } else if (hub) hub(e); else panel(wheel, e);
+                if (want && pageMode()) { TitleNav.drawOver(fbW, fbH); Gfx.s = sc; }
             } finally { Gfx.round = false; }
             if (click && fieldFocus()) commitEdit(); // clicked somewhere else
             if (click) Hits.press(0); // a click the panel did not use may land on a HUD widget
@@ -798,7 +822,7 @@ final class Menu {
 
     /** Mods: logo + MODS, search, HUD editor; category chips; the card grid. */
     private static void modsScreen(float wheel, float e) {
-        float pw = Math.max(760, Math.min(1180, W * 0.86f)), ph = Math.max(500, Math.min(640, H * 0.86f));
+        float pw = Math.max(760, Math.min(1180, W * 0.86f)), ph = pageH(Math.max(500, Math.min(640, H * 0.86f)));
         float hx = header(pw, ph, e, null, "MODS"), cy = sy + TOP / 2f;
         Gfx.text(Gfx.UI, 12, hx, cy, Th.mut, onCount(tab) + " of " + count(tab) + " on");
         float ex = sx + sw - 16 - 28 - 8 - 28;
@@ -853,7 +877,7 @@ final class Menu {
 
     /** Settings: gear + SETTINGS; General / Controls / Profiles. */
     private static void settingsScreen(float wheel, float e) {
-        float pw = Math.max(720, Math.min(940, W * 0.72f)), ph = Math.max(500, Math.min(640, H * 0.86f));
+        float pw = Math.max(720, Math.min(940, W * 0.72f)), ph = pageH(Math.max(500, Math.min(640, H * 0.86f)));
         header(pw, ph, e, "settings", "SETTINGS");
         PW = pw + 16;
         PH = ph + 62;
@@ -863,8 +887,8 @@ final class Menu {
 
     /** Wardrobe: hanger + WARDROBE; player preview and cosmetics. */
     private static void wardrobeScreen(float wheel, float e) {
-        float pw = Math.max(760, Math.min(1100, W * 0.82f)), ph = Math.max(500, Math.min(640, H * 0.86f));
-        header(pw, ph, e, "wardrobe", "WARDROBE");
+        float pw = Math.max(760, Math.min(1100, W * 0.82f)), ph = pageH(Math.max(500, Math.min(640, H * 0.86f)));
+        header(pw, ph, e, "wardrobe", pageMode() ? "LOCKER" : "WARDROBE");
         PW = pw + 16; // Wardrobe draws at (px + 28, py + 124) inside PW x PH
         PH = ph + 62;
         Wardrobe.draw(sx - 8, sy - 68, wheel);
@@ -873,8 +897,8 @@ final class Menu {
 
     /** Friends: people + FRIENDS; status, requests, join / invite. */
     private static void friendsScreen(float wheel, float e) {
-        float pw = Math.max(640, Math.min(820, W * 0.7f)), ph = Math.max(480, Math.min(620, H * 0.86f));
-        float hx = header(pw, ph, e, "friends", "FRIENDS");
+        float pw = Math.max(640, Math.min(820, W * 0.7f)), ph = pageH(Math.max(480, Math.min(620, H * 0.86f)));
+        float hx = header(pw, ph, e, "friends", pageMode() ? "SOCIAL" : "FRIENDS");
         Friends.header(hx, sx, sw, sy + TOP / 2f);
         Friends.draw(sx, sy, sw, sh, TOP, FOOT, wheel);
         footer(Friends.typing ? "Enter sends the request  ·  Esc stops typing" : "Esc back");
@@ -882,14 +906,18 @@ final class Menu {
 
     /** Screen frame: backdrop, panel, back arrow (to the hub), mark + title, close. Returns the x after the title. */
     private static float header(float pw, float ph, float e, String icon, String title) {
+        boolean pg = pageMode();
+        float nh = pg ? navH() : 0;
         // over the title screen the hub is the only thing to look at: its buttons and logo recede further
-        Gfx.rect(0, 0, W, H, 0, Gfx.a(0xFF000000, (Th.light() ? 0.18f : 0.34f) + (MainMenu.title ? 0.26f : 0)));
+        // (page mode: the bar stays clear; the page dims the lobby under it)
+        Gfx.rect(0, nh, W, H - nh, 0, Gfx.a(0xFF000000, (Th.light() ? 0.18f : 0.34f) + (MainMenu.title ? 0.26f : 0)));
         float kk = k(tS, 0, 0.32f);
         Gfx.alpha *= kk;
         sw = pw;
         sh = ph;
         sx = (W - pw) / 2 + tDir * (1 - kk) * 70;
-        sy = (H - ph) / 2 + (1 - e) * 14 + (tDir == 0 ? (1 - kk) * 26 : 0);
+        sy = pg ? nh + 14 + Math.max(0, (H - nh - 30 - ph) / 2) * 0.35f + (1 - e) * 10 + (tDir == 0 ? (1 - kk) * 16 : 0)
+            : (H - ph) / 2 + (1 - e) * 14 + (tDir == 0 ? (1 - kk) * 26 : 0);
         // Glass: see-through panel, larger radius and a soft top sheen; Minecraft: near-opaque square plate with a 2 px edge
         if (Th.round()) {
             Gfx.rect(sx, sy, pw, ph, 14, Gfx.a(Th.s1, Th.light() ? 0.82f : 0.74f));
@@ -900,19 +928,24 @@ final class Menu {
             Gfx.ring(sx, sy, pw, ph, 0, 2, Th.ln2);
         }
         float cy = sy + TOP / 2f;
-        float bt = an("back", in(sx + 12, cy - 14, 28, 28));
-        Gfx.rect(sx + 12, cy - 14, 28, 28, 4, Gfx.a(Th.ov, 0.07f * bt));
-        Gfx.mask("back", BACK, 16, sx + 18, cy - 8, 16, Gfx.mix(Th.mut, Th.tx, bt));
-        if (hit(sx + 12, cy - 14, 28, 28)) toHub();
         float tx = sx + 50;
+        if (pg) tx = sx + 20; // the bar is the way back: no arrow, no close
+        else {
+            float bt = an("back", in(sx + 12, cy - 14, 28, 28));
+            Gfx.rect(sx + 12, cy - 14, 28, 28, 4, Gfx.a(Th.ov, 0.07f * bt));
+            Gfx.mask("back", BACK, 16, sx + 18, cy - 8, 16, Gfx.mix(Th.mut, Th.tx, bt));
+            if (hit(sx + 12, cy - 14, 28, 28)) toHub();
+        }
         if (icon == null) { Logo.draw(tx, cy - 12, 24); tx += Logo.width(24) + 10; }
         else { if (!ModIcons.drawItem(icon, tx, cy - 9, 18)) ModIcons.draw(icon, tx, cy - 9, 18, Th.ac2); tx += 28; }
         float tw = Gfx.text(Gfx.HEAD, 16, tx, cy, Th.tx, title);
         float cx = sx + pw - 16 - 28;
-        float xt = an("close", in(cx, cy - 14, 28, 28));
-        Gfx.rect(cx, cy - 14, 28, 28, 4, Gfx.a(Th.ov, 0.07f * xt));
-        drawX(cx + 14, cy, 4.2f, Gfx.mix(Th.mut, Th.tx, xt));
-        if (hit(cx, cy - 14, 28, 28) && leaveOk(() -> Input.setMenu(false))) Input.setMenu(false);
+        if (!pg) {
+            float xt = an("close", in(cx, cy - 14, 28, 28));
+            Gfx.rect(cx, cy - 14, 28, 28, 4, Gfx.a(Th.ov, 0.07f * xt));
+            drawX(cx + 14, cy, 4.2f, Gfx.mix(Th.mut, Th.tx, xt));
+            if (hit(cx, cy - 14, 28, 28) && leaveOk(() -> Input.setMenu(false))) Input.setMenu(false);
+        }
         Gfx.rect(sx, sy + TOP, pw, 1, 0, Th.ln);
         return tx + tw + 12;
     }

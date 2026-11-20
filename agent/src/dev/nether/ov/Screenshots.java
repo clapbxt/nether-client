@@ -375,7 +375,7 @@ final class Screenshots extends Module {
     static void close() {
         open = false;
         stopEdit();
-        if (fromWorld) { fromWorld = false; Input.setMenu(false); }
+        if (fromWorld || Menu.pageMode()) { fromWorld = false; Input.setMenu(false); }
     }
 
     private static List<Shot> list() {
@@ -418,8 +418,11 @@ final class Screenshots extends Module {
     static void drawBrowser(float e, float wheel) {
         t = Config.calm() ? 1 : Math.min(1, t + Gfx.dt * 6);
         float k = 1 - (float) Math.pow(1 - t, 3);
-        Gfx.rect(0, 0, Menu.W, Menu.H, 0, Gfx.a(0xFF000000, 0.6f * e));
-        float w = Math.min(1000, Menu.W - 40), h = Math.min(640, Menu.H - 40), x = (Menu.W - w) / 2, y = (Menu.H - h) / 2 + 12 * (1 - k);
+        boolean pg = Menu.pageMode();
+        float nh = pg ? Menu.navH() : 0;
+        Gfx.rect(0, nh, Menu.W, Menu.H - nh, 0, Gfx.a(0xFF000000, 0.6f * e));
+        float w = Math.min(1000, Menu.W - 40), h = pg ? Math.min(640, Menu.H - nh - 30) : Math.min(640, Menu.H - 40), x = (Menu.W - w) / 2;
+        float y = (pg ? nh + 14 : (Menu.H - h) / 2) + 12 * (1 - k);
         float a0 = Gfx.alpha;
         Gfx.alpha = a0 * k;
         Gfx.rect(x, y, w, h, 10, Th.s1);
@@ -432,11 +435,13 @@ final class Screenshots extends Module {
         Gfx.text(Gfx.SEMI, 15, x + 34, y + 34, Th.tx, "SCREENSHOTS", false, 1.4f);
         String sub = shots.size() == 1 ? "1 PICTURE" : shots.size() + " PICTURES";
         Gfx.text(Gfx.MONO, 9, x + 34 + Gfx.width(Gfx.SEMI, 15, "SCREENSHOTS", 1.4f) + 14, y + 35, Th.mut, sub, false, 1.4f);
-        boolean ch = Menu.in(x + w - 44, y + 18, 28, 28);
-        float ct = Menu.an("ssx", ch);
-        Gfx.rect(x + w - 44, y + 18, 28, 28, 6, Gfx.a(Th.ov, 0.05f * ct));
-        Menu.drawX(x + w - 30, y + 32, 5, Gfx.mix(Th.mut, Th.tx, ct));
-        if (Menu.hit(x + w - 44, y + 18, 28, 28)) { close(); Gfx.alpha = a0; return; }
+        if (!pg) { // on the title screen the bar is the way back
+            boolean ch = Menu.in(x + w - 44, y + 18, 28, 28);
+            float ct = Menu.an("ssx", ch);
+            Gfx.rect(x + w - 44, y + 18, 28, 28, 6, Gfx.a(Th.ov, 0.05f * ct));
+            Menu.drawX(x + w - 30, y + 32, 5, Gfx.mix(Th.mut, Th.tx, ct));
+            if (Menu.hit(x + w - 44, y + 18, 28, 28)) { close(); Gfx.alpha = a0; return; }
+        }
 
         if (view >= 0) viewer(l, x, y, w, h);
         else grid(l, x, y, w, h, wheel);
