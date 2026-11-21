@@ -145,6 +145,9 @@ pub struct AssetIndexRef {
 #[derive(Deserialize, Clone)]
 pub struct Downloads {
     pub client: Artifact,
+    /// The dedicated server jar (Horizon's preparer reads it once).
+    #[serde(default)]
+    pub server: Option<Artifact>,
 }
 
 #[derive(Deserialize, Clone)]

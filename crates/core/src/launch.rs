@@ -244,6 +244,14 @@ fn install(c: &reqwest::blocking::Client, paths: &Paths, v: &VersionJson, progre
     install_mode(c, paths, v, progress, cancel, None)
 }
 
+/// Download a plain Minecraft version's files (version JSON, client jar, libraries, assets) into the shared folders,
+/// laid out like the official launcher's. Horizon prepares from these.
+pub fn install_vanilla(c: &reqwest::blocking::Client, paths: &Paths, version: &str, progress: &Progress, cancel: Option<&std::sync::atomic::AtomicBool>) -> Result<VersionJson> {
+    let v = mojang::version_json(c, paths, version)?;
+    install(c, paths, &v, progress, cancel)?;
+    Ok(v)
+}
+
 /// `repaired` = verify mode: assets are checked by hash too, natives rewritten, and replaced files counted.
 fn install_mode(c: &reqwest::blocking::Client, paths: &Paths, v: &VersionJson, progress: &Progress, cancel: Option<&std::sync::atomic::AtomicBool>, repaired: Option<&AtomicUsize>) -> Result<(Vec<PathBuf>, PathBuf)> {
     // verify mode: note a file that is missing or fails its check before fetch replaces it

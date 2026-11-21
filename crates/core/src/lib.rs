@@ -8,6 +8,7 @@ pub mod combine;
 pub mod cosimport;
 pub mod cosmetics;
 pub mod gamesettings;
+pub mod horizon;
 pub mod download;
 pub mod fabric;
 pub mod forge;

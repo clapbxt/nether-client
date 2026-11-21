@@ -39,6 +39,7 @@ mod discord;
 mod friends;
 mod party;
 mod presets;
+mod horizon;
 mod perfui;
 mod setup;
 mod voice;
@@ -59,7 +60,8 @@ fn span(secs: i64) -> String {
 /// Bottom deck: which games are running ("Survival running", "Survival + Creative running").
 fn running_label(ui: &AppWindow) {
     let b = ui.global::<Backend>();
-    let names: Vec<String> = b.get_instances().iter().filter(|i| i.running).map(|i| i.name.to_string()).collect();
+    let mut names: Vec<String> = b.get_instances().iter().filter(|i| i.running).map(|i| i.name.to_string()).collect();
+    if b.get_hz_state() == 2 || b.get_hz_state() == 3 { names.push("Horizon".into()); }
     let label = match names.len() { 0 => String::new(), 1 | 2 => format!("{} running", names.join(" + ")), n => format!("{n} games running") };
     b.set_running_label(label.into());
 }
@@ -1156,6 +1158,7 @@ fn main() -> Result<(), slint::PlatformError> {
     friends::init(&ui, shared.clone());
     party::init(&ui, shared.clone());
     presets::init(&ui, shared.clone());
+    horizon::init(&ui, shared.clone());
     setup::init(&ui, shared.clone());
     if !snapshot {
         deeplink::unregister_old();
@@ -1646,7 +1649,7 @@ java.lang.OutOfMemoryError: Java heap space
             for i in 0..rows.row_count().min(2) { if let Some(mut r) = rows.row_data(i) { r.on = true; rows.set_row_data(i, r); } }
         }
         if let Some(n) = std::env::var("NC_SNAP_STEP").ok().and_then(|n| n.parse::<i32>().ok()) { ui.global::<Wizard>().set_snap_step(n); }
-        // NC_SNAP_PLAYTAB=n: Play page tab (0 Nether, 1 Vanilla, 2 Modpacks); NC_SNAP_VANILLA=1: the create wizard makes a Vanilla profile
+        // NC_SNAP_PLAYTAB=n: Play page tab (0 Nether, 1 Vanilla, 2 Modpacks, 3 Horizon); NC_SNAP_VANILLA=1: the create wizard makes a Vanilla profile
         if let Some(n) = std::env::var("NC_SNAP_PLAYTAB").ok().and_then(|n| n.parse::<i32>().ok()) { ui.global::<Backend>().set_play_tab(n); refilter(&ui); }
         if std::env::var("NC_SNAP_VANILLA").is_ok() { ui.global::<Backend>().set_create_nether(false); }
         // NC_SNAP_CARD=fam,way: pick a Play card once the cards are in
