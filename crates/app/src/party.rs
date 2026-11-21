@@ -7,6 +7,10 @@
 //! - Identity: a connection's key is checked against the friend list (the friends service vouches for which key belongs
 //!   to which account) or the roster the leader built; frames from any other key are dropped. Account tokens never
 //!   leave the launcher.
+//! - Parties live in the game only (2026-11-21): with no game linked for a moment the party is left and friends see
+//!   no party (size 0 in presence); invites only reach friends in game on the same Minecraft version.
+//! - Ready gate: the leader picks a server or one of their worlds; when everyone in the lobby is ready a 5 s countdown
+//!   runs (`Party::gate`), then the leader's game connects / opens and hosts the world and ready members follow.
 //! - Bridge to the game: a loopback TCP socket (port + per-run token in `client/party/bridge.json`) carrying JSON
 //!   lines: the game sends actions, we send the lobby state, live chat lines and who is talking. Chat exists only in
 //!   memory (here and in the game) and is gone when the party ends; nothing is logged.
@@ -18,7 +22,7 @@ use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use nether_core::party::{self, mic, Dest, Look, Member, Msg, Party, Snapshot};
+use nether_core::party::{self, mic, Dest, Gate, Look, Member, Msg, Party, Snapshot};
 use nether_core::party_net::{Event, Net};
 use nether_core::Session;
 use serde::{Deserialize, Serialize};
@@ -26,7 +30,7 @@ use serde_json::{json, Value};
 use slint::ComponentHandle;
 
 use crate::voice::{self, Voice};
-use crate::{friends, ui_do, AppWindow, Shared};
+use crate::{friends, AppWindow, Shared};
 
 /// Members' voices the leader forwards at the same time (its own comes on top).
 const FLOOR: usize = 4;
@@ -92,14 +96,17 @@ struct Actor {
     vetoed: HashSet<String>,
     last_go: u64,
     last_ping: Instant,
-    last_world: String,
-    last_server: String,
     note: String,
     voice_route: Arc<Mutex<VoiceRoute>>,
     /// leader: members whose voice it forwards right now (sid -> last frame), at most FLOOR at once
     floor: HashMap<u16, Instant>,
     auth: Arc<Mutex<HashSet<String>>>,
     failed_net: Option<Instant>,
+    /// the last game unlinked at (parties exist only while a game is linked)
+    game_gone: Option<Instant>,
+    /// leader, party started: when, and whether our game got there yet
+    live_at: Option<Instant>,
+    arrived: bool,
 }
 
 #[derive(Default, Clone)]
@@ -233,8 +240,8 @@ impl Actor {
         Actor {
             sh, weak, tx, net: None, who: None, role: Role::Leader(Party::solo(party::new_id(), Member::default())), mine: Mine { at: "launcher".into(), ..Default::default() },
             prefs, voice, invites: vec![], next_id: 1, asked: vec![], relayed: vec![], hello: HashSet::new(), names: HashMap::new(), chat: VecDeque::new(), clients: vec![],
-            last_state: String::new(), last_talk: String::new(), last_blocks: vec![], vetoed: HashSet::new(), last_go: 0, last_ping: Instant::now(), last_world: String::new(),
-            last_server: String::new(), note: String::new(), voice_route: Arc::new(Mutex::new(VoiceRoute::default())), floor: HashMap::new(), auth: Arc::new(Mutex::new(HashSet::new())), failed_net: None,
+            last_state: String::new(), last_talk: String::new(), last_blocks: vec![], vetoed: HashSet::new(), last_go: 0, last_ping: Instant::now(),  note: String::new(), voice_route: Arc::new(Mutex::new(VoiceRoute::default())), floor: HashMap::new(), auth: Arc::new(Mutex::new(HashSet::new())), failed_net: None,
+            game_gone: Some(Instant::now()), live_at: None, arrived: false,
         }
     }
 
@@ -245,6 +252,15 @@ impl Actor {
     fn snap(&self) -> &Snapshot { match &self.role { Role::Leader(p) => &p.snap, Role::Member { snap, .. } => snap } }
     fn leader(&self) -> bool { matches!(self.role, Role::Leader(_)) }
     fn size(&self) -> usize { self.snap().size().max(1) }
+    /// A game is linked: only then do we have a party others can see or join.
+    fn in_game(&self) -> bool { !self.clients.is_empty() }
+    /// Our party size for friends' presence (0 = not in game: no party to invite to or join).
+    fn publish(&self) {
+        PARTY_SIZE.store(if self.in_game() { self.size() } else { 1 }, std::sync::atomic::Ordering::SeqCst);
+        if let Some(n) = &self.net { friends::set_party(n.id(), if self.in_game() { self.size() as u32 } else { 0 }); }
+    }
+    /// Another Minecraft version than ours ("" on either side = unknown, let it through).
+    fn other_ver(&self, v: &str) -> bool { !v.is_empty() && !self.mine.ver.is_empty() && v != self.mine.ver }
 
     fn run(&mut self, rx: Receiver<Cmd>) {
         let mut last_tick = Instant::now();
@@ -485,9 +501,14 @@ impl Actor {
             Msg::Ping => self.tell(peer, Msg::Pong),
             Msg::Pong => { if let Role::Member { heard, .. } = &mut self.role { *heard = Instant::now(); } }
             // ---- friend to friend
-            Msg::Invite { party: pid, leader, leader_name, leader_peer, size, auto } => {
+            Msg::Invite { party: pid, leader, leader_name, leader_peer, size, auto, ver } => {
                 if !self.is_friend(uuid) || !party::valid_peer(&leader_peer) || !party::valid_uuid(&leader) || pid == self.snap().id { return; }
-                if friends::blocked().contains(&leader) { return; }
+                if friends::blocked().contains(&leader) || !self.in_game() { return; }
+                if self.other_ver(&ver) {
+                    let n = self.name_of(uuid);
+                    self.toast(&format!("{n} invited you, but their party plays Minecraft {ver}"));
+                    return;
+                }
                 let we_asked = self.asked.iter().any(|(u, _)| u == uuid);
                 self.invites.retain(|i| i.from != uuid);
                 let id = self.next_id;
@@ -507,6 +528,7 @@ impl Actor {
             Msg::Sync => { if self.is_friend(uuid) { synced_on_request(); } }
             Msg::Ask => {
                 if !self.is_friend(uuid) { return; }
+                if !self.in_game() { self.tell(peer, Msg::AskAnswer { ok: false, why: "They aren't in game right now".into() }); return; }
                 let name = self.name_of(uuid);
                 if self.leader() {
                     self.as_leader(&me.clone(), &self.peer(), Msg::Request { uuid: uuid.to_string(), name, peer: peer.to_string() });
@@ -536,7 +558,7 @@ impl Actor {
                 if let Some((_, fp)) = self.relayed.iter().find(|(u, _)| *u == friend).cloned() {
                     let s = self.snap().clone();
                     let leader_peer = s.member(&s.leader).map(|m| m.peer.clone()).unwrap_or_default();
-                    self.tell(&fp, Msg::Invite { party: s.id.clone(), leader: s.leader.clone(), leader_name: self.name_of(&s.leader), leader_peer, size: s.size() as u32, auto: true });
+                    self.tell(&fp, Msg::Invite { party: s.id.clone(), leader: s.leader.clone(), leader_name: self.name_of(&s.leader), leader_peer, size: s.size() as u32, auto: true, ver: self.mine.ver.clone() });
                     self.relayed.retain(|(u, _)| *u != friend);
                 }
             }
@@ -592,10 +614,13 @@ impl Actor {
                     if uuid == me { self.relayed.retain(|(u, _)| *u != who); }
                 }
             }
-            Msg::Join { party: pid } => {
+            Msg::Join { party: pid, ver } => {
                 let name = self.names.get(uuid).cloned().unwrap_or_else(|| friends::name(uuid));
+                let party_ver = self.mine.ver.clone();
+                let wrong = self.other_ver(&ver);
                 let Role::Leader(p) = &mut self.role else { return };
                 if pid != p.snap.id { after.push((peer.to_string(), Msg::AskAnswer { ok: false, why: "That party has ended".into() })); }
+                else if wrong && !p.is_member(uuid) { after.push((peer.to_string(), Msg::AskAnswer { ok: false, why: format!("That party plays Minecraft {party_ver}") })); }
                 else {
                     match p.join(uuid, &name, peer, now) {
                         Ok(new) => { changed = true; if new { toasts.push(format!("{name} joined the party")); } }
@@ -626,7 +651,8 @@ impl Actor {
                     self.role = Role::Member { snap, leader_peer: lp.clone(), lost: None, heard: Instant::now(), joined: true, since: Instant::now() };
                     for (pk, m) in after.drain(..) { self.tell(&pk, m); }
                     let pid = self.snap().id.clone();
-                    self.tell(&lp, Msg::Join { party: pid });
+                    let ver = self.mine.ver.clone();
+                    self.tell(&lp, Msg::Join { party: pid, ver });
                     for t in toasts { self.toast(&t); }
                     return;
                 }
@@ -638,7 +664,7 @@ impl Actor {
                     if r.via.is_empty() || r.via == me {
                         // our own friend asked us: invite them straight away
                         let s = self.snap().clone();
-                        after.push((r.peer.clone(), Msg::Invite { party: s.id.clone(), leader: me.clone(), leader_name: self.my_name(), leader_peer: self.peer(), size: s.size() as u32, auto: true }));
+                        after.push((r.peer.clone(), Msg::Invite { party: s.id.clone(), leader: me.clone(), leader_name: self.my_name(), leader_peer: self.peer(), size: s.size() as u32, auto: true, ver: self.mine.ver.clone() }));
                     } else if let Some(m) = self.snap().member(&r.via) { after.push((m.peer.clone(), Msg::Approved { uuid: who })); }
                 }
             }
@@ -718,7 +744,8 @@ impl Actor {
         if joined_now { self.toast(&format!("You joined {}'s party", self.name_of(&self.snap().leader.clone()))); self.send_me(); }
         if leader_changed && !lp.is_empty() {
             let pid = self.snap().id.clone();
-            self.tell(&lp, Msg::Join { party: pid });
+            let ver = self.mine.ver.clone();
+            self.tell(&lp, Msg::Join { party: pid, ver });
         }
         self.after_change();
     }
@@ -746,13 +773,13 @@ impl Actor {
             self.last_go = snap.go;
             if !self.leader() {
                 if let Some(d) = snap.dest.clone() {
+                    let waiting = matches!(&d, Dest::World { ticket, .. } if ticket.is_empty()); // the leader's world is still opening
                     if self.mine.ready && self.mine.at == "lobby" { self.go_to(d, false); }
-                    else { self.event("went", &dest_name(&d)); }
+                    else if !waiting { self.event("went", &dest_name(&d)); }
                 }
             }
         }
-        PARTY_SIZE.store(self.size(), std::sync::atomic::Ordering::SeqCst);
-        if let Some(n) = &self.net { friends::set_party(n.id(), self.size() as u32); }
+        self.publish();
     }
 
     fn route_voice(&self) {
@@ -773,16 +800,10 @@ impl Actor {
     fn go_to(&mut self, d: Dest, manual: bool) {
         match d {
             Dest::Server { address, name } => self.send_game(json!({ "t": "go", "address": address, "name": if name.is_empty() { address.clone() } else { name } })),
-            Dest::World { ticket, name, host, ver, loader } => {
-                if host == self.me() { return; }
-                let here = self.mine.ver == ver && self.mine.loader.eq_ignore_ascii_case(&loader);
-                if !here {
-                    if manual {
-                        let inv = nether_core::share::Invite { id: 0, from: host.clone(), address: ticket, world: name, ver, loader, at: 0 };
-                        let (sh, from) = (self.sh.clone(), self.name_of(&host));
-                        ui_do(&self.weak, move |ui| { crate::prefs::show(ui); crate::worldshare::join_friend(ui, &sh, &from, inv); });
-                        self.say("Opened in the launcher: pick an instance to join with");
-                    } else { self.event("went", &name); }
+            Dest::World { ticket, name, host, ver, .. } => {
+                if host == self.me() || ticket.is_empty() { return; }
+                if self.other_ver(&ver) {
+                    if manual { self.toast(&format!("This world needs Minecraft {ver}")); } else { self.event("went", &name); }
                     return;
                 }
                 let tx = self.tx.clone();
@@ -803,7 +824,19 @@ impl Actor {
         let s = |k: &str| v[k].as_str().unwrap_or_default().to_string();
         let me = self.me();
         match v["t"].as_str().unwrap_or_default() {
-            "bye" => { let id = v["client"].as_u64().unwrap_or(0); self.clients.retain(|(c, _)| *c != id); return; }
+            "bye" => {
+                let id = v["client"].as_u64().unwrap_or(0);
+                self.clients.retain(|(c, _)| *c != id);
+                if !self.in_game() {
+                    // the game closed: no lobby, not ready; the party ends shortly unless a game links again
+                    self.game_gone = Some(Instant::now());
+                    self.mine = Mine { at: "launcher".into(), ..Default::default() };
+                    self.invites.clear();
+                    self.send_me();
+                    self.publish();
+                }
+                return;
+            }
             "go_ready" => { self.send_game(json!({ "t": "go", "address": s("address"), "name": s("name") })); return; }
             "go_fail" => { self.toast(&s("msg")); return; }
             "ptt" => { self.voice.ptt(v["down"].as_bool().unwrap_or(false)); return; }
@@ -851,17 +884,17 @@ impl Actor {
                     self.to_leader(Msg::Chat { text });
                 }
             }
-            "ready" => { self.mine.ready = v["on"].as_bool().unwrap_or(!self.mine.ready); self.send_me(); }
+            "ready" => { self.mine.ready = v["on"].as_bool().unwrap_or(!self.mine.ready) && self.mine.at == "lobby"; self.send_me(); }
             "dest" => {
-                let d = if s("address").is_empty() { None } else { Some(Dest::Server { address: s("address"), name: s("name") }) };
+                // the leader picked: a server from their list, or one of their own worlds (opened when the party starts)
+                let d = match s("kind").as_str() {
+                    "world" if !s("name").is_empty() => Some(Dest::World { ticket: String::new(), name: s("name"), host: me.clone(), ver: self.mine.ver.clone(), loader: self.mine.loader.clone() }),
+                    _ if !s("address").is_empty() => Some(Dest::Server { address: s("address"), name: s("name") }),
+                    _ => None,
+                };
                 self.to_leader(Msg::SetDest { dest: d });
             }
-            "play" => {
-                if !self.leader() { return; }
-                self.to_leader(Msg::Go);
-                if let Some(d) = self.snap().dest.clone() { if let Dest::Server { address, name } = d { self.send_game(json!({ "t": "go", "address": address, "name": name })); } }
-            }
-            "follow" => { if let Some(d) = self.snap().dest.clone() { self.go_to(d, true); } }
+            "follow" => { if self.snap().live { if let Some(d) = self.snap().dest.clone() { self.go_to(d, true); } } }
             "voice" => {
                 let o = v["cfg"].clone();
                 let was_off = self.prefs.voice.mode == mic::OFF;
@@ -914,7 +947,6 @@ impl Actor {
                     self.failed_net = None;
                 } else { self.say("Privacy mode applies after you leave this party"); }
             }
-            "follow_pref" => { self.prefs.follow = v["on"].as_bool().unwrap_or(true); self.save(); }
             "refresh" => friends::poke(),
             _ => {}
         }
@@ -924,13 +956,16 @@ impl Actor {
     fn invite(&mut self, uuid: &str) {
         if !party::valid_uuid(uuid) || self.snap().member(uuid).is_some() { return; }
         let Some(fp) = self.friend_peer(uuid) else { return self.toast("They need to be online in Nether to get a party invite") };
+        let f = friends::list().unwrap_or_default().into_iter().find(|f| f.uuid == uuid);
+        if f.as_ref().is_some_and(|f| f.party == 0) { return self.toast(&format!("{} isn't in game: parties are in game only", self.name_of(uuid))); }
+        if let Some(v) = f.map(|f| f.ver).filter(|v| self.other_ver(v)) { return self.toast(&format!("{} plays Minecraft {v}: parties are one version", self.name_of(uuid))); }
         let me = self.me();
         let name = self.name_of(uuid);
         if self.leader() { self.as_leader(&me.clone(), &self.peer(), Msg::Admit { uuid: uuid.to_string(), name: name.clone(), peer: fp.clone() }); }
         else { self.to_leader(Msg::Admit { uuid: uuid.to_string(), name: name.clone(), peer: fp.clone() }); }
         let s = self.snap().clone();
         let leader_peer = s.member(&s.leader).map(|m| m.peer.clone()).unwrap_or_default();
-        self.tell(&fp, Msg::Invite { party: s.id.clone(), leader: s.leader.clone(), leader_name: self.name_of(&s.leader), leader_peer, size: s.size() as u32, auto: false });
+        self.tell(&fp, Msg::Invite { party: s.id.clone(), leader: s.leader.clone(), leader_name: self.name_of(&s.leader), leader_peer, size: s.size() as u32, auto: false, ver: self.mine.ver.clone() });
         self.say(&format!("Invited {name}"));
     }
 
@@ -943,7 +978,7 @@ impl Actor {
         self.role = Role::Member { snap, leader_peer: inv.leader_peer.clone(), lost: None, heard: Instant::now(), joined: false, since: Instant::now() };
         self.last_go = u64::MAX; // don't follow a PLAY that happened before we joined
         self.allow_key(&inv.leader_peer);
-        self.tell(&inv.leader_peer, Msg::Join { party: inv.party.clone() });
+        self.tell(&inv.leader_peer, Msg::Join { party: inv.party.clone(), ver: self.mine.ver.clone() });
         self.say(&format!("Joining {}'s party...", inv.leader_name));
     }
 
@@ -959,6 +994,10 @@ impl Actor {
         let me = self.me();
         let now = now_ms();
         self.invites.retain(|i| i.at.elapsed() < Duration::from_secs(300));
+        // no game: no party (a quick restart of the game keeps it for a moment)
+        if !self.in_game() && self.size() > 1 && self.game_gone.is_some_and(|t| t.elapsed() > Duration::from_secs(15)) {
+            self.end_party(true);
+        }
         self.asked.retain(|(_, t)| t.elapsed() < Duration::from_secs(300));
         // leader upkeep
         let mut changed = false;
@@ -1009,7 +1048,7 @@ impl Actor {
             self.broadcast();
             self.after_change();
         }
-        if let Some((peer, pid)) = redial { self.tell(&peer, Msg::Join { party: pid }); }
+        if let Some((peer, pid)) = redial { let ver = self.mine.ver.clone(); self.tell(&peer, Msg::Join { party: pid, ver }); }
         // keepalive
         if self.last_ping.elapsed() > Duration::from_secs(8) {
             self.last_ping = Instant::now();
@@ -1019,29 +1058,11 @@ impl Actor {
                 _ => {}
             }
         }
-        // the leader's world / server becomes the party's destination
-        if self.leader() && self.size() > 1 && self.prefs.follow {
-            let world = crate::worldshare::host_info();
-            let wkey = world.as_ref().map(|w| w.0.clone()).unwrap_or_default();
-            if wkey != self.last_world {
-                self.last_world = wkey;
-                if let Some((ticket, name, ver, loader)) = world {
-                    let m = me.clone();
-                    self.as_leader(&m, &self.peer(), Msg::SetDest { dest: Some(Dest::World { ticket, name, host: me.clone(), ver, loader }) });
-                    self.as_leader(&m, &self.peer(), Msg::Go);
-                }
-            }
-            let srv = if self.mine.at == "server" { self.mine.server.clone() } else { String::new() };
-            if srv != self.last_server {
-                self.last_server = srv.clone();
-                if !srv.is_empty() && !matches!(&self.snap().dest, Some(Dest::Server { address, .. }) if *address == srv) {
-                    let m = me.clone();
-                    let name = srv.rsplit_once(':').map(|(h, _)| h.to_string()).unwrap_or_else(|| srv.clone());
-                    self.as_leader(&m, &self.peer(), Msg::SetDest { dest: Some(Dest::Server { address: srv, name }) });
-                    self.as_leader(&m, &self.peer(), Msg::Go);
-                }
-            }
-        }
+        // the ready gate: everyone ready -> 5 s countdown -> start
+        let gate = match &mut self.role { Role::Leader(p) => p.gate(now), _ => Gate::Idle };
+        if gate != Gate::Idle { self.broadcast(); self.after_change(); }
+        if gate == Gate::Go { self.start_here(); }
+        if self.leader() && self.snap().live { self.live_upkeep(); }
         // local mutes / volumes follow sids
         let sids: Vec<(u16, String)> = self.snap().members.iter().map(|m| (m.sid, m.uuid.clone())).collect();
         for (sid, u) in sids {
@@ -1063,13 +1084,49 @@ impl Actor {
                 if let Some((snap, peers)) = snap_for_leave { for p in peers { net.send(&p, &Msg::State { snap: snap.clone() }); } }
             }));
         }
-        PARTY_SIZE.store(self.size(), std::sync::atomic::Ordering::SeqCst);
-        if let Some(n) = &self.net { friends::set_party(n.id(), self.size() as u32); }
+        self.publish();
         self.push_state();
         self.push_talk();
     }
 
     fn save(&self) { let _ = nether_core::store::write_json(&prefs_file(&self.sh), &self.prefs); }
+
+    /// The countdown ran out (we lead): our game goes first. A server: connect. A world: the game opens it and hosts
+    /// it for the party; `live_upkeep` sends its link to the members once it is up.
+    fn start_here(&mut self) {
+        self.live_at = Some(Instant::now());
+        self.arrived = false;
+        match self.snap().dest.clone() {
+            Some(Dest::Server { address, name }) => self.send_game(json!({ "t": "go", "address": address, "name": if name.is_empty() { address.clone() } else { name } })),
+            Some(Dest::World { name, .. }) => self.send_game(json!({ "t": "host_world", "name": name })),
+            None => {}
+        }
+    }
+
+    /// Leader while the party plays: a hosted world's link goes to the members; back in the lobby (or never got
+    /// there) ends the round, everyone readies up again.
+    fn live_upkeep(&mut self) {
+        let me = self.me();
+        let started = *self.live_at.get_or_insert_with(Instant::now);
+        if self.mine.at != "lobby" { self.arrived = true; }
+        let over = if self.arrived { self.mine.at == "lobby" } else { started.elapsed() > Duration::from_secs(60) };
+        if over {
+            if !self.arrived { self.toast("Couldn't start: the party is back in the lobby"); }
+            if let Role::Leader(p) = &mut self.role { p.end_live(); }
+            self.live_at = None;
+            self.arrived = false;
+            self.broadcast();
+            self.after_change();
+            return;
+        }
+        let pending = matches!(&self.snap().dest, Some(Dest::World { ticket, host, .. }) if ticket.is_empty() && *host == me);
+        if pending {
+            if let Some((ticket, ..)) = crate::worldshare::host_info() {
+                let sent = match &mut self.role { Role::Leader(p) => p.set_ticket(&ticket), _ => false };
+                if sent { self.broadcast(); self.after_change(); }
+            }
+        }
+    }
 
     // ---------------- to the game
 
@@ -1122,6 +1179,7 @@ impl Actor {
             Role::Leader(p) => p.snap.members.iter().find(|m| m.uuid != me).and_then(|m| self.net.as_ref().and_then(|n| n.route(&m.peer))).unwrap_or(""),
         };
         let (lost, joining) = match &self.role { Role::Member { lost, joined, .. } => (lost.is_some(), !joined), _ => (false, false) };
+        let start_in = if snap.start > 0 { snap.start.saturating_sub(now_ms()) } else { 0 };
         let members: Vec<Value> = snap.members.iter().map(|m| json!({
             "uuid": m.uuid, "name": if m.name.is_empty() { self.name_of(&m.uuid) } else { m.name.clone() }, "leader": m.uuid == snap.leader, "me": m.uuid == me,
             "ready": m.ready || (m.uuid == snap.leader), "mic": m.mic, "deaf": m.deaf, "away": m.away, "game": m.game, "at": m.at, "seq": m.seq,
@@ -1131,8 +1189,8 @@ impl Actor {
         let pending: Vec<Value> = snap.pending.iter().map(|r| json!({ "uuid": r.uuid, "name": r.name, "via": r.via_name })).collect();
         let dest = snap.dest.as_ref().map(|d| match d {
             Dest::Server { address, name } => json!({ "kind": "server", "address": address, "name": name }),
-            Dest::World { name, host, ver, loader, .. } => json!({ "kind": "world", "name": name, "host": host, "host_name": self.name_of(host), "ver": ver, "loader": loader,
-                "here": self.mine.ver == *ver && self.mine.loader.eq_ignore_ascii_case(loader) }),
+            Dest::World { name, host, ver, loader, ticket } => json!({ "kind": "world", "name": name, "host": host, "host_name": self.name_of(host), "ver": ver, "loader": loader,
+                "here": !self.other_ver(ver), "pending": ticket.is_empty() }),
         });
         let in_party: HashSet<&str> = snap.members.iter().map(|m| m.uuid.as_str()).collect();
         let asked: Vec<&str> = self.asked.iter().map(|(u, _)| u.as_str()).collect();
@@ -1140,7 +1198,8 @@ impl Actor {
             let on = f.online();
             json!({ "uuid": f.uuid, "name": friends::name(&f.uuid), "online": on, "status": if on { u8::from(f.status) } else { 0 },
                 "act": if on { friends::game_line(f) } else { friends::offline_line(f) }, "party": if on { f.party } else { 0 }, "seen": f.seen,
-                "nether": on && !f.peer.is_empty(), "here": in_party.contains(f.uuid.as_str()), "asked": asked.contains(&f.uuid.as_str()) })
+                "nether": on && !f.peer.is_empty(), "here": in_party.contains(f.uuid.as_str()), "asked": asked.contains(&f.uuid.as_str()),
+                "ingame": on && !f.peer.is_empty() && f.party > 0, "ver": f.ver, "same": !self.other_ver(&f.ver) })
         }).collect();
         let invites: Vec<Value> = self.invites.iter().map(|i| json!({ "id": i.id, "from": i.from, "from_name": i.from_name, "leader_name": i.leader_name, "size": i.size, "age": i.at.elapsed().as_secs() })).collect();
         let c = self.voice.cfg();
@@ -1151,12 +1210,12 @@ impl Actor {
             "ok": self.net.is_some(), "signed": self.who.is_some(), "me": me, "name": self.my_name(), "note": self.note,
             "service": if self.net.is_none() { if self.who.is_none() { "signin" } else { "starting" } } else if friends::list().is_none() { "friends" } else { "ok" },
             "party": { "id": snap.id, "leader": snap.leader, "size": snap.size(), "members": members, "pending": pending, "dest": dest, "go": snap.go,
-                "route": route, "lost": lost, "joining": joining, "leading": self.leader() },
+                "route": route, "lost": lost, "joining": joining, "leading": self.leader(), "start_in": start_in, "live": snap.live },
             "invites": invites, "friends": friends_v,
             "voice": { "mode": c.mode, "deaf": c.deaf, "input": c.input, "output": c.output, "gate": c.gate, "gain": c.gain, "volume": c.volume,
                 "test": self.voice.testing(), "err_in": ein, "err_out": eout, "intro": self.prefs.voice_intro,
                 "ins": ins.iter().map(|(i, n)| json!([i, n])).collect::<Vec<_>>(), "outs": outs.iter().map(|(i, n)| json!([i, n])).collect::<Vec<_>>() },
-            "relay": self.prefs.relay, "follow": self.prefs.follow, "ready": self.mine.ready,
+            "relay": self.prefs.relay, "ready": self.mine.ready, "ver": self.mine.ver,
         })
     }
 }
@@ -1194,7 +1253,9 @@ mod tests {
         })
     }
 
-    struct Node { a: Actor, rx: Receiver<Cmd>, t: Instant }
+    /// `game`: the far end of a stand-in game link (parties exist only while a game is linked); what the launcher
+    /// sends the game lands here unread.
+    struct Node { a: Actor, rx: Receiver<Cmd>, t: Instant, _game: Option<TcpStream> }
     impl Node {
         fn new(uuid: &str, name: &str, dir: &std::path::Path) -> Node { Node::with(uuid, name, dir, false) }
         /// `relay`: Hide my IP (relay-only): the link crosses the internet, like a friend whose router blocks a direct path
@@ -1203,7 +1264,12 @@ mod tests {
             let mut a = Actor::new(shared(uuid, name, dir), slint::Weak::default(), tx, Prefs { follow: true, relay, ..Default::default() });
             a.ensure_net();
             assert!(a.net.is_some(), "endpoint");
-            Node { a, rx, t: Instant::now() }
+            let l = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+            let ours = TcpStream::connect(l.local_addr().unwrap()).unwrap();
+            let (game, _) = l.accept().unwrap();
+            a.clients.push((1, ours));
+            a.on_game(&json!({ "t": "me", "at": "lobby", "ver": "1.21.11", "loader": "fabric", "game": "1.21.11 Fabric" }));
+            Node { a, rx, t: Instant::now(), _game: Some(game) }
         }
         fn pump(&mut self) { for _ in 0..20 { self.a.step(&self.rx, &mut self.t, Duration::from_millis(5)); } }
     }
@@ -1227,7 +1293,7 @@ mod tests {
         let mut b = Node::new(&ub, "Bob", &dir.join("b"));
         let mut c = Node::new(&uc, "Cara", &dir.join("c"));
         // the friends service (one list shared by the three in this process; each ignores itself)
-        let f = |u: &str, p: &str| Friend { uuid: u.into(), status: Status::Online, peer: p.into(), ..Default::default() };
+        let f = |u: &str, p: &str| Friend { uuid: u.into(), status: Status::Online, peer: p.into(), party: 1, ver: "1.21.11".into(), ..Default::default() };
         let (pa, pb, pc) = (a.a.peer(), b.a.peer(), c.a.peer());
         crate::friends::test_state(State { friends: vec![f(&ua, &pa), f(&ub, &pb), f(&uc, &pc)], ..Default::default() });
         // Alice invites Bob; Bob accepts
@@ -1245,6 +1311,15 @@ mod tests {
         assert!(run_until(&mut [&mut a, &mut b, &mut c], 30, |n| n[0].a.snap().pending.iter().any(|r| r.uuid == "c".repeat(32) && r.via_name == "Bob")), "no request at the leader");
         a.a.on_game(&json!({ "t": "act", "op": "approve", "uuid": uc }));
         assert!(run_until(&mut [&mut a, &mut b, &mut c], 40, |n| n.iter().all(|x| x.a.size() == 3)), "Cara didn't join");
+        // the ready gate: Alice picks a server, Bob and Cara ready up, 5 s later the party starts and they follow
+        a.a.on_game(&json!({ "t": "act", "op": "dest", "kind": "server", "address": "mc.example.net:25565", "name": "Ex" }));
+        assert!(run_until(&mut [&mut a, &mut b, &mut c], 10, |n| n[2].a.snap().dest.is_some()), "pick not seen");
+        b.a.on_game(&json!({ "t": "act", "op": "ready", "on": true }));
+        c.a.on_game(&json!({ "t": "act", "op": "ready", "on": true }));
+        assert!(run_until(&mut [&mut a, &mut b, &mut c], 10, |n| n[0].a.snap().start > 0), "no countdown");
+        let t0 = Instant::now();
+        assert!(run_until(&mut [&mut a, &mut b, &mut c], 15, |n| n[0].a.snap().live && n[1].a.last_go == n[0].a.snap().go && n[2].a.last_go == n[0].a.snap().go), "didn't start");
+        println!("started {:.1} s after the countdown began", t0.elapsed().as_secs_f32());
         // voice: Bob's frame goes to the leader, who stamps Bob's id and passes it to Cara
         let bob_sid = a.a.snap().member(&ub).map(|m| m.sid).unwrap();
         for seq in 0..6u16 { b.a.net.as_ref().unwrap().voice(&pa, &party::voice_frame(0, seq, &[0xF8, 0xFF, 0xFE])); }
@@ -1281,7 +1356,7 @@ mod tests {
         let uuids: Vec<String> = (0..n).map(|i| format!("{:032x}", 0xA000 + i)).collect();
         let t0 = Instant::now();
         let mut nodes: Vec<Node> = (0..n).map(|i| Node::with(&uuids[i], &format!("P{i}"), &dir.join(format!("p{i}")), relay)).collect();
-        let f = |u: &str, p: &str| Friend { uuid: u.into(), status: Status::Online, peer: p.into(), ..Default::default() };
+        let f = |u: &str, p: &str| Friend { uuid: u.into(), status: Status::Online, peer: p.into(), party: 1, ver: "1.21.11".into(), ..Default::default() };
         crate::friends::test_state(State { friends: (0..n).map(|i| f(&uuids[i], &nodes[i].a.peer())).collect(), ..Default::default() });
         println!("{n} endpoints up in {:?} (relay-only: {relay}, impair: {:?})", t0.elapsed(), std::env::var("NC_NET_IMPAIR").ok());
         let pump = |nodes: &mut Vec<Node>| for x in nodes.iter_mut() { x.a.step(&x.rx, &mut x.t, Duration::ZERO); };
@@ -1405,11 +1480,11 @@ mod tests {
             cancel: AtomicBool::new(false), toast_id: AtomicU32::new(0), running: Mutex::new(Default::default()), launching: Mutex::new(Default::default()), stopping: Mutex::new(Default::default()),
         });
         bridge(&sh, tx.clone());
-        let mut a = Node { a: Actor::new(sh.clone(), slint::Weak::default(), tx, Prefs { follow: true, ..Default::default() }), rx, t: Instant::now() };
+        let mut a = Node { a: Actor::new(sh.clone(), slint::Weak::default(), tx, Prefs { follow: true, ..Default::default() }), rx, t: Instant::now(), _game: None }; // the real game links over the bridge
         a.a.ensure_net();
         let dir = std::env::temp_dir().join("nether-party-test");
         let mut b = Node::new(&ub, "Notch", &dir.join("b2"));
-        let f = |u: &str, p: &str| Friend { uuid: u.into(), status: Status::Online, peer: p.into(), ..Default::default() };
+        let f = |u: &str, p: &str| Friend { uuid: u.into(), status: Status::Online, peer: p.into(), party: 1, ver: "1.21.11".into(), ..Default::default() };
         let (pa, pb) = (a.a.peer(), b.a.peer());
         crate::friends::test_state(State { friends: vec![f(&ua, &pa), f(&ub, &pb)], ..Default::default() });
         a.a.on_game(&json!({ "t": "act", "op": "invite", "uuid": ub }));

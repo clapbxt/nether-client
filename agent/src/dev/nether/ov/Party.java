@@ -24,8 +24,10 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 /**
  * The party lobby on the title screen (Fortnite-style): your party standing on the stage in their own skins, cape and
  * cosmetics, nameplates with leader crown, ready and mic state; empty spots invite friends. Invite / join-request
- * cards, live party chat (title screen only, never in the world or the server's chat), voice controls, the leader's
- * PLAY and everyone's READY, and the PARTY drawer (members, requests, friends to invite).
+ * cards, live party chat (title screen only, never in the world or the server's chat), voice controls, the party card
+ * (the leader picks SURVIVAL / MULTIPLAYER on the game's own lists ({@link PartyPick}), everyone readies up, a 5 s
+ * countdown starts it; members who leave while it plays can only REJOIN), and the PARTY drawer (members, requests,
+ * friends to invite), also on the pause screen in a world (members, invite, kick, volume, voice).
  *
  * The launcher does all the work (`crates/app/src/party.rs`): this class only draws and sends actions over a loopback
  * socket (port + per-run token in {@code client/party/bridge.json}). Chat lines live in memory only.
@@ -43,7 +45,7 @@ final class Party {
         double vol = 1;
         long seq;
     }
-    private static final class Fr { String uuid = "", name = "", act = ""; boolean online, nether, here, asked; int party, status; long seen; }
+    private static final class Fr { String uuid = "", name = "", act = "", ver = ""; boolean online, nether, here, asked, ingame, same = true; int party, status; long seen; }
     private static final class Inv { long id; String from = "", fromName = "", leaderName = ""; int size; }
     private static final class Req { String uuid = "", name = "", via = ""; }
     private static final class Line { long id, at; String from = "", name = "", text = ""; boolean me; }
@@ -55,8 +57,10 @@ final class Party {
     private static OutputStream os;
     private static final ConcurrentLinkedQueue<Map<?, ?>> inbox = new ConcurrentLinkedQueue<>();
 
-    private static boolean loaded, ok, leading, lost, joining, relay, follow = true, ready, voiceIntro;
-    private static String service = "", me = "", myName = "", note = "", route = "", partyId = "";
+    private static boolean loaded, ok, leading, lost, joining, relay, ready, voiceIntro, live;
+    private static String service = "", me = "", myName = "", note = "", route = "", partyId = "", myVer = "";
+    /** the countdown ends at (ms, 0 = none) */
+    private static long startAt;
     private static long noteAt, go;
     private static List<M> members = Collections.emptyList();
     private static List<Req> pending = Collections.emptyList();
@@ -86,8 +90,23 @@ final class Party {
     /** People in the party (1 = solo, 0 = no launcher). */
     static int size() { return linked && loaded ? Math.max(1, members.size()) : 0; }
     static boolean active() { return size() > 1; }
-    /** This player leads a party that follows them (a world they open becomes the party's destination). */
-    static boolean bringsParty() { return active() && leading && follow; }
+    /** This player leads a party that is playing (a world they host is the party's). */
+    static boolean bringsParty() { return active() && leading && live; }
+    /** We lead a party of two or more. */
+    static boolean leads() { return active() && leading; }
+    /** The party is playing at its destination (members may only go back there). */
+    static boolean live() { return active() && live; }
+    /** A party panel is open (the pause screen hands it the wheel). */
+    static boolean panelOpen() { return drawerOpen || voiceOpen || popFor != null; }
+    static void lockedNote() { say("Your party is playing: REJOIN it, or leave the party first"); Sfx.error(); }
+
+    /** Leader: pick where the party plays (the game's own lists; 1.8.9 / 1.12.2: the card's own picker). */
+    static void pick(int kind, Object screen) {
+        if (Game.legacy()) { destKind = kind; destOpen = true; return; }
+        PartyPick.start(kind, screen);
+    }
+    static void pickServer(String addr, String name) { act("dest", "kind", "server", "address", normal(addr), "name", name); }
+    static void pickWorld(String folder) { act("dest", "kind", "world", "name", folder); }
     /** Something for the hub badge: invites to us + requests we decide. */
     static int badge() { return invites.size() + (leading ? pending.size() : 0); }
 
@@ -171,6 +190,7 @@ final class Party {
         String demo = System.getProperty("nether.partyDemo");
         if (demo != null) { demo(demo); return; }
         Leave.devTick();
+        PartyPick.tick();
         connect();
         Map<?, ?> m;
         while ((m = inbox.poll()) != null) apply(m);
@@ -196,8 +216,9 @@ final class Party {
     }
 
     private static boolean demoDone;
-    /** Dev: -Dnether.partyDemo=1 (party of four), 2 (solo + invite), 3 (drawer), 4 (voice settings), 5 (solo drawer): sample people, no launcher. */
+    /** Dev: -Dnether.partyDemo=1 (party of four), 2 (solo + invite), 3 (drawer), 4 (voice settings), 5 (solo drawer), 6 (member, countdown): sample people, no launcher. */
     private static void demo(String v) {
+        if (demoDone && "6".equals(v)) startAt = System.currentTimeMillis() + 3200; // keeps counting for snapshots
         if (demoDone) return;
         demoDone = true;
         linked = loaded = ok = true;
@@ -208,7 +229,7 @@ final class Party {
         me = self;
         myName = ppl[0][1];
         List<M> ml = new ArrayList<>();
-        int n = "1".equals(v) || "3".equals(v) || "4".equals(v) ? 4 : 1;
+        int n = "1".equals(v) || "3".equals(v) || "4".equals(v) || "6".equals(v) ? 4 : 1;
         for (int i = 0; i < n; i++) {
             M m = new M();
             m.uuid = ppl[i][0]; m.name = ppl[i][1]; m.me = i == 0; m.leader = i == 0; m.seq = i; m.at = i == 3 ? "server" : "lobby";
@@ -246,6 +267,7 @@ final class Party {
         }
         fl.sort(FRIEND_ORDER);
         friends = fl;
+        if ("6".equals(v)) { leading = false; members.get(1).leader = true; members.get(0).leader = false; ready = true; members.get(0).ready = true; startAt = System.currentTimeMillis() + 4200; }
         if ("3".equals(v) || "5".equals(v)) drawerOpen = true;
         if ("4".equals(v)) voiceOpen = true;
         say("Invited TangoTek");
@@ -298,6 +320,7 @@ final class Party {
                 return;
             }
             case "chat_clear": chat.clear(); return;
+            case "host_world": PartyPick.host(str(m.get("name"))); return; // the party starts on our world
             case "talk": {
                 talking.clear();
                 if (m.get("s") instanceof List) for (Object o : (List<?>) m.get("s")) talking.add(str(o));
@@ -313,7 +336,7 @@ final class Party {
             case "event": {
                 String k = str(m.get("kind")), s = str(m.get("text"));
                 if ("invite".equals(k) && !MainMenu.title) Toast.show(s + " invited you to their party  ·  " + Menu.keyName(Config.menuKey()) + " > Friends");
-                if ("went".equals(k)) { went = s; wentAt = System.currentTimeMillis(); if (!MainMenu.title) Toast.show("Your party went to " + s); }
+                if ("went".equals(k)) { went = s; wentAt = System.currentTimeMillis(); if (!MainMenu.title) Toast.show("Your party went to " + s + "  ·  REJOIN from the title screen"); }
                 return;
             }
             case "go": {
@@ -343,8 +366,8 @@ final class Party {
         String n = str(m.get("note"));
         if (!n.isEmpty() && !n.equals(note)) say(n);
         relay = yes(m.get("relay"));
-        follow = !Boolean.FALSE.equals(m.get("follow"));
         ready = yes(m.get("ready"));
+        myVer = str(m.get("ver"));
         Map<?, ?> p = m.get("party") instanceof Map ? (Map<?, ?>) m.get("party") : Collections.emptyMap();
         String id = str(p.get("id"));
         if (!id.equals(partyId)) { partyId = id; went = null; }
@@ -353,6 +376,9 @@ final class Party {
         joining = yes(p.get("joining"));
         route = str(p.get("route"));
         go = (long) dbl(p.get("go"), 0);
+        long left = (long) dbl(p.get("start_in"), 0);
+        startAt = left > 0 ? System.currentTimeMillis() + left : 0;
+        live = yes(p.get("live"));
         dest = p.get("dest") instanceof Map ? (Map<?, ?>) p.get("dest") : null;
         List<M> ml = new ArrayList<>();
         if (p.get("members") instanceof List) for (Object o : (List<?>) p.get("members")) {
@@ -396,6 +422,7 @@ final class Party {
             Fr f = new Fr();
             f.uuid = str(r.get("uuid")); f.name = str(r.get("name")); f.act = str(r.get("act")); f.online = yes(r.get("online")); f.nether = yes(r.get("nether"));
             f.here = yes(r.get("here")); f.asked = yes(r.get("asked")); f.party = num(r.get("party")); f.status = num(r.get("status")); f.seen = (long) dbl(r.get("seen"), 0);
+            f.ingame = yes(r.get("ingame")); f.same = !Boolean.FALSE.equals(r.get("same")); f.ver = str(r.get("ver"));
             if (f.name.isEmpty()) f.name = f.uuid.length() > 8 ? f.uuid.substring(0, 8) : f.uuid;
             fl.add(f);
         }
@@ -676,20 +703,22 @@ final class Party {
             float th = mh * sc, tw = mw * sc;
             float fy = feet - depth * 6 * u;
             float bx = cx - tw / 2, by = fy - th + th * 0.06f;
-            boolean hov = MainMenu.over(bx + tw * 0.2f, by + th * 0.05f, tw * 0.6f, th * 0.95f);
+            boolean hov = m == null ? MainMenu.over(cx - tw * 0.25f, fy - th * 0.74f - 6, tw * 0.5f, th * 0.74f) : MainMenu.over(bx + tw * 0.2f, by + th * 0.05f, tw * 0.6f, th * 0.95f);
             float hv = MainMenu.an("pst" + i + (m == null ? "g" : m.uuid), hov);
             if (m == null) {
-                // empty spot: a pale ghost with a plus
-                glow(cx, fy, tw * 0.9f, 22 * sc * u, Gfx.a(Gfx.ICE, 0.05f + 0.05f * hv));
-                String k = model(null, 0.35f * Math.signum(i - mid), th * Gfx.s);
-                Gfx.image(k, bx, by - hv * 3, tw, th, Gfx.a(0xFFFFFFFF, 0.10f + 0.10f * hv), 0);
-                float pr = 15 * sc * Math.min(u, 1.5f);
-                float py = by + th * 0.42f - hv * 3;
-                Gfx.rect(cx - pr, py - pr, pr * 2, pr * 2, pr, Gfx.mix(Gfx.a(Gfx.CARD, 0.7f), Gfx.a(Th.ac, 0.9f), hv));
+                // empty spot: a soft rounded slot with a plus (a pale ghost model read as stray vertical bars)
+                float sw2 = tw * 0.5f, sh2 = th * 0.74f, sx2 = cx - sw2 / 2, sy2 = fy - sh2 - 6 * sc - hv * 3;
+                glow(cx, fy, tw * 0.8f, 18 * sc * u, Gfx.a(Gfx.ICE, 0.04f + 0.05f * hv));
+                Gfx.rect(sx2, sy2, sw2, sh2, 16 * sc, Gfx.a(Gfx.CARD, 0.22f + 0.18f * hv));
+                Gfx.ring(sx2, sy2, sw2, sh2, 16 * sc, 1, Gfx.mix(Gfx.a(Gfx.ICE, 0.10f), Gfx.a(Th.ac2, 0.7f), hv));
+                float pr = 16 * sc * Math.min(u, 1.5f);
+                float py = sy2 + sh2 * 0.44f;
+                Gfx.rect(cx - pr, py - pr, pr * 2, pr * 2, pr, Gfx.mix(Gfx.a(Gfx.CARD, 0.8f), Gfx.a(Th.ac, 0.9f), hv));
                 Gfx.ring(cx - pr, py - pr, pr * 2, pr * 2, pr, 1, Gfx.mix(Gfx.LN2, Gfx.a(Th.ac2, 0.8f), hv));
                 ModIcons.draw("plus", cx - pr * 0.55f, py - pr * 0.55f, pr * 1.1f, Gfx.mix(Gfx.DIM, 0xFFFFFFFF, hv));
-                Gfx.textC(Gfx.SEMI, 10, cx, fy + 16, Gfx.mix(Gfx.SUB, Gfx.ICE, hv), "INVITE", 1.4f);
-                if (MainMenu.hit(bx + tw * 0.2f, by, tw * 0.6f, th)) { drawerOpen = true; toFriends = true; }
+                Gfx.textC(Gfx.SEMI, 10, cx, py + pr + 18, Gfx.mix(Gfx.SUB, Gfx.ICE, hv), "INVITE", 1.4f);
+                if (hov) MainMenu.tip("Invite a friend (in game, same version)");
+                if (MainMenu.hit(sx2, sy2, sw2, sh2)) { drawerOpen = true; toFriends = true; }
                 continue;
             }
             boolean talk = talking.contains(m.uuid) || (m.me && sending);
@@ -787,7 +816,8 @@ final class Party {
         if (goAddr != null && Game.player0() == null) { String a = goAddr, n = goName; goAddr = goName = null; QuickJoin.join(n == null || n.isEmpty() ? a : n, a, screen); return; }
         if (!linked || !loaded) { offline(W, H); return; }
         boolean party = members.size() > 1;
-        if (party) play(W - 16 - 250, playBottom, 250);
+        if (party) play(W - 16 - 250, playBottom, 250, screen);
+        else destOpen = false;
         chatBox(chatX, chatBottom, Math.min(300, W * 0.36f), party);
         cards(W);
         if (!note.isEmpty() && System.currentTimeMillis() - noteAt < 5000) {
@@ -833,8 +863,26 @@ final class Party {
             Gfx.textC(Gfx.SEMI, 9.5f, bx + 8, y + h / 2, 0xFFFFFFFF, String.valueOf(Math.min(9, b)), 0);
         }
         MainMenu.box(x, y, w, h);
+        chipRect = new float[] {x, y, w, h};
+        if (hv && !MainMenu.title) MainMenu.tip(n > 1 ? "Your party: members, voice, invite" : "Party up with friends in game");
         if (MainMenu.hit(x, y, w, h)) { drawerOpen = !drawerOpen; scroll = scrollT = 0; popFor = null; }
         return w;
+    }
+
+    private static float[] chipRect;
+
+    /** Pause screen in a world: the PARTY chip's drawer, member pop-up and voice settings (no chat in the world). */
+    static void pause(float W, float H) {
+        if (!linked || !loaded) { offline(W, H); return; }
+        typing = false;
+        destOpen = false;
+        if (panelOpen()) MainMenu.box(0, 0, W, H); // our panels take every click while open
+        drawerA = Config.calm() ? (drawerOpen ? 1 : 0) : Math.max(0, Math.min(1, drawerA + (drawerOpen ? 1 : -1) * Gfx.dt * 9));
+        if (drawerA > 0) drawer(W, H);
+        if (popFor != null) pop(W, H);
+        voiceA = Config.calm() ? (voiceOpen ? 1 : 0) : Math.max(0, Math.min(1, voiceA + (voiceOpen ? 1 : -1) * Gfx.dt * 10));
+        if (voiceA > 0) voicePanel(W, H);
+        wheel = 0;
     }
 
     // ---------------- invite / request cards (top right, under the account)
@@ -916,48 +964,99 @@ final class Party {
 
     // ---------------- PLAY / READY card (bottom right)
 
-    private static float[] destRect(float W, float H) { return new float[] {W - 16 - 250, Math.max(60, H - 36 - 96 - 8 - 220), 250, 220}; }
+    private static float cardX, cardTop;
+    private static int destKind = PartyPick.SERVER;
 
-    private static void play(float x, float bottom, float w) {
-        float h = 96, y = bottom - h;
+    private static float[] destRect(float W, float H) { return new float[] {cardX, Math.max(60, cardTop - 46 - 220), 250, 220}; }
+
+    /**
+     * The party card (bottom right): what was picked, who is ready, the countdown; the leader's SURVIVAL / MULTIPLAYER
+     * picks above it; READY UP for members; REJOIN while the party plays.
+     */
+    private static void play(float x, float bottom, float w, Object screen) {
+        String kind = dest == null ? "" : str(dest.get("kind"));
+        boolean world = "world".equals(kind), pending = world && yes(dest.get("pending"));
+        long now = System.currentTimeMillis(), left = startAt > now ? startAt - now : 0;
+        float h = 104, y = bottom - h;
+        cardX = x;
+        cardTop = y;
+        if (leading && !live) { // the leader's two picks
+            float hw = (w - 6) / 2, py = y - 8 - 30;
+            if (pickBtn("ppw", "SURVIVAL", "host", x, py, hw, 30, world)) pick(PartyPick.WORLD, screen);
+            if (MainMenu.over(x, py, hw, 30)) MainMenu.tip("Pick one of your worlds: it opens for the party when everyone is ready");
+            if (pickBtn("pps", "MULTIPLAYER", "server", x + hw + 6, py, hw, 30, "server".equals(kind))) pick(PartyPick.SERVER, screen);
+            if (MainMenu.over(x + hw + 6, py, hw, 30)) MainMenu.tip("Pick a server from your list: you all join when everyone is ready");
+        }
         MainMenu.glass(x, y, w, h);
         int rd = 0, total = 0;
         for (M m : members) { total++; if (m.ready || m.leader) rd++; }
-        Gfx.text(Gfx.MONO, 8.5f, x + 14, y + 15, Gfx.SUB, "PARTY · " + rd + "/" + total + " READY", false, 1.4f);
+        String head = live ? "PARTY · PLAYING" : "PARTY · " + rd + "/" + total + " READY";
+        float hw = Gfx.text(Gfx.MONO, 8.5f, x + 14, y + 15, live ? Th.ac2 : Gfx.SUB, head, false, 1.4f);
         if (!route.isEmpty()) {
             String r = "relay".equals(route) ? "RELAY" : "DIRECT";
             float rw = Gfx.width(Gfx.MONO, 8.5f, r, 1.4f);
-            Gfx.text(Gfx.MONO, 8.5f, x + w - 14 - rw, y + 15, relay ? Th.ac2 : Gfx.SUB, r, false, 1.4f);
-            if (MainMenu.over(x + w - 18 - rw, y + 6, rw + 8, 18)) MainMenu.tip("relay".equals(route) ? "Through a relay: party members don't see your IP" : "Direct peer-to-peer link (party members can see your IP)");
+            if (x + 14 + hw + 12 < x + w - 14 - rw) {
+                Gfx.text(Gfx.MONO, 8.5f, x + w - 14 - rw, y + 15, relay ? Th.ac2 : Gfx.SUB, r, false, 1.4f);
+                if (MainMenu.over(x + w - 18 - rw, y + 6, rw + 8, 18)) MainMenu.tip("relay".equals(route) ? "Through a relay: party members don't see your IP" : "Direct peer-to-peer link (party members can see your IP)");
+            }
         }
-        // destination row
-        String dn;
-        String kind = dest == null ? "" : str(dest.get("kind"));
-        boolean worldHere = true;
-        if (dest == null) dn = leading ? "Pick a server, or just join one" : "The leader picks where to play";
-        else if ("world".equals(kind)) { dn = str(dest.get("host_name")) + "'s world · " + str(dest.get("name")); worldHere = yes(dest.get("here")) || str(dest.get("host")).equals(me); }
-        else dn = str(dest.get("name")).isEmpty() ? str(dest.get("address")) : str(dest.get("name"));
-        float ry = y + 26;
-        boolean rh = leading && MainMenu.over(x + 8, ry, w - 16, 26);
-        if (leading) Gfx.rect(x + 8, ry, w - 16, 26, 6, Gfx.a(Gfx.ICE, rh || destOpen ? 0.08f : 0.035f));
-        ModIcons.draw("world".equals(kind) ? "host" : "server", x + 14, ry + 6, 14, dest == null ? Gfx.MUT : Th.ac2);
-        Gfx.text(Gfx.SEMI, 11.5f, x + 34, ry + 13, dest == null ? Gfx.SUB : Gfx.ICE, MainMenu.fit(Gfx.SEMI, 11.5f, dn, 0, w - 34 - (leading ? 34 : 14)));
-        if (leading) {
-            ModIcons.draw("chev", x + w - 30, ry + 5, 16, rh || destOpen ? Gfx.ICE : Gfx.SUB);
-            if (MainMenu.hit(x + 8, ry, w - 16, 26)) destOpen = !destOpen;
-        }
-        float by = y + 60, bh = 28;
-        if (leading) {
-            boolean can = dest != null;
-            if (bigButton("pgo", can ? "PLAY" : "PLAY", x + 8, by, w - 16, bh, can, true) && can) act("play");
-            if (!can && MainMenu.over(x + 8, by, w - 16, bh)) MainMenu.tip("Pick a server first. Ready members follow you when you join one.");
-        } else if (dest != null && go > 0 && went != null && !("world".equals(kind) && str(dest.get("host")).equals(me))) {
-            if (bigButton("pjoin", worldHere ? "JOIN PARTY" : "OPEN IN LAUNCHER", x + 8, by, w - 16, bh, true, true)) act("follow");
-            if (!worldHere && MainMenu.over(x + 8, by, w - 16, bh)) MainMenu.tip("Needs Minecraft " + str(dest.get("ver")) + " " + str(dest.get("loader")) + ": the launcher picks an instance");
+        // what was picked
+        String dn, sub;
+        if (dest == null) { dn = leading ? "Pick where to play" : "The leader picks where to play"; sub = leading ? "SURVIVAL or MULTIPLAYER above" : "Then ready up here"; }
+        else if (world) {
+            dn = str(dest.get("name"));
+            boolean mine = str(dest.get("host")).equals(me);
+            sub = (mine ? "Your world" : str(dest.get("host_name")) + "'s world") + (str(dest.get("ver")).isEmpty() ? "" : " · " + str(dest.get("ver")));
         } else {
-            if (bigButton("prdy", ready ? "READY" : "READY UP", x + 8, by, w - 16, bh, true, !ready)) act("ready", "on", !ready);
-            if (ready) ModIcons.draw("check", x + w / 2 - Gfx.width(Gfx.SEMI, 12, "READY", 1.6f) / 2 - 22, by + bh / 2 - 7, 14, 0xFF3FB950);
+            dn = str(dest.get("name")).isEmpty() ? str(dest.get("address")) : str(dest.get("name"));
+            sub = "Server · " + str(dest.get("address"));
         }
+        float ry = y + 26;
+        Gfx.rect(x + 8, ry, w - 16, 34, 7, Gfx.a(Gfx.ICE, 0.035f));
+        ModIcons.draw(world ? "host" : "server", x + 16, ry + 9, 16, dest == null ? Gfx.MUT : Th.ac2);
+        boolean clr = leading && dest != null && !live;
+        float tw = w - 16 - 32 - (clr ? 30 : 10);
+        Gfx.text(Gfx.SEMI, 11.5f, x + 40, ry + 12, dest == null ? Gfx.SUB : Gfx.ICE, MainMenu.fit(Gfx.SEMI, 11.5f, dn, 0, tw));
+        Gfx.text(Gfx.UI, 9.5f, x + 40, ry + 25, Gfx.SUB, MainMenu.fit(Gfx.UI, 9.5f, sub, 0, tw));
+        if (clr && iconBtn("pdclr", "close", x + w - 8 - 28, ry + 5, 24, false, 0, "Clear the pick")) act("dest", "address", "");
+        // the action row
+        float by = y + h - 8 - 30, bw = w - 16, bh = 30;
+        if (left > 0) {
+            // everyone is ready: the countdown (members click it to un-ready, which stops it)
+            float k = Math.max(0, Math.min(1, 1 - left / 5000f));
+            boolean hv = !leading && MainMenu.over(x + 8, by, bw, bh);
+            Gfx.rect(x + 8, by, bw, bh, 7, Gfx.a(Th.ac, 0.22f));
+            Gfx.rect(x + 8, by, Math.max(14, bw * k), bh, 7, Gfx.mix(Th.ac, Th.ac2, 0.3f + 0.4f * (hv ? 1 : 0)));
+            Gfx.textC(Gfx.SEMI, 12, x + 8 + bw / 2, by + bh / 2, 0xFFFFFFFF, "STARTING IN " + (left + 999) / 1000, 1.6f);
+            if (hv) MainMenu.tip("Click to un-ready (stops the countdown)");
+            if (!leading && MainMenu.hit(x + 8, by, bw, bh)) act("ready", "on", false);
+        } else if (live) {
+            if (leading) bigButton("plv", "PLAYING", x + 8, by, bw, bh, false, true);
+            else if (pending) bigButton("plv", "OPENING THE WORLD...", x + 8, by, bw, bh, false, true);
+            else if (bigButton("prj", "REJOIN PARTY", x + 8, by, bw, bh, true, true)) act("follow");
+        } else if (leading) {
+            int wait = total - rd;
+            bigButton("pwt", dest == null ? "PICK ABOVE" : wait > 0 ? "WAITING FOR " + wait + " TO READY" : "STARTING...", x + 8, by, bw, bh, false, true);
+            if (dest != null && wait > 0 && MainMenu.over(x + 8, by, bw, bh)) MainMenu.tip("Starts 5 seconds after everyone is ready");
+        } else if (dest == null) bigButton("prdy", "READY UP", x + 8, by, bw, bh, false, true);
+        else if (world && !yes(dest.get("here"))) bigButton("prdy", "NEEDS MINECRAFT " + str(dest.get("ver")).toUpperCase(Locale.ROOT), x + 8, by, bw, bh, false, true);
+        else {
+            if (bigButton("prdy", ready ? "READY" : "READY UP", x + 8, by, bw, bh, true, !ready)) act("ready", "on", !ready);
+            if (ready) ModIcons.draw("check", x + w / 2 - Gfx.width(Gfx.SEMI, 12, "READY", 1.6f) / 2 - 22, by + bh / 2 - 7, 14, 0xFF3FB950);
+            if (MainMenu.over(x + 8, by, bw, bh)) MainMenu.tip(ready ? "Click to un-ready" : "The party starts 5 seconds after everyone is ready");
+        }
+    }
+
+    /** SURVIVAL / MULTIPLAYER pick button above the card (selected = what is picked now). */
+    private static boolean pickBtn(String id, String label, String icon, float x, float y, float w, float h, boolean sel) {
+        boolean hv = MainMenu.over(x, y, w, h);
+        float t = MainMenu.an(id, hv);
+        Gfx.rect(x, y, w, h, 7, Gfx.mix(Gfx.a(Gfx.CARD, 0.82f), Gfx.CARD2, t));
+        Gfx.ring(x, y, w, h, 7, 1, sel ? Gfx.a(Th.ac2, 0.85f) : Gfx.mix(Gfx.a(Gfx.ICE, 0.1f), Gfx.LN2, t));
+        float lw = Gfx.width(Gfx.SEMI, 10.5f, label, 1.3f), ix = x + (w - lw - 20) / 2;
+        ModIcons.draw(icon, ix, y + h / 2 - 7, 14, sel ? Th.ac2 : Gfx.mix(Gfx.SUB, Gfx.ICE, t));
+        Gfx.text(Gfx.SEMI, 10.5f, ix + 20, y + h / 2, Gfx.mix(Gfx.DIM, Gfx.ICE, Math.max(t, sel ? 1 : 0)), label, false, 1.3f);
+        return MainMenu.hit(x, y, w, h);
     }
 
     private static boolean bigButton(String id, String label, float x, float y, float w, float h, boolean enabled, boolean primary) {
@@ -978,21 +1077,22 @@ final class Party {
         Gfx.rect(x, y + 4, w, h, 10, Gfx.a(Gfx.BLACK, 0.4f));
         Gfx.rect(x, y, w, h, 10, Gfx.a(Gfx.CARD, 0.97f));
         Gfx.ring(x, y, w, h, 10, 1, Gfx.LN2);
-        Gfx.text(Gfx.MONO, 8.5f, x + 14, y + 16, Gfx.SUB, "PLAY ON", false, 1.4f);
-        List<String[]> list = QuickJoin.list();
+        boolean worlds = destKind == PartyPick.WORLD;
+        Gfx.text(Gfx.MONO, 8.5f, x + 14, y + 16, Gfx.SUB, worlds ? "PICK A WORLD" : "PICK A SERVER", false, 1.4f);
+        List<String[]> list = worlds ? PartyPick.worlds() : QuickJoin.list(); // worlds: {folder, name}; servers: {name, address}
         float yy = y + 28;
-        if (list.isEmpty()) Gfx.text(Gfx.UI, 11, x + 14, yy + 14, Gfx.SUB, "Add servers in Multiplayer first.");
+        if (list.isEmpty()) Gfx.text(Gfx.UI, 11, x + 14, yy + 14, Gfx.SUB, worlds ? "Create a world in Singleplayer first." : "Add servers in Multiplayer first.");
         for (String[] s : list) {
-            if (yy + 30 > y + h - 34) break;
-            boolean sel = dest != null && s[1].equalsIgnoreCase(str(dest.get("address")));
+            if (yy + 30 > y + h - 8) break;
+            String title = worlds ? s[1] : s[0], line = worlds ? s[0] : s[1];
+            boolean sel = dest != null && (worlds ? s[0].equals(str(dest.get("name"))) : s[1].equalsIgnoreCase(str(dest.get("address"))));
             boolean hv = MainMenu.over(x + 6, yy, w - 12, 28);
             Gfx.rect(x + 6, yy, w - 12, 28, 6, sel ? Gfx.a(Th.ac, 0.2f) : Gfx.a(Gfx.ICE, hv ? 0.07f : 0));
-            Gfx.text(Gfx.SEMI, 11, x + 16, yy + 10, Gfx.ICE, MainMenu.fit(Gfx.SEMI, 11, s[0], 0, w - 40));
-            Gfx.text(Gfx.UI, 9, x + 16, yy + 21, Gfx.SUB, MainMenu.fit(Gfx.UI, 9, s[1], 0, w - 40));
-            if (MainMenu.hit(x + 6, yy, w - 12, 28)) { act("dest", "address", normal(s[1]), "name", s[0]); destOpen = false; }
+            Gfx.text(Gfx.SEMI, 11, x + 16, yy + 10, Gfx.ICE, MainMenu.fit(Gfx.SEMI, 11, title, 0, w - 40));
+            Gfx.text(Gfx.UI, 9, x + 16, yy + 21, Gfx.SUB, MainMenu.fit(Gfx.UI, 9, line, 0, w - 40));
+            if (MainMenu.hit(x + 6, yy, w - 12, 28)) { if (worlds) pickWorld(s[0]); else pickServer(s[1], s[0]); destOpen = false; }
             yy += 30;
         }
-        if (dest != null && pill("pdclr", "CLEAR", x + 10, y + h - 32, w - 20, 24, false)) { act("dest", "address", ""); destOpen = false; }
         MainMenu.inModal = false;
         if (MainMenu.clickNow() && !MainMenu.overRaw(x, y, w, h)) { destOpen = false; MainMenu.eat(); }
     }
@@ -1342,16 +1442,15 @@ final class Party {
             float bw = (w - 36 - 8) / 2;
             if (members.size() > 1) { if (pill("dleave", "LEAVE PARTY", x + 18, fy + 12, bw, 26, false)) act("leave"); }
             else if (pill("dinv", "INVITE FRIENDS", x + 18, fy + 12, bw, 26, true)) scrollT = friendsAt;
+            if (MainMenu.over(x + 18, fy + 12, bw, 26) && members.size() <= 1) MainMenu.tip("Friends in game on Minecraft " + myVer + " can join");
             if (pill("dvoice", "VOICE SETTINGS", x + 18 + bw + 8, fy + 12, bw, 26, false)) voiceOpen = true;
             float ty = fy + 48;
-            if (toggle("drelay", "Hide my IP (relay)", relay, x + 18, ty, (w - 36) / 2 + 10)) act("relay", "on", !relay);
-            if (MainMenu.over(x + 18, ty, (w - 36) / 2, 24)) MainMenu.tip("Party links go through a relay so members never see your IP (slightly more delay)");
-            if (toggle("dfollow", "Follow leader", follow, x + 18 + (w - 36) / 2 + 14, ty, (w - 36) / 2 - 14)) act("follow_pref", "on", !follow);
-            if (MainMenu.over(x + 18 + (w - 36) / 2 + 14, ty, (w - 36) / 2 - 14, 24)) MainMenu.tip("When you lead: the server or world you join becomes the party's, and ready members follow");
+            if (toggle("drelay", "Hide my IP (relay)", relay, x + 18, ty, w - 36)) act("relay", "on", !relay);
+            if (MainMenu.over(x + 18, ty, w - 36, 24)) MainMenu.tip("Party links go through a relay so members never see your IP (slightly more delay)");
         }
         Gfx.alpha = a0;
         MainMenu.inModal = false;
-        float[] cb = MainMenu.chipBox();
+        float[] cb = chipRect != null ? chipRect : MainMenu.chipBox();
         if (MainMenu.clickNow() && !MainMenu.overRaw(x, y, w, h) && !(cb != null && MainMenu.overRaw(cb[0], cb[1], cb[2], cb[3])) && popFor == null && !voiceOpen) { drawerOpen = false; }
     }
 
@@ -1392,6 +1491,7 @@ final class Party {
         }
         if (!pending.isEmpty()) {
             if (!measure) header(leading ? "WANT TO JOIN" : "WAITING FOR THE LEADER", x, y);
+            // (requests come only from friends of members who are in game on this version)
             y += 22;
             for (Req r : new ArrayList<>(pending)) {
                 vis = !measure && y + 48 > top && y < bottom;
@@ -1435,7 +1535,7 @@ final class Party {
         float nx = x + 56;
         float nw = Gfx.text(Gfx.SEMI, 12, nx, y + 18, m.away ? Gfx.DIM : Gfx.ICE, MainMenu.fit(Gfx.SEMI, 12, m.name + (m.me ? " (you)" : ""), 0, w - 170));
         if (m.leader && members.size() > 1) ModIcons.draw("crown", nx + nw + 5, y + 12, 12, 0xFFF2C94C);
-        String sub = m.away ? "Reconnecting..." : m.leader && members.size() > 1 ? "Leader" + (m.game.isEmpty() ? "" : " · " + m.game) : (m.ready ? "Ready" : "lobby".equals(m.at) ? "In the lobby" : "world".equals(m.at) || "server".equals(m.at) ? "Playing" : "In the launcher") + (m.game.isEmpty() ? "" : " · " + m.game);
+        String sub = m.away ? "Reconnecting..." : m.leader && members.size() > 1 ? "Leader" + (m.game.isEmpty() ? "" : " · " + m.game) : (m.ready ? "Ready" : "lobby".equals(m.at) ? "In the lobby" : "world".equals(m.at) || "server".equals(m.at) ? "Playing" : "Game closed") + (m.game.isEmpty() ? "" : " · " + m.game);
         Gfx.text(Gfx.UI, 10, nx, y + 33, m.ready && !m.leader ? 0xFF3FB950 : Gfx.SUB, MainMenu.fit(Gfx.UI, 10, sub, 0, w - 170));
         // right: mic state, then actions on hover
         float ax = x + w - 16;
@@ -1451,9 +1551,11 @@ final class Party {
             ax -= 30;
             if (iconBtn("dmk" + m.uuid, "leave", ax - 26, y + 11, 26, false, 0, "Remove from party")) act("kick", "uuid", m.uuid);
         }
-        if (m.me && hv && members.size() > 1 && !leading) {
+        if (m.me && hv && members.size() > 1 && !leading && MainMenu.title) {
             if (iconBtn("dmr", "check", ax - 26, y + 11, 26, ready, 0xFF3FB950, ready ? "Not ready" : "Ready up")) act("ready", "on", !ready);
         }
+        if (!m.me && hv) MainMenu.tip("Click for volume" + (leading ? ", leader and remove" : " and more"));
+        if (!m.me && MainMenu.hit(x + 8, y, w - 16, 48)) { popFor = m.uuid; popAt = new float[] {x - 250, y + 40}; }
     }
 
     /** Friends: online A-Z, then offline by most recently online ({@link #FRIEND_ORDER}); people in the party are skipped. */
@@ -1480,10 +1582,12 @@ final class Party {
             if (!f.online && !offHdr) { offHdr = true; if (!measure) header("RECENTLY ONLINE", x, y + 4); y += 26; }
             boolean vis = !measure && y + 48 > top && y < bottom;
             if (vis) {
-                String sub = !f.online ? f.act : !f.nether ? f.act + " · not on a Nether launcher that has parties yet" : f.party > 1 ? "In a party of " + f.party + " · " + f.act : f.act;
+                boolean can = f.online && f.nether && f.ingame && f.same;
+                String sub = !f.online ? f.act : !f.nether ? f.act + " · no parties on their launcher yet" : !f.ingame ? "In the launcher · parties are in game"
+                    : !f.same ? "Playing " + (f.ver.isEmpty() ? "another version" : f.ver) + " · you're on " + myVer : f.party > 1 ? "In a party of " + f.party + " · " + f.act : f.act;
                 String[] a = null, b = null;
                 Runnable ra = null, rb = null;
-                if (f.online && f.nether) {
+                if (can) {
                     a = new String[] {"INVITE", "1"};
                     ra = () -> act("invite", "uuid", f.uuid);
                     if (f.party > 1) { b = new String[] {f.asked ? "ASKED" : "JOIN", ""}; rb = () -> { if (!f.asked) act("ask", "uuid", f.uuid); }; }

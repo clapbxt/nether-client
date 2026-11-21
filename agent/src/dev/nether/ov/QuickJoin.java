@@ -263,7 +263,7 @@ final class QuickJoin {
     }
 
     /** Minimal NBT reader (uncompressed): compounds as maps, lists, strings and numbers; arrays skipped. */
-    private static Object nbt(DataInputStream in, int type, int depth) throws IOException {
+    static Object nbt(DataInputStream in, int type, int depth) throws IOException {
         if (depth > 64) throw new IOException("nbt too deep");
         switch (type) {
             case 1: return in.readByte();

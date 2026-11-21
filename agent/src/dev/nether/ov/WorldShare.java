@@ -319,6 +319,12 @@ final class WorldShare {
         }
     }
 
+    /** The party starts on this world (we lead): open it to friends (the launcher hands its link to the party). */
+    static void forParty() {
+        if (!sharing()) publish();
+        if (sharing()) System.out.println("[nether-agent] party: hosting this world for the party");
+    }
+
     private static void sendInvite() {
         String n = name.trim();
         if (n.isEmpty()) return;

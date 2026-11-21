@@ -29,6 +29,8 @@ pub const REQUEST_MS: u64 = 5 * 60_000;
 pub const GRACE_MS: u64 = 45_000;
 /// Members wait this long for a lost leader before the successor takes over (ms).
 pub const LEADER_GRACE_MS: u64 = 10_000;
+/// Everyone is ready: the party starts this long after (ms), unless someone un-readies.
+pub const COUNTDOWN_MS: u64 = 5_000;
 
 pub fn valid_uuid(u: &str) -> bool { u.len() == 32 && u.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) }
 /// iroh endpoint id, as `EndpointId`'s Display writes it.
@@ -91,6 +93,10 @@ pub struct Member {
     pub look: Look,
 }
 
+/// What [`Party::gate`] did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Gate { Idle, Changed, Go }
+
 /// A friend of a member asking to join (leader decides).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -110,7 +116,8 @@ pub struct Request {
 pub enum Dest {
     /// a public server (`host:port`)
     Server { address: String, name: String },
-    /// a member's singleplayer world through the P2P world link (`iroh:` ticket)
+    /// a member's singleplayer world through the P2P world link (`iroh:` ticket; "" = picked, not open yet:
+    /// `name` is then the save folder the leader's game opens when the party starts)
     World { ticket: String, name: String, host: String, ver: String, loader: String },
 }
 
@@ -123,7 +130,7 @@ impl Dest {
                 ok.then(|| Dest::Server { address: address.to_ascii_lowercase(), name: short(&name, 48) })
             }
             Dest::World { ticket, name, host, ver, loader } => {
-                let ok = ticket.starts_with("iroh:") && ticket.len() <= 160 && valid_uuid(&host);
+                let ok = (ticket.is_empty() || (ticket.starts_with("iroh:") && ticket.len() <= 160)) && valid_uuid(&host);
                 ok.then(|| Dest::World { ticket, name: short(&name, 48), host, ver: short(&ver, 32), loader: short(&loader, 16) })
             }
         }
@@ -143,8 +150,12 @@ pub struct Snapshot {
     /// join requests waiting for the leader (members see them so a blocker can veto)
     pub pending: Vec<Request>,
     pub dest: Option<Dest>,
-    /// bumped when the leader presses PLAY (ready members go to `dest`)
+    /// bumped when the party starts (and again when a hosted world's link is up): ready members go to `dest`
     pub go: u64,
+    /// everyone is ready: the party starts at this time (unix ms, 0 = not counting down)
+    pub start: u64,
+    /// the party is playing at `dest` (members who left may only go back there)
+    pub live: bool,
 }
 
 impl Snapshot {
@@ -162,7 +173,9 @@ pub enum Msg {
     Hello { v: u32, uuid: String, name: String },
     // ---- friend to friend
     /// you're invited to this party: dial `leader_peer` and send `Join`. `auto` = your request was approved.
-    Invite { party: String, leader: String, leader_name: String, leader_peer: String, size: u32, auto: bool },
+    Invite { party: String, leader: String, leader_name: String, leader_peer: String, size: u32, auto: bool,
+        /// the party's Minecraft version (parties are one version; "" = older launcher)
+        #[serde(default)] ver: String },
     /// let me join your party
     Ask,
     /// I just sent you a world invite through the friends service: fetch it now (it pops up at once, no waiting for
@@ -178,7 +191,7 @@ pub enum Msg {
     Admit { uuid: String, name: String, peer: String },
     /// my friend asks to join (you decide)
     Request { uuid: String, name: String, peer: String },
-    Join { party: String },
+    Join { party: String, #[serde(default)] ver: String },
     Leave,
     Kick { uuid: String },
     Promote { uuid: String },
@@ -276,7 +289,7 @@ impl Party {
         me.seq = 0;
         me.sid = 1;
         me.away = false;
-        let snap = Snapshot { id, epoch: 1, leader: me.uuid.clone(), members: vec![me], pending: vec![], dest: None, go: 0 };
+        let snap = Snapshot { id, epoch: 1, leader: me.uuid.clone(), members: vec![me], pending: vec![], dest: None, go: 0, start: 0, live: false };
         Party { snap, allow: vec![], pairs: HashSet::new(), vetoed: HashSet::new(), next_seq: 1, next_sid: 2, away: vec![] }
     }
 
@@ -466,18 +479,65 @@ impl Party {
     pub fn set_dest(&mut self, by: &str, dest: Option<Dest>) -> Result<(), Refusal> {
         if by != self.snap.leader { return Err(Refusal::NotLeader); }
         let dest = dest.and_then(Dest::clean);
-        if self.snap.dest != dest { self.snap.dest = dest; self.bump(); }
+        if self.snap.dest != dest {
+            // a new pick: everyone readies up for it again
+            self.snap.dest = dest;
+            self.snap.start = 0;
+            self.snap.live = false;
+            let leader = self.snap.leader.clone();
+            for m in &mut self.snap.members { if m.uuid != leader { m.ready = false; } }
+            self.bump();
+        }
         Ok(())
     }
 
-    /// PLAY: ready members go to the destination.
+    /// Start now: ready members go to the destination.
     pub fn go(&mut self, by: &str) -> Result<(), Refusal> {
         if by != self.snap.leader { return Err(Refusal::NotLeader); }
         if self.snap.dest.is_none() { return Err(Refusal::Stale); }
         self.snap.go += 1;
-        for m in &mut self.snap.members { if m.uuid != by { m.ready = false; } }
+        self.snap.start = 0;
+        self.snap.live = true;
         self.bump();
         Ok(())
+    }
+
+    /// The ready gate, every leader tick: with a destination picked and everyone in the lobby and ready (the leader
+    /// counts as ready), a countdown of [`COUNTDOWN_MS`] starts; anyone un-readying or leaving the lobby stops it;
+    /// when it runs out the party starts ([`Party::go`]).
+    pub fn gate(&mut self, now: u64) -> Gate {
+        let leader = self.snap.leader.clone();
+        let all = self.snap.dest.is_some() && !self.snap.live && self.snap.members.len() > 1
+            && self.snap.members.iter().all(|m| !m.away && m.at == "lobby" && (m.ready || m.uuid == leader));
+        match (all, self.snap.start) {
+            (true, 0) => { self.snap.start = now + COUNTDOWN_MS; self.bump(); Gate::Changed }
+            (true, t) if now >= t => { let _ = self.go(&leader); Gate::Go }
+            (false, t) if t != 0 => { self.snap.start = 0; self.bump(); Gate::Changed }
+            _ => Gate::Idle,
+        }
+    }
+
+    /// The party is back in the lobby: a hosted world's link is gone, everyone readies up again.
+    pub fn end_live(&mut self) {
+        if !self.snap.live { return; }
+        self.snap.live = false;
+        self.snap.start = 0;
+        if let Some(Dest::World { ticket, .. }) = &mut self.snap.dest { ticket.clear(); }
+        let leader = self.snap.leader.clone();
+        for m in &mut self.snap.members { if m.uuid != leader { m.ready = false; } }
+        self.bump();
+    }
+
+    /// The leader's picked world is open to the party now: members go to it.
+    pub fn set_ticket(&mut self, t: &str) -> bool {
+        let ok = t.starts_with("iroh:") && t.len() <= 160;
+        match &mut self.snap.dest {
+            Some(Dest::World { ticket, .. }) if ok && self.snap.live && ticket != t => { *ticket = t.to_string(); }
+            _ => return false,
+        }
+        self.snap.go += 1;
+        self.bump();
+        true
     }
 
     /// The member with this endpoint key.
@@ -608,11 +668,48 @@ mod tests {
         assert_eq!(np.set_dest(&u('c'), None), Err(Refusal::NotLeader));
         np.go(&u('b')).unwrap();
         assert_eq!(np.snap.go, 1);
+        assert!(np.snap.live);
+    }
+
+    #[test]
+    fn ready_gate_counts_down_and_starts() {
+        let mut party = Party::solo(new_id(), Member { uuid: u('a'), name: "A".into(), peer: p('a'), at: "lobby".into(), ..Default::default() });
+        party.admit(&u('a'), &u('b'), &p('b'), 0).unwrap();
+        party.join(&u('b'), "B", &p('b'), 1).unwrap();
+        party.set_me(&u('b'), false, 0, false, "1.21.11 Fabric", "lobby", Look::default());
+        // nothing picked: nothing to count down
+        assert_eq!(party.gate(10), Gate::Idle);
+        party.set_dest(&u('a'), Some(Dest::World { ticket: String::new(), name: "My World".into(), host: u('a'), ver: "1.21.11".into(), loader: "Fabric".into() })).unwrap();
+        assert_eq!(party.gate(20), Gate::Idle); // b isn't ready
+        party.set_me(&u('b'), true, 0, false, "1.21.11 Fabric", "lobby", Look::default());
+        assert_eq!(party.gate(30), Gate::Changed);
+        assert_eq!(party.snap.start, 30 + COUNTDOWN_MS);
+        // b un-readies: the countdown stops
+        party.set_me(&u('b'), false, 0, false, "1.21.11 Fabric", "lobby", Look::default());
+        assert_eq!(party.gate(40), Gate::Changed);
+        assert_eq!(party.snap.start, 0);
+        party.set_me(&u('b'), true, 0, false, "1.21.11 Fabric", "lobby", Look::default());
+        assert_eq!(party.gate(50), Gate::Changed);
+        assert_eq!(party.gate(50 + COUNTDOWN_MS - 1), Gate::Idle);
+        assert_eq!(party.gate(50 + COUNTDOWN_MS), Gate::Go);
+        assert!(party.snap.live && party.snap.go == 1);
+        // the world opens: members get its ticket with a second go
+        assert!(party.set_ticket("iroh:abc"));
+        assert_eq!(party.snap.go, 2);
+        // back in the lobby: the world's link is gone, ready again for the next round
+        party.end_live();
+        assert!(!party.snap.live);
+        assert!(matches!(&party.snap.dest, Some(Dest::World { ticket, .. }) if ticket.is_empty()));
+        assert!(!party.snap.member(&u('b')).unwrap().ready);
     }
 
     #[test]
     fn wire_round_trip_and_voice_frames() {
-        let m = Msg::Invite { party: new_id(), leader: u('a'), leader_name: "Pa".into(), leader_peer: p('a'), size: 2, auto: false };
+        let m = Msg::Invite { party: new_id(), leader: u('a'), leader_name: "Pa".into(), leader_peer: p('a'), size: 2, auto: false, ver: "1.21.11".into() };
+        assert_eq!(Msg::parse(&m.to_bytes()), Some(m));
+        // older launchers send no version
+        assert!(matches!(Msg::parse(br#"{"t":"join","party":"x"}"#), Some(Msg::Join { ver, .. }) if ver.is_empty()));
+        let m = Msg::Join { party: new_id(), ver: "1.8.9".into() };
         assert_eq!(Msg::parse(&m.to_bytes()), Some(m));
         assert_eq!(Msg::parse(br#"{"t":"ask"}"#), Some(Msg::Ask));
         assert!(Msg::parse(br#"{"t":"nope"}"#).is_none());

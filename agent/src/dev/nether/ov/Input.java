@@ -121,7 +121,9 @@ final class Input {
             return true;
         }
         // the party lobby's chat field / key capture on our title screen
-        if (!menuOpen && (MainMenu.title || Party.capturing()) && Party.key(key, action)) return true;
+        if (!menuOpen && (MainMenu.title || MainMenu.pause || Party.capturing()) && Party.key(key, action)) return true;
+        // the party leader's pick on the game's world / server list: Enter selects for the party instead of starting
+        if (!menuOpen && PartyPick.key(key, action)) return true;
         // Esc with nothing left to step back from closes the menu here, like the menu key (not a frame later, so the
         // game never sees its repeats or release and the cursor is handed back at once)
         if (key == 256 && escHeld) { if (action == RELEASE) escHeld = false; return true; }
@@ -194,7 +196,7 @@ final class Input {
         events++;
         if (dead) return false;
         if (menuOpen) { scrollY += y; return true; }
-        if (MainMenu.title) { Party.wheel += (float) y; return true; }
+        if (MainMenu.title || (MainMenu.pause && Party.panelOpen())) { Party.wheel += (float) y; return true; }
         return Modules.onScroll(y);
     }
 

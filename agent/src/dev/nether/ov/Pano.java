@@ -92,14 +92,15 @@ final class Pano {
 
     /**
      * Perspective view of a strip into the box: tv = tangent of half the vertical field of view (kept under HMAX), lift
-     * shifts the horizon (h units), a = alpha. Slices are 1/96 of the width (whole device pixels, no seams).
+     * shifts the horizon (h units), a = alpha. Slices are 2 device pixels wide (whole pixels, no seams): each slice
+     * has one vertical span, so wider slices (1/96 of the width before) left visible vertical steps between them.
      */
     private static void view(String name, float x, float y, float w, float h, float yawDeg, float tv, float lift, float a) {
         String key = "pano:" + name;
         tv = Math.min(tv, HMAX - Math.abs(lift) - 0.01f);
         float f = (h / 2) / tv, cx = x + w / 2, s = Gfx.s;
         int tint = (Math.round(a * 255) << 24) | 0xFFFFFF;
-        int n = 96;
+        int n = Math.max(96, Math.round(w * s / 2));
         float base = yawDeg / 360f;
         for (int i = 0, p0 = Math.round(x * s); i < n; i++) {
             int p1 = Math.round((x + w * (i + 1) / n) * s);

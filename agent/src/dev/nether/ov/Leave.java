@@ -170,13 +170,58 @@ final class Leave {
         return false;
     }
 
+    /** Every widget-like object a 1.14+ screen holds (its fields and the lists in them), in declaration order. */
+    static List<Object> widgets(Object s) {
+        List<Object> widgets = new ArrayList<>();
+        try {
+            for (Class<?> k = s.getClass(); k != null && k != Object.class; k = k.getSuperclass()) {
+                for (Field f : k.getDeclaredFields()) {
+                    if (Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive()) continue;
+                    f.setAccessible(true);
+                    Object v = f.get(s);
+                    if (v instanceof Collection) { for (Object o : (Collection<?>) v) if (o != null && !widgets.contains(o)) widgets.add(o); }
+                    else if (v != null && press(v) != null && !widgets.contains(v)) widgets.add(v);
+                }
+            }
+        } catch (Throwable ignored) { }
+        return widgets;
+    }
+
+    /** The button among `ws` whose text is this translation key (e.g. "selectWorld.select"), or null. */
+    static Object button(List<Object> ws, String key) {
+        for (Object w : ws) if (press(w) != null && says(w, "'" + key + "'")) return w;
+        return null;
+    }
+
+    /** A 1.14+ widget's {x, y, width, height} in GUI px (AbstractWidget's first four ints: width, height, x, y), or null. */
+    static int[] rect(Object w) {
+        try {
+            for (Class<?> k = w.getClass(); k != null && k != Object.class; k = k.getSuperclass()) {
+                List<Field> ints = new ArrayList<>();
+                for (Field f : k.getDeclaredFields()) if (f.getType() == int.class && !Modifier.isStatic(f.getModifiers())) ints.add(f);
+                if (ints.size() < 4) continue;
+                int[] v = new int[4];
+                for (int i = 0; i < 4; i++) { ints.get(i).setAccessible(true); v[i] = ints.get(i).getInt(w); }
+                if (v[0] >= 20 && v[1] >= 16 && v[1] <= 24) return new int[] {v[2], v[3], v[0], v[1]};
+            }
+        } catch (Throwable ignored) { }
+        return null;
+    }
+
+    /** Press a 1.14+ button (its press callback, whether or not it is active). */
+    static boolean click(Object w) {
+        Object[] p = press(w);
+        if (p == null) return false;
+        try { return fire(w, p); } catch (Throwable t) { return fail("press: " + t); }
+    }
+
     private static boolean fire(Object w, Object[] p) throws Exception {
         ((Method) p[1]).invoke(p[0], w);
         return true;
     }
 
     /** The widget's press callback: [callback object, its one method], or null if it isn't a button. */
-    private static Object[] press(Object w) {
+    static Object[] press(Object w) {
         try {
             for (Class<?> k = w.getClass(); k != null && k != Object.class; k = k.getSuperclass()) {
                 for (Field f : k.getDeclaredFields()) {
@@ -198,7 +243,7 @@ final class Leave {
     }
 
     /** Some field of the widget prints `key` (a translatable text's toString shows its key in quotes). */
-    private static boolean says(Object w, String key) {
+    static boolean says(Object w, String key) {
         for (Class<?> k = w.getClass(); k != null && k != Object.class; k = k.getSuperclass()) {
             for (Field f : k.getDeclaredFields()) {
                 if (Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive() || f.getType() == String.class) continue;

@@ -33,17 +33,9 @@ final class MainMenu {
         Module m = MODULE;
         m.needs(4);
         m.add(Setting.header("Background"));
-        m.add(Setting.choice("bg", "Background", "Panorama", MenuBack.KINDS).hint("Panorama: Nether's own shader-lit scenes. Vanilla: the game's own panorama."));
-        m.add(Setting.choice("pano", "Panorama", "Random", Pano.CHOICES).when(() -> m.str("bg").equals("Panorama")).hint("Random picks a different one each time the game starts."));
-        m.add(Setting.slider("dim", "Dim", 0, 0.8, 0.05, 0.3).hint("Darkens the panorama or image behind the menu."));
-        m.add(Setting.bool("motion", "Animate background", true).hint("Ember drift, grid sweep, slow pan on images. Reduce motion stops it."));
-        java.util.function.BooleanSupplier img = () -> m.str("bg").equals("Image");
-        m.add(Setting.choice("imageFit", "Image fit", "Fill", "Fill", "Fit", "Stretch").when(img));
-        m.add(Setting.slider("imageBlur", "Image blur", 0, 1, 0.1, 0).when(img));
-        m.add(Setting.slider("slideshow", "Slideshow (seconds)", 0, 120, 5, 0).hint("0 keeps one image, otherwise every image in the folder in turn.").when(img));
-        m.add(Setting.text("imageFile", "Image file", "", 96).hint("A file in client/backgrounds; empty shows the first one.").when(img));
-        m.add(Setting.action("folder", "Backgrounds folder", "OPEN", MenuBack::openFolder).hint("PNG, JPG or GIF (first frame).").when(img));
-        m.add(Setting.action("next", "Next image", "NEXT", MenuBack::next).when(img));
+        m.add(Setting.choice("pano", "Panorama", "Random", Pano.CHOICES).hint("Nether's own shader-lit scenes. Random picks a different one each time the game starts."));
+        m.add(Setting.slider("dim", "Dim", 0, 0.8, 0.05, 0.3).hint("Darkens the panorama behind the menu."));
+        m.add(Setting.bool("motion", "Animate background", true).hint("The panorama turns slowly. Reduce motion stops it."));
         m.add(Setting.header("Layout"));
         m.add(Setting.choice("layout", "Layout", "Lobby", LAYOUTS).hint("Lobby: your party on stage, Fortnite style."));
         m.add(Setting.bool("partyStage", "Party on stage", true).hint("Lobby layout: you and your party in your skins."));
@@ -67,7 +59,7 @@ final class MainMenu {
     private static Field fFading, fFadeStart, fSplash;
     private static boolean looked, legacy;
     /** our title screen is drawn this frame (every click on it is ours) */
-    static boolean title, pause, packs;
+    static boolean title, pause, packs, pick;
     private static boolean pressed, click;
     private static long shownAt;
     /** the title screen whose widgets we removed (rebuilt by {@link #restoreVanilla}) and the splash vanilla picked for it */
@@ -122,7 +114,7 @@ final class MainMenu {
     /** Before the in-game menu each frame. */
     static void frame(int fbW, int fbH) {
         boolean was = title;
-        title = pause = packs = false;
+        title = pause = packs = pick = false;
         click = pressed;
         pressed = false;
         nb = 0;
@@ -140,6 +132,7 @@ final class MainMenu {
         try {
             if (isTitle) {
                 title = true;
+                PartyPick.title();
                 if (!was) shownAt = System.nanoTime();
                 strip(s);
                 stripped = s;
@@ -148,6 +141,13 @@ final class MainMenu {
                 Friends.title(s);
                 units(Gfx.base);
                 WorldShare.card(Gfx.fbW / Gfx.s, 56);
+            } else if (!Input.menuOpen && PartyPick.screen(s) != PartyPick.NONE) {
+                // the party leader picks on the game's own world / server list: SELECT instead of play / join
+                pick = true;
+                units(Gfx.base);
+                tip = null;
+                PartyPick.draw(s, Gfx.fbW / Gfx.s);
+                if (tip != null) tooltip(Gfx.fbW / Gfx.s, Gfx.fbH / Gfx.s);
             } else if (!Input.menuOpen && packScreen(s)) {
                 // the game's resource pack screen: a vanilla-style GET PACKS button in the footer row opens the Modrinth browser
                 packs = true;
@@ -159,14 +159,23 @@ final class MainMenu {
                 if (legacy || !Boolean.FALSE.equals(Game.fld(s, "field_19319"))) {
                     pause = true;
                     units(Gfx.base);
+                    float W = Gfx.fbW / Gfx.s, H = Gfx.fbH / Gfx.s;
+                    modal = Party.modal(W, H);
+                    tip = null;
+                    float cx = 12 + chipW("NETHER", keyName(), true) + 8;
                     if (chip("pause", 12, 12, 32, "NETHER", keyName(), true, false, false)) Input.setMenu(true);
                     // singleplayer: invite friends into this world (WorldShare)
                     if (WorldShare.server() != null) {
                         boolean on = WorldShare.sharing();
-                        if (chip("invite", 12 + chipW("NETHER", keyName(), true) + 8, 12, 32, on ? "SHARING" : "INVITE", null, false, on, true)) WorldShare.show();
+                        if (chip("invite", cx, 12, 32, on ? "SHARING" : "INVITE", null, false, on, true)) WorldShare.show();
+                        cx += chipW(on ? "SHARING" : "INVITE", null, false) + 8;
                     }
-                    WorldShare.card(Gfx.fbW / Gfx.s, 12);
+                    // the party, in the world too: members, invite, kick, volume, voice
+                    Party.chip(cx, 12, 32);
+                    WorldShare.card(W, 12);
                     galleryButton(s);
+                    Party.pause(W, H);
+                    if (tip != null) tooltip(W, H);
                 }
             }
         } finally {
@@ -224,7 +233,7 @@ final class MainMenu {
     static void restoreVanilla() {
         Object s = stripped;
         stripped = null;
-        title = pause = false;
+        title = pause = pick = false;
         if (s == null || s != Game.screen()) return;
         try {
             if (legacy && fSplash != null && splash != null) fSplash.set(s, splash);
@@ -293,7 +302,8 @@ final class MainMenu {
     /** Mouse press from the input chain while no Nether menu is open; true swallows it. */
     static boolean press(int b) {
         if (title) { if (b == 0) pressed = true; return true; }
-        if ((pause || packs) && b == 0) {
+        if (pick && b == 0 && PartyPick.press()) return true;
+        if ((pause || packs || pick) && b == 0) {
             float x = fx(), y = fy();
             for (int i = 0; i < nb; i += 4) if (x >= boxes[i] && y >= boxes[i + 1] && x < boxes[i] + boxes[i + 2] && y < boxes[i + 1] + boxes[i + 3]) { pressed = true; return true; }
         }
@@ -371,8 +381,7 @@ final class MainMenu {
         if (panelOpen && click && !inPanel && !inside(custBox)) { panelOpen = false; click = false; modal = null; }
         account();
 
-        String kind = MODULE.str("bg");
-        MenuBack.draw(W, H, kind, legacy, MX, MY);
+        MenuBack.draw(W, H, legacy, MX, MY);
         float a0 = Gfx.alpha;
         Gfx.alpha = a0 * e;
         float rise = (1 - e) * 8;
@@ -471,7 +480,7 @@ final class MainMenu {
         footer(W, H, false);
         // the bar before the party panels: its PARTY chip toggles the drawer, which closes on clicks elsewhere
         if (TitleNav.draw(fbW, fbH, fx(), fy(), click, true)) click = false;
-        Party.title(W, H, 24, bottom, bottom - 30 - 8, scr);
+        Party.title(W, H, 24, bottom, bottom, scr);
         Gfx.alpha = a0;
         if (panelOpen) panel(W, H);
         else panelA = 0;
@@ -519,13 +528,7 @@ final class MainMenu {
 
     /** Solo: mode card + big PLAY. Party: SINGLEPLAYER / MULTIPLAYER over the party's own card (Party.title draws it). */
     private static void playBlock(float x, float bottom, float w, Object scr, boolean party) {
-        if (party) {
-            float hw = (w - 6) / 2, y = bottom - 96 - 8 - 30;
-            if (smallBtn("psg", "SINGLEPLAYER", x, y, hw, 30)) act(SINGLE, scr);
-            if (smallBtn("pmu", "MULTIPLAYER", x + hw + 6, y, hw, 30)) act(MULTI, scr);
-            modesOpen = false;
-            return;
-        }
+        if (party) { modesOpen = false; return; } // Party.title draws the party's card (SURVIVAL / MULTIPLAYER picks on it)
         String[] m = mode();
         float ph = 64, mh = 42, my = bottom - ph - 8 - mh;
         // mode card: what PLAY starts; opens the list of modes
@@ -1107,6 +1110,21 @@ final class MainMenu {
     }
 
     static void act(int i, Object screen) {
+        if ((i == SINGLE || i == MULTI) && Party.active()) {
+            if (Party.leads()) { Party.pick(i == SINGLE ? PartyPick.WORLD : PartyPick.SERVER, screen); return; }
+            if (Party.live()) { Party.lockedNote(); return; }
+        }
+        openRaw(i, screen);
+    }
+
+    /** The title screen we replaced (our lobby), e.g. after a party pick on the game's lists. */
+    static void toTitle() {
+        Object t = stripped;
+        if (t != null) open(Game.mc(), t);
+    }
+
+    /** The action itself, without the party's rules. */
+    static void openRaw(int i, Object screen) {
         Object mc = Game.mc();
         switch (i) {
             case SINGLE:

@@ -61,7 +61,7 @@ final class Sfx {
             try {
                 Integer first = Q.poll(60, TimeUnit.SECONDS);
                 if (first == null) {
-                    if (line != null) { line.drain(); line.close(); line = null; }
+                    if (line != null) { line.close(); line = null; }
                     continue;
                 }
                 int k = first;
@@ -70,13 +70,20 @@ final class Sfx {
                 if (line == null) {
                     AudioFormat f = new AudioFormat(RATE, 16, 1, true, false);
                     line = AudioSystem.getSourceDataLine(f);
-                    line.open(f, RATE / 10 * 2); // ~100 ms buffer: low latency, no underruns between sounds
-                    line.start();
+                    line.open(f, RATE / 10 * 2); // ~100 ms buffer: low latency
                 }
                 seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
                 float pitch = k == CLICK ? 0.97f + 0.06f * ((seed >>> 1) / (float) Integer.MAX_VALUE) : 1f;
                 byte[] pcm = pcm(render(k, pitch), gain());
+                line.flush();
+                line.start();
                 line.write(pcm, 0, pcm.length);
+                // A started line that runs dry replays its ring buffer on Windows (DirectSound): the last sound looped
+                // with nobody touching anything. Pad with a full buffer of silence, let it play out, then stop the line.
+                byte[] quiet = new byte[line.getBufferSize()];
+                line.write(quiet, 0, quiet.length);
+                line.drain();
+                line.stop();
             } catch (Throwable e) {
                 // no speakers, device gone, line busy: stay quiet and try again next time
                 if (line != null) { try { line.close(); } catch (Throwable ignored) { } line = null; }
