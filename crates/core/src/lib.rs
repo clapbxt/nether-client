@@ -33,6 +33,7 @@ pub mod perf;
 pub mod preflight;
 pub mod preview;
 pub mod restore;
+pub mod rpacks;
 pub mod p2p;
 pub mod party;
 pub mod party_net;

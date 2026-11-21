@@ -279,7 +279,11 @@ final class Modules {
      */
     static void drawHud(int fbW, int fbH) {
         boolean menu = Input.menuOpen;
-        if (!menu && (!inGame() || Game.hudHidden() || (Game.screenOpen() && !Game.chatOpen()))) { for (Module m : all) m.tick(); return; }
+        if (!menu && (!inGame() || Game.hudHidden() || (Game.screenOpen() && !Game.chatOpen()))) {
+            for (Module m : all) m.tick();
+            if (!Game.hudHidden() && LYRICS.enabled()) menuLyrics(fbW, fbH);
+            return;
+        }
         float[] chat = null;
         if (!menu && Game.chatOpen()) {
             float g = Gfx.gui;
@@ -291,6 +295,27 @@ final class Modules {
         boolean r0 = Gfx.round;
         Gfx.round = Th.round(); // v6: rounded panels, bars and chips over the world too
         try { hud(fbW, fbH, chat); } finally { Gfx.round = r0; Gfx.s = prev; }
+    }
+
+    /** Title screen and game screens (pause, inventory, options): the lyrics panel stays, alone (issue #23). */
+    private static void menuLyrics(int fbW, int fbH) {
+        float prev = Gfx.s;
+        boolean r0 = Gfx.round;
+        Gfx.round = Th.round();
+        LYRICS.menu = true;
+        try {
+            // clear of the menu's buttons (the HUD spot often sits on them): bottom centre, on our title screen bottom
+            // left above its footer (the centre has the player and their name)
+            if (LYRICS.visible()) {
+                float k = LYRICS.layout(), lw = LYRICS.w * k, lh = LYRICS.h * k;
+                boolean title = MainMenu.title;
+                LYRICS.draw((title ? 12 * Gfx.gui : (fbW - lw) / 2) / k, (fbH - lh - (title ? 30 : 10) * Gfx.gui) / k);
+            }
+        } finally {
+            LYRICS.menu = false;
+            Gfx.round = r0;
+            Gfx.s = prev;
+        }
     }
 
     private static void hud(int fbW, int fbH, float[] chat) {
@@ -714,15 +739,34 @@ final class Modules {
         private double orig = Double.NaN;
 
         Fullbright() {
-            super("fullbright", "Fullbright", "Visual", "Maximum brightness everywhere. Your own brightness setting is restored when you pause or leave.", false, false, 0, 0);
+            super("fullbright", "Fullbright", "Visual", "Maximum brightness everywhere. Your own brightness setting is restored in Options and when you leave.", false, false, 0, 0);
             add(Setting.slider("level", "Brightness", 2, 15, 1, 12));
             needs(3);
         }
 
         @Override boolean available() { return super.available() && Game.optionsOk(); }
 
+        private Class<?> cOpts, cPause;
+        private boolean looked, inOpts;
+
+        /** True from the game's Options screen through its sub-screens until the pause menu or the world is back: the game shows and saves gamma there. */
+        private boolean options() {
+            Object s = Game.screen();
+            if (s == null) return inOpts = false;
+            if (!looked) {
+                looked = true;
+                boolean l = Game.legacy();
+                cOpts = Game.cls0(l ? Game.l("axn", "net.minecraft.client.gui.GuiOptions") : "net.minecraft.class_429");
+                cPause = Game.cls0(l ? Game.l("axp", "net.minecraft.client.gui.GuiIngameMenu") : "net.minecraft.class_433");
+            }
+            if (cOpts != null && cOpts.isInstance(s)) inOpts = true;
+            else if (cPause != null && cPause.isInstance(s)) inOpts = false;
+            return inOpts;
+        }
+
         @Override void tick() {
-            if (enabled() && Game.playing()) {
+            // stays on behind chat, inventories and the pause menu (issue #20); off only where the game shows or saves the setting
+            if (enabled() && Game.inWorld() && !options()) {
                 if (Double.isNaN(orig)) orig = Game.gamma();
                 double lv = num("level");
                 if (Game.gamma() != lv) Game.setGamma(lv);

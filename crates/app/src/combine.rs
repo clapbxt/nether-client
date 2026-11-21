@@ -85,6 +85,11 @@ pub fn create(ui: &AppWindow, sh: &Arc<Shared>) {
         base: (base > 0).then(|| (base - 1) as usize),
         picks: c.get_cats().iter().map(|r| match r.pick { 0 => None, 1 => Some(None), n => Some(Some((n - 2) as usize)) }).collect(),
     };
+    // the packs it takes from go off under it at the next launch (issue #22)
+    let mut used: Vec<usize> = recipe.base.into_iter().chain(recipe.picks.iter().filter_map(|p| p.flatten())).collect();
+    used.sort_unstable();
+    used.dedup();
+    let sources: Vec<String> = used.iter().filter_map(|&i| packs.get(i).map(|p| p.id.clone())).collect();
     let name = c.get_name().to_string();
     c.set_busy(true);
     c.set_prog(0.0);
@@ -93,6 +98,7 @@ pub fn create(ui: &AppWindow, sh: &Arc<Shared>) {
     std::thread::spawn(move || {
         let prog = move |f: f32| { ui_do(&w2, move |ui| ui.global::<Combiner>().set_prog(f)); };
         let res = combine::create(&dir, &packs, &recipe, &name, &prog);
+        if let Ok((p, _)) = &res { nether_core::rpacks::replace(&dir, &p.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default(), &sources); }
         ui_do(&weak, move |ui| {
             let c = ui.global::<Combiner>();
             c.set_busy(false);
@@ -100,7 +106,7 @@ pub fn create(ui: &AppWindow, sh: &Arc<Shared>) {
                 Ok((p, n)) => {
                     c.set_open(false);
                     let file = p.file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default();
-                    show_toast(ui, &sh, &format!("{file} created ({n} files). Turn it on in the game's Resource Packs menu"));
+                    show_toast(ui, &sh, &format!("{file} created ({n} files). It replaces its source packs from the next launch"));
                     ui.global::<Backend>().invoke_refresh_installed();
                 }
                 Err(e) => crate::toast(ui, &sh, &format!("Couldn't combine packs: {e}"), true, None),

@@ -273,7 +273,8 @@ fn set_worn(ui: &AppWindow, id: &str) {
     ui.global::<Backend>().set_ncape_worn(id.into());
 }
 
-fn msa_uuid(sh: &Shared) -> Option<String> { sh.session.lock().ok().and_then(|s| s.clone()).filter(|s| s.user_type == "msa").map(|s| s.uuid) }
+fn msa_uuid(sh: &Shared) -> Option<String> { msa(sh).map(|s| s.uuid) }
+fn msa(sh: &Shared) -> Option<nether_core::Session> { sh.session.lock().ok().and_then(|s| s.clone()).filter(|s| s.user_type == "msa") }
 
 /// Load the Nether cape directory (+ textures) and which one the signed-in player wears.
 pub fn load_ncapes(ui: &AppWindow, sh: &Arc<Shared>) { load_ncapes_as(ui, sh, false) }
@@ -284,15 +285,16 @@ fn load_ncapes_as(ui: &AppWindow, sh: &Arc<Shared>, again: bool) {
     let st = b.get_ncape_state();
     if st == 1 || (st == 2 && !again) { return; }
     if st != 2 { b.set_ncape_state(1); }
-    let uuid = msa_uuid(sh);
-    NUUID.with(|u| *u.borrow_mut() = uuid.clone());
+    let me = msa(sh);
+    NUUID.with(|u| *u.borrow_mut() = me.as_ref().map(|s| s.uuid.clone()));
     let weak = ui.as_weak();
     let sh = sh.clone();
     std::thread::spawn(move || {
         let c = client();
         let list: Vec<(nether_core::backend::Cape, Vec<RgbaImage>)> = nether_core::backend::capes(&c).into_iter()
             .filter_map(|cape| { let f = cape_frames(&image::load_from_memory(&cape.png(&c)?).ok()?.to_rgba8()); (!f.is_empty()).then_some((cape, f)) }).collect(); // signed + layout-checked bytes only
-        let worn = uuid.as_deref().and_then(|u| nether_core::backend::players(&c, &[u]).ok()).and_then(|m| m.into_values().next()).unwrap_or_default();
+        // own look from the database, not the cached public list (issue #24: a fresh APPLY looked lost)
+        let worn = me.as_ref().and_then(|s| nether_core::backend::own_look(&c, s)).map(|l| l.cape).unwrap_or_default();
         ui_do(&weak, move |ui| {
             let b = ui.global::<Backend>();
             if list.is_empty() { b.set_ncape_state(3); return; }
@@ -351,14 +353,14 @@ fn load_cosmetics_as(ui: &AppWindow, sh: &Arc<Shared>, again: bool) {
     let st = b.get_cos_state();
     if st == 1 || (st == 2 && !again) { return; }
     if st != 2 { b.set_cos_state(1); }
-    let uuid = msa_uuid(sh);
+    let me = msa(sh);
     let (skin, slim) = ACCOUNT.with(|a| a.borrow().clone()).unwrap_or_else(|| (RgbaImage::new(64, 64), false));
     let (weak, sh) = (ui.as_weak(), sh.clone());
     std::thread::spawn(move || {
         let c = client();
         let list: Vec<(nether_core::backend::Cosmetic, Loaded, RgbaImage)> = nether_core::backend::cosmetics(&c).into_iter()
             .filter_map(|m| { let l = m.load(&c)?; let img = card(&skin, slim, &l); Some((m, l, img)) }).collect();
-        let worn = uuid.as_deref().and_then(|u| nether_core::backend::looks(&c, &[u]).ok()).and_then(|m| m.into_values().next()).map(|l| l.slots).unwrap_or_default();
+        let worn = me.as_ref().and_then(|s| nether_core::backend::own_look(&c, s)).map(|l| l.slots).unwrap_or_default();
         ui_do(&weak, move |ui| {
             let b = ui.global::<Backend>();
             if list.is_empty() { b.set_cos_state(3); b.set_look_refreshing(false); return; }

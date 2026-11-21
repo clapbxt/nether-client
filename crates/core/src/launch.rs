@@ -487,6 +487,8 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
         _ if !opts.client => None,
         _ => crate::agent::ensure(paths),
     };
+    // packs the launcher turned on / off, downloaded or combined -> options.txt's list (issue #22)
+    crate::rpacks::sync(&opts.game_dir, v.legacy_args.is_some());
     if let Some(a) = agent {
         if let Some(g) = &opts.groups { jvm.insert(0, format!("-Dnether.groups={g}")); }
         jvm.insert(0, format!("-Dnether.config={}", crate::agent::global_config(paths).display()));

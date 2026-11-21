@@ -356,6 +356,26 @@ pub fn players(c: &Client, uuids: &[&str]) -> Result<HashMap<String, String>> {
     Ok(looks(c, uuids)?.into_iter().map(|(u, l)| (u, l.cape)).collect())
 }
 
+/// What the signed-in player wears now (`GET /v1/me/look`, never cached); None when the service predates it.
+pub fn my_look(c: &Client, s: &Session) -> Result<Option<Look>> {
+    let api = api_url();
+    let r = authed(c, s, |t| c.get(format!("{api}/v1/me/look")).bearer_auth(t))?;
+    if r.status() == reqwest::StatusCode::NOT_FOUND { return Ok(None); }
+    let v: serde_json::Value = r.error_for_status()?.json()?;
+    let l = &v["look"];
+    let str_of = |v: &serde_json::Value| v.as_str().filter(|x| x.is_empty() || valid_cape_id(x)).unwrap_or_default().to_string();
+    Ok(Some(Look { cape: str_of(&l["c"]), slots: LOOK_KEYS.map(|k| str_of(&l[k])) }))
+}
+
+/// The signed-in player's look: [`my_look`], else the public lookup (older service).
+pub fn own_look(c: &Client, s: &Session) -> Option<Look> {
+    match my_look(c, s) {
+        Ok(Some(l)) => Some(l),
+        Ok(None) => looks(c, &[s.uuid.as_str()]).ok().and_then(|m| m.into_values().next()),
+        Err(_) => None,
+    }
+}
+
 /// API look keys per slot (`cosmetics::Kind::ALL` order): hat, headband, mask, back, wings, aura, pet.
 const LOOK_KEYS: [&str; crate::cosmetics::SLOTS] = ["h", "b", "m", "k", "w", "a", "p"];
 

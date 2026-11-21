@@ -613,7 +613,10 @@ final class Lyrics extends Module {
         }
     }
 
-    @Override boolean visible() { return sample() || (Media.cur != null && content() && (mode() == 0 || noWorld)); }
+    /** drawn over a menu (title screen, pause, inventory): the panel, whatever the mode (Modules.menuLyrics) */
+    boolean menu;
+
+    @Override boolean visible() { return sample() || (Media.cur != null && content() && (mode() == 0 || noWorld || menu)); }
 
     @Override void measure() {
         w = (float) num("width");

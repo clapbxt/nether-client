@@ -34,7 +34,8 @@ import java.util.function.Supplier;
 final class Capes {
     static final String API = trim(System.getProperty("nether.capeApi")), CONTENT = trim(System.getProperty("nether.capeContent"));
     private static final String DEV = System.getProperty("nether.capeDev");
-    private static final long REQUERY_MS = 10 * 60_000L;
+    /** re-ask about a player this often: the API answers only for launchers running now (issue #21), so leaving / joining shows within minutes */
+    private static final long REQUERY_MS = 2 * 60_000L;
 
     // Nether players: uuid (no dashes) -> cape id ("" = none; absent = not a Nether player); uuid -> last query time
     private static final Map<String, String> worn = new ConcurrentHashMap<>();
