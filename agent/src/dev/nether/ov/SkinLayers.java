@@ -10,6 +10,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import org.lwjgl.opengl.GL11;
+
 /**
  * 3D skin layers: the outer layer of a skin (hat, jacket, sleeves, trousers) as voxels, one pixel deep, standing on the
  * body like the real thing; further away than the set distance the game's flat layer stays. Drawn by the cosmetics
@@ -46,20 +48,29 @@ final class SkinLayers extends Module {
     private static Boolean ok;
     private static String why;
 
-    /** 1.21.9+ (deferred model drawing) with the cosmetics layer, and no other 3D skin layers mod. */
+    /** 1.21.9+ (deferred model drawing) or 1.8.9 (the doRender hook), with the cosmetics layer, and no other 3D skin layers mod. */
     private static boolean supported() {
-        if (ok == null && Game.fabric()) {
+        if (ok == null && (Game.fabric() || Game.legacy())) {
             boolean mod = false;
             for (String c : new String[] {"dev.tr7zw.skinlayers.SkinLayersModBase", "dev.tr7zw.skinlayers.SkinLayersMod"})
                 try { Class.forName(c, false, Game.loader()); mod = true; } catch (Throwable ignored) { }
             if (mod) { ok = false; why = "3D SKIN LAYERS MOD INSTALLED"; }
-            else { ok = Cosmetics.renders() && Game.cls0("net.minecraft.class_11659") != null; if (!ok) why = "NEEDS MINECRAFT 1.21.9+"; }
+            else if (Game.legacy() && Game.is189() && !dev.nether.agent.Hook.mountHooked) return false; // its renderer is not loaded (hooked) yet: ask again later
+            else if (Game.legacy()) {
+                ok = Game.is189() && Cosmetics.renders();
+                if (ok) { dev.nether.agent.Hook.layersIn = SkinLayers::legacyIn; dev.nether.agent.Hook.layersOut = SkinLayers::legacyOut; }
+                else why = "NEEDS MINECRAFT 1.8.9 OR 1.21.9+";
+            }
+            else { ok = Cosmetics.renders() && Game.cls0("net.minecraft.class_11659") != null; if (!ok) why = "NEEDS MINECRAFT 1.8.9 OR 1.21.9+"; }
         }
         return Boolean.TRUE.equals(ok);
     }
 
-    @Override boolean available() { return super.available() && supported(); }
-    @Override String lockNote() { return super.available() && ok != null && !ok ? why : super.lockNote(); }
+    /** Every frame: settles support once the game is bound (1.8.9 installs its doRender callbacks then). */
+    @Override void tick() { if (ok == null) supported(); }
+
+    @Override boolean available() { return (Game.fabric() || Game.legacy()) && supported(); }
+    @Override String lockNote() { return ok != null && !ok ? why : super.lockNote(); }
 
     // ---------------------------------------------------------------- skins and meshes
 
@@ -131,6 +142,20 @@ final class SkinLayers extends Module {
             if (img == null || img.getWidth() != 64 || (img.getHeight() != 64 && img.getHeight() != 32)) { s.dead = true; return; }
             int[] px = new int[64 * 64];
             img.getRGB(0, 0, 64, img.getHeight(), px, 0, 64);
+            if (img.getHeight() == 32) { // old 64x32 skin: a hat area with no see-through pixel is no hat (the game's own rule)
+                boolean clear = false;
+                for (int y = 0; y < 32 && !clear; y++) for (int x = 32; x < 64; x++) if ((px[y * 64 + x] >>> 24) < 128) { clear = true; break; }
+                if (!clear) for (int y = 0; y < 32; y++) for (int x = 32; x < 64; x++) px[y * 64 + x] = 0;
+            }
+            build(s, px);
+        } catch (Throwable t) {
+            s.dead = true;
+        }
+    }
+
+    /** Both arm widths' meshes from 64x64 ARGB pixels, then the skin is ready. Worker thread. */
+    private static void build(Skin s, int[] px) {
+        try {
             s.mesh[0] = meshes(px, false);
             s.mesh[1] = meshes(px, true);
             s.px = px;
@@ -276,6 +301,121 @@ final class SkinLayers extends Module {
             ok = false;
             why = "UNAVAILABLE";
             System.out.println("[nether-agent] 3D skin layers disabled: " + t);
+        }
+    }
+
+    // ---------------------------------------------------------------- 1.8.9 (Hook.tintIn / tintOut around RendererLivingEntity.doRender)
+
+    /** per ANCHORS part: ModelPlayer's wear part {notch, SRG}, and the body part it sits on */
+    private static final String[][] LWEAR = {{"f", "field_178720_f"}, {"v", "field_178730_v"}, {"b", "field_178732_b"}, {"a", "field_178734_a"}, {"d", "field_178731_d"}, {"c", "field_178733_c"}};
+    private static final String[][] LPART = {{"e", "field_78116_c"}, {"g", "field_78115_e"}, {"h", "field_178723_h"}, {"i", "field_178724_i"}, {"j", "field_178721_j"}, {"k", "field_178722_k"}};
+    private static final Object[] lHidden = new Object[6];
+    private static Object lEntity, lModel, lLoc;
+    private static Cosmetics.Mesh[] lMesh;
+    private static Field lHide;
+    private static Class<?> lPlayer;
+
+    /**
+     * The player's skin location -> its skin, read back from the game's own texture once (exactly what the game draws:
+     * downloaded, converted, resource-pack skins alike). Render thread, inside doRender (the model binds its texture after).
+     */
+    private static Skin legacySkin(Object loc, Object tm) {
+        String key = loc + "@" + Res.gen();
+        Skin s = skins.get(key);
+        if (s == null) {
+            Game.call(tm, Game.l("a", "func_110577_a"), loc); // bind (loads it if needed)
+            int w = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_WIDTH), h = GL11.glGetTexLevelParameteri(GL11.GL_TEXTURE_2D, 0, GL11.GL_TEXTURE_HEIGHT);
+            if (skins.size() > 256) skins.clear();
+            skins.put(key, s = new Skin());
+            if (w != 64 || (h != 64 && h != 32)) { s.dead = true; return null; }
+            java.nio.IntBuffer buf = java.nio.ByteBuffer.allocateDirect(w * h * 4).order(java.nio.ByteOrder.nativeOrder()).asIntBuffer();
+            GL11.glGetTexImage(GL11.GL_TEXTURE_2D, 0, org.lwjgl.opengl.GL12.GL_BGRA, org.lwjgl.opengl.GL12.GL_UNSIGNED_INT_8_8_8_8_REV, buf);
+            int[] px = new int[64 * 64];
+            buf.get(px, 0, w * h);
+            final Skin sk = s;
+            POOL.execute(() -> build(sk, px));
+        }
+        return s.px != null && !s.dead ? s : null;
+    }
+
+    static void legacyIn(Object e) {
+        legacyOut();
+        if (!M.enabled() || !Boolean.TRUE.equals(ok)) return;
+        if (lPlayer == null) lPlayer = Game.cls0(Game.l("bet", "net.minecraft.client.entity.AbstractClientPlayer"));
+        if (lPlayer == null || !lPlayer.isInstance(e) || Boolean.TRUE.equals(Game.call(e, Game.l("ax", "func_82150_aj")))) return;
+        double[] me = Game.player();
+        Object x = Game.fld(e, Game.l("s", "field_70165_t")), y = Game.fld(e, Game.l("t", "field_70163_u")), z = Game.fld(e, Game.l("u", "field_70161_v"));
+        double far = M.num("dist");
+        if (me == null || !(x instanceof Double) || !(y instanceof Double) || !(z instanceof Double)) return;
+        double dx = (Double) x - me[0], dy = (Double) y - me[1], dz = (Double) z - me[2];
+        if (dx * dx + dy * dy + dz * dz > far * far) return;
+        Object loc = Game.call(e, Game.l("i", "func_110306_p"));
+        Object tm = Game.call(Game.mc(), Game.l("P", "func_110434_K"));
+        Skin s = loc == null || tm == null ? null : legacySkin(loc, tm);
+        if (s == null) return;
+        boolean slim = "slim".equals(Game.call(e, Game.l("l", "func_175154_l")));
+        Object rm = Game.call(Game.mc(), Game.l("af", "func_175598_ae"));
+        Object map = rm == null ? null : Game.fld(rm, Game.l("l", "field_178636_l"));
+        Object renderer = map instanceof Map ? ((Map<?, ?>) map).get(slim ? "slim" : "default") : null;
+        Object model = renderer == null ? null : Game.fld(renderer, Game.l("f", "field_77045_g"));
+        Cosmetics.Mesh[] meshes = s.mesh[slim ? 1 : 0];
+        if (model == null || meshes == null) return;
+        try {
+            for (int p = 0; p < 6; p++) {
+                if (!M.bool(KEY[p])) continue;
+                Object wear = Game.fld(model, Game.l(LWEAR[p][0], LWEAR[p][1]));
+                if (wear == null || !Boolean.TRUE.equals(Game.fld(wear, Game.l("j", "field_78806_j")))) continue; // showModel: the player's own skin settings
+                if (lHide == null) lHide = Game.field(wear.getClass(), Game.l("k", "field_78807_k"));
+                if (lHide == null) break;
+                lHide.setBoolean(wear, true);
+                lHidden[p] = wear;
+            }
+        } catch (Throwable t) {
+            legacyOut();
+            throw new IllegalStateException(t);
+        }
+        lEntity = e; lModel = model; lLoc = loc; lMesh = meshes;
+    }
+
+    /** Hook.tintOut: the flat parts back as they were. */
+    static void legacyOut() {
+        for (int p = 0; p < 6; p++) {
+            Object w = lHidden[p];
+            if (w == null) continue;
+            lHidden[p] = null;
+            try { lHide.setBoolean(w, false); } catch (Throwable ignored) { }
+        }
+        lEntity = null;
+    }
+
+    /** The 1.8.9 cosmetics layer, inside that doRender: the voxels on the parts legacyIn hid. */
+    static void drawLegacy(Object entity, float pt) {
+        if (entity == null || entity != lEntity) return;
+        Object tm = Game.call(Game.mc(), Game.l("P", "func_110434_K"));
+        if (tm == null) return;
+        int light = 0xF000F0;
+        Object br = Game.call(entity, Game.l("b", "func_70070_b"), pt);
+        if (br instanceof Integer) light = (Integer) br;
+        boolean sneak = Boolean.TRUE.equals(Game.call(entity, Game.l("av", "func_70093_af")));
+        GL11.glPushAttrib(GL11.GL_ALL_ATTRIB_BITS);
+        try {
+            Game.call(tm, Game.l("a", "func_110577_a"), lLoc); // bind the skin
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glEnable(GL11.GL_TEXTURE_2D);
+            GL11.glColor4f(1, 1, 1, 1);
+            for (int p = 0; p < 6; p++) {
+                if (lHidden[p] == null) continue;
+                Object part = Game.fld(lModel, Game.l(LPART[p][0], LPART[p][1]));
+                if (part == null) continue;
+                GL11.glPushMatrix();
+                if (sneak) GL11.glTranslatef(0, 0.2f, 0); // ModelBiped moves the whole model down when sneaking
+                Game.call(part, Game.l("c", "func_78794_c"), 0.0625f); // postRender
+                Cosmetics.gl(-1, lMesh[p], light);
+                GL11.glPopMatrix();
+            }
+        } finally {
+            GL11.glPopAttrib();
         }
     }
 }

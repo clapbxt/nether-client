@@ -201,7 +201,13 @@ public final class Hook {
     }
     public static volatile Tint tint;
     private static boolean tinted;
+    /** 3D skin layers (1.8.9): around each living entity's doRender, after the game set a player's layer visibility */
+    public static volatile java.util.function.Consumer<Object> layersIn;
+    public static volatile Runnable layersOut;
+
     public static void tintIn(Object e) {
+        java.util.function.Consumer<Object> li = layersIn;
+        if (li != null) try { li.accept(e); } catch (Throwable x) { layersIn = null; System.out.println("[nether-agent] 3D skin layers hook: " + x); }
         tinted = false;
         Tint t = tint;
         Object m = mountOf;
@@ -215,6 +221,8 @@ public final class Hook {
         try { t.shield(stack, d); } catch (Throwable x) { viewFail(x); }
     }
     public static void tintOut() {
+        Runnable lo = layersOut;
+        if (lo != null) try { lo.run(); } catch (Throwable x) { layersOut = null; }
         if (!tinted) return;
         tinted = false;
         Tint t = tint;

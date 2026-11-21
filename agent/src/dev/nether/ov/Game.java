@@ -1027,6 +1027,9 @@ final class Game {
     }
 
     /** LWJGL2-era name: the vanilla 1.8.9 notch name or the SRG/MCP name (Forge's deobfuscation_data; mapped to notch by the table on vanilla 1.12.2). */
+    /** 1.8.9 (vanilla, Legacy Fabric, Forge), not 1.12.2: the 1.8.9 code paths. */
+    static boolean is189() { String v = version(); return legacy() && (lmode == 0 || lmode == 3 || (lmode == 1 && v != null && v.startsWith("1.8"))); }
+
     static String l(String notch, String srgName) { return lmode == 0 || lmode == 3 ? notch : srgName; }
 
     private static void obfuscated(String n, String v) {

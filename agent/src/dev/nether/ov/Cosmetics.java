@@ -317,6 +317,7 @@ final class Cosmetics {
             final Object renderer = r;
             mine = Proxy.newProxyInstance(lr.getClassLoader(), new Class<?>[] {lr}, (p, m, a) -> {
                 if (a != null && a.length == 8) { // doRenderLayer(entity, limbSwing, amount, partialTicks, age, headYaw, headPitch, scale)
+                    try { SkinLayers.drawLegacy(a[0], (Float) a[3]); } catch (Throwable t) { legacyError(t); }
                     try { drawLegacy(renderer, a[0], (Float) a[3]); } catch (Throwable t) { legacyError(t); }
                     return null;
                 }
@@ -709,7 +710,7 @@ final class Cosmetics {
                     GL11.glPushMatrix();
                     if (sneak) GL11.glTranslatef(0, 0.2f, 0); // ModelBiped moves the whole model down when sneaking
                     Game.call(part, Game.l("c", "func_78794_c"), 0.0625f); // postRender
-                    gl(it, model(it, t, ID, 0, p), lightUV);
+                    gl(it.gl, model(it, t, ID, 0, p), lightUV);
                     GL11.glPopMatrix();
                 }
             }
@@ -726,7 +727,7 @@ final class Cosmetics {
                     float[] r = {(float) -Math.cos(yaw), 0, (float) -Math.sin(yaw)};
                     float[] u = {r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]};
                     GL11.glDepthMask(false);
-                    gl(au, aura(au, uuid, t, x, y, z, unbody(body, 1.5078125f, 0.9375f), r, u, 0), lightUV);
+                    gl(au.gl, aura(au, uuid, t, x, y, z, unbody(body, 1.5078125f, 0.9375f), r, u, 0), lightUV);
                 }
             }
         } finally {
@@ -740,9 +741,9 @@ final class Cosmetics {
         return (Double) a + ((Double) b - (Double) a) * pt;
     }
 
-    /** Immediate-mode quads: lit ones with the entity's light, glowing ones unlit at full lightmap brightness. */
-    private static void gl(Item it, Mesh m, int lightUV) {
-        GL11.glBindTexture(GL11.GL_TEXTURE_2D, it.gl);
+    /** Immediate-mode quads with texture `tex` (-1: the one bound now): lit ones with the entity's light, glowing ones unlit. */
+    static void gl(int tex, Mesh m, int lightUV) {
+        if (tex >= 0) GL11.glBindTexture(GL11.GL_TEXTURE_2D, tex);
         for (int pass = 0; pass < 2; pass++) {
             boolean glowPass = pass == 1;
             boolean any = false;
