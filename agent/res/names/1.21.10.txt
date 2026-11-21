@@ -244,3 +244,16 @@ net.minecraft.class_757	hfk
 net.minecraft.class_759	hfo	
 net.minecraft.class_897	hnx	
 net.minecraft.class_922	hpa	
+comp_1626	a	Ljb$c;
+comp_3627	a	Lamj;
+comp_4939	b	Ljava/lang/String;
+field_3480	A	Z
+field_3665	k	Z
+field_53332	L	D
+field_53520	a	Lczp;
+field_53530	q	Z
+field_53531	r	Z
+field_53543	m	Z
+field_53544	n	Z
+field_53545	o	Z
+field_53546	p	Z

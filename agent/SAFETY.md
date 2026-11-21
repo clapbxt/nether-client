@@ -15,3 +15,4 @@ check a server's rules before turning them on.
 | Coordinates, Compass, Waypoints (incl. death point), Speed, Day Counter, Clock, Session, Memory (coordinates hide themselves where the server hides F3 data) | own data |
 | Potion Effects, Armor Status, Server Address | own data |
 | Media Player, Lyrics | your PC's media session |
+| 3D Skin Layers (default off) | looks only: other players' skins as the game already shows them, drawn with depth |

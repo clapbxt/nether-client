@@ -245,7 +245,7 @@ final class Cosmetics {
 
     /** Overlay frame: keep our layer on the player renderers (they are rebuilt on resource reload), map entity ids. */
     static void tick() {
-        if (off || CAT.isEmpty() && DEV == null && Capes.API == null) return;
+        if (off || CAT.isEmpty() && DEV == null && Capes.API == null && !SkinLayers.M.enabled()) return;
         long t = System.currentTimeMillis();
         try {
             boolean legacy = Game.legacy();
@@ -343,7 +343,17 @@ final class Cosmetics {
         float[] p, uv, n;
         int[] light, color;
         int quads;
+        /** >= 0: one light for every quad (a shared mesh drawn with this frame's light, see lit) */
+        int lightAll = -1;
         Mesh(int cap) { p = new float[cap * 12]; uv = new float[cap * 8]; n = new float[cap * 3]; light = new int[cap]; color = new int[cap]; }
+        private Mesh() { }
+
+        /** This mesh's quads under one light, sharing the geometry (the game writes it later, so each draw gets its own). */
+        Mesh lit(int l) {
+            Mesh m = new Mesh();
+            m.p = p; m.uv = uv; m.n = n; m.light = light; m.color = color; m.quads = quads; m.lightAll = l;
+            return m;
+        }
     }
 
     private static final float[] ID = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
@@ -489,6 +499,7 @@ final class Cosmetics {
     /** RenderLayer draw: args = (PoseStack, SubmitNodeCollector | MultiBufferSource, light, render state, yRot, xRot). */
     static void draw(Object layer, Object[] a) throws Exception {
         if (a.length < 4 || !(a[2] instanceof Integer)) return;
+        SkinLayers.draw(layer, a); // every player, Nether or not
         Object ps = a[0], sink = a[1], st = a[3];
         int light = (Integer) a[2];
         Object eid = Game.fld(st, "field_53528");
@@ -514,7 +525,7 @@ final class Cosmetics {
                 if (part == null) continue;
                 push(ps);
                 Game.call(part, "method_22703", ps); // translateAndRotate (= translateToHead for the head, also before 1.21.9)
-                submit(ps, sink, it, model(it, t, ID, light, p));
+                submit(ps, sink, it.type, model(it, t, ID, light, p));
                 pop(ps);
             }
         }
@@ -534,7 +545,7 @@ final class Cosmetics {
                 double fx = (Double) bx, fy = (Double) by, fz = (Double) bz;
                 remember(uuid, t, fx, fy, fz);
                 float[] r = new float[3], u = new float[3];
-                if (camera(r, u)) submit(ps, sink, au, aura(au, uuid, t, fx, fy, fz, unbody((Float) br, 1.501f, 0.9375f), r, u, light));
+                if (camera(r, u)) submit(ps, sink, au.type, aura(au, uuid, t, fx, fy, fz, unbody((Float) br, 1.501f, 0.9375f), r, u, light));
             }
         }
     }
@@ -583,11 +594,11 @@ final class Cosmetics {
         out[2] = z + qw * tz + (qx * ty - qy * tx);
     }
 
-    private static void push(Object ps) { Game.call(ps, "method_22903"); }
-    private static void pop(Object ps) { Game.call(ps, "method_22909"); }
+    static void push(Object ps) { Game.call(ps, "method_22903"); }
+    static void pop(Object ps) { Game.call(ps, "method_22909"); }
 
     /** Hand the mesh to the game: 1.21.9+ as custom geometry on the node collector, before that straight into the buffer. */
-    private static void submit(Object ps, Object sink, Item it, Mesh m) throws Exception {
+    static void submit(Object ps, Object sink, Object type, Mesh m) {
         if (m.quads == 0) return;
         if (collectorCls == null) {
             collectorCls = Game.cls0("net.minecraft.class_11659");
@@ -601,10 +612,10 @@ final class Cosmetics {
                 if (me.getReturnType() == String.class) return "NetherCosmetic";
                 return null;
             });
-            Game.call(sink, "method_73483", ps, it.type, r);
+            Game.call(sink, "method_73483", ps, type, r);
         } else {
-            Object vc = Game.call(sink, "method_73477", it.type);
-            if (vc == null) vc = Game.call(sink, "method_23500", it.type);
+            Object vc = Game.call(sink, "method_73477", type);
+            if (vc == null) vc = Game.call(sink, "method_23500", type);
             if (vc != null) write(Game.call(ps, "method_23760"), vc, m);
         }
     }
@@ -634,7 +645,7 @@ final class Cosmetics {
                     int o = q * 12 + i * 3;
                     float x = m.p[o], y = m.p[o + 1], z = m.p[o + 2];
                     float px = f[0] * x + f[4] * y + f[8] * z + f[12], py = f[1] * x + f[5] * y + f[9] * z + f[13], pz = f[2] * x + f[6] * y + f[10] * z + f[14];
-                    addVertex.invokeExact(vc, px, py, pz, m.color[q], m.uv[q * 8 + i * 2], m.uv[q * 8 + i * 2 + 1], overlay, m.light[q], tx, ty, tz);
+                    addVertex.invokeExact(vc, px, py, pz, m.color[q], m.uv[q * 8 + i * 2], m.uv[q * 8 + i * 2 + 1], overlay, m.lightAll >= 0 ? m.lightAll : m.light[q], tx, ty, tz);
                 }
             }
         } catch (Throwable t) {

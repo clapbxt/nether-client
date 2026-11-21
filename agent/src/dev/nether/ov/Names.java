@@ -16,6 +16,19 @@ final class Names {
     private Names() {}
 
     private static final String[] T = {
+        "comp_1626", "body",
+        "comp_3627", "texturePath",
+        "comp_4939", "url",
+        "field_3480", "slim",
+        "field_3665", "visible",
+        "field_53332", "distanceToCameraSq",
+        "field_53520", "skin",
+        "field_53530", "showLeftSleeve",
+        "field_53531", "showRightSleeve",
+        "field_53543", "showHat",
+        "field_53544", "showJacket",
+        "field_53545", "showLeftPants",
+        "field_53546", "showRightPants",
         "field_1329", "location",
         "field_1350", "z",
         "field_1351", "y",
