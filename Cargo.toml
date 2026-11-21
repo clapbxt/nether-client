@@ -1,10 +1,12 @@
 ﻿[workspace]
-members = ["crates/core", "crates/app", "crates/media", "crates/installer"]
+members = ["crates/core", "crates/ui", "crates/app", "crates/media", "crates/installer"]
 resolver = "2"
 
 [profile.release]
 opt-level = 3
-lto = "thin"
+# Per-crate optimisation only. Whole-program "thin" LTO re-optimised the ~30 MB of generated UI code (crates/ui) on
+# every release link: ~7 minutes even for a version bump. Measured 2026-11-21 (see the commit).
+lto = false
 
 # The installer's build.rs deflates the 54 MB launcher exe. Build scripts default to opt-level 0,
 # which made that step take ~10 minutes; optimising just the compression crates makes it seconds.

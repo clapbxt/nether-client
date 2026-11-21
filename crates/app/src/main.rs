@@ -44,7 +44,8 @@ mod perfui;
 mod setup;
 mod voice;
 mod sfx;
-slint::include_modules!();
+// the generated screens (crates/ui): AppWindow, Backend and the other Slint types
+use nether_ui::*;
 
 #[allow(clippy::too_many_arguments)]
 fn inst(name: &str, ver: &str, loader: &str, hours: i32, mods: i32, ram: i32, client: &str, last: &str, running: bool) -> Inst {
