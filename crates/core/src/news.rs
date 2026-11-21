@@ -22,7 +22,7 @@ fn wiki(version: &str) -> String { format!("https://minecraft.wiki/?search=Java+
 
 /// Newest entries from the feeds; empty when offline.
 pub fn latest(c: &Client) -> Vec<Item> {
-    let mut out: Vec<Item> = crate::backend::news(c).into_iter().take(2).map(|n| Item { tag: n.tag, title: n.title, url: n.url, image: String::new() }).collect();
+    let mut out: Vec<Item> = crate::backend::news(c).into_iter().take(2).map(|n| Item { image: if n.image.starts_with("https://") { n.image } else { String::new() }, tag: n.tag, title: n.title, url: n.url }).collect();
     if let Ok(v) = get_cached(c, "https://launchercontent.mojang.com/v2/javaPatchNotes.json", &[], TTL) {
         let entries = v["entries"].as_array().cloned().unwrap_or_default();
         // the feed is newest-first; a release older than the current snapshot cycle is still the newest release

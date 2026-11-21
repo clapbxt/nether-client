@@ -139,6 +139,9 @@ pub struct NewsItem {
     pub title: String,
     #[serde(default)]
     pub url: String,
+    /// Card image (https), "" = the launcher's own art.
+    #[serde(default)]
+    pub image: String,
 }
 fn nether_tag() -> String { "NETHER".into() }
 
