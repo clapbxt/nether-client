@@ -42,6 +42,16 @@ final class FileWatch {
         }
     }
 
+    /** Runs `poll` on the nether-io thread every `ms` milliseconds (stats and other small disk checks off the render thread). */
+    static void every(Runnable poll, long ms) {
+        IO.scheduleWithFixedDelay(() -> { try { poll.run(); } catch (Throwable ignored) { } }, 0, ms, TimeUnit.MILLISECONDS);
+    }
+
+    /** File modification time in ms, 0 when missing or unreadable. */
+    static long mtime(Path p) {
+        try { return p != null && Files.isRegularFile(p) ? Files.getLastModifiedTime(p).toMillis() : 0; } catch (Throwable t) { return 0; }
+    }
+
     /** False while the file is missing. */
     boolean exists() { return exists; }
 

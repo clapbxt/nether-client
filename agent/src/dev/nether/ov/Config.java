@@ -39,6 +39,9 @@ final class Config {
 
     private static Path gPath, iPath, lPath;
     private static long gTime, iTime, lTime, lastPoll, dirtyAt;
+    /** the files' modification times as the nether-io thread last saw them (the render thread never stats them per poll) */
+    private static volatile long gSeen, iSeen, lSeen;
+    private static boolean watching;
     private static Map<String, Object> g = new LinkedHashMap<>(), in = new LinkedHashMap<>();
     /** values changed in game and not saved yet: "id\0key" (or "\0menuKey") -> value */
     private static final Map<String, Object> gTouched = new LinkedHashMap<>(), iTouched = new LinkedHashMap<>();
@@ -163,12 +166,18 @@ final class Config {
     /** Per-frame: reload on external change, debounced save (a failed save stays pending and is retried). */
     static synchronized void tick() {
         long now = System.currentTimeMillis();
+        if (!watching) {
+            watching = true;
+            gSeen = gTime; iSeen = iTime; lSeen = lTime;
+            final Path g = gPath, i = iPath, l = lPath;
+            FileWatch.every(() -> { gSeen = mtime(g); if (i != null) iSeen = mtime(i); lSeen = mtime(l); }, 1000);
+        }
         if (now - lastPoll > 1000) {
             lastPoll = now;
             boolean r = false;
-            if (!gOk || mtime(gPath) != gTime) { boolean was = gOk; if (loadG()) { r = true; if (!was) defaults(); } }
-            if (iPath != null && (!iOk || mtime(iPath) != iTime) && loadI()) r = true;
-            if (mtime(lPath) != lTime) { loadL(); r = true; }
+            if (!gOk || gSeen != gTime) { boolean was = gOk; if (loadG()) { r = true; if (!was) defaults(); } }
+            if (iPath != null && (!iOk || iSeen != iTime) && loadI()) r = true;
+            if (lSeen != lTime) { loadL(); r = true; }
             if (r) System.out.println("[nether-agent] config reloaded");
         }
         if ((gDirty || iDirty) && now - dirtyAt > 500) {

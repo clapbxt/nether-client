@@ -40,7 +40,10 @@ final class Wardrobe {
     private static final String[] picked = {"", "", "", "", "", "", ""};
     private static boolean slim, loaded;
     private static BufferedImage skin;
-    private static long mtime = -1, nextCheck;
+    /** the launcher's state.json, checked on the nether-io thread */
+    /** changes with every new state (texture keys: a re-sent picture replaces the old one) */
+    private static long mtime;
+    private static final FileWatch STATE = new FileWatch(() -> { Path d = Data.dir("wardrobe"); return d == null ? null : d.resolve("state.json"); }, 500);
     /** the request waiting for the launcher (seq, 0 = none), when it was sent; refresh waits for a new state.json */
     private static double pendingSeq;
     private static long pendingAt, refreshAt, pendingLimit = 20000;
@@ -85,16 +88,14 @@ final class Wardrobe {
         long now = System.currentTimeMillis();
         if (pendingSeq != 0 && now - pendingAt > pendingLimit) { pendingSeq = 0; say("The launcher didn't answer. Is it still open?", false); }
         if (refreshAt != 0 && now - refreshAt > 20000) refreshAt = 0;
-        if (now < nextCheck) return;
-        nextCheck = now + 500;
+        if (!STATE.exists()) { loaded = false; return; }
+        byte[] bytes = STATE.take();
+        if (bytes == null) return;
         try {
             Path f = dir().resolve("state.json");
-            if (!Files.isRegularFile(f)) { loaded = false; return; }
-            long m = Files.getLastModifiedTime(f).toMillis();
-            if (m == mtime) return;
-            mtime = m;
-            Object o = Json.parse(new String(Files.readAllBytes(f), StandardCharsets.UTF_8));
+            Object o = Json.parse(new String(bytes, StandardCharsets.UTF_8));
             if (!(o instanceof Map)) return;
+            mtime = now;
             Map<?, ?> st = (Map<?, ?>) o;
             boolean clean = !loaded || !dirty();
             nether.clear();
@@ -110,7 +111,7 @@ final class Wardrobe {
             fill(st.get("nether"), nether, false);
             fill(st.get("account"), account, true);
             loaded = true;
-            if (refreshAt != 0 && m >= refreshAt) { refreshAt = 0; say("Up to date", true); }
+            if (refreshAt != 0 && now >= refreshAt) { refreshAt = 0; say("Up to date", true); }
             Map<?, ?> an = st.get("answer") instanceof Map ? (Map<?, ?>) st.get("answer") : null;
             if (an != null && pendingSeq != 0 && an.get("seq") instanceof Number && ((Number) an.get("seq")).doubleValue() == pendingSeq) {
                 pendingSeq = 0;

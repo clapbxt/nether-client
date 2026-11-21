@@ -23,16 +23,20 @@ final class Res {
     private static List<Path> packs = Collections.emptyList();
     private static long mtime = Long.MIN_VALUE, checked;
     private static int gen;
+    /** options.txt's modification time as the nether-io thread last saw it (0 = missing); MIN_VALUE = not looked yet */
+    private static volatile long seen = Long.MIN_VALUE;
+    private static boolean watching;
 
     /** Bumps whenever the enabled packs change (options.txt is re-read at most every 2 s). Render thread. */
     static int gen() {
         long now = System.currentTimeMillis();
         if (now - checked < 2000) return gen;
         checked = now;
+        if (!watching) { watching = true; Path o = Paths.get("options.txt").toAbsolutePath(); FileWatch.every(() -> seen = FileWatch.mtime(o), 2000); }
         try {
             Path opt = Paths.get("options.txt").toAbsolutePath();
-            long t = Files.exists(opt) ? Files.getLastModifiedTime(opt).toMillis() : 0;
-            if (t == mtime) return gen;
+            long t = seen;
+            if (t == Long.MIN_VALUE || t == mtime) return gen;
             mtime = t;
             List<Path> out = new ArrayList<>();
             if (t != 0) for (String l : Files.readAllLines(opt, StandardCharsets.UTF_8)) {
