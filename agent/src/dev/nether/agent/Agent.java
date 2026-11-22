@@ -159,7 +159,7 @@ public final class Agent {
         VIEW_HOOKS.put("net/minecraft/client/renderer/entity/layers/EquipmentLayerRenderer", new String[] {"armor", "", "", "armorCutoutNoCull", "net/minecraft/client/renderer/rendertype/RenderTypes|net/minecraft/client/renderer/RenderType"});
         // 1.8.9 (Forge: MCP class names + SRG members): fire overlay constants, mount tint around RendererLivingEntity.doRender
         // fire: renderFireInFirstPerson ((F)V in 1.8.9, ()V in 1.12.2); helper = 1.12.2 renderItemInFirstPerson (shield lift after its pushMatrix)
-        VIEW_HOOKS.put("net/minecraft/client/renderer/ItemRenderer", new String[] {"lfire", "func_78442_d", "", "func_187457_a", "func_179094_E"});
+        VIEW_HOOKS.put("net/minecraft/client/renderer/ItemRenderer", new String[] {"lfire", "func_78442_d", "", "func_187457_a|func_78440_a", "func_179094_E"});
         VIEW_HOOKS.put("net/minecraft/client/renderer/entity/RendererLivingEntity", new String[] {"lmount", "func_76986_a", "(Lnet/minecraft/entity/EntityLivingBase;DDDFF)V", "", ""}); // 1.8.9
         VIEW_HOOKS.put("net/minecraft/client/renderer/entity/RenderLivingBase", new String[] {"lmount", "func_76986_a", "(Lnet/minecraft/entity/EntityLivingBase;DDDFF)V", "", ""}); // 1.12.2
         VIEW_HOOKS.put("net/minecraft/client/renderer/RenderGlobal", new String[] {"lsky", "func_174976_a", "(FI)V", "", ""}); // Forge 1.8.9 / 1.12.2 renderSky: custom sky layers at its end
@@ -181,7 +181,7 @@ public final class Agent {
         if (v.equals("1.8.9")) {
             // vanilla notch names; on Legacy Fabric put189 maps them through Tiny.
             put189(NAME_HOOKS, "wn", 0, "f_", "()Leu;"); // EntityPlayer.getDisplayName
-            put189(VIEW_HOOKS, "bfn", 1, "lfire", "f", "(F)V", "", ""); // ItemRenderer.renderFireInFirstPerson
+            put189(VIEW_HOOKS, "bfn", 1, "lfire", "f", "(F)V", Tiny.on() ? Tiny.method("bfn", "a", "(F)V") : "a", ""); // ItemRenderer.renderFireInFirstPerson (+ renderItemInFirstPerson: hand view)
             put189(VIEW_HOOKS, "bjl", 1, "lmount", "a", "(Lpr;DDDFF)V", "", ""); // RendererLivingEntity.doRender
             put189(VIEW_HOOKS, "bfr", 1, "lsky", "a", "(FI)V", "", ""); // RenderGlobal.renderSky
             put189(LABEL_HOOKS, "bjl", 0, "a", "(Lpr;)Z"); // RendererLivingEntity.canRenderName
@@ -814,7 +814,7 @@ public final class Agent {
             try {
                 ClassReader cr = new ClassReader(bytes);
                 ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
-                final int[] n = {0}, shields = {0};
+                final int[] n = {0}, shields = {0}, hands = {0};
                 cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
                     @Override
                     public MethodVisitor visitMethod(int access, String mname, String desc, String sig, String[] ex) {
@@ -952,6 +952,21 @@ public final class Agent {
                                 }
                             };
                         }
+                        if (kind.equals("lfire") && helpers.contains(mname) && !stat && "(F)V".equals(desc)) { // renderItemInFirstPerson(partial): hand view
+                            return new MethodVisitor(Opcodes.ASM9, mv) {
+                                @Override
+                                public void visitCode() {
+                                    super.visitCode();
+                                    hands[0]++;
+                                    super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "handIn", "()V", false);
+                                }
+                                @Override
+                                public void visitInsn(int op) {
+                                    if (op == Opcodes.RETURN) super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "handOut", "()V", false);
+                                    super.visitInsn(op);
+                                }
+                            };
+                        }
                         if (kind.equals("lfire") && helpers.contains(mname) && !stat && at.length == 7 && at[5].getSort() == Type.OBJECT) {
                             final int item = slot(at, 5); // 1.12.2 renderItemInFirstPerson(player, partial, pitch, hand, swing, stack, equip)
                             return new MethodVisitor(Opcodes.ASM9, mv) {
@@ -1013,7 +1028,8 @@ public final class Agent {
                     }
                 }, 0);
                 if (shields[0] > 0) Hook.shieldHooked = true;
-                if (n[0] == 0 && shields[0] == 0) return null;
+                if (hands[0] > 0) Hook.handViewHooked = true;
+                if (n[0] == 0 && shields[0] == 0 && hands[0] == 0) return null;
                 if (kind.equals("shield")) Hook.shieldHooked = true;
                 else if (kind.equals("fire") || (kind.equals("lfire") && n[0] > 0)) Hook.fireHooked = true;
                 else if (kind.equals("mount") || kind.equals("lmount")) Hook.mountHooked = true;

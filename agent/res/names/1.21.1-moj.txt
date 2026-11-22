@@ -228,3 +228,5 @@ net.minecraft.class_922	net.minecraft.client.renderer.entity.LivingEntityRendere
 net.minecraft.class_1541	net.minecraft.world.entity.item.PrimedTnt	
 method_6969	getFuse	()I
 method_18112	entitiesForRendering	()Ljava/lang/Iterable;
+method_6079	getOffhandItem	()Lnet/minecraft/world/item/ItemStack;
+method_22905	scale	(FFF)V

@@ -122,12 +122,20 @@ public final class Hook {
         void pop(Object ps);
         void move(Object ps, float dy);
         boolean shield(Object stack);
+        /** Hand view: the arm / held item moved by (x, y, z) and scaled by s (x mirrored for the offhand). */
+        void hand(Object ps, Object stack, float x, float y, float z, float s);
     }
     public static volatile Pose pose;
     /** ItemInHandRenderer arm / ScreenEffectRenderer fire / entity renderers were hooked (each module needs its own). */
     public static volatile boolean shieldHooked, fireHooked, mountHooked;
     /** Shield: held shield moved up/down by this (0 = vanilla). Fire: overlay moved by fireDy, alpha fireAlpha (-1 = vanilla). */
     public static volatile float shieldDy, fireDy, fireAlpha = -1;
+    /** Hand view: first-person arm and item offset (blocks) and scale; 0 / 1 = vanilla. */
+    public static volatile float handX, handY, handZ, handS = 1;
+    /** Hand view on 1.8.9 / 1.12.2: GL push + transform / pop around renderItemInFirstPerson (set by the overlay). */
+    public static volatile Runnable handGlIn, handGlOut;
+    public static volatile boolean handViewHooked;
+    private static boolean handPushed;
     private static boolean firePushed;
     private static Object firePose, mountArg;
     /** Ride: the entity you ride while its opacity is below 255 (else null), and that alpha. */
@@ -143,8 +151,25 @@ public final class Hook {
     public static void shield(Object ps, Object stack) {
         float d = shieldDy;
         Pose p = pose;
-        if (d == 0 || p == null) return;
-        try { if (p.shield(stack)) p.move(ps, d); } catch (Throwable t) { viewFail(t); }
+        if (p == null) return;
+        try {
+            if (handX != 0 || handY != 0 || handZ != 0 || handS != 1) p.hand(ps, stack, handX, handY, handZ, handS);
+            if (d != 0 && p.shield(stack)) p.move(ps, d);
+        } catch (Throwable t) { viewFail(t); }
+    }
+
+    /** 1.8.9 / 1.12.2 renderItemInFirstPerson: start (push + offset) and each return (pop). */
+    public static void handIn() {
+        handPushed = false;
+        Runnable r = handGlIn;
+        if (r == null || (handX == 0 && handY == 0 && handZ == 0 && handS == 1)) return;
+        try { r.run(); handPushed = true; } catch (Throwable t) { viewFail(t); }
+    }
+    public static void handOut() {
+        if (!handPushed) return;
+        handPushed = false;
+        Runnable r = handGlOut;
+        try { if (r != null) r.run(); } catch (Throwable t) { viewFail(t); }
     }
 
     /** Start / each return of the fire overlay method: its own pose level moved by fireDy. */

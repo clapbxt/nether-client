@@ -40,6 +40,7 @@ final class Modules {
         all.add(TntTimer.M);
         all.add(CustomSky.M);
         all.add(new Views.Shield());
+        all.add(new Views.Hand());
         all.add(new Views.Fire());
         all.add(new Views.Ride());
         all.add(new Armor());

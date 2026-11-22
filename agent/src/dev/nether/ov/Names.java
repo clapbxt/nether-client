@@ -16,6 +16,8 @@ final class Names {
     private Names() {}
 
     private static final String[] T = {
+        "method_22905", "scale",
+        "method_6079", "getOffhandItem",
         "net.minecraft.class_1541", "net.minecraft.world.entity.item.PrimedTnt",
         "method_6969", "getFuse",
         "method_18112", "entitiesForRendering",

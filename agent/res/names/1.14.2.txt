@@ -182,3 +182,4 @@ net.minecraft.class_922	dqh
 method_18112	b	()Ljava/lang/Iterable;
 method_6969	i	()I
 net.minecraft.class_1541	atq	
+method_6079	cR	()Lbcb;

@@ -260,3 +260,5 @@ field_53546	p	Z
 method_18112	f	()Ljava/lang/Iterable;
 method_6969	f	()I
 net.minecraft.class_1541	cvs	
+method_22905	b	(FFF)V
+method_6079	fr	()Ldhp;

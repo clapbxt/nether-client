@@ -227,3 +227,5 @@ net.minecraft.class_922	ffm
 method_18112	e	()Ljava/lang/Iterable;
 method_6969	i	()I
 net.minecraft.class_1541	bqw	
+method_22905	a	(FFF)V
+method_6079	eA	()Lcax;

@@ -25,6 +25,8 @@ final class Views {
         return false;
     }
     private static boolean bound;
+    /** where the game holds a first-person item (main hand; the off hand mirrors x), the hand view's scaling pivot */
+    private static final float HX = 0.56f, HY = -0.52f, HZ = -0.72f;
 
     /** Hook.pose / Hook.translucent in the game's own names (once, lazily: the game classes must be loaded). */
     static void bind() {
@@ -44,6 +46,18 @@ final class Views {
             @Override public boolean shield(Object stack) {
                 if (shieldItem == null) shieldItem = stat("net.minecraft.class_1802", "field_8255");
                 return shieldItem != null && Game.call(stack, "method_7909") == shieldItem;
+            }
+            @Override public void hand(Object ps, Object stack, float x, float y, float z, float s) {
+                Object me = Game.fld(Game.mc(), "field_1724");
+                Object off = me == null ? null : Game.call(me, "method_6079"); // the off-hand stack: mirror sideways
+                boolean left = off != null && off == stack && Boolean.FALSE.equals(Game.call(off, "method_7960"));
+                if (left) x = -x;
+                // scale about where the game holds the item (0.56, -0.52, -0.72), not about the eye
+                float k = 1 - s, tx = x + (left ? -HX : HX) * k, ty = y + HY * k, tz = z + HZ * k;
+                if (moveKind == 0) moveKind = floatTranslate(ps.getClass()) ? 1 : 2;
+                if (moveKind == 1) Game.call(ps, "method_46416", tx, ty, tz);
+                else Game.call(ps, "method_22904", (double) tx, (double) ty, (double) tz);
+                if (s != 1) Game.call(ps, "method_22905", s, s, s);
             }
         };
         Hook.translucent = id -> {
@@ -82,6 +96,14 @@ final class Views {
 
     /** 1.8.9: the mount fade through GlStateManager (its colour cache must see every change), as MountOpacity's render events. */
     private static void bindLegacy() {
+        // hand view (renderItemInFirstPerson): one matrix level around the whole first-person pass
+        Hook.handGlIn = () -> {
+            org.lwjgl.opengl.GL11.glPushMatrix();
+            float s = Hook.handS, k = 1 - s; // scale about the held item's spot, as on modern versions
+            org.lwjgl.opengl.GL11.glTranslatef(Hook.handX + HX * k, Hook.handY + HY * k, Hook.handZ + HZ * k);
+            if (s != 1) org.lwjgl.opengl.GL11.glScalef(s, s, s);
+        };
+        Hook.handGlOut = org.lwjgl.opengl.GL11::glPopMatrix;
         final Class<?> gl = lcls("bfl", "net.minecraft.client.renderer.GlStateManager");
         if (gl == null) return;
         Hook.tint = new Hook.Tint() {
@@ -162,6 +184,42 @@ final class Views {
             ModIcons.draw("shieldview", sx - 17, sy - 17 + d, 34, Th.ac);
             Gfx.reclip(pc);
             Gfx.textC(Gfx.MONO, 10, cx, cy + h / 2 + 16, Gfx.DIM, String.format(java.util.Locale.ROOT, "HEIGHT %.2f", num("height")), 0);
+        }
+    }
+
+    // ---------------------------------------------------------------- Hand View Editor
+
+    static final class Hand extends Module {
+        Hand() {
+            super("handview", "Hand View Editor", "Visual", "Move and resize your first-person hand and the item you hold.", false, false, 0, 0);
+            add(Setting.slider("x", "Sideways", -0.6, 0.6, 0.01, 0).hint("Positive moves it right; the off hand mirrors it."));
+            add(Setting.slider("y", "Height", -0.6, 0.6, 0.01, 0).hint("Positive moves it up."));
+            add(Setting.slider("z", "Distance", -0.6, 0.6, 0.01, 0).hint("Positive brings it closer."));
+            add(Setting.slider("scale", "Size", 0.4, 1.5, 0.01, 1).hint("1 = vanilla."));
+            needs(4);
+        }
+
+        @Override boolean available() { return super.available() && (Hook.shieldHooked || Hook.handViewHooked); }
+
+        @Override void tick() {
+            boolean on = enabled();
+            if (on) bind();
+            Hook.handX = on ? (float) num("x") : 0;
+            Hook.handY = on ? (float) num("y") : 0;
+            Hook.handZ = on ? (float) num("z") : 0;
+            Hook.handS = on ? (float) num("scale") : 1;
+        }
+
+        @Override void preview(float cx, float cy) {
+            float w = 200, h = 112, k = 90;
+            screen(cx, cy, w, h);
+            float sz = 40 * (float) num("scale") * (float) (1 + num("z") * 0.8);
+            float sx = cx + 44 + (float) num("x") * k, sy = cy + 18 - (float) num("y") * k;
+            Gfx.ring(cx + 44 - 20, cy + 18 - 20, 40, 40, 6, 1, Gfx.a(Th.mut, 0.7f));
+            int[] pc = Gfx.clipIn(cx - w / 2, cy - h / 2, w, h);
+            ModIcons.draw("handview", sx - sz / 2, sy - sz / 2, sz, Th.ac);
+            Gfx.reclip(pc);
+            Gfx.textC(Gfx.MONO, 10, cx, cy + h / 2 + 16, Gfx.DIM, String.format(java.util.Locale.ROOT, "X %.2f  Y %.2f  Z %.2f  SIZE %.2f", num("x"), num("y"), num("z"), num("scale")), 0);
         }
     }
 
