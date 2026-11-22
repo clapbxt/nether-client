@@ -183,3 +183,8 @@ method_18112	b	()Ljava/lang/Iterable;
 method_6969	i	()I
 net.minecraft.class_1541	att	
 method_6079	cS	()Lbce;
+method_8430	h	(F)F
+method_8478	f	(F)F
+field_1481	b	I
+field_1482	a	I
+method_1522	c	()Lcts;

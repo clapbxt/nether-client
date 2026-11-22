@@ -445,6 +445,22 @@ final class Gfx {
         quad(px, py, pw, ph, u0, v0, u1, v1, tint, tint, Math.max(0, Math.min(r * s, Math.min(pw, ph) / 2)), -1);
     }
 
+    /** Texture "key" on an arbitrary quad: p = 4 corners (x, y in framebuffer pixels, clockwise), uv = their texture coordinates. */
+    static void imageQuad(String key, float[] p, float[] uv, int tint) {
+        Tex t = texs.get(key);
+        if (t == null) return;
+        if (!ready) ensure();
+        if (boundImg != t.id) {
+            flush();
+            GlBackend.cur.texBind(t.id);
+            boundImg = t.id;
+            if (rec != null) rec.op(1, 0).a[0] = t.id;
+        }
+        if ((verts + 6) * FLOATS > buf.capacity()) flush();
+        int[] order = {0, 1, 3, 1, 2, 3};
+        for (int i : order) vert(p[i * 2], p[i * 2 + 1], uv[i * 2], uv[i * 2 + 1], tint, 0, 0, 1e6f, 1e6f, 0, -1); // a huge box: no rounding, full coverage
+    }
+
     // ---------------------------------------------------------------- text
 
     private static Font font(int f, int px) {

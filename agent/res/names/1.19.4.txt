@@ -231,3 +231,9 @@ method_6969	j	()I
 net.minecraft.class_1541	bvg	
 method_22905	b	(FFF)V
 method_6079	eL	()Lcfv;
+method_8430	d	(F)F
+method_8478	b	(F)F
+field_1481	d	I
+field_1482	c	I
+method_1522	f	()Lefr;
+method_30277	f	()I

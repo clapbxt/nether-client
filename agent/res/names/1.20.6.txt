@@ -229,3 +229,9 @@ method_6969	u	()I
 net.minecraft.class_1541	cjk	
 method_22905	b	(FFF)V
 method_6079	eY	()Lcur;
+method_8430	d	(F)F
+method_8478	b	(F)F
+field_1481	d	I
+field_1482	c	I
+method_1522	h	()Leym;
+method_30277	f	()I

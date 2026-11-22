@@ -16,6 +16,15 @@ final class Names {
     private Names() {}
 
     private static final String[] T = {
+        "field_1481", "height",
+        "field_1482", "width",
+        "method_68427", "glId",
+        "method_30277", "getColorTexture",
+        "method_1522", "getMainRenderTarget",
+        "method_8478", "getThunderLevel",
+        "method_8430", "getRainLevel",
+        "method_62302", "renderSkyDisc",
+        "net.minecraft.class_9975", "net.minecraft.client.renderer.SkyRenderer",
         "method_22905", "scale",
         "method_6079", "getOffhandItem",
         "net.minecraft.class_1541", "net.minecraft.world.entity.item.PrimedTnt",

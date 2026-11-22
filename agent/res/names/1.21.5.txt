@@ -242,3 +242,12 @@ method_6969	f	()I
 net.minecraft.class_1541	cop	
 method_22905	b	(FFF)V
 method_6079	fc	()Ldak;
+method_62302	a	(FFF)V
+method_8430	d	(F)F
+method_8478	b	(F)F
+net.minecraft.class_9975	gsi	
+field_1481	d	I
+field_1482	c	I
+method_1522	h	()Lfjr;
+method_30277	c	()Lcom/mojang/blaze3d/textures/GpuTexture;
+method_68427	b	()I

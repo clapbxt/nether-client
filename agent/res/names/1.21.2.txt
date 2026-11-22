@@ -240,3 +240,11 @@ method_6969	m	()I
 net.minecraft.class_1541	cmb	
 method_22905	b	(FFF)V
 method_6079	fa	()Lcxo;
+method_62302	a	(FFF)V
+method_8430	d	(F)F
+method_8478	b	(F)F
+net.minecraft.class_9975	gmg	
+field_1481	d	I
+field_1482	c	I
+method_1522	h	()Lffb;
+method_30277	g	()I

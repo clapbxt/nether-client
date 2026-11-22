@@ -262,3 +262,9 @@ method_6969	getFuse	()I
 method_18112	entitiesForRendering	()Ljava/lang/Iterable;
 method_6079	getOffhandItem	()Lnet/minecraft/world/item/ItemStack;
 method_22905	scale	(FFF)V
+net.minecraft.class_9975	net.minecraft.client.renderer.SkyRenderer	
+method_62302	renderSkyDisc	(I)V
+method_8430	getRainLevel	(F)F
+method_8478	getThunderLevel	(F)F
+method_27983	dimension	()Lnet/minecraft/resources/ResourceKey;
+method_29177	location	()Lnet/minecraft/resources/ResourceLocation;

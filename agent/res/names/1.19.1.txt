@@ -229,3 +229,9 @@ method_6969	i	()I
 net.minecraft.class_1541	bqw	
 method_22905	a	(FFF)V
 method_6079	eA	()Lcax;
+method_8430	d	(F)F
+method_8478	b	(F)F
+field_1481	d	I
+field_1482	c	I
+method_1522	f	()Ldzc;
+method_30277	f	()I

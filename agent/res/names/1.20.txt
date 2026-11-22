@@ -232,3 +232,9 @@ method_6969	k	()I
 net.minecraft.class_1541	bvi	
 method_22905	b	(FFF)V
 method_6079	eP	()Lcfz;
+method_8430	d	(F)F
+method_8478	b	(F)F
+field_1481	d	I
+field_1482	c	I
+method_1522	f	()Legv;
+method_30277	f	()I

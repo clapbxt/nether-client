@@ -178,8 +178,8 @@ final class GlCore extends GlBackend {
         align = s[Hook.G_ALIGN];
 
         GL13.glActiveTexture(GL13.GL_TEXTURE0);
-        GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, 0);
-        GL11.glViewport(0, 0, fw, fh);
+        if (targetFb != 0) { GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, targetFb); GL11.glViewport(0, 0, fw, fh); }
+        else { GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, 0); GL11.glViewport(0, 0, fw, fh); }
         GL11.glDisable(GL11.GL_DEPTH_TEST);
         GL11.glDisable(GL11.GL_CULL_FACE);
         GL11.glDisable(GL11.GL_SCISSOR_TEST);

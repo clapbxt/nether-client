@@ -13,6 +13,8 @@ import dev.nether.agent.Hook;
  */
 abstract class GlBackend {
     static GlBackend cur;
+    /** non-zero while drawing inside the game's world pass (custom sky): the framebuffer to draw into instead of the window */
+    static int targetFb;
 
     // ---------------------------------------------------------------- GL shadow (dev.nether.agent.Hook): no driver stall per frame
 

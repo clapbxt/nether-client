@@ -233,6 +233,12 @@ public final class Hook {
     /** Custom sky (1.8.9 / 1.12.2): drawn at the end of RenderGlobal.renderSky with the game's camera matrices. */
     public static volatile java.util.function.Consumer<Float> skyDraw;
     public static volatile boolean skyHooked;
+    /** Custom sky (1.21.2 - 26.1): drawn after SkyRenderer.renderSkyDisc, inside the world pass. */
+    public static volatile Runnable skyModernDraw;
+    public static void skyModern() {
+        Runnable d = skyModernDraw;
+        if (d != null) try { d.run(); } catch (Throwable x) { skyModernDraw = null; System.out.println("[nether-agent] custom sky off: " + x); }
+    }
     public static void sky(float partial) {
         java.util.function.Consumer<Float> d = skyDraw;
         if (d != null) try { d.accept(partial); } catch (Throwable x) { skyDraw = null; System.out.println("[nether-agent] custom sky off: " + x); }

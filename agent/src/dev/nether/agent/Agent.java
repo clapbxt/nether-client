@@ -163,6 +163,8 @@ public final class Agent {
         VIEW_HOOKS.put("net/minecraft/client/renderer/entity/RendererLivingEntity", new String[] {"lmount", "func_76986_a", "(Lnet/minecraft/entity/EntityLivingBase;DDDFF)V", "", ""}); // 1.8.9
         VIEW_HOOKS.put("net/minecraft/client/renderer/entity/RenderLivingBase", new String[] {"lmount", "func_76986_a", "(Lnet/minecraft/entity/EntityLivingBase;DDDFF)V", "", ""}); // 1.12.2
         VIEW_HOOKS.put("net/minecraft/client/renderer/RenderGlobal", new String[] {"lsky", "func_174976_a", "(FI)V", "", ""}); // Forge 1.8.9 / 1.12.2 renderSky: custom sky layers at its end
+        VIEW_HOOKS.put("net/minecraft/class_9975", new String[] {"sky", "method_62302", "", "", ""}); // Fabric SkyRenderer.renderSkyDisc (1.21.2+)
+        VIEW_HOOKS.put("net/minecraft/client/renderer/SkyRenderer", new String[] {"sky", "renderSkyDisc", "", "", ""}); // Mojang names (26.x, Forge / NeoForge)
         String[] a = String.valueOf(System.getProperty("sun.java.command")).split(" ");
         String v = null;
         for (int i = 0; i + 1 < a.length; i++) if (a[i].equals("--version")) v = a[i + 1];
@@ -230,6 +232,7 @@ public final class Agent {
         viewRow(rows, "fire", "net.minecraft.class_4603", "method_23070", null, null);
         viewRow(rows, "tag", "net.minecraft.class_897", "method_62425", null, null);
         viewRow(rows, "mount", "net.minecraft.class_922", null, null, null);
+        viewRow(rows, "sky", "net.minecraft.class_9975", "method_62302", null, null);
         if (rows.containsKey("net.minecraft.class_12249")) viewRow(rows, "armor", "net.minecraft.class_10197", null, "method_75966", "net.minecraft.class_12249");
         else viewRow(rows, "armor", "net.minecraft.class_10197", null, "method_25448", "net.minecraft.class_1921"); // 1.21.4-1.21.10: RenderType
         String[] ps = rows.get("net.minecraft.class_4587");
@@ -993,6 +996,16 @@ public final class Agent {
                                 }
                             };
                         }
+                        if (kind.equals("sky")) { // SkyRenderer.renderSkyDisc: custom sky layers right after the sky colour (26.3+ draws inside its own pass: left alone)
+                            if (!named || stat || (at.length > 0 && at[0].getSort() == Type.OBJECT)) return mv;
+                            return new MethodVisitor(Opcodes.ASM9, mv) {
+                                @Override
+                                public void visitInsn(int op) {
+                                    if (op == Opcodes.RETURN) { n[0]++; super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "skyModern", "()V", false); }
+                                    super.visitInsn(op);
+                                }
+                            };
+                        }
                         if (kind.equals("lsky")) { // 1.8.9 / 1.12.2 renderSky(partial, pass): custom sky layers after the vanilla sky
                             if (!named || stat) return mv;
                             return new MethodVisitor(Opcodes.ASM9, mv) {
@@ -1033,7 +1046,7 @@ public final class Agent {
                 if (kind.equals("shield")) Hook.shieldHooked = true;
                 else if (kind.equals("fire") || (kind.equals("lfire") && n[0] > 0)) Hook.fireHooked = true;
                 else if (kind.equals("mount") || kind.equals("lmount")) Hook.mountHooked = true;
-                else if (kind.equals("lsky")) Hook.skyHooked = true;
+                else if (kind.equals("lsky") || kind.equals("sky")) Hook.skyHooked = true;
                 System.out.println("[nether-agent] hooked view " + kind + " (" + n[0] + ")");
                 return cw.toByteArray();
             } catch (Throwable t) {

@@ -20,6 +20,10 @@ import org.lwjgl.opengl.GL11;
  * conditions are not read (the layer shows everywhere). Format from the OptiFine docs; the face layout follows
  * Horizon's open reader. No sky art is bundled: packs bring it.
  * 1.8.9 / 1.12.2: drawn at the end of RenderGlobal.renderSky (Hook.sky) with immediate GL in the game's camera matrices.
+ * 1.21.2 - 26.1: drawn right after SkyRenderer.renderSkyDisc (Hook.skyModern) into the game's bound render target by the
+ * overlay's own GL program ({@link GlBackend#targetFb}: the main colour texture on our own framebuffer, since the game's pass has ended): each face as small projected quads (fine enough that the flat
+ * mapping inside one quad is invisible), behind everything drawn later (terrain, clouds). 26.3 draws its sky inside its
+ * own render pass and is not hooked.
  */
 final class CustomSky extends Module {
     static final CustomSky M = new CustomSky();
@@ -31,11 +35,15 @@ final class CustomSky extends Module {
 
     private static boolean installed;
 
-    @Override boolean available() { return Game.legacy() && dev.nether.agent.Hook.skyHooked; }
-    @Override String lockNote() { return Game.legacy() ? (available() ? null : "NOT AVAILABLE ON THIS VERSION") : "AVAILABLE ON 1.8.9 AND 1.12.2 FOR NOW"; }
+    @Override boolean available() { return (Game.legacy() || Game.fabric()) && dev.nether.agent.Hook.skyHooked; }
+    @Override String lockNote() { return available() ? null : "NEEDS 1.8.9, 1.12.2 OR 1.21.2 - 26.1 (IN A WORLD)"; }
 
     @Override void tick() {
-        if (!installed && available()) { installed = true; dev.nether.agent.Hook.skyDraw = CustomSky::draw; }
+        if (!installed && available()) {
+            installed = true;
+            if (Game.legacy()) dev.nether.agent.Hook.skyDraw = CustomSky::draw;
+            else dev.nether.agent.Hook.skyModernDraw = CustomSky::drawModern;
+        }
     }
 
     // ---------------------------------------------------------------- layers
@@ -44,7 +52,7 @@ final class CustomSky extends Module {
     private static final String[] BLENDS = {"add", "subtract", "multiply", "dodge", "burn", "screen", "replace", "overlay", "alpha"};
 
     private static final class Layer {
-        String source;
+        String source, key; // key: the overlay texture (modern)
         java.awt.image.BufferedImage img;
         int tex = -1, w, h;
         int fadeIn0 = -1, fadeIn1 = -1, fadeOut0 = -1, fadeOut1 = -1; // ticks, 0 = 06:00
@@ -82,7 +90,7 @@ final class CustomSky extends Module {
 
     /** All layers of world <dim> from the enabled packs (optifine/ wins over mcpatcher/). Render thread, on a pack or dimension change. */
     private static void load(int d) {
-        for (Layer l : layers) if (l.tex >= 0) GL11.glDeleteTextures(l.tex);
+        for (Layer l : layers) { if (l.tex >= 0) GL11.glDeleteTextures(l.tex); if (l.key != null) Gfx.dropTexture(l.key); }
         List<Layer> out = new ArrayList<>();
         for (String root : new String[] {"assets/minecraft/optifine/sky/world" + d + "/", "assets/minecraft/mcpatcher/sky/world" + d + "/"}) {
             for (int n = 1, miss = 0; n <= 64 && miss < 4; n++) {
@@ -255,5 +263,132 @@ final class CustomSky extends Module {
         GL11.glTexCoord2f(u1, v1); GL11.glVertex3f(c[6], c[7], c[8]);
         GL11.glTexCoord2f(u0, v1); GL11.glVertex3f(c[9], c[10], c[11]);
         GL11.glEnd();
+    }
+
+    // ---------------------------------------------------------------- drawing (1.21.2 - 26.1, Hook.skyModern)
+
+    /** face cells (col, row) and corners TL, TR, BR, BL on the unit cube (x east, y up, z south), as in {@link #cube} */
+    private static final float[][] FACES = {
+        {1, 1, -1, 1, -1, 1, 1, -1, 1, -1, -1, -1, -1, -1},
+        {2, 0, 1, 1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1},
+        {2, 1, 1, 1, -1, 1, 1, 1, 1, -1, 1, 1, -1, -1},
+        {0, 1, -1, 1, 1, -1, 1, -1, -1, -1, -1, -1, -1, 1},
+        {1, 0, -1, 1, 1, 1, 1, 1, 1, 1, -1, -1, 1, -1},
+        {0, 0, -1, -1, -1, 1, -1, -1, 1, -1, 1, -1, -1, 1}};
+    private static final int SUB = 16;
+    private static int keys, fbTex = -1, fbId;
+
+    /** Our framebuffer with the game's colour texture attached (made again when the game swaps the texture on resize). */
+    private static int fbo(int tex) {
+        if (tex == fbTex && fbId != 0) return fbId;
+        int prev = GL11.glGetInteger(0x8CA6); // DRAW_FRAMEBUFFER_BINDING
+        if (fbId == 0) fbId = org.lwjgl.opengl.GL30.glGenFramebuffers();
+        org.lwjgl.opengl.GL30.glBindFramebuffer(org.lwjgl.opengl.GL30.GL_FRAMEBUFFER, fbId);
+        org.lwjgl.opengl.GL30.glFramebufferTexture2D(org.lwjgl.opengl.GL30.GL_FRAMEBUFFER, org.lwjgl.opengl.GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, tex, 0);
+        boolean ok = org.lwjgl.opengl.GL30.glCheckFramebufferStatus(org.lwjgl.opengl.GL30.GL_FRAMEBUFFER) == org.lwjgl.opengl.GL30.GL_FRAMEBUFFER_COMPLETE;
+        org.lwjgl.opengl.GL30.glBindFramebuffer(org.lwjgl.opengl.GL30.GL_FRAMEBUFFER, prev);
+        fbTex = tex;
+        if (!ok) { System.out.println("[nether-agent] custom sky: target not usable"); return 0; }
+        return fbId;
+    }
+
+    /** The game's sun angle (0 = noon .. 1) from the day time, as vanilla's timeOfDay does. */
+    private static float sunAngle(long dayTime) {
+        double d = (((dayTime % 24000) + 24000) % 24000) / 24000.0 - 0.25;
+        d -= Math.floor(d);
+        double e = 0.5 - Math.cos(d * Math.PI) / 2;
+        return (float) ((d * 2 + e) / 3);
+    }
+
+    static void drawModern() {
+        if (!M.enabled() || GlBackend.cur == null || Gfx.fbW <= 0 || Gfx.fbH <= 0) return;
+        Object level = Game.level();
+        if (level == null) return;
+        Object key = Game.call(level, "method_27983"), id = key == null ? null : Game.call(key, "method_29177");
+        String dn = String.valueOf(id);
+        if (dn.endsWith("the_nether")) return; // OptiFine skies: overworld (world0) and End (world1) only
+        int d = dn.endsWith("the_end") ? 1 : 0;
+        int g = Res.gen();
+        if (g != gen || d != dim) { gen = g; dim = d; load(d); }
+        if (layers.isEmpty()) return;
+        Object tObj = Game.call(level, "method_8532");
+        long total = tObj instanceof Long ? (Long) tObj : 6000;
+        long day = ((total % 24000) + 24000) % 24000;
+        float celestial = sunAngle(total);
+        Object rObj = Game.call(level, "method_8430", 1f), thObj = Game.call(level, "method_8478", 1f);
+        float rain = rObj instanceof Float ? (Float) rObj : 0, thunder = thObj instanceof Float ? (Float) thObj : 0;
+        boolean isThunder = thunder > 0.5f, isRain = !isThunder && rain > 0.5f, isClear = !isThunder && !isRain;
+        // the game's main colour texture (its pass has ended, nothing is bound): drawn into through our own framebuffer
+        Object rt = Game.call(Game.mc(), "method_1522"), ct = rt == null ? null : Game.call(rt, "method_30277"), idO = ct == null ? null : Game.call(ct, "method_68427");
+        Object wO = rt == null ? null : Game.fld(rt, "field_1482"), hO = rt == null ? null : Game.fld(rt, "field_1481");
+        if (!(wO instanceof Integer) || !(hO instanceof Integer)) return;
+        // 1.21.2 - 1.21.4 (no GlTexture yet): the game still has its target bound here
+        int W = (Integer) wO, H = (Integer) hO, fb = idO instanceof Integer ? fbo((Integer) idO) : GL11.glGetInteger(0x8CA6);
+        double[] cam = Game.camera();
+        if (fb == 0 || cam == null || !Project.begin(W, H)) return;
+        double cx = cam[0], cy = cam[1], cz = cam[2];
+        GlBackend.targetFb = fb;
+        Gfx.begin(W, H);
+        try {
+            float[] p = new float[8], uv = new float[8], v = new float[3];
+            for (Layer l : layers) {
+                if (l.days != null) { int di = (int) ((total / 24000) % l.daysLoop); if (di >= l.days.length || !l.days[di]) continue; }
+                if (!((isClear && l.clear) || (isRain && l.rain) || (isThunder && l.thunder))) continue;
+                float b = fade(l, day);
+                if (b <= 0.001f) continue;
+                if (l.key == null && l.img != null) { l.w = l.img.getWidth(); l.h = l.img.getHeight(); l.key = "nsky" + (keys++); Gfx.texture(l.key, l.img, true); l.img = null; }
+                if (l.key == null) continue;
+                Gfx.ensure();
+                Gfx.flush();
+                int tint = blendModern(l.blend, b);
+                double ang = l.rotate ? Math.toRadians(celestial * 360f * l.speed) : 0, cs = Math.cos(ang), sn = Math.sin(ang);
+                float iu = 0.5f / Math.max(1, l.w), iv = 0.5f / Math.max(1, l.h);
+                for (float[] f : FACES) {
+                    float u0 = f[0] / 3f + iu, u1 = (f[0] + 1) / 3f - iu, v0 = f[1] / 2f + iv, v1 = (f[1] + 1) / 2f - iv;
+                    for (int i = 0; i < SUB; i++) for (int j = 0; j < SUB; j++) {
+                        boolean ok = true;
+                        for (int k = 0; k < 4 && ok; k++) {
+                            float a = (i + (k == 1 || k == 2 ? 1 : 0)) / (float) SUB, c = (j + (k >= 2 ? 1 : 0)) / (float) SUB;
+                            for (int x = 0; x < 3; x++) // bilinear over TL, TR, BR, BL
+                                v[x] = f[2 + x] + (f[5 + x] - f[2 + x]) * a + (f[11 + x] - f[2 + x]) * c + (f[2 + x] - f[5 + x] + f[8 + x] - f[11 + x]) * a * c;
+                            if (ang != 0) rotate(v, l.ax, l.ay, l.az, cs, sn);
+                            if (!Project.to(cx + v[0] * 100, cy + v[1] * 100, cz + v[2] * 100)) ok = false;
+                            p[k * 2] = Project.sx(W); p[k * 2 + 1] = Project.sy(H);
+                            uv[k * 2] = u0 + (u1 - u0) * a; uv[k * 2 + 1] = v0 + (v1 - v0) * c;
+                        }
+                        if (ok) Gfx.imageQuad(l.key, p, uv, tint);
+                    }
+                }
+                Gfx.flush();
+            }
+        } finally {
+            Gfx.end();
+            GlBackend.targetFb = 0;
+        }
+    }
+
+    /** v rotated about unit axis (x, y, z) by the angle with cos cs / sin sn (right hand, as glRotatef). */
+    private static void rotate(float[] v, float x, float y, float z, double cs, double sn) {
+        double d = x * v[0] + y * v[1] + z * v[2];
+        double cx = y * v[2] - z * v[1], cy = z * v[0] - x * v[2], cz = x * v[1] - y * v[0];
+        float a = (float) (v[0] * cs + cx * sn + x * d * (1 - cs)), b = (float) (v[1] * cs + cy * sn + y * d * (1 - cs)), c = (float) (v[2] * cs + cz * sn + z * d * (1 - cs));
+        v[0] = a; v[1] = b; v[2] = c;
+    }
+
+    /** The blend function for a mode (set now, after the overlay's own); returns the tint carrying the fade. */
+    private static int blendModern(int mode, float b) {
+        int c = Math.round(b * 255), col = 0xFF000000 | c << 16 | c << 8 | c, alpha = c << 24 | 0xFFFFFF;
+        GL11.glEnable(GL11.GL_BLEND);
+        switch (mode) {
+            case ALPHA: GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA); return alpha;
+            case ADD: GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE); return alpha;
+            case SUBTRACT: GL11.glBlendFunc(GL11.GL_ONE_MINUS_DST_COLOR, GL11.GL_ZERO); return col;
+            case MULTIPLY: GL11.glBlendFunc(GL11.GL_DST_COLOR, GL11.GL_ONE_MINUS_SRC_ALPHA); return c << 24 | (col & 0xFFFFFF);
+            case DODGE: GL11.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE); return col;
+            case BURN: GL11.glBlendFunc(GL11.GL_ZERO, GL11.GL_ONE_MINUS_SRC_COLOR); return col;
+            case SCREEN: GL11.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_COLOR); return col;
+            case OVERLAY: GL11.glBlendFunc(GL11.GL_DST_COLOR, GL11.GL_SRC_COLOR); return col;
+            default: GL11.glDisable(GL11.GL_BLEND); return 0xFFFFFFFF; // replace
+        }
     }
 }
