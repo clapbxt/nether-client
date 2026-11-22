@@ -228,6 +228,11 @@ mod tests {
 }
 
 /// Mojang runtime component for a Java major.
+/// Vanilla 1.8.9 / 1.12.2 without OptiFine: Java 25 by default (the user's own Java choice still wins).
+fn legacy_on_25(loader: Loader, version: &str, optifine: bool) -> bool {
+    loader == Loader::Vanilla && !optifine && matches!(version, "1.8.9" | "1.12.2")
+}
+
 fn java_component(major: u32) -> &'static str {
     java::component(major)
 }
@@ -410,6 +415,9 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
 
     let (component, major) = match opts.java_major {
         Some(m) => (java_component(m).to_string(), m),
+        // vanilla 1.8.9 / 1.12.2 run on Java 25 (faster JIT and GC; singleplayer and multiplayer checked 2026-11-22);
+        // OptiFine (LaunchWrapper) and modded legacy loaders stay on the version's own Java 8
+        None if legacy_on_25(opts.loader, &opts.version, of.is_some()) => (java_component(25).to_string(), 25),
         None => v.java.as_ref().map(|j| (j.component.clone(), j.major)).unwrap_or(("jre-legacy".into(), 8)),
     };
     let java = java::find_or_install(&c, paths, &component, major, &progress, cancel)?;
