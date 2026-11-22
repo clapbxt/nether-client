@@ -38,6 +38,7 @@ final class Modules {
         all.add(FULLBRIGHT);
         all.add(SkinLayers.M);
         all.add(TntTimer.M);
+        all.add(CustomSky.M);
         all.add(new Views.Shield());
         all.add(new Views.Fire());
         all.add(new Views.Ride());

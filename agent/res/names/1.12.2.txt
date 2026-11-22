@@ -119,3 +119,9 @@ field_70142_S	M
 field_70137_T	N	
 field_70136_U	O	
 net.minecraft.entity.item.EntityTNTPrimed	acm	
+field_73011_w	s	
+func_186058_p	q	()Layn;
+func_186068_a	a	()I
+func_72826_c	c	(F)F
+func_72867_j	j	(F)F
+func_72819_i	h	(F)F

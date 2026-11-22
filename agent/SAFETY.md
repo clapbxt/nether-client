@@ -15,5 +15,6 @@ check a server's rules before turning them on.
 | Coordinates, Compass, Waypoints (incl. death point), Speed, Day Counter, Clock, Session, Memory (coordinates hide themselves where the server hides F3 data) | own data |
 | Potion Effects, Armor Status, Server Address | own data |
 | Media Player, Lyrics | your PC's media session |
+| Custom Sky (default on) | looks only: skies from your own resource packs (OptiFine / MCPatcher format) |
 | TNT Timer (default off) | the fuse the game already sends for every lit TNT, shown above it |
 | 3D Skin Layers (default off) | looks only: other players' skins as the game already shows them, drawn with depth |

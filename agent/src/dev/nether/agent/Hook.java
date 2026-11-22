@@ -205,6 +205,14 @@ public final class Hook {
     public static volatile java.util.function.Consumer<Object> layersIn;
     public static volatile Runnable layersOut;
 
+    /** Custom sky (1.8.9 / 1.12.2): drawn at the end of RenderGlobal.renderSky with the game's camera matrices. */
+    public static volatile java.util.function.Consumer<Float> skyDraw;
+    public static volatile boolean skyHooked;
+    public static void sky(float partial) {
+        java.util.function.Consumer<Float> d = skyDraw;
+        if (d != null) try { d.accept(partial); } catch (Throwable x) { skyDraw = null; System.out.println("[nether-agent] custom sky off: " + x); }
+    }
+
     public static void tintIn(Object e) {
         java.util.function.Consumer<Object> li = layersIn;
         if (li != null) try { li.accept(e); } catch (Throwable x) { layersIn = null; System.out.println("[nether-agent] 3D skin layers hook: " + x); }

@@ -162,6 +162,7 @@ public final class Agent {
         VIEW_HOOKS.put("net/minecraft/client/renderer/ItemRenderer", new String[] {"lfire", "func_78442_d", "", "func_187457_a", "func_179094_E"});
         VIEW_HOOKS.put("net/minecraft/client/renderer/entity/RendererLivingEntity", new String[] {"lmount", "func_76986_a", "(Lnet/minecraft/entity/EntityLivingBase;DDDFF)V", "", ""}); // 1.8.9
         VIEW_HOOKS.put("net/minecraft/client/renderer/entity/RenderLivingBase", new String[] {"lmount", "func_76986_a", "(Lnet/minecraft/entity/EntityLivingBase;DDDFF)V", "", ""}); // 1.12.2
+        VIEW_HOOKS.put("net/minecraft/client/renderer/RenderGlobal", new String[] {"lsky", "func_174976_a", "(FI)V", "", ""}); // Forge 1.8.9 / 1.12.2 renderSky: custom sky layers at its end
         String[] a = String.valueOf(System.getProperty("sun.java.command")).split(" ");
         String v = null;
         for (int i = 0; i + 1 < a.length; i++) if (a[i].equals("--version")) v = a[i + 1];
@@ -176,11 +177,13 @@ public final class Agent {
         // TileEntityRendererDispatcher.renderTileEntity(te, partial, destroyStage): 1.8.9 bhc.a(akw, F, I)V, 1.12.2 bwx.a(avj, F, I)V
         if (v.equals("1.8.9")) BECULL_HOOKS.put(Tiny.on() ? Tiny.cls("bhc") : "bhc", "");
         if (v.equals("1.12.2")) BECULL_HOOKS.put(Tiny.on() ? Tiny.cls("bwx") : "bwx", "");
+        if (v.equals("1.12.2")) put189(VIEW_HOOKS, "buy", 1, "lsky", "a", "(FI)V", "", ""); // RenderGlobal.renderSky
         if (v.equals("1.8.9")) {
             // vanilla notch names; on Legacy Fabric put189 maps them through Tiny.
             put189(NAME_HOOKS, "wn", 0, "f_", "()Leu;"); // EntityPlayer.getDisplayName
             put189(VIEW_HOOKS, "bfn", 1, "lfire", "f", "(F)V", "", ""); // ItemRenderer.renderFireInFirstPerson
             put189(VIEW_HOOKS, "bjl", 1, "lmount", "a", "(Lpr;DDDFF)V", "", ""); // RendererLivingEntity.doRender
+            put189(VIEW_HOOKS, "bfr", 1, "lsky", "a", "(FI)V", "", ""); // RenderGlobal.renderSky
             put189(LABEL_HOOKS, "bjl", 0, "a", "(Lpr;)Z"); // RendererLivingEntity.canRenderName
             put189(LOOK_HOOKS, "pk", 0, "c", "(FF)V", "lturn"); // Entity.setAngles
             put189(LOOK_HOOKS, "bfk", 0, "f", "(F)V", "lcam", "pk", "y|A", "z|B"); // EntityRenderer.orientCamera
@@ -975,6 +978,20 @@ public final class Agent {
                                 }
                             };
                         }
+                        if (kind.equals("lsky")) { // 1.8.9 / 1.12.2 renderSky(partial, pass): custom sky layers after the vanilla sky
+                            if (!named || stat) return mv;
+                            return new MethodVisitor(Opcodes.ASM9, mv) {
+                                @Override
+                                public void visitInsn(int op) {
+                                    if (op == Opcodes.RETURN) {
+                                        n[0]++;
+                                        super.visitVarInsn(Opcodes.FLOAD, 1);
+                                        super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "sky", "(F)V", false);
+                                    }
+                                    super.visitInsn(op);
+                                }
+                            };
+                        }
                         if (kind.equals("lmount")) { // 1.8.9 doRender: GL tint around the whole mob (MountOpacity's render events)
                             if (!named || stat) return mv;
                             return new MethodVisitor(Opcodes.ASM9, mv) {
@@ -1000,6 +1017,7 @@ public final class Agent {
                 if (kind.equals("shield")) Hook.shieldHooked = true;
                 else if (kind.equals("fire") || (kind.equals("lfire") && n[0] > 0)) Hook.fireHooked = true;
                 else if (kind.equals("mount") || kind.equals("lmount")) Hook.mountHooked = true;
+                else if (kind.equals("lsky")) Hook.skyHooked = true;
                 System.out.println("[nether-agent] hooked view " + kind + " (" + n[0] + ")");
                 return cw.toByteArray();
             } catch (Throwable t) {
