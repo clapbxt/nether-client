@@ -235,3 +235,6 @@ net.minecraft.class_757	net.minecraft.client.renderer.GameRenderer
 net.minecraft.class_759	net.minecraft.client.renderer.ItemInHandRenderer	
 net.minecraft.class_897	net.minecraft.client.renderer.entity.EntityRenderer	
 net.minecraft.class_922	net.minecraft.client.renderer.entity.LivingEntityRenderer	
+net.minecraft.class_1541	net.minecraft.world.entity.item.PrimedTnt	
+method_6969	getFuse	()I
+method_18112	entitiesForRendering	()Ljava/lang/Iterable;

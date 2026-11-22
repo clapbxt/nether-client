@@ -237,3 +237,6 @@ net.minecraft.class_757	gxb
 net.minecraft.class_759	gxf	
 net.minecraft.class_897	hed	
 net.minecraft.class_922	hfg	
+method_18112	e	()Ljava/lang/Iterable;
+method_6969	f	()I
+net.minecraft.class_1541	cra	

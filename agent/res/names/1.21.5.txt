@@ -237,3 +237,6 @@ net.minecraft.class_757	grd
 net.minecraft.class_759	grg	
 net.minecraft.class_897	gxu	
 net.minecraft.class_922	gyw	
+method_18112	d	()Ljava/lang/Iterable;
+method_6969	f	()I
+net.minecraft.class_1541	cop	

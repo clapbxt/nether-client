@@ -226,3 +226,6 @@ net.minecraft.class_757	fhz
 net.minecraft.class_759	fic	
 net.minecraft.class_897	fnd	
 net.minecraft.class_922	fof	
+method_18112	e	()Ljava/lang/Iterable;
+method_6969	j	()I
+net.minecraft.class_1541	bvg	

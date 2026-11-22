@@ -272,3 +272,6 @@ field_53543	q	Z
 field_53544	r	Z
 field_53545	s	Z
 field_53546	t	Z
+method_18112	f	()Ljava/lang/Iterable;
+method_6969	f	()I
+net.minecraft.class_1541	czm	

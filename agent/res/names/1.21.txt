@@ -225,3 +225,6 @@ net.minecraft.class_757	ges
 net.minecraft.class_759	gev	
 net.minecraft.class_897	gki	
 net.minecraft.class_922	glk	
+method_18112	e	()Ljava/lang/Iterable;
+method_6969	t	()I
+net.minecraft.class_1541	cji	

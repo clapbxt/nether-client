@@ -37,6 +37,7 @@ final class Modules {
         all.add(FREELOOK);
         all.add(FULLBRIGHT);
         all.add(SkinLayers.M);
+        all.add(TntTimer.M);
         all.add(new Views.Shield());
         all.add(new Views.Fire());
         all.add(new Views.Ride());
@@ -326,6 +327,7 @@ final class Modules {
         boxes(fbW, fbH, chat);
         boolean world = Input.inWorld() && !Game.hudHidden();
         if (WAYPOINTS.enabled() && world) WAYPOINTS.drawMarkers(fbW, fbH);
+        if (TntTimer.M.enabled() && world) TntTimer.M.drawWorld(fbW, fbH);
         if (LYRICS.enabled() && world) LYRICS.drawWorld(fbW, fbH);
         SELFTAG.drawWorld(fbW, fbH, SELFTAG.enabled() && world);
         if (world) { Toast.draw(fbW); SHOTS.drawCard(fbW); menuHint(fbW); }

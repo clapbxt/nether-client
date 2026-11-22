@@ -215,3 +215,6 @@ net.minecraft.class_757	ena
 net.minecraft.class_759	end	
 net.minecraft.class_897	erw	
 net.minecraft.class_922	esx	
+method_18112	b	()Ljava/lang/Iterable;
+method_6969	i	()I
+net.minecraft.class_1541	bhd	

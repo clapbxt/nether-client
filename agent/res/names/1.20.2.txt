@@ -227,3 +227,6 @@ net.minecraft.class_757	fnx
 net.minecraft.class_759	foa	
 net.minecraft.class_897	ftg	
 net.minecraft.class_922	fui	
+method_18112	e	()Ljava/lang/Iterable;
+method_6969	s	()I
+net.minecraft.class_1541	byo	

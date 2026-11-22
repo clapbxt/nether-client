@@ -206,3 +206,6 @@ net.minecraft.class_757	dzr
 net.minecraft.class_759	dzu	
 net.minecraft.class_897	eem	
 net.minecraft.class_922	efj	
+method_18112	b	()Ljava/lang/Iterable;
+method_6969	h	()I
+net.minecraft.class_1541	bct	

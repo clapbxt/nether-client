@@ -237,3 +237,6 @@ net.minecraft.class_757	glq
 net.minecraft.class_759	glt	
 net.minecraft.class_897	gse	
 net.minecraft.class_922	gtg	
+method_18112	d	()Ljava/lang/Iterable;
+method_6969	m	()I
+net.minecraft.class_1541	cle	

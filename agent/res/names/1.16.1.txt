@@ -202,3 +202,6 @@ net.minecraft.class_757	ebs
 net.minecraft.class_759	ebv	
 net.minecraft.class_897	egn	
 net.minecraft.class_922	ehk	
+method_18112	b	()Ljava/lang/Iterable;
+method_6969	h	()I
+net.minecraft.class_1541	bbh	

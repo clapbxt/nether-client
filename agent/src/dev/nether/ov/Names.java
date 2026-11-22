@@ -16,6 +16,9 @@ final class Names {
     private Names() {}
 
     private static final String[] T = {
+        "net.minecraft.class_1541", "net.minecraft.world.entity.item.PrimedTnt",
+        "method_6969", "getFuse",
+        "method_18112", "entitiesForRendering",
         "comp_1626", "body",
         "comp_3627", "texturePath",
         "comp_4939", "url",

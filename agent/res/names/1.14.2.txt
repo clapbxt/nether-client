@@ -179,3 +179,6 @@ net.minecraft.class_757	dkk
 net.minecraft.class_759	dkm	
 net.minecraft.class_897	dpj	
 net.minecraft.class_922	dqh	
+method_18112	b	()Ljava/lang/Iterable;
+method_6969	i	()I
+net.minecraft.class_1541	atq	

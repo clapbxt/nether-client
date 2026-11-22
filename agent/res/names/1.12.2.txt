@@ -113,3 +113,9 @@ net.minecraft.client.renderer.texture.DynamicTexture	cdg
 net.minecraft.client.resources.I18n	cey	
 net.minecraft.potion.Potion	uz	
 net.minecraft.util.ResourceLocation	nf	
+field_70516_a	c	
+field_72996_f	e	
+field_70142_S	M	
+field_70137_T	N	
+field_70136_U	O	
+net.minecraft.entity.item.EntityTNTPrimed	acm	

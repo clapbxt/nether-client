@@ -198,3 +198,6 @@ net.minecraft.class_757	dqk
 net.minecraft.class_759	dqm	
 net.minecraft.class_897	dvd	
 net.minecraft.class_922	dvz	
+method_18112	b	()Ljava/lang/Iterable;
+method_6969	i	()I
+net.minecraft.class_1541	avz	
