@@ -31,6 +31,7 @@ final class MediaPlayer extends Module {
         java.util.function.BooleanSupplier box = () -> !str("layout").equals("Art only");
         add(Setting.slider("width", "Width", 150, 320, 2, 220).when(box));
         add(Setting.bool("art", "Album art", true).when(box));
+        add(Setting.bool("lyrics", "Lyrics in player", false).hint("Show the current line and the next two lyrics below playback controls.").when(() -> str("layout").equals("Card")));
         add(Setting.bool("albumAccent", "Album colour accent", false).hint("Accent bar and progress take the cover's colour"));
         add(Setting.bool("marquee", "Scroll long titles", true).when(box));
         add(Setting.choice("time", "Time", "Elapsed / total", "Elapsed / total", "Remaining", "Hidden").when(() -> str("layout").equals("Card")));
@@ -93,7 +94,7 @@ final class MediaPlayer extends Module {
         A = bool("art") ? 56 : 0;
         if (l.equals("Art only")) { A = 64; w = h = A; }
         else if (l.equals("Compact")) { w = (float) num("width"); h = 28; }
-        else { w = (float) num("width"); h = P * 2 + Math.max(A, ROWS); }
+        else { w = (float) num("width"); h = P * 2 + Math.max(A, ROWS) + (bool("lyrics") ? 44 : 0); }
     }
 
     @Override void draw(float x, float y) {
@@ -123,7 +124,8 @@ final class MediaPlayer extends Module {
     private void drawCard(float x, float y, Media.State s) {
         card(x, y, w, h);
         float inset = bool("accent") && bool("bg") ? 2 : 0;
-        float ax = x + P + inset, cx = ax + (A > 0 ? A + 10 : 0), cw = x + w - P - cx, top = y + P + (h - P * 2 - ROWS) / 2;
+        float lyricRows = bool("lyrics") ? 44 : 0;
+        float ax = x + P + inset, cx = ax + (A > 0 ? A + 10 : 0), cw = x + w - P - cx, top = y + P + (h - P * 2 - ROWS - lyricRows) / 2;
         if (A > 0) art(ax, y + (h - A) / 2, A);
         boolean ctl = controls();
         float bw = ctl ? 3 * 18 : 0;
@@ -134,6 +136,20 @@ final class MediaPlayer extends Module {
         marquee(Gfx.SEMI, 13, cx, top + 22, cw, color(), s.title, 0.2f);
         if (!s.artist.isEmpty()) marquee(Gfx.UI, 11, cx, top + 37, cw, Gfx.a(color(), 0.72f), s.artist, 0);
         progress(cx, top + 48, cw, s, true);
+        if (lyricRows > 0) {
+            String[] lines = Modules.LYRICS.playerLines();
+            for (int i = 0; i < lines.length; i++) {
+                float ly = top + 65 + i * 12;
+                if (lines[i].isEmpty()) continue;
+                String hitId = "media.lyric." + i;
+                boolean hit = s.canSeek && !Menu.hudEdit && Hits.box(hitId, cx, ly - 8, cw, 12);
+                if (hit) Gfx.rect(cx - 2, ly - 8, cw + 4, 12, 3, Gfx.a(Gfx.ICE, 0.08f));
+                if (s.canSeek && !Menu.hudEdit && Hits.clicked(hitId) == 0) Modules.LYRICS.seekPlayerLine(i);
+                int tint = i == 0 ? color() : Gfx.a(labelColor(), i == 1 ? 0.75f : 0.48f);
+                if (i == 0 && Modules.LYRICS.drawBarLine(cx, cx + cw, ly, 9)) continue;
+                marquee(i == 0 ? Gfx.SEMI : Gfx.UI, i == 0 ? 9 : 8, cx, ly, cw, tint, lines[i], 0);
+            }
+        }
     }
 
     private void drawCompact(float x, float y, Media.State s) {

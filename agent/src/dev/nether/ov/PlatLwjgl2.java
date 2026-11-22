@@ -40,7 +40,7 @@ final class PlatLwjgl2 extends Plat implements Hook.Legacy {
     @Override int away(long window) { return !Display.isVisible() ? 2 : Display.isActive() ? 0 : 1; }
 
     @Override void tick() {
-        if (Input.menuOpen) {
+        if (Input.menuOpen || Input.worldGuiOpen) {
             Input.mx = Mouse.getX();
             Input.my = Display.getHeight() - 1 - Mouse.getY();
         }
@@ -93,13 +93,13 @@ final class PlatLwjgl2 extends Plat implements Hook.Legacy {
                 int g = Keys.toGlfw(lw);
                 boolean swallow;
                 try { // one bad event must never cost the game its keyboard
-                    swallow = Input.devOnly || (g >= 0 ? Input.onKey(WINDOW, g, action) : Input.menuOpen);
+                    swallow = Input.devOnly || (g >= 0 ? Input.onKey(WINDOW, g, action) : Input.menuOpen || Input.worldGuiOpen);
                     if (!Input.devOnly && down && ch != 0 && Input.onChar(ch)) swallow = true;
                 } catch (Throwable t) { Input.fail(t); swallow = false; }
                 if (!swallow) return true;
                 r = Keyboard.next(); // swallowed: look at the next event (this call is not filtered again)
             }
-            if (!Input.menuOpen && !synthQ.isEmpty()) { synth = synthQ.poll(); return true; }
+            if (!Input.menuOpen && !Input.worldGuiOpen && !synthQ.isEmpty()) { synth = synthQ.poll(); return true; }
             return false;
         } finally {
             inside = false;
@@ -113,7 +113,7 @@ final class PlatLwjgl2 extends Plat implements Hook.Legacy {
     @Override public boolean kbDown(boolean r, int key) {
         if (inside) return r;
         if (Input.dead) return r;
-        if (Input.menuOpen) return false;
+        if (Input.menuOpen || Input.worldGuiOpen) return false;
         return r && !Input.devOnly;
     }
 
@@ -125,13 +125,13 @@ final class PlatLwjgl2 extends Plat implements Hook.Legacy {
         try {
             while (r) {
                 int b = Mouse.getEventButton(), dw = Mouse.getEventDWheel();
-                boolean swallow = (Input.menuOpen || Input.devOnly) && !Input.dead;
+                boolean swallow = (Input.menuOpen || Input.worldGuiOpen || Input.devOnly) && !Input.dead;
                 try {
                     if (b >= 0 && !Input.devOnly) {
-                        if (!Input.menuOpen) { Input.mx = Mouse.getEventX(); Input.my = Display.getHeight() - 1 - Mouse.getEventY(); } // where the click was (HUD widgets, title screen)
+                        if (!Input.menuOpen || Input.worldGuiOpen) { Input.mx = Mouse.getEventX(); Input.my = Display.getHeight() - 1 - Mouse.getEventY(); } // where the click was (HUD widgets, title screen)
                         swallow = Input.onButton(WINDOW, b, Mouse.getEventButtonState() ? 1 : 0);
                     }
-                    if (DEBUG && (b >= 0 || dw != 0)) System.out.println("[nether-agent] mouse event b=" + b + " dw=" + dw + " menu=" + Input.menuOpen + " swallow=" + swallow);
+                    if (DEBUG && (b >= 0 || dw != 0)) System.out.println("[nether-agent] mouse event b=" + b + " dw=" + dw + " menu=" + Input.menuOpen + " worldGui=" + Input.worldGuiOpen + " swallow=" + swallow);
                     else if (dw != 0 && !Input.devOnly) swallow = Input.onScroll(dw / 120.0);
                 } catch (Throwable t) { Input.fail(t); swallow = false; }
                 if (!swallow) return true;
@@ -146,13 +146,13 @@ final class PlatLwjgl2 extends Plat implements Hook.Legacy {
     @Override public int msButton(int r) { return r; }
     @Override public boolean msState(boolean r) { return r; }
     @Override public int msWheel(int r) { return r; }
-    @Override public int msDX(int r) { return inside || !Input.menuOpen && !Input.devOnly ? r : 0; }
-    @Override public int msDY(int r) { return inside || !Input.menuOpen && !Input.devOnly ? r : 0; }
-    @Override public boolean msDown(boolean r, int b) { return inside || !Input.menuOpen && !Input.devOnly ? r : false; }
+    @Override public int msDX(int r) { return inside || !Input.menuOpen && !Input.worldGuiOpen && !Input.devOnly ? r : 0; }
+    @Override public int msDY(int r) { return inside || !Input.menuOpen && !Input.worldGuiOpen && !Input.devOnly ? r : 0; }
+    @Override public boolean msDown(boolean r, int b) { return inside || !Input.menuOpen && !Input.worldGuiOpen && !Input.devOnly ? r : false; }
 
     @Override public boolean msGrab(boolean g) {
         if (internal) return g;
         Input.gameMode = g ? Input.DISABLED : Input.NORMAL;
-        return (Input.menuOpen || Input.devOnly) && !Input.dead ? false : g;
+        return (Input.menuOpen || Input.worldGuiOpen || Input.devOnly) && !Input.dead ? false : g;
     }
 }

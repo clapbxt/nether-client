@@ -37,8 +37,9 @@ your player UUID and nothing else.
   4 characters of a hash of each player's UUID. The service answers with every Nether player under those prefixes
   and the client picks the matches itself, so the service never learns whom you play with. It asks at most once per
   player every 10 minutes. You can turn this off with **Settings → Privacy → Nether capes in game**.
-- **Lyrics** (off by default) send the song title, artist, album and length to lrclib.net, and the title and artist
-  to music.163.com (NetEase Cloud Music) for word-by-word timing. Lyrics are cached on your PC.
+- **Lyrics** (off by default) send the song title, artist, album and length to lrclib.net. If LRCLIB has no lyrics,
+  the title and artist are also sent to api.lyrics.ovh for plain-text lyrics. The title and artist are sent to
+  music.163.com (NetEase Cloud Music) for word-by-word timing. Lyrics are cached on your PC.
 - **Server status.** The title screen shows the status of the servers saved in your Multiplayer list, so the game
   pings them (like the Multiplayer screen does) about once a minute while it is open. Turn **Live server status** off in the Main
   Menu settings to stop it.

@@ -140,11 +140,11 @@ final class PlatSdl extends Plat implements Hook.Sdl {
                 if (Input.devOnly) return true;
                 boolean down = memGetByte(p + SDL_KeyboardEvent.DOWN) != 0, rep = memGetByte(p + SDL_KeyboardEvent.REPEAT) != 0;
                 int g = Keys.fromSdl(memGetInt(p + SDL_KeyboardEvent.SCANCODE));
-                return g >= 0 ? Input.onKey(w, g, down ? (rep ? 2 : 1) : 0) : Input.menuOpen;
+                return g >= 0 ? Input.onKey(w, g, down ? (rep ? 2 : 1) : 0) : Input.menuOpen || Input.worldGuiOpen;
             }
             case SDLEvents.SDL_EVENT_TEXT_INPUT: {
                 if (Input.devOnly) return true;
-                if (!Input.menuOpen) return false;
+                if (!Input.menuOpen && !Input.worldGuiOpen) return false;
                 String s = memUTF8Safe(memGetAddress(p + SDL_TextInputEvent.TEXT));
                 if (s != null) for (int i = 0; i < s.length(); i++) Input.onChar(s.charAt(i));
                 return true;
@@ -153,7 +153,7 @@ final class PlatSdl extends Plat implements Hook.Sdl {
                 if (Input.devOnly) return true;
                 Input.mx = memGetFloat(p + SDL_MouseMotionEvent.X);
                 Input.my = memGetFloat(p + SDL_MouseMotionEvent.Y);
-                return Input.menuOpen;
+                return Input.menuOpen || Input.worldGuiOpen;
             case SDLEvents.SDL_EVENT_MOUSE_BUTTON_DOWN:
             case SDLEvents.SDL_EVENT_MOUSE_BUTTON_UP: {
                 if (Input.devOnly) return true;
@@ -172,7 +172,7 @@ final class PlatSdl extends Plat implements Hook.Sdl {
     @Override public Object keys(Object state) {
         if (!(state instanceof ByteBuffer)) return state;
         if (Input.dead) return state;
-        boolean hide = Input.menuOpen || Input.devOnly;
+        boolean hide = Input.menuOpen || Input.worldGuiOpen || Input.devOnly;
         if (!hide) return state;
         ByteBuffer s = (ByteBuffer) state;
         int n = s.capacity();
@@ -184,6 +184,6 @@ final class PlatSdl extends Plat implements Hook.Sdl {
     @Override public boolean relative(boolean on) {
         if (internal) return on;
         Input.gameMode = on ? Input.DISABLED : Input.NORMAL;
-        return (Input.menuOpen || Input.devOnly) && !Input.dead ? false : on;
+        return (Input.menuOpen || Input.worldGuiOpen || Input.devOnly) && !Input.dead ? false : on;
     }
 }

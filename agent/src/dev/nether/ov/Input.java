@@ -26,6 +26,7 @@ final class Input {
     private static final int[] clickN = new int[2];
 
     static boolean menuOpen;
+    static boolean worldGuiOpen;
     /** The overlay died: every filter passes everything through, vanilla input is untouched. */
     static volatile boolean dead;
     /** A printable menu key toggled the menu: its character event (which follows the key event) must not be typed. */
@@ -86,6 +87,8 @@ final class Input {
     private static boolean modHeld, modUsed, modEaten;
 
     static void setMenu(boolean on) {
+        if (on && worldGuiOpen) setWorldGui(false);
+        if (!on && worldGuiOpen) setWorldGui(false);
         if (on == menuOpen || window == 0) return;
         if (on) {
             // If focus changed while Escape was held, some window systems never deliver its release. A fresh menu
@@ -103,6 +106,14 @@ final class Input {
             chars.setLength(0);
             Menu.closed();
         }
+    }
+
+    static void setWorldGui(boolean on) {
+        if (on == worldGuiOpen || menuOpen) return;
+        if (window == 0) { worldGuiOpen = on; return; }
+        worldGuiOpen = on;
+        if (on) Plat.cur.opened();
+        else { Plat.cur.closed(); clickL = clickR = upL = false; }
     }
 
     // ---------------------------------------------------------------- filters (true = swallow)
@@ -124,6 +135,12 @@ final class Input {
         if (!menuOpen && (MainMenu.title || MainMenu.pause || Party.capturing()) && Party.key(key, action)) return true;
         // the party leader's pick on the game's world / server list: Enter selects for the party instead of starting
         if (!menuOpen && PartyPick.key(key, action)) return true;
+        if (worldGuiOpen) {
+            if (Menu.capturing() && action == PRESS) { Menu.capture(key); return true; }
+            if (key == 256 && action == PRESS) { setWorldGui(false); return true; }
+            if (action == PRESS) Modules.LYRICS.key(key);
+            return true;
+        }
         // Esc with nothing left to step back from closes the menu here, like the menu key (not a frame later, so the
         // game never sees its repeats or release and the cursor is handed back at once)
         if (key == 256 && escHeld) { if (action == RELEASE) escHeld = false; return true; }
@@ -165,12 +182,17 @@ final class Input {
         events++;
         window = w;
         if (dead) return false;
-        if (b < 0 || b >= btn.length) return menuOpen;
+        if (b < 0 || b >= btn.length) return menuOpen || worldGuiOpen;
         btn[b] = action == PRESS;
         if (action == PRESS && modHeld) modUsed = true; // shift-click
         // middle / side buttons bind like keys (code 400 + button); left and right stay the menu's own clicks
         if (b >= 2 && action == PRESS && Menu.capturing()) { Menu.capture(MOUSE + b); return true; }
         if (action == PRESS && !menuOpen && Party.button(b)) return true;
+        if (worldGuiOpen) {
+            if (action == PRESS && Hits.press(b)) ourBtn[b] = true;
+            if (action != PRESS && ourBtn[b]) ourBtn[b] = false;
+            return true;
+        }
         if (menuOpen) {
             if (action == PRESS) {
                 if (b == 0) clickL = true;
@@ -196,6 +218,7 @@ final class Input {
         events++;
         if (dead) return false;
         if (menuOpen) { scrollY += y; return true; }
+        if (worldGuiOpen) { LyricsWorldPanel.scroll(y); return true; }
         if (MainMenu.title || (MainMenu.pause && Party.panelOpen())) { Party.wheel += (float) y; return true; }
         return Modules.onScroll(y);
     }
@@ -207,7 +230,7 @@ final class Input {
             eatCharAt = 0;
             if (eat) return true;
         }
-        if (!menuOpen) {
+        if (!menuOpen && !worldGuiOpen) {
             if (Party.typing && MainMenu.title) { if (cp >= 32 && cp <= 0xFFFF && !Character.isSurrogate((char) cp)) Party.chars(String.valueOf((char) cp)); return true; }
             return false;
         }

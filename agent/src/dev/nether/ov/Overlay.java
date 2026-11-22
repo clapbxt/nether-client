@@ -143,7 +143,7 @@ public final class Overlay {
         dead = true;
         Input.dead = true; // every input filter passes events through from now on
         try {
-            if (Input.menuOpen) { Input.menuOpen = false; Plat.cur.closed(); } // cursor mode / grab / key repeat back to the game's
+            if (Input.menuOpen || Input.worldGuiOpen) { Input.menuOpen = false; Input.worldGuiOpen = false; Plat.cur.closed(); } // cursor mode / grab / key repeat back to the game's
         } catch (Throwable t) { System.out.println("[nether-agent] panic: cursor " + t); }
         try { Modules.release(); } catch (Throwable t) { System.out.println("[nether-agent] panic: options " + t); }
         try { MainMenu.restoreVanilla(); } catch (Throwable t) { System.out.println("[nether-agent] panic: title " + t); }

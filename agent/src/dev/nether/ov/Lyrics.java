@@ -13,7 +13,8 @@ import java.util.Map;
 /**
  * Synced lyrics for the track {@link Media} reports, from LRCLIB (lrclib.net, community lyrics, no key): a local
  * {@code <client>/lyrics/<artist> - <title>.lrc} wins, then {@code /api/get} (title, artist, album, duration), then
- * {@code /api/search}; synced lyrics are preferred over plain ones from any step. Answers are cached on disk by
+ * {@code /api/search}; when those have no lyrics, lyrics.ovh is a final plain-text fallback. Synced lyrics are
+ * preferred over plain ones from any step. Answers are cached on disk by
  * {@link Net}; nothing is bundled or re-shared. "On screen" is a karaoke panel: the current line fills word by word as
  * it is sung, instrumental breaks show three filling dots. "In world" follows River Client's lyric scene, projected by
  * the overlay itself ({@link Project}), no renderer code: words pop up near the crosshair as they are sung (Scatter),
@@ -23,12 +24,17 @@ import java.util.Map;
  */
 final class Lyrics extends Module {
     private static final String API = "https://lrclib.net/api/";
+    private static final String PLAIN_API = "https://api.lyrics.ovh/v1/";
     private static final long TTL = 30L * 24 * 3600 * 1000;
-    private static final float P = 8, ROW = 16, ROWC = 22;
+    private static final float P = 8, ROW = 16, ROWC = 22, HEAD_H = 52;
     /** seconds lyrics run ahead of the reported position, so a word's appear animation lands as it is heard */
     private static final double LEAD = 0.1;
     private static final String[] SAMPLE = {"The line that was just sung", "The line being sung now", "The line that comes next"};
+    private static final Media.State SAMPLE_TRACK = new Media.State("PREVIEW", "Track title", "Artist name", "Album name", "", true, 72, 214, 1, 0, true, true, true, true);
     private static final int IDLE = 0, LOADING = 1, SYNCED = 2, PLAIN = 3, INSTRUMENTAL = 4, NOT_FOUND = 5, OFFLINE = 6;
+    private static final String[] PROFILE_KEYS = {"enabled", "anchor", "ox", "oy", "scale", "color", "chroma", "labels", "labelColor", "shadow", "bg", "bgAlpha", "accent", "border",
+        "mode", "panelStyle", "lines", "align", "width", "songInfo", "albumArt", "trackProgress", "trackTime", "playerControls", "opacity", "paused", "upper", "panelKey",
+        "wStyle", "worldSize", "dist", "follow", "viewLock", "airMode", "musicNotes", "worldIntro", "preset", "font", "lyricsColor", "glowColor", "glowColor2", "twoTone", "appear", "disappear", "animSpeed", "glow", "beatGlow", "motion", "blur", "outline", "curve", "varied", "stars", "motes", "streaks", "density", "ambientColor"};
 
     /** lyric lines by start time (seconds) */
     private double[] times = new double[0];
@@ -42,11 +48,16 @@ final class Lyrics extends Module {
     private boolean[] wTimed = new boolean[0];
     private int state = IDLE, stage;
     private String trackKey = "", title = "", artist = "";
+    private String lyricSource = "LRCLIB";
     private Media.State track;
     private Net.Req req;
+    private long lookupTtl = TTL;
+    private boolean forceLookup;
     /** best plain-only record met so far: used when no step finds synced lyrics */
     private Map<String, Object> plainBest;
     private long stateAt, nudgeAt;
+    private long trackIntroAt, notesAt;
+    private String introTitle = "", introArtist = "";
     private float scroll = -9; // -9 = not placed yet
     private int shownIdx = -2;
     private boolean noWorld;
@@ -60,46 +71,151 @@ final class Lyrics extends Module {
     private boolean local;
 
     Lyrics() {
-        super("lyrics", "Lyrics", "HUD", "Synced lyrics for the song in Media Player, as a karaoke panel or floating in the world. Sends the title, artist, album and duration to lrclib.net, and the title and artist to music.163.com for word timing; answers are cached on this PC.", true, false, 0.35, 0.6);
-        add(Setting.choice("mode", "Display", "On screen", "On screen", "In world").hint("On screen: a karaoke panel. In world: the words float where you look as they are sung."));
-        add(Setting.bool("upper", "Uppercase", false));
-        add(Setting.header("On screen"));
-        add(Setting.choice("lines", "Lines", "3", "1", "3", "5").when(() -> mode() == 0));
-        add(Setting.choice("align", "Align", "Centre", "Left", "Centre").when(() -> mode() == 0));
-        add(Setting.slider("width", "Panel width", 160, 420, 2, 260).when(() -> mode() == 0));
-        add(Setting.header("In world"));
-        add(Setting.choice("wStyle", "Style", "Scatter", "Scatter", "Row", "Lines").hint("Scatter: each word pops up near the crosshair. Row: the words build a line ahead of you. Lines: whole lines, lit word by word.").when(() -> mode() == 1));
-        add(Setting.slider("worldSize", "Text size", 0.5, 2.5, 0.05, 1).when(() -> mode() == 1));
-        add(Setting.slider("dist", "Distance (blocks)", 3, 12, 0.5, 6).when(() -> mode() == 1));
-        add(Setting.bool("follow", "Follow you", false).hint("Words move along with you instead of staying where they appeared.").when(() -> mode() == 1));
-        add(Setting.slider("fx", "Effects (%)", 0, 100, 5, 60).hint("Glow, pop and motion blur together. Reduce motion stops the movement.").when(() -> mode() == 1));
-        add(Setting.header("Sync"));
-        add(Setting.slider("offset", "Timing (ms)", -2000, 2000, 50, 0).hint("Positive shows lyrics later. The nudge keys adjust only the song playing."));
-        add(Setting.key("laterKey", "Nudge later key", -1).hint("+100 ms, saved for the current song"));
-        add(Setting.key("earlierKey", "Nudge earlier key", -1).hint("-100 ms, saved for the current song"));
+        super("lyrics", "Lyrics", "HUD", "Synced lyrics for the song in Media Player, as a karaoke panel or floating in the world. Searches LRCLIB, then lyrics.ovh for plain lyrics; music.163.com can add word timing. Answers are cached on this PC.", true, false, 0.35, 0.6);
+        java.util.function.BooleanSupplier layout = section("Layout");
+        add(Setting.choice("mode", "Display", "On screen", "On screen", "In world").hint("On screen: a karaoke panel. In world: words float where you look as they are sung.").when(layout));
+        add(Setting.choice("panelStyle", "Screen layout", "Karaoke", "Karaoke", "Focus", "Minimal").hint("Karaoke shows the lines around the current one. Focus and Minimal keep attention on the sung line.").when(layout).when(() -> mode() == 0));
+        add(Setting.choice("lines", "Lines at once", "3", "1", "3", "5").when(layout).when(() -> mode() == 0 && str("panelStyle").equals("Karaoke")));
+        add(Setting.choice("align", "Alignment", "Centre", "Left", "Centre").when(layout).when(() -> mode() == 0));
+        add(Setting.slider("width", "Panel width", 160, 420, 2, 260).when(layout).when(() -> mode() == 0));
+        add(Setting.bool("songInfo", "Song info", true).when(layout).when(() -> mode() == 0 && !str("panelStyle").equals("Minimal")));
+        add(Setting.bool("albumArt", "Album art", true).when(layout).when(() -> mode() == 0 && bool("songInfo")));
+        add(Setting.bool("trackProgress", "Track progress", true).when(layout).when(() -> mode() == 0 && !str("panelStyle").equals("Minimal")));
+        add(Setting.choice("trackTime", "Track time", "Elapsed / total", "Elapsed / total", "Remaining", "Hidden").when(layout).when(() -> mode() == 0 && bool("trackProgress")));
+        add(Setting.choice("playerControls", "Player controls", "On hover", "Off", "On hover", "Always").hint("Play/pause, skip and seek from the lyrics panel while the cursor is free.").when(layout).when(() -> mode() == 0 && !str("panelStyle").equals("Minimal")));
+        add(Setting.slider("opacity", "Lyrics opacity (%)", 20, 100, 5, 100).when(layout));
+        add(Setting.choice("paused", "When paused", "Keep", "Keep", "Dim", "Hide").when(layout));
+        add(Setting.bool("upper", "Uppercase", false).when(layout));
+        add(Setting.choice("wStyle", "World layout", "Air", "Air", "Sky", "Walls", "Row", "Lines").hint("Air scatters words around your view. Sky places a full line overhead. Walls pins a curved karaoke line ahead. Row and Lines keep Nether's classic layouts.").when(layout).when(() -> mode() == 1));
+        add(Setting.slider("worldSize", "World text size", 0.5, 2.5, 0.05, 1).when(layout).when(() -> mode() == 1));
+        add(Setting.slider("dist", "World distance", 3, 12, 0.5, 6).when(layout).when(() -> mode() == 1));
+        add(Setting.bool("follow", "Follow you", false).hint("Move placed words along with you instead of leaving them where they appeared.").when(layout).when(() -> mode() == 1));
+        add(Setting.bool("viewLock", "View lock", false).hint("Keep lyric words at the same angle in your view as you turn.").when(layout).when(() -> mode() == 1));
+        add(Setting.choice("airMode", "Air style", "Chill", "Chill", "PvP").hint("Chill scatters with soft effects. PvP keeps words clean and quick.").when(layout).when(() -> mode() == 1 && str("wStyle").equals("Air")));
+        add(Setting.bool("musicNotes", "Music notes", true).hint("Show drifting notes during instrumental sections, intros, or when lyrics are unavailable.").when(layout).when(() -> mode() == 1));
+        add(Setting.bool("worldIntro", "Track intro title", true).hint("Briefly show the song title and artist when a new track starts.").when(layout).when(() -> mode() == 1));
+
+        java.util.function.BooleanSupplier style = section("Themes & type");
+        add(Setting.choice("preset", "Theme preset", "HUD", "HUD", "Album", "Nether", "Ice", "Aurora", "Sunset", "Gold", "Violet", "Custom").hint("Album follows the cover art. Custom lets you pick both colors.").when(style));
+        add(Setting.choice("font", "Lyrics font", "Semibold", "Semibold", "Regular").hint("Uses Nether's active Pixel or Barlow typeface, at the weight you choose.").when(style));
+        add(Setting.color("lyricsColor", "Custom highlight", "#FF6157").when(style).when(() -> str("preset").equals("Custom")));
+        add(Setting.color("glowColor", "Custom glow", "#FFB020").when(style).when(() -> str("preset").equals("Custom") && bool("twoTone")));
+        add(Setting.color("glowColor2", "Second glow color", "#55D9FF").when(style).when(() -> str("preset").equals("Custom") && bool("twoTone")));
+        add(Setting.bool("twoTone", "Two-color glow", false).hint("Adds a second soft color around active words.").when(style));
+
+        java.util.function.BooleanSupplier animation = section("Animation & effects");
+        add(Setting.choice("appear", "Word entrance", "Pop", "Fade", "Rise", "Pop").when(animation).when(() -> mode() == 1));
+        add(Setting.choice("disappear", "Word exit", "Fade", "Fade", "Drift", "Float up").when(animation).when(() -> mode() == 1));
+        add(Setting.slider("animSpeed", "Animation speed", 0.5, 2, 0.1, 1).when(animation).when(() -> mode() == 1));
+        add(Setting.slider("glow", "Glow (%)", 0, 100, 5, 60).when(animation));
+        add(Setting.bool("beatGlow", "Pulse on sung words", true).hint("Let the current word brighten and breathe as it is sung.").when(animation));
+        add(Setting.slider("motion", "Pop and drift (%)", 0, 100, 5, 60).hint("Reduce motion turns movement off; Nether's Reduce motion setting also applies.").when(animation).when(() -> mode() == 1));
+        add(Setting.slider("blur", "Motion blur (%)", 0, 100, 5, 50).when(animation).when(() -> mode() == 1));
+        add(Setting.slider("outline", "Word outline (%)", 0, 100, 5, 60).when(animation).when(() -> mode() == 1));
+        add(Setting.bool("curve", "Curve world rows", false).when(animation).when(() -> mode() == 1 && (str("wStyle").equals("Row") || str("wStyle").equals("Walls") || str("wStyle").equals("Sky"))));
+        add(Setting.bool("varied", "Vary word sizes", false).when(animation).when(() -> mode() == 1));
+        add(Setting.bool("stars", "Sky lyric stars", true).hint("Add soft lyric-colored glints around Sky lines.").when(animation).when(() -> mode() == 1 && str("wStyle").equals("Sky")));
+        add(Setting.bool("motes", "Floating lyric lights", false).hint("Small drifting lights follow active world lyrics.").when(animation).when(() -> mode() == 1));
+        add(Setting.bool("streaks", "Falling lyric streaks", false).hint("Occasional short light trails around the current line.").when(animation).when(() -> mode() == 1));
+        add(Setting.slider("density", "Ambient density", 1, 12, 1, 5).when(animation).when(() -> mode() == 1 && (bool("motes") || bool("streaks") || bool("stars"))));
+        add(Setting.color("ambientColor", "Ambient color", "#75D6FF").when(animation).when(() -> mode() == 1 && !str("preset").equals("Album") && (bool("motes") || bool("streaks") || bool("stars"))));
+
+        java.util.function.BooleanSupplier sync = section("Sync & controls");
+        add(Setting.slider("offset", "Timing (ms)", -2000, 2000, 50, 0).hint("Positive shows lyrics later. The nudge keys adjust only the song playing.").when(sync));
+        add(Setting.key("laterKey", "Nudge later key", -1).hint("+100 ms, saved for the current song.").when(sync));
+        add(Setting.key("earlierKey", "Nudge earlier key", -1).hint("-100 ms, saved for the current song.").when(sync));
+        add(Setting.action("refetch", "Search lyrics again", "SEARCH", this::refetch).hint("Recheck local lyrics and refresh online results for the current song.").when(sync));
+        add(Setting.key("panelKey", "3D lyric panel key", 79).hint("Default O. Spawn the floating player. Nearby toggles it; far away brings it to you."));
+
+        java.util.function.BooleanSupplier profiles = section("Profiles & reset");
+        add(Setting.choice("profileSlot", "Look slot", "1", "1", "2", "3").when(profiles));
+        add(Setting.action("saveProfile", "Save current look", "SAVE", this::saveProfile).when(profiles));
+        add(Setting.action("loadProfile", "Load saved look", "LOAD", this::loadProfile).when(profiles));
+        add(Setting.action("deleteProfile", "Delete saved look", "DELETE", this::deleteProfile).when(profiles));
+        add(Setting.action("resetLyrics", "Reset lyrics settings", "RESET", this::resetExperience).when(profiles));
     }
+
+    /** Fold the lyrics controls into small groups in Nether's existing module settings page. */
+    private java.util.function.BooleanSupplier section(String title) {
+        Setting h = Setting.header(title);
+        h.fold = id + "#" + title;
+        String key = h.fold;
+        add(h);
+        return () -> Setting.open.contains(key);
+    }
+
+    @Override int color() {
+        switch (str("preset")) {
+            case "Album": return albumColor();
+            case "Nether": return 0xFFFF705C;
+            case "Ice": return 0xFF75D6FF;
+            case "Aurora": return 0xFF65E6B4;
+            case "Sunset": return 0xFFFF9B70;
+            case "Gold": return 0xFFFFD166;
+            case "Violet": return 0xFFC7A0FF;
+            case "Custom": return bool("chroma") ? chroma() : Config.color(id, "lyricsColor", 0xFFFF6157);
+            default: return super.color();
+        }
+    }
+
+    private int albumColor() {
+        Media.State s = Media.cur != null ? Media.cur : track;
+        return s != null && !s.art.isEmpty() && s.art.equals(Media.artShown) ? Media.artColor : super.color();
+    }
+
+    private int glowColor() {
+        if (str("preset").equals("Custom")) return Config.color(id, "glowColor", 0xFFFFB020);
+        switch (str("preset")) {
+            case "Album": return Gfx.mix(color(), 0xFFFFFFFF, 0.45f);
+            case "Nether": return 0xFFFFB020;
+            case "Ice": return 0xFFDAFAFF;
+            case "Aurora": return 0xFFB0FFD6;
+            case "Sunset": return 0xFFFFD19A;
+            case "Gold": return 0xFFFFF0B5;
+            case "Violet": return 0xFFF0D7FF;
+            default: return color();
+        }
+    }
+
+    private int glowColor2() {
+        if (str("preset").equals("Custom")) return Config.color(id, "glowColor2", 0xFF55D9FF);
+        return Gfx.mix(glowColor(), color(), 0.65f);
+    }
+
+    private int font() { return str("font").equals("Regular") ? Gfx.UI : Gfx.SEMI; }
 
     @Override boolean available() { return Media.supported(); }
     @Override String lockNote() { return !available() ? "NOT AVAILABLE ON THIS OS" : super.lockNote(); }
 
     // ---------------------------------------------------------------- lookup
 
-    /** Once per config: settings from before the merged ones (Style, Distance, Effects) carried over, old keys dropped. */
+    /** Carry old world-layout options forward, then split the combined effect slider into individual controls. */
     private void migrate() {
-        if (Config.raw(id, "v2") != null) return;
-        Config.set(id, "v2", true);
-        if (!(Config.raw(id, "glow") instanceof Number)) return;
-        double sum = 0;
-        for (String k : new String[] {"glow", "blur", "bounce"}) { Object v = Config.raw(id, k); sum += v instanceof Number ? ((Number) v).doubleValue() : 60; }
-        Config.set(id, "fx", (double) Math.round(sum / 15) * 5);
-        Object show = Config.raw(id, "wShow"), lay = Config.raw(id, "wLayout"), nr = Config.raw(id, "near"), fr = Config.raw(id, "far");
-        Config.set(id, "wStyle", "Lines".equals(show) ? "Lines" : "Center".equals(lay) ? "Row" : "Scatter");
-        if (nr instanceof Number && fr instanceof Number) Config.set(id, "dist", Math.max(3, Math.min(12, (((Number) nr).doubleValue() + ((Number) fr).doubleValue()) / 2)));
-        for (String k : new String[] {"glow", "blur", "bounce", "outline", "wShow", "wLayout", "near", "far", "reveal", "sweep", "plain", "lift", "fade"}) Config.set(id, k, null);
+        if (Config.raw(id, "v2") == null) {
+            Config.set(id, "v2", true);
+            if (Config.raw(id, "glow") instanceof Number) {
+                double sum = 0;
+                for (String k : new String[] {"glow", "blur", "bounce"}) { Object v = Config.raw(id, k); sum += v instanceof Number ? ((Number) v).doubleValue() : 60; }
+                Config.set(id, "fx", (double) Math.round(sum / 15) * 5);
+                Object show = Config.raw(id, "wShow"), lay = Config.raw(id, "wLayout"), nr = Config.raw(id, "near"), fr = Config.raw(id, "far");
+                Config.set(id, "wStyle", "Lines".equals(show) ? "Lines" : "Center".equals(lay) ? "Row" : "Scatter");
+                if (nr instanceof Number && fr instanceof Number) Config.set(id, "dist", Math.max(3, Math.min(12, (((Number) nr).doubleValue() + ((Number) fr).doubleValue()) / 2)));
+                for (String k : new String[] {"glow", "blur", "bounce", "outline", "wShow", "wLayout", "near", "far", "reveal", "sweep", "plain", "lift", "fade"}) Config.set(id, k, null);
+            }
+        }
+        if (Config.raw(id, "v3") == null) {
+            double old = Config.num(id, "fx", 60);
+            if (!(Config.raw(id, "glow") instanceof Number)) Config.set(id, "glow", old);
+            if (!(Config.raw(id, "motion") instanceof Number)) Config.set(id, "motion", old);
+            if (!(Config.raw(id, "blur") instanceof Number)) Config.set(id, "blur", old * 0.83);
+            if (!(Config.raw(id, "outline") instanceof Number)) Config.set(id, "outline", old * 1.5);
+            Config.set(id, "v3", true);
+        }
     }
 
     @Override void tick() {
         migrate();
+        if (!enabled() && LyricsWorldPanel.visible()) LyricsWorldPanel.hide();
         if (!live()) return;
         Media.keep();
         Media.State s = Media.cur;
@@ -107,6 +223,10 @@ final class Lyrics extends Module {
         String key = s.app + "\u0001" + s.artist + "\u0001" + s.title;
         if (!key.equals(trackKey)) {
             trackKey = key;
+            trackIntroAt = System.currentTimeMillis();
+            introTitle = s.title; introArtist = s.artist;
+            lookupTtl = forceLookup ? 0 : TTL;
+            forceLookup = false;
             track = s;
             times = new double[0];
             texts = new String[0];
@@ -127,8 +247,9 @@ final class Lyrics extends Module {
             neIds.clear();
             neLrc = null;
             local = false;
+            lyricSource = "LRCLIB";
             next();
-            if (!local && !title.isEmpty()) nreq = Net.get(NE + "cloudsearch/pc?type=1&limit=8&s=" + enc((title + " " + artist).trim()), TTL, 1 << 20);
+            if (!local && !title.isEmpty()) nreq = Net.get(NE + "cloudsearch/pc?type=1&limit=8&s=" + enc((title + " " + artist).trim()), lookupTtl, 1 << 20);
         }
         track = s;
         if (req != null && req.done()) { Net.Req r = req; req = null; answer(r); }
@@ -139,9 +260,65 @@ final class Lyrics extends Module {
 
     private int retries;
 
+    @Override boolean live() { return super.live() || Modules.LYRICS_BAR.enabled(); }
+
+    private void refetch() {
+        if (Media.cur == null && track == null) return;
+        req = null;
+        nreq = null;
+        forceLookup = true;
+        trackKey = "";
+        set(LOADING);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> profiles() {
+        Object p = Config.raw(id, "profiles");
+        return p instanceof Map ? new LinkedHashMap<>((Map<String, Object>) p) : new LinkedHashMap<>();
+    }
+
+    private void saveProfile() {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        for (String k : PROFILE_KEYS) {
+            Object v = Config.raw(id, k);
+            Setting s = setting(k);
+            if (v == null && s != null) v = s.def;
+            if (v != null) snapshot.put(k, v);
+        }
+        for (Object[] d : Modules.LYRICS_BAR.schema()) {
+            String k = (String) d[0]; Object v = Config.raw(Modules.LYRICS_BAR.id, k);
+            snapshot.put("bar." + k, v == null ? d[1] : v);
+        }
+        snapshot.put("media.lyrics", Config.bool(Modules.MEDIA.id, "lyrics", false));
+        Map<String, Object> all = profiles();
+        all.put(str("profileSlot"), snapshot);
+        Config.set(id, "profiles", all);
+    }
+
+    private void loadProfile() {
+        Object o = profiles().get(str("profileSlot"));
+        if (!(o instanceof Map)) return;
+        @SuppressWarnings("unchecked") Map<String, Object> saved = (Map<String, Object>) o;
+        for (String k : PROFILE_KEYS) if (saved.containsKey(k)) Config.set(id, k, saved.get(k));
+        for (Map.Entry<String, Object> e : saved.entrySet()) if (e.getKey().startsWith("bar.")) Config.set(Modules.LYRICS_BAR.id, e.getKey().substring(4), e.getValue());
+        if (saved.get("media.lyrics") instanceof Boolean) Config.set(Modules.MEDIA.id, "lyrics", saved.get("media.lyrics"));
+    }
+
+    private void deleteProfile() {
+        Map<String, Object> all = profiles();
+        all.remove(str("profileSlot"));
+        Config.set(id, "profiles", all.isEmpty() ? null : all);
+    }
+
+    private void resetExperience() {
+        reset();
+        Modules.LYRICS_BAR.reset();
+        Config.set(Modules.MEDIA.id, "lyrics", false);
+    }
+
     private void set(int st) { state = st; stateAt = System.currentTimeMillis(); }
 
-    /** Next lookup step: local file, /api/get, structured search, keyword search; then the best plain lyrics met, if any. */
+    /** Next lookup step: local file, LRCLIB lookup/search, then plain-only lyrics.ovh as a last resort. */
     private void next() {
         stage++;
         Media.State s = track;
@@ -153,15 +330,20 @@ final class Lyrics extends Module {
                 StringBuilder u = new StringBuilder(API).append("get?track_name=").append(enc(title)).append("&artist_name=").append(enc(artist));
                 if (!s.album.isEmpty()) u.append("&album_name=").append(enc(s.album));
                 if (s.dur >= 1 && s.dur <= 3600) u.append("&duration=").append(Math.round(s.dur));
-                req = Net.get(u.toString(), TTL, 1 << 20);
+                req = Net.get(u.toString(), lookupTtl, 1 << 20);
                 return;
             }
             case 2:
                 if (artist.isEmpty()) { next(); return; }
-                req = Net.get(API + "search?track_name=" + enc(title) + "&artist_name=" + enc(artist), TTL, 1 << 20);
+                req = Net.get(API + "search?track_name=" + enc(title) + "&artist_name=" + enc(artist), lookupTtl, 1 << 20);
                 return;
             case 3:
-                req = Net.get(API + "search?q=" + enc((title + " " + artist).trim()), TTL, 1 << 20);
+                req = Net.get(API + "search?q=" + enc((title + " " + artist).trim()), lookupTtl, 1 << 20);
+                return;
+            case 4:
+                if (plainBest != null) { finish(NOT_FOUND); return; }
+                if (title.isEmpty() || artist.isEmpty()) { next(); return; }
+                req = Net.get(PLAIN_API + encPath(artist) + "/" + encPath(title), lookupTtl, 1 << 20);
                 return;
             default:
                 finish(NOT_FOUND);
@@ -181,6 +363,17 @@ final class Lyrics extends Module {
         if (!r.ok()) { finish(OFFLINE); return; }
         Object o;
         try { o = Json.parse(r.text()); } catch (Throwable t) { next(); return; }
+        if (stage == 4 && o instanceof Map) {
+            Object lyrics = ((Map<?, ?>) o).get("lyrics");
+            if (lyrics instanceof String && !((String) lyrics).trim().isEmpty() && plainBest == null) {
+                Map<String, Object> fallback = new LinkedHashMap<>();
+                fallback.put("plainLyrics", lyrics);
+                fallback.put("source", "lyrics.ovh");
+                plainBest = fallback;
+            }
+            next();
+            return;
+        }
         if (o instanceof Map) { if (!accept((Map<String, Object>) o, null)) next(); return; }
         if (!(o instanceof List)) { next(); return; }
         // search: synced before plain before instrumental, then the closest duration (within 3 s when known)
@@ -215,6 +408,7 @@ final class Lyrics extends Module {
         parse(lrc);
         if (texts.length == 0) return false;
         plainBest = null;
+        lyricSource = local ? "Local file" : "LRCLIB";
         set(SYNCED);
         return true;
     }
@@ -235,6 +429,7 @@ final class Lyrics extends Module {
                 String y = yrc(neText(m, "yrc"));
                 if (y != null && !local && state != INSTRUMENTAL) {
                     parse(y);
+                    lyricSource = "NetEase";
                     req = null; // LRCLIB's answer, if still coming, is not needed
                     stage = 9;
                     plainBest = null;
@@ -249,8 +444,8 @@ final class Lyrics extends Module {
                 if (neLrc == null && l != null && l.contains("[")) neLrc = noCredits(l);
             }
         }
-        if (!neIds.isEmpty()) { nreq = Net.get(NE + "song/lyric/v1?yv=1&lv=1&tv=-1&id=" + neIds.remove(0), TTL, 1 << 20); return; }
-        if (neLrc != null && !local && (state == NOT_FOUND || state == PLAIN || state == OFFLINE)) { stage = 9; accept(null, neLrc); }
+        if (!neIds.isEmpty()) { nreq = Net.get(NE + "song/lyric/v1?yv=1&lv=1&tv=-1&id=" + neIds.remove(0), lookupTtl, 1 << 20); return; }
+        if (neLrc != null && !local && (state == NOT_FOUND || state == PLAIN || state == OFFLINE)) { stage = 9; if (accept(null, neLrc)) lyricSource = "NetEase"; }
     }
 
     /** Up to three search results with the same title, by the same artist or of the same length (within 1 s), closest first. */
@@ -369,6 +564,8 @@ final class Lyrics extends Module {
         texts = l.toArray(new String[0]);
         times = new double[texts.length]; // spread over the track at draw time
         splitWords(null);
+        Object source = m.get("source");
+        lyricSource = source instanceof String ? (String) source : "LRCLIB";
         set(PLAIN);
         return true;
     }
@@ -516,6 +713,9 @@ final class Lyrics extends Module {
         try { return URLEncoder.encode(s, "UTF-8").replace("+", "%20"); } catch (Exception e) { return ""; }
     }
 
+    /** Encode one lyrics.ovh path segment so artist/title punctuation cannot change the endpoint path. */
+    private static String encPath(String s) { return enc(s); }
+
     // ---------------------------------------------------------------- timing
 
     private String offKey() { return (artist + " - " + title).toLowerCase(Locale.ROOT); }
@@ -587,6 +787,7 @@ final class Lyrics extends Module {
 
     /** Keys from the game's key callback (in play); true swallows. */
     boolean key(int key) {
+        if (key >= 0 && key == (int) num("panelKey") && enabled()) { LyricsWorldPanel.toggle(); return true; }
         if (key < 0 || !enabled()) return false;
         if (key == (int) num("laterKey")) { nudge(100); return true; }
         if (key == (int) num("earlierKey")) { nudge(-100); return true; }
@@ -598,9 +799,54 @@ final class Lyrics extends Module {
     // ---------------------------------------------------------------- panel
 
     private boolean sample() { return Media.cur == null && Modules.sampling(this); }
-    private int rows() { return Integer.parseInt(str("lines")); }
+    private int rows() { return str("panelStyle").equals("Karaoke") ? Integer.parseInt(str("lines")) : 1; }
     /** 0 on screen, 1 in the world (an old "Pinned" counts as in the world). */
     private int mode() { return str("mode").equals("On screen") ? 0 : 1; }
+
+    /** Current lyric for the optional top bar; status strings are kept short enough for its compact layout. */
+    String barLyric() {
+        if (state == LOADING) return "Searching lyrics…";
+        if (state == INSTRUMENTAL) return "Instrumental";
+        if (state == OFFLINE) return "Lyrics unavailable";
+        if (texts.length == 0) return state == NOT_FOUND ? "No lyrics found" : "";
+        int i = index(now());
+        return i >= 0 && i < texts.length ? disp(texts[i]) : "";
+    }
+
+    /** Three-line now-playing preview: current lyric first, then the next two lines. */
+    String[] playerLines() {
+        String[] out = {"", "", ""};
+        if (texts.length == 0) { out[0] = barLyric(); return out; }
+        int i = index(now());
+        int first = Math.max(0, i);
+        if (i < 0) out[0] = "";
+        int skip = i < 0 ? 1 : 0;
+        for (int n = 0; n < 3 - skip && first + n < texts.length; n++) out[n + skip] = disp(texts[first + n]);
+        return out;
+    }
+
+    void seekPlayerLine(int visibleIndex) {
+        if (track == null || !track.canSeek || texts.length == 0) return;
+        int i = index(now());
+        if (i < 0) i = 0;
+        i = Math.min(texts.length - 1, i + Math.max(0, visibleIndex));
+        Media.seek(Math.max(0, Math.min(track.dur, lineStart(i))));
+    }
+
+    /** Draw the active line using the same timed word fill as the full karaoke panel. */
+    boolean drawBarLine(float left, float right, float cy, float size) {
+        if (texts.length == 0) return false;
+        int i = index(now());
+        if (i < 0 || i >= texts.length || words[i].length == 0) return false;
+        timing(i);
+        double t = now(); float[] f = new float[words[i].length]; String[] ws = new String[words[i].length];
+        for (int k = 0; k < f.length; k++) {
+            ws[k] = disp(words[i][k]);
+            f[k] = wTimed[i] ? (float) Math.max(0, Math.min(1, (t - wS[i][k]) / Math.max(0.02, wE[i][k] - wS[i][k]))) : (t >= wE[i][k] ? 1 : t >= wS[i][k] ? 0.5f : 0);
+        }
+        fill(ws, f, size, left, right, false, cy, 1);
+        return true;
+    }
 
     /** Something worth showing: lines, or a status that is still fresh (not found fades after 5 s). */
     private boolean content() {
@@ -616,22 +862,45 @@ final class Lyrics extends Module {
     /** drawn over a menu (title screen, pause, inventory): the panel, whatever the mode (Modules.menuLyrics) */
     boolean menu;
 
-    @Override boolean visible() { return sample() || (Media.cur != null && content() && (mode() == 0 || noWorld || menu)); }
+    @Override boolean visible() {
+        if (sample()) return true;
+        if (Media.cur == null || !content() || !(mode() == 0 || noWorld || menu)) return false;
+        return Media.cur.playing || !str("paused").equals("Hide");
+    }
 
     @Override void measure() {
         w = (float) num("width");
-        h = P + (rows() - 1) * ROW + ROWC + 16;
+        h = headerHeight() + P + (rows() - 1) * ROW + ROWC + (str("panelStyle").equals("Minimal") ? P : 16);
+    }
+
+    private float headerHeight() {
+        boolean controls = !str("playerControls").equals("Off");
+        return !str("panelStyle").equals("Minimal") && (bool("songInfo") || bool("trackProgress") || controls) ? HEAD_H : 0;
     }
 
     /** An intro long enough for the dots before the first line. */
     private boolean intro() { return state == SYNCED && times.length > 0 && times[0] > 3; }
 
+    private int panelAccent() { return str("preset").equals("HUD") ? Th.ac : color(); }
+
     @Override void draw(float x, float y) {
-        panel(x, y, w, h);
+        float alpha = Gfx.alpha;
+        boolean paused = Media.cur != null && !Media.cur.playing;
+        float pauseAlpha = paused && str("paused").equals("Dim") ? 0.45f : 1;
+        Gfx.alpha = alpha * (float) num("opacity") / 100 * pauseAlpha;
+        try { drawPanel(x, y); } finally { Gfx.alpha = alpha; }
+    }
+
+    private void drawPanel(float x, float y) {
+        boolean minimal = str("panelStyle").equals("Minimal");
+        if (!minimal) panel(x, y, w, h, panelAccent());
+        float header = headerHeight();
+        if (header > 0) drawTrackHeader(x, y, header);
         int n = rows();
         float inset = bool("accent") && bool("bg") ? 3 : 0, left = x + P + inset + 2, right = x + w - P;
         boolean centre = str("align").equals("Centre");
-        float rowsH = (n - 1) * ROW + ROWC, cy0 = y + P + (n / 2) * ROW + ROWC / 2;
+        float bodyTop = y + header + P;
+        float rowsH = (n - 1) * ROW + ROWC, cy0 = bodyTop + (n / 2) * ROW + ROWC / 2;
         if (sample()) {
             float p = (System.currentTimeMillis() % 4200) / 3000f;
             for (int i = -1; i <= 1; i++) {
@@ -643,19 +912,19 @@ final class Lyrics extends Module {
                 for (int k = 0; k < ws.length; k++) f[k] = Math.max(0, Math.min(1, p * ws.length - k));
                 fill(ws, f, 14, left, right, centre, cy, 1);
             }
-            foot(y + P + rowsH + 8, right, null);
+            if (!minimal) foot(bodyTop + rowsH + 8, right, null);
             return;
         }
         String status = status();
         if (status != null) {
-            Gfx.text(Gfx.SEMI, 10, centre ? (left + right) / 2 - Gfx.width(Gfx.SEMI, 10, status) / 2 : left, cy0, labelColor(), status, bool("shadow"), 0);
+            Gfx.text(font(), 10, centre ? (left + right) / 2 - Gfx.width(font(), 10, status) / 2 : left, cy0, labelColor(), status, bool("shadow"), 0);
         } else {
             double t = now();
             int idx = index(t);
             if (idx != shownIdx) { shownIdx = idx; if (scroll < -1.5f || Math.abs(idx - scroll) > n + 1 || Config.calm()) scroll = idx; } // first frame, seek: no long scroll
             scroll += (idx - scroll) * Math.min(1, Gfx.dt * 8);
             if (Math.abs(idx - scroll) < 0.002f) scroll = idx;
-            int[] prev = Gfx.clipIn(x, y + P - 2, w, rowsH + 4);
+            int[] prev = Gfx.clipIn(x, bodyTop - 2, w, rowsH + 4);
             float half = n / 2f;
             for (int i = Math.max(intro() ? -1 : 0, idx - n / 2 - 1); i <= Math.min(texts.length - 1, idx + n / 2 + 1); i++) {
                 float r = i - scroll, d = Math.abs(r);
@@ -666,7 +935,95 @@ final class Lyrics extends Module {
             }
             Gfx.reclip(prev);
         }
-        foot(y + P + rowsH + 8, right, state == PLAIN ? "UNSYNCED" : null);
+        if (!minimal) foot(bodyTop + rowsH + 8, right, state == PLAIN ? "UNSYNCED" : null);
+    }
+
+    /** Track context, art, a seekable timeline and transport controls share the panel's existing HUD treatment. */
+    private void drawTrackHeader(float x, float y, float h) {
+        Media.State s = sample() ? SAMPLE_TRACK : Media.cur != null ? Media.cur : track;
+        if (s == null) return;
+        float inset = bool("accent") && bool("bg") ? 3 : 0;
+        float left = x + P + inset + 2, top = y + P + 2, right = x + w - P;
+        boolean art = bool("songInfo") && bool("albumArt");
+        if (art) { trackArt(left, top, 28, s); left += 36; }
+
+        boolean hover = !Menu.hudEdit && cursorOver(x, y, w, h);
+        String controlMode = str("playerControls");
+        boolean controls = !Menu.hudEdit && s != SAMPLE_TRACK && (controlMode.equals("Always") || (controlMode.equals("On hover") && hover));
+        float controlWidth = controls ? 53 : 0;
+        float titleRight = right - controlWidth;
+        if (bool("songInfo")) {
+            drawFit(font(), 11, left, top + 8, color(), disp(s.title), titleRight - left);
+            String sub = s.artist;
+            if (!s.album.isEmpty()) sub = sub.isEmpty() ? s.album : sub + "  ·  " + s.album;
+            if (!sub.isEmpty()) drawFit(Gfx.UI, 9, left, top + 21, Gfx.a(labelColor(), 0.92f), disp(sub), titleRight - left);
+            else drawFit(Gfx.MONO, 8, left, top + 21, labelColor(), s.app.toUpperCase(Locale.ROOT), titleRight - left);
+        }
+
+        if (controls) {
+            float cx = right - 45, cy = top + 13;
+            playerButton("lyrics.prev", "<", cx, cy, s.canPrev, Media::prev);
+            playerButton("lyrics.play", s.playing ? "||" : ">", cx + 17, cy, s.canPlay, Media::toggle);
+            playerButton("lyrics.next", ">", cx + 34, cy, s.canNext, Media::next);
+        }
+
+        if (bool("trackProgress") && s.timeline()) {
+            float py = top + 31, pw = right - left;
+            float p = (float) Math.max(0, Math.min(1, s.position() / s.dur));
+            Gfx.rect(left, py, pw, 2, 1, Gfx.a(labelColor(), 0.2f));
+            Gfx.rect(left, py, pw * p, 2, 1, color());
+            boolean seek = controls && s.canSeek && !Menu.hudEdit && s != SAMPLE_TRACK;
+            if (seek && Hits.box("lyrics.seek", left, py - 5, pw, 12)) Gfx.rect(left + pw * p - 3, py - 2, 6, 6, 3, Gfx.ICE);
+            if (seek && Hits.clicked("lyrics.seek") == 0 && pw > 0) {
+                float mx = (float) (Input.mx * Gfx.fbW / Input.ww) / Gfx.s;
+                Media.seek(Math.max(0, Math.min(1, (mx - left) / pw)) * s.dur);
+            }
+            if (!str("trackTime").equals("Hidden")) {
+                String elapsed = MediaPlayer.clock(s.position());
+                String total = str("trackTime").equals("Remaining") ? "-" + MediaPlayer.clock(s.dur - s.position()) : MediaPlayer.clock(s.dur);
+                float ty = top + 40;
+                Gfx.text(Gfx.MONO, 7.5f, left, ty, Gfx.a(labelColor(), 0.9f), elapsed, false, 0);
+                Gfx.text(Gfx.MONO, 7.5f, right - Gfx.width(Gfx.MONO, 7.5f, total), ty, Gfx.a(labelColor(), 0.9f), total, false, 0);
+            }
+        }
+    }
+
+    private void trackArt(float x, float y, float size, Media.State s) {
+        Gfx.rect(x, y, size, size, 4, Gfx.CARD2);
+        boolean has = s != SAMPLE_TRACK && s.art.equals(Media.artShown) && Gfx.hasTexture(Media.ART);
+        if (has) Gfx.image(Media.ART, x, y, size, size, 0xFFFFFFFF, 4);
+        else {
+            String initial = s.title.trim().isEmpty() ? "♪" : s.title.trim().substring(0, 1).toUpperCase(Locale.ROOT);
+            Gfx.text(font(), 14, x + (size - Gfx.width(font(), 14, initial)) / 2, y + size / 2, Gfx.a(color(), 0.9f), initial, false, 0);
+        }
+    }
+
+    private void playerButton(String id, String label, float cx, float cy, boolean enabled, Runnable action) {
+        float bx = cx - 7, by = cy - 8;
+        boolean hot = enabled && !Menu.hudEdit && Hits.box(id, bx, by, 14, 16);
+        if (hot) Gfx.rect(bx - 2, by - 1, 18, 18, 4, Gfx.a(Gfx.ICE, 0.15f));
+        int c = enabled ? (hot ? Gfx.ICE : color()) : Gfx.a(labelColor(), 0.5f);
+        Gfx.textC(Gfx.MONO, 9, cx, cy, c, label, 0);
+        if (enabled && !Menu.hudEdit && Hits.clicked(id) == 0) action.run();
+    }
+
+    private static boolean cursorOver(float x, float y, float w, float h) {
+        if (!Hits.free()) return false;
+        float mx = (float) (Input.mx * Gfx.fbW / Input.ww) / Gfx.s;
+        float my = (float) (Input.my * Gfx.fbH / Input.wh) / Gfx.s;
+        return mx >= x && my >= y && mx < x + w && my < y + h;
+    }
+
+    private void drawFit(int face, float size, float x, float cy, int col, String value, float max) {
+        if (max <= 4 || value == null || value.isEmpty()) return;
+        float tw = Gfx.width(face, size, value);
+        while (tw > max && size > 7) { size -= 0.5f; tw = Gfx.width(face, size, value); }
+        String text = value;
+        while (tw > max && text.length() > 4) {
+            text = text.substring(0, text.length() - 4).trim() + "...";
+            tw = Gfx.width(face, size, text);
+        }
+        Gfx.text(face, size, x, cy, col, text, bool("shadow"), 0);
     }
 
     /**
@@ -708,19 +1065,19 @@ final class Lyrics extends Module {
     /** Footer: attribution (required courtesy to LRCLIB), or the timing just nudged. */
     private void foot(float cy, float right, String extra) {
         boolean nudged = System.currentTimeMillis() - nudgeAt < 1500;
-        String s = nudged ? String.format(Locale.ROOT, "TIMING %+d MS", Math.round(num("offset") + trackOffset())) : (extra != null ? extra + "  ·  " : "") + "LYRICS: LRCLIB";
+        String s = nudged ? String.format(Locale.ROOT, "TIMING %+d MS", Math.round(num("offset") + trackOffset())) : (extra != null ? extra + "  ·  " : "") + "LYRICS: " + lyricSource;
         int c = nudged ? color() : Gfx.a(labelColor(), 0.7f);
         Gfx.text(Gfx.MONO, 8, right - Gfx.width(Gfx.MONO, 8, s), cy, c, s, false, 0);
     }
 
     /** A whole line in the label colour, lit towards the text colour by lit (0..1); shrunk, then cut, to fit. */
     private void text(String s, float size, float lit, float left, float right, boolean centre, float cy, float a) {
-        float max = right - left, tw = Gfx.width(Gfx.SEMI, size, s);
-        if (tw > max) { size = Math.max(8, size * max / tw); tw = Gfx.width(Gfx.SEMI, size, s); }
-        while (tw > max && s.length() > 4) { s = s.substring(0, s.length() - 4).trim() + "..."; tw = Gfx.width(Gfx.SEMI, size, s); }
+        float max = right - left, tw = Gfx.width(font(), size, s);
+        if (tw > max) { size = Math.max(8, size * max / tw); tw = Gfx.width(font(), size, s); }
+        while (tw > max && s.length() > 4) { s = s.substring(0, s.length() - 4).trim() + "..."; tw = Gfx.width(font(), size, s); }
         float a0 = Gfx.alpha;
         Gfx.alpha = a0 * a * (0.8f + 0.2f * lit);
-        Gfx.text(Gfx.SEMI, size, centre ? (left + right) / 2 - tw / 2 : left, cy, Gfx.mix(labelColor(), color(), lit), s, bool("shadow"), 0);
+        Gfx.text(font(), size, centre ? (left + right) / 2 - tw / 2 : left, cy, Gfx.mix(labelColor(), color(), lit), s, bool("shadow"), 0);
         Gfx.alpha = a0;
     }
 
@@ -729,39 +1086,47 @@ final class Lyrics extends Module {
      * The word being sung hops a little and glows softly. Shrinks to fit, never cut (the fill must stay readable).
      */
     private void fill(String[] ws, float[] f, float size, float left, float right, boolean centre, float cy, float a) {
-        float max = right - left, sp = Gfx.width(Gfx.SEMI, size, " "), total = -sp;
-        for (String w : ws) total += Gfx.width(Gfx.SEMI, size, w) + sp;
+        float max = right - left, sp = Gfx.width(font(), size, " "), total = -sp;
+        for (String w : ws) total += Gfx.width(font(), size, w) + sp;
         if (total > max) {
             size = Math.max(7, size * max / total);
-            sp = Gfx.width(Gfx.SEMI, size, " ");
+            sp = Gfx.width(font(), size, " ");
             total = -sp;
-            for (String w : ws) total += Gfx.width(Gfx.SEMI, size, w) + sp;
+            for (String w : ws) total += Gfx.width(font(), size, w) + sp;
         }
         float x = centre ? (left + right) / 2 - total / 2 : left, a0 = Gfx.alpha;
         boolean sh = bool("shadow"), calm = Config.calm();
-        int col = color(), dim = labelColor();
+        int col = color(), dim = labelColor(), glowCol = glowColor(), glowCol2 = glowColor2();
+        float glow = (float) num("glow") / 100;
         Gfx.alpha = a0 * a;
         for (int k = 0; k < ws.length; k++) {
-            float ww = Gfx.width(Gfx.SEMI, size, ws[k]), fk = f[k];
+            float ww = Gfx.width(font(), size, ws[k]), fk = f[k];
             boolean active = fk > 0 && fk < 1;
-            float wy = cy - (calm || !active ? 0 : (float) Math.sin(fk * Math.PI) * size * 0.07f);
-            if (fk >= 1) Gfx.text(Gfx.SEMI, size, x, wy, col, ws[k], sh, 0);
+            float motion = Config.calm() ? 0 : (float) num("motion") / 100;
+            float wy = cy - (!active ? 0 : (float) Math.sin(fk * Math.PI) * size * 0.07f * motion);
+            if (fk >= 1) Gfx.text(font(), size, x, wy, col, ws[k], sh, 0);
             else {
-                Gfx.text(Gfx.SEMI, size, x, wy, Gfx.a(dim, 0.8f), ws[k], sh, 0);
+                Gfx.text(font(), size, x, wy, Gfx.a(dim, 0.8f), ws[k], sh, 0);
                 if (active) {
-                    if (!calm) {
-                        int g = Gfx.a(col, 0.09f);
-                        Gfx.text(Gfx.SEMI, size, x - 1, wy, g, ws[k], false, 0);
-                        Gfx.text(Gfx.SEMI, size, x + 1, wy, g, ws[k], false, 0);
-                        Gfx.text(Gfx.SEMI, size, x, wy - 1, g, ws[k], false, 0);
-                        Gfx.text(Gfx.SEMI, size, x, wy + 1, g, ws[k], false, 0);
+                    if (!calm && glow > 0) {
+                        float beat = bool("beatGlow") ? 0.45f + 0.55f * (float) Math.sin(fk * Math.PI) : 1;
+                        int g = Gfx.a(col, (0.02f + 0.11f * glow) * beat);
+                        Gfx.text(font(), size, x - 1, wy, g, ws[k], false, 0);
+                        Gfx.text(font(), size, x + 1, wy, g, ws[k], false, 0);
+                        Gfx.text(font(), size, x, wy - 1, g, ws[k], false, 0);
+                        Gfx.text(font(), size, x, wy + 1, g, ws[k], false, 0);
+                        if (bool("twoTone")) {
+                            int g1 = Gfx.a(glowCol, 0.035f + 0.08f * glow), g2 = Gfx.a(glowCol2, 0.035f + 0.08f * glow);
+                            Gfx.text(font(), size, x - 2, wy, g1, ws[k], false, 0);
+                            Gfx.text(font(), size, x + 2, wy, g2, ws[k], false, 0);
+                        }
                     }
                     float fw = (ww + 2) * fk;
                     int[] pc = Gfx.clipIn(x - 1, wy - size, fw + 3, size * 2); // soft leading edge
-                    Gfx.text(Gfx.SEMI, size, x, wy, Gfx.a(col, 0.5f), ws[k], false, 0);
+                    Gfx.text(font(), size, x, wy, Gfx.a(col, 0.5f), ws[k], false, 0);
                     Gfx.reclip(pc);
                     pc = Gfx.clipIn(x - 1, wy - size, fw, size * 2);
-                    Gfx.text(Gfx.SEMI, size, x, wy, col, ws[k], false, 0);
+                    Gfx.text(font(), size, x, wy, col, ws[k], false, 0);
                     Gfx.reclip(pc);
                 }
             }
@@ -804,6 +1169,7 @@ final class Lyrics extends Module {
         String[] w;
         long[] at, until;
         double x, y, z, ax, ay, az;
+        double viewYaw, viewPitch, viewDist;
         float fit, halfW, halfH, seed;
         long fadeAt = Long.MAX_VALUE;
         /** word times are real stamps (held notes glow only then) */
@@ -817,6 +1183,7 @@ final class Lyrics extends Module {
     private int spawnedIdx = -2;
     private boolean wasPlaying;
     private double fx = Double.NaN, fy, fz;
+    private double camX, camY, camZ, camYaw, camPitch;
     private long followNs;
 
     private void clearWorld() { pieces.clear(); pending.clear(); spawnedIdx = -2; }
@@ -828,9 +1195,6 @@ final class Lyrics extends Module {
 
     private String wStyle() { return str("wStyle"); }
 
-    /** Effects 0..1 (glow, pop, motion blur, outline). */
-    private float fx() { return (float) num("fx") / 100; }
-
     private double unit() { return UNIT * num("worldSize"); }
     private double near() { return num("dist") * 2 / 3; }
     private double far() { return num("dist") * 4 / 3; }
@@ -841,9 +1205,9 @@ final class Lyrics extends Module {
         return new double[] {-Math.sin(y) * Math.cos(p), -Math.sin(p), Math.cos(y) * Math.cos(p)};
     }
     /** Font px of a word (fixed, whatever the GUI scale: in-world layout must not change with it). */
-    private static float fw(String w) { return Gfx.widthFree(Gfx.SEMI, REF, w) / 2; }
+    private float fw(String w) { return Gfx.widthFree(font(), REF, w) / 2; }
     /** Font px of words in a row (a space between). */
-    private static float fontW(String[] ws) {
+    private float fontW(String[] ws) {
         float sp = fw(" "), t = -sp;
         for (String w : ws) t += fw(w) + sp;
         return Math.max(0, t);
@@ -876,24 +1240,75 @@ final class Lyrics extends Module {
         noWorld = c == null; // camera unknown here (1.8.9 third person): the panel stands in
         Gfx.s = prev;
         if (c == null) return;
+        camX = c[0]; camY = c[1]; camZ = c[2]; camYaw = c[3]; camPitch = c[4];
         long nowMs = System.currentTimeMillis();
         Media.State s = Media.cur;
-        boolean playing = s != null && s.playing && (state == SYNCED || state == PLAIN);
+        boolean playing = s != null && s.playing;
+        boolean lyricData = state == SYNCED || state == PLAIN;
+        int idx = lyricData ? index(now()) : -1;
+        boolean noteOnly = playing && bool("musicNotes") && (!lyricData || idx < 0);
         if (!playing) { if (wasPlaying) fadeAll(nowMs); spawnedIdx = -2; }
         wasPlaying = playing;
-        if (playing) {
+        if (playing && lyricData && idx >= 0) {
             double t = now();
-            int idx = index(t);
             if (idx != spawnedIdx) { spawnedIdx = idx; setLine(idx, t, nowMs, c, W, H); }
+        } else if (noteOnly && nowMs - notesAt > 780) {
+            spawnMusicNote(nowMs, c, W, H);
+            notesAt = nowMs;
         }
         frame(nowMs, c, W, H);
         if (!pieces.isEmpty()) draw(nowMs, c, fbW, fbH, W, H);
+        drawTrackIntro(nowMs, c, W, H);
+    }
+
+    private void spawnMusicNote(long now, double[] c, float W, float H) {
+        if (pieces.isEmpty() || spawnedIdx != -3) fadeAll(now);
+        spawnedIdx = -3;
+        String[] note = {rnd.nextBoolean() ? "♪" : "♫"};
+        long[] at = {now}, until = {now + 800};
+        long life = 2200;
+        double[] eye = {c[0], c[1], c[2]};
+        double[] p;
+        if (wStyle().equals("Sky")) {
+            p = skyPos(eye, c[4], c[3]);
+            p[0] += (rnd.nextDouble() - 0.5) * 2.4;
+            p[1] += (rnd.nextDouble() - 0.5) * 1.3;
+            p[2] += (rnd.nextDouble() - 0.5) * 2.4;
+        } else {
+            p = scatter(eye, c[4], c[3], note, rnd.nextInt(8), now, life, false, c, W, H);
+        }
+        Piece q = addPiece(note, at, until, p, eye, 1, c, W, H);
+        q.fadeAt = now + life;
+        q.stamped = false;
+        while (pieces.size() > 12) pieces.remove(0);
+    }
+
+    private void drawTrackIntro(long now, double[] c, float W, float H) {
+        if (!bool("worldIntro") || trackIntroAt <= 0) return;
+        float t = (now - trackIntroAt) / 3000f;
+        if (t < 0 || t >= 1) return;
+        double[] d = dir(Math.max(-55, Math.min(10, c[4] - 10)), c[3]);
+        double dist = Math.max(3, Math.min(8, num("dist")));
+        double x = c[0] + d[0] * dist, y = c[1] + d[1] * dist, z = c[2] + d[2] * dist;
+        if (!Project.to(x, y, z) || Project.depth < 1) return;
+        float a = Math.min(1, Math.min(t * 4, (1 - t) * 4));
+        float sx = Project.sx(W) * Gfx.base, sy = Project.sy(H) * Gfx.base;
+        float size = 15 + 3 * (1 - a);
+        int col = Gfx.a(color(), a);
+        String titleText = disp(introTitle);
+        float tw = Gfx.widthFree(font(), size, titleText);
+        Gfx.textFree(font(), size, sx - tw / 2, sy, col, titleText);
+        if (!introArtist.isEmpty()) {
+            String sub = disp(introArtist);
+            float sw = Gfx.widthFree(Gfx.UI, size * 0.55f, sub);
+            Gfx.textFree(Gfx.UI, size * 0.55f, sx - sw / 2, sy + size * 1.25f, Gfx.a(labelColor(), a * 0.85f), sub);
+        }
     }
 
     /** The song moved on to line idx: its words put on the wall clock and placed (Lines/Row) or queued (Scatter). */
     private void setLine(int idx, double t, long now, double[] c, float W, float H) {
         String st = wStyle();
-        boolean lines = st.equals("Lines") || state == PLAIN, row = !lines && st.equals("Row"); // plain lyrics: no word timing to show
+        boolean sky = st.equals("Sky"), lines = st.equals("Lines") || sky || state == PLAIN, row = !lines && (st.equals("Row") || st.equals("Walls")); // plain lyrics: no word timing to show
         if (lines || row) fadeAll(now);
         else { pending.clear(); for (Piece p : pieces) if (p.fadeAt == Long.MAX_VALUE) p.fadeAt = now; }
         if (idx < 0 || idx >= texts.length || words[idx].length == 0) return;
@@ -912,7 +1327,19 @@ final class Lyrics extends Module {
         double[] eye = {c[0], c[1], c[2]}; // the camera, interpolated every frame (the player only moves 20 times a second)
         double yaw = c[3], pitch = c[4];
         if (Double.isNaN(fx) || d2(fx, fy, fz, c[0], c[1], c[2]) > 1024) { fx = c[0]; fy = c[1]; fz = c[2]; }
-        if (lines) {
+        if (sky) {
+            // A gently arced, camera-facing lyric line in the upper view. It stays in the world and follows the view's yaw.
+            double[] mid = skyPos(eye, pitch, yaw), right = dir(0, yaw + 90);
+            float sp = fw(" "), total = fontW(ws), x = -total / 2;
+            double dist = Math.sqrt(d2(mid[0], mid[1], mid[2], eye[0], eye[1], eye[2])), u = unit();
+            double fit = Math.min(1, 2 * dist * Math.tan(Math.toRadians(hFov(c[5], W, H) * 0.38)) / Math.max(total * u, 0.001));
+            for (int k = 0; k < n; k++) {
+                float ww = fw(ws[k]); double o = (x + ww / 2) * u;
+                double curve = bool("curve") ? Math.max(0, 1 - Math.pow((x + ww / 2) / Math.max(total / 2, 1), 2)) * u * 3 : 0;
+                Piece p = addPiece(new String[] {ws[k]}, new long[] {at[k]}, new long[] {until[k]}, new double[] {mid[0] + right[0] * o, mid[1] + curve, mid[2] + right[2] * o}, eye, (float) fit, c, W, H);
+                p.stamped = stamped; x += ww + sp;
+            }
+        } else if (lines) {
             addPiece(ws, at, until, scatter(eye, pitch, yaw, ws, 0, at[0], 4000, true, c, W, H), eye, 1, c, W, H).stamped = stamped;
         } else if (!row) { // scattered round the crosshair, each when it is sung (see frame)
             for (int k = 0; k < n; k++) {
@@ -932,7 +1359,9 @@ final class Lyrics extends Module {
             for (int k = 0; k < n; k++) {
                 float ww = fw(ws[k]);
                 double o = (x + ww / 2) * u;
-                addPiece(new String[] {ws[k]}, new long[] {at[k]}, new long[] {until[k]}, new double[] {mid[0] + right[0] * o, mid[1], mid[2] + right[2] * o}, eye, (float) fit, c, W, H).stamped = stamped;
+                double curve = bool("curve") ? Math.max(0, 1 - Math.pow((x + ww / 2) / Math.max(total / 2, 1), 2)) * u * 7 : 0;
+                Piece p = addPiece(new String[] {ws[k]}, new long[] {at[k]}, new long[] {until[k]}, new double[] {mid[0] + right[0] * o, mid[1] + curve, mid[2] + right[2] * o}, eye, (float) fit, c, W, H);
+                p.stamped = stamped;
                 x += ww + sp;
             }
         }
@@ -968,11 +1397,21 @@ final class Lyrics extends Module {
     }
 
     private double[] pos(Piece p, boolean follow) {
+        if (bool("viewLock")) {
+            double[] d = dir(camPitch + p.viewPitch, camYaw + p.viewYaw);
+            return new double[] {camX + d[0] * p.viewDist, camY + d[1] * p.viewDist, camZ + d[2] * p.viewDist};
+        }
         if (!follow || Double.isNaN(fx)) return new double[] {p.x, p.y, p.z};
         return new double[] {p.x + fx - p.ax, p.y + fy - p.ay, p.z + fz - p.az};
     }
 
     private static double d2(double a, double b, double c, double x, double y, double z) { return (a - x) * (a - x) + (b - y) * (b - y) + (c - z) * (c - z); }
+
+    private float wordScale(String word) {
+        if (!bool("varied")) return 1;
+        int h = word.toLowerCase(Locale.ROOT).hashCode();
+        return 0.88f + (h & 255) / 255f * 0.24f;
+    }
 
     private Piece addPiece(String[] ws, long[] at, long[] until, double[] pos, double[] eye, float fitLimit, double[] c, float W, float H) {
         double dist = Math.max(0.5, Math.sqrt(d2(pos[0], pos[1], pos[2], eye[0], eye[1], eye[2]))), u = unit(), width = fontW(ws) * u;
@@ -980,6 +1419,11 @@ final class Lyrics extends Module {
         Piece p = new Piece();
         p.w = ws; p.at = at; p.until = until;
         p.x = pos[0]; p.y = pos[1]; p.z = pos[2];
+        double dx = pos[0] - eye[0], dy = pos[1] - eye[1], dz = pos[2] - eye[2];
+        p.viewDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        double targetYaw = Math.toDegrees(Math.atan2(-dx, dz));
+        double targetPitch = -Math.toDegrees(Math.atan2(dy, Math.hypot(dx, dz)));
+        p.viewYaw = angle(targetYaw - c[3]); p.viewPitch = targetPitch - c[4];
         boolean nf = Double.isNaN(fx);
         p.ax = nf ? eye[0] : fx; p.ay = nf ? eye[1] : fy; p.az = nf ? eye[2] : fz;
         p.fit = fit;
@@ -990,9 +1434,17 @@ final class Lyrics extends Module {
         return p;
     }
 
+    private static double angle(double a) { while (a > 180) a -= 360; while (a < -180) a += 360; return a; }
+
     /** Straight ahead, a touch below the crosshair, halfway between the near and far distance. */
     private double[] centerPos(double[] eye, double pitch, double yaw) {
         double[] d = dir(Math.max(-40, Math.min(40, pitch + 4)), yaw);
+        double m = (near() + far()) / 2;
+        return new double[] {eye[0] + d[0] * m, eye[1] + d[1] * m, eye[2] + d[2] * m};
+    }
+
+    private double[] skyPos(double[] eye, double pitch, double yaw) {
+        double[] d = dir(Math.max(-65, Math.min(5, pitch - 18)), yaw);
         double m = (near() + far()) / 2;
         return new double[] {eye[0] + d[0] * m, eye[1] + d[1] * m, eye[2] + d[2] * m};
     }
@@ -1055,8 +1507,15 @@ final class Lyrics extends Module {
     /** Every piece, furthest first: it springs up into place when sung, sung words light up, and it shrinks as it fades. */
     private void draw(long now, double[] c, int fbW, int fbH, float W, float H) {
         boolean follow = bool("follow"), calm = Config.calm();
-        float e = fx();
-        float glow = e, outline = Math.min(0.6f, e * 1.5f), blurS = calm ? 0 : e * 0.83f, bounce = calm ? 0 : Math.min(1, e / 0.6f);
+        float glow = (float) num("glow") / 100, outline = (float) num("outline") / 100;
+        float blurS = calm ? 0 : (float) num("blur") / 100, bounce = calm ? 0 : (float) num("motion") / 100;
+        boolean pvpAir = wStyle().equals("Air") && str("airMode").equals("PvP");
+        boolean beat = bool("beatGlow") && !pvpAir;
+        if (pvpAir) { glow = 0; outline = 0; blurS = 0; bounce = 0; }
+        float speed = Math.max(0.25f, (float) num("animSpeed"));
+        float opacity = (float) num("opacity") / 100;
+        boolean riseOnEnter = str("appear").equals("Rise"), popOnEnter = str("appear").equals("Pop");
+        String exit = str("disappear");
         int col = color();
         double tanY = Math.tan(Math.toRadians(c[5]) / 2), u = unit();
         ArrayList<Piece> order = new ArrayList<>(pieces);
@@ -1064,15 +1523,17 @@ final class Lyrics extends Module {
         {
             for (Piece p : order) {
                 if (now < p.at[0]) continue;
-                float appear = calm ? 1 : Math.max(0, Math.min(1, (now - p.at[0]) / (float) APPEAR));
-                float fade = now < p.fadeAt ? 0 : Math.max(0, Math.min(1, (now - p.fadeAt) / (float) FADE));
-                float alpha = easeOutCubic(appear) * (1 - fade);
+                float appear = calm ? 1 : Math.max(0, Math.min(1, (now - p.at[0]) * speed / (float) APPEAR));
+                float fade = now < p.fadeAt ? 0 : Math.max(0, Math.min(1, (now - p.fadeAt) * speed / (float) FADE));
+                float alpha = easeOutCubic(appear) * (1 - fade) * opacity;
                 if (alpha < 0.02f) continue;
                 float blur = blurS * Math.max(1 - appear, fade);
-                float pop = (1 - 0.6f * bounce * (1 - easeOutBack(appear, 2))) * (1 - 0.15f * fade);
-                double rise = -0.4 * bounce * (1 - easeOutCubic(appear)), drift = Math.sin(now / 700.0 + p.seed) * 0.05 * bounce;
+                float pop = popOnEnter ? (1 - 0.6f * bounce * (1 - easeOutBack(appear, 2))) * (1 - 0.15f * fade) : 1;
+                double rise = riseOnEnter ? -0.4 * bounce * (1 - easeOutCubic(appear)) : 0;
+                double drift = exit.equals("Drift") ? Math.sin(now / 700.0 + p.seed) * 0.05 * bounce * fade : 0;
+                double floatUp = exit.equals("Float up") ? 0.32 * fade : 0;
                 double[] q = pos(p, follow);
-                if (!Project.to(q[0], q[1] + rise + drift, q[2]) || Project.depth < 1 || Math.abs(Project.nx) > 1.3 || Math.abs(Project.ny) > 1.3) continue;
+                if (!Project.to(q[0], q[1] + rise + drift + floatUp, q[2]) || Project.depth < 1 || Math.abs(Project.nx) > 1.3 || Math.abs(Project.ny) > 1.3) continue;
                 alpha *= Math.min(1, (float) (Project.depth - 1) / 1.5f); // walked into: fades instead of filling the screen
                 if (alpha < 0.02f) continue;
                 float ax = Project.sx(W) * Gfx.base, ay = Project.sy(H) * Gfx.base; // framebuffer px
@@ -1086,36 +1547,61 @@ final class Lyrics extends Module {
                     float ww = fw(p.w[i]), a = alpha, pulse = 1;
                     boolean lit = now >= p.at[i] && (now < p.until[i] || i == cur);
                     if (karaoke && !lit) a *= now < p.at[i] ? 0.45f : 0.7f;
-                    else if (karaoke) { float t = Math.max(0, Math.min(1, (now - p.at[i]) / 250f)); if (t < 1) pulse += 0.12f * bounce * (float) Math.sin(t * Math.PI); }
-                    float hold = held(p, i, now);
+                    else if (karaoke && beat) { float t = Math.max(0, Math.min(1, (now - p.at[i]) / 250f)); if (t < 1) pulse += 0.12f * bounce * (float) Math.sin(t * Math.PI); }
+                    float hold = beat ? held(p, i, now) : 0;
                     pulse *= 1 + 0.1f * bounce * hold;
-                    word(p.w[i], ax + (float) ((x + ww / 2) * fpx), ay, (float) (REF / 2 * fpx * pulse), a, blur, col, glow, outline, 1 + 0.8f * hold);
+                    word(p.w[i], ax + (float) ((x + ww / 2) * fpx), ay, (float) (REF / 2 * fpx * pulse * wordScale(p.w[i])), a, blur, col, glow, outline, 1 + 0.8f * hold);
                     x += ww + sp;
                 }
+                if (bool("stars") || bool("motes") || bool("streaks")) ambient(ax, ay, p.seed, now, alpha, skyMode());
+            }
+        }
+    }
+
+    private boolean skyMode() { return str("wStyle").equals("Sky"); }
+
+    /** Small deterministic sparkles around projected lyric lines; bounded to the line so they never become screen clutter. */
+    private void ambient(float x, float y, float seed, long now, float alpha, boolean sky) {
+        int count = (int) num("density");
+        float colA = sky ? 1 : 0.7f;
+        int c = str("preset").equals("Album") ? color() : Config.color(id, "ambientColor", 0xFF75D6FF);
+        double phase = now / 900.0 + seed;
+        for (int i = 0; i < count; i++) {
+            double a = phase + i * 2.399963, r = 12 + (i % 5) * 6;
+            float px = x + (float) (Math.cos(a) * r), py = y + (float) (Math.sin(a * 0.77) * (sky ? r * 0.48 : r * 0.75));
+            float blink = 0.35f + 0.65f * (float) (0.5 + 0.5 * Math.sin(phase * 1.6 + i));
+            if (bool("stars") && (sky || i % 3 == 0)) Gfx.textFree(Gfx.SEMI, 7 + (i % 3), px, py, Gfx.a(c, alpha * colA * blink * 0.65f), "*");
+            if (bool("motes") && i % 2 == 0) Gfx.textFree(Gfx.UI, 5, px + 3, py + 2, Gfx.a(c, alpha * blink * 0.38f), "·");
+            if (bool("streaks") && i % 4 == 0) {
+                float len = 3 + (i % 3) * 2;
+                Gfx.textFree(Gfx.UI, 5, px + len, py - len, Gfx.a(c, alpha * blink * 0.45f), "/");
             }
         }
     }
 
     /** Glow halo, motion-blur smears and a dark outline ring, then the word on top; centre and size P in framebuffer px, unsnapped. */
-    private static void word(String s, float cx, float cy, float P, float a, float blur, int col, float glow, float outline, float boost) {
-        float k = P / REF, x = cx - Gfx.widthFree(Gfx.SEMI, P, s) / 2;
+    private void word(String s, float cx, float cy, float P, float a, float blur, int col, float glow, float outline, float boost) {
+        float k = P / REF, x = cx - Gfx.widthFree(font(), P, s) / 2;
         if (glow > 0.02f) {
             float ga = a * (0.1f + 0.05f * glow) * boost, spread = 2 * (0.5f + 0.5f * glow) * (0.75f + 0.25f * boost) * k;
-            if (ga > 0.02f) for (float[] o : GLOW) Gfx.textFree(Gfx.SEMI, P, x + o[0] * spread, cy + o[1] * spread, Gfx.a(col, ga), s);
+            if (ga > 0.02f) {
+                if (bool("twoTone")) for (int i = 0; i < GLOW.length; i++) { float[] o = GLOW[i]; int gc = i % 2 == 0 ? glowColor() : glowColor2(); Gfx.textFree(font(), P, x + o[0] * spread * 1.5f, cy + o[1] * spread * 1.5f, Gfx.a(gc, ga * 0.75f), s); }
+                for (float[] o : GLOW) Gfx.textFree(font(), P, x + o[0] * spread, cy + o[1] * spread, Gfx.a(col, ga), s);
+            }
         }
         if (blur > 0.01f) for (int j = 1; j <= 2; j++) {
             int bc = Gfx.a(col, a * 0.3f / j);
             float dx = 2 * j * 1.6f * blur * k;
-            Gfx.textFree(Gfx.SEMI, P, x - dx, cy, bc, s);
-            Gfx.textFree(Gfx.SEMI, P, x + dx, cy, bc, s);
+            Gfx.textFree(font(), P, x - dx, cy, bc, s);
+            Gfx.textFree(font(), P, x + dx, cy, bc, s);
         }
         if (outline > 0.02f) {
             int in = Gfx.a(0xFF070A14, a * 0.34f * outline), out = Gfx.a(0xFF070A14, a * 0.16f * outline);
             for (float[] o : RING) {
-                Gfx.textFree(Gfx.SEMI, P, x + o[0] * 1.1f * k, cy + o[1] * 1.1f * k, in, s);
-                Gfx.textFree(Gfx.SEMI, P, x + o[0] * 2.2f * k, cy + o[1] * 2.2f * k, out, s);
+                Gfx.textFree(font(), P, x + o[0] * 1.1f * k, cy + o[1] * 1.1f * k, in, s);
+                Gfx.textFree(font(), P, x + o[0] * 2.2f * k, cy + o[1] * 2.2f * k, out, s);
             }
         }
-        Gfx.textFree(Gfx.SEMI, P, x, cy, Gfx.a(col, a * (1 - 0.55f * blur)), s);
+        Gfx.textFree(font(), P, x, cy, Gfx.a(col, a * (1 - 0.55f * blur)), s);
     }
 }

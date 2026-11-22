@@ -20,6 +20,7 @@ final class Modules {
     static final Waypoints WAYPOINTS = new Waypoints();
     static final MediaPlayer MEDIA = new MediaPlayer();
     static final Lyrics LYRICS = new Lyrics();
+    static final LyricsBar LYRICS_BAR = new LyricsBar();
     static final Stopwatch STOPWATCH = new Stopwatch();
     static final Screenshots SHOTS = new Screenshots();
     static final SelfTag SELFTAG = new SelfTag();
@@ -53,6 +54,7 @@ final class Modules {
         all.add(WAYPOINTS);
         all.add(MEDIA);
         all.add(LYRICS);
+        all.add(LYRICS_BAR);
         // c5
         all.add(new Reach());
         all.add(new Combo());
@@ -331,6 +333,7 @@ final class Modules {
         if (WAYPOINTS.enabled() && world) WAYPOINTS.drawMarkers(fbW, fbH);
         if (TntTimer.M.enabled() && world) TntTimer.M.drawWorld(fbW, fbH);
         if (LYRICS.enabled() && world) LYRICS.drawWorld(fbW, fbH);
+        if (LYRICS.enabled() && Input.inWorld() && (world || Input.worldGuiOpen)) LyricsWorldPanel.draw(fbW, fbH);
         SELFTAG.drawWorld(fbW, fbH, SELFTAG.enabled() && world);
         if (world) { Toast.draw(fbW); SHOTS.drawCard(fbW); menuHint(fbW); }
     }

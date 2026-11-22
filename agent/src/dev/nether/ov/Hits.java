@@ -30,7 +30,7 @@ final class Hits {
     }
 
     /** The cursor may interact with HUD widgets: our menu or a game screen holds it. */
-    static boolean free() { return Input.menuOpen || Game.screenOpen(); }
+    static boolean free() { return Input.menuOpen || Input.worldGuiOpen || Game.screenOpen(); }
 
     /** Cursor position in framebuffer pixels. */
     private static float mx() { return (float) (Input.mx * Gfx.fbW / Input.ww); }
