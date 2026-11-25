@@ -53,7 +53,10 @@ final class Gfx {
     /** v8 blend: HEAD (titles, nav, PLAY) in Nether Pixel, the rest in Barlow; false = Barlow everywhere. Set by {@link #face}. */
     static boolean pixel = true;
     /** first face index of the lyric display fonts ({@link #lyricFace}); they keep their own shapes whatever the theme */
-    static final int LYRIC0 = 5;
+    static final int LYRIC0 = 7;
+    /** HUD text in Nether Pixel (Feather / vanilla HUD look): Bold for HEAD, Regular for the rest. Set per module while it lays out and draws. */
+    static final int PIXB = 5, PIXR = 6;
+    static boolean hudPix;
     private static final String[] LYRIC_FILES = {"Righteous-Regular", "BebasNeue-Regular", "Poppins-SemiBold", "LilitaOne-Regular", "Pacifico-Regular", "KaushanScript-Regular", "PermanentMarker-Regular", "Neonderthaw-Regular", "Monoton-Regular"};
     private static final Font[] fonts = new Font[LYRIC0 + LYRIC_FILES.length]; // 4 = fallback for characters our fonts lack (accents, Cyrillic, CJK)
     private static final boolean[] lyricTried = new boolean[LYRIC_FILES.length];
@@ -90,6 +93,8 @@ final class Gfx {
         }
         pick();
         fonts[4] = new Font(Font.DIALOG, Font.PLAIN, 12);
+        fonts[PIXB] = faces[0];
+        fonts[PIXR] = faces[2];
         scratch = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
         g2 = scratch.createGraphics();
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
@@ -597,7 +602,12 @@ final class Gfx {
     /** Nether Pixel is drawn at whole multiples of 8 px (one font pixel = a whole number of screen pixels); Barlow and the lyric fonts at any whole size. */
     private static int pxSize(int f, float size) {
         float px = Math.max(Math.max(5, minPx), size * s);
-        return pixel && f == HEAD ? Math.max(8, Math.round(px / 8f) * 8) : Math.max(7, Math.round(px));
+        return (pixel && f == HEAD) || f == PIXB || f == PIXR ? Math.max(8, Math.round(px / 8f) * 8) : Math.max(7, Math.round(px));
+    }
+
+    /** The face actually drawn: theme slots become Nether Pixel while {@link #hudPix} is on. */
+    private static int hf(int f) {
+        return hudPix && f < 4 ? (f == HEAD ? PIXB : PIXR) : f;
     }
 
     /**
@@ -641,6 +651,7 @@ final class Gfx {
 
     /** Width in logical units. spacing is extra logical units per glyph. */
     static float width(int f, float size, String str, float spacing) {
+        f = hf(f);
         int px = pxSize(f, size);
         float w = 0;
         for (int i = 0; i < str.length(); i++) w += glyph(f, px, str.charAt(i)).adv + spacing * s;
@@ -653,6 +664,7 @@ final class Gfx {
 
     /** Draws str with its left edge at x and capital letters centred on cy. Returns the logical width. */
     static float text(int f, float size, float x, float cy, int col, String str, boolean shadow, float spacing) {
+        f = hf(f);
         int px = pxSize(f, size);
         int[] m = met(f, px);
         float cap = px * 0.36f;
@@ -680,6 +692,7 @@ final class Gfx {
      * scaling a much larger glyph down from the next 8 px step.
      */
     static void textFree(int f, float size, float x, float cy, int col, String str) {
+        f = hf(f);
         int px = freePx(size);
         float k = size / px, top = cy + size * 0.36f - (met(f, px)[0] + 2) * k, pen = -2 * k;
         for (int i = 0; i < str.length(); i++) {
@@ -692,6 +705,7 @@ final class Gfx {
 
     /** Width in framebuffer px of {@link #textFree} text. */
     static float widthFree(int f, float size, String str) {
+        f = hf(f);
         int px = freePx(size);
         float w = 0;
         for (int i = 0; i < str.length(); i++) w += glyph(f, px, str.charAt(i)).adv;

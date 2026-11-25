@@ -378,7 +378,8 @@ final class Modules {
                 if (chat != null && bot > chat[2]) continue;
                 if (chat != null && m.bx < chat[0] && bot > chat[1]) continue;
                 Gfx.s = k;
-                m.draw(m.bx / k, m.by / k);
+                Gfx.hudPix = m.mcFont();
+                try { m.draw(m.bx / k, m.by / k); } finally { Gfx.hudPix = false; }
                 Slow.mark2("draw ", m.id);
             }
         } finally {
@@ -1038,12 +1039,12 @@ final class Modules {
                 if (hh % 45 == 0) {
                     String s = DIRS[hh / 45];
                     boolean major = s.length() == 1;
-                    Gfx.textC(Gfx.SEMI, major ? 12 : 9, tx, y + 10, Gfx.a(major ? (hh == 0 ? Th.ac2 : col) : Gfx.DIM, fade), s, 0);
+                    Gfx.textC(Gfx.SEMI, major ? 12 : 9, tx, y + 10, Gfx.a(major ? (hh == 0 ? 0xFFFF5555 : col) : Gfx.DIM, fade), s, 0);
                 } else if (hh % 15 == 0) Gfx.rect(tx - 0.5f, ty - 4, 1, 4, 0, Gfx.a(Gfx.DIM, fade));
                 else Gfx.rect(tx - 0.5f, ty - 2, 1, 2, 0, Gfx.a(Gfx.MUT, fade));
             }
             waypointTicks(x, y, cx, ppd, span);
-            Gfx.rect(cx - 1, y + 5, 2, h - (hd ? 20 : 10), 1, Gfx.a(Th.ac, 0.9f));
+            Gfx.rect(cx - 1, y + 5, 2, h - (hd ? 20 : 10), 1, Gfx.a(0xFFFFFFFF, 0.9f));
             if (hd) Gfx.textC(Gfx.MONO, 10, cx, y + h - 6, Gfx.DIM, String.valueOf(Math.round(bearing) % 360), 0);
         }
     }
