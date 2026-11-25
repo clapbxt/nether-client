@@ -1101,6 +1101,7 @@ public final class Agent {
                 else if (kind.equals("fire") || (kind.equals("lfire") && n[0] > 0)) Hook.fireHooked = true;
                 else if (kind.equals("mount") || kind.equals("lmount")) Hook.mountHooked = true;
                 else if (kind.equals("lsky") || kind.equals("sky")) Hook.skyHooked = true;
+                else if (kind.equals("tag")) Hook.tagHooked = true;
                 System.out.println("[nether-agent] hooked view " + kind + " (" + n[0] + ")");
                 return cw.toByteArray();
             } catch (Throwable t) {

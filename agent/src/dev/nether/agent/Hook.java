@@ -198,7 +198,14 @@ public final class Hook {
 
     /** EntityRenderer.createRenderState(entity, partial): its entity at the start, its result at the return (remembers the ridden entity's state). */
     public static void mountArg(Object entity) { mountArg = entity; }
-    public static void mountTag(Object state) { Object e = mountArg; mountArg = null; if (e != null && e == mountOf) mountState = state; }
+    public static void mountTag(Object state) {
+        Object e = mountArg; mountArg = null; if (e != null && e == mountOf) mountState = state;
+        java.util.function.Consumer<Object> c = stateDone;
+        if (c != null) try { c.accept(state); } catch (Throwable x) { stateDone = null; System.out.println("[nether-agent] render state hook off: " + x); }
+    }
+    /** EntityRenderer.createRenderState returned this state (1.21.2+): 3D skin layers hides flat parts before the model draws. */
+    public static volatile java.util.function.Consumer<Object> stateDone;
+    public static volatile boolean tagHooked;
     /** LivingEntityRenderer.submit's translucent flag for getRenderType: forced on for the faded mount. */
     public static boolean mountTranslucent(boolean t, Object state) {
         Object m = mountOf; // 1.21.2+ passes the render state, 1.21.1 the entity itself
