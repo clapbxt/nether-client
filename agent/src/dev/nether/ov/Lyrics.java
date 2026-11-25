@@ -13,8 +13,10 @@ import java.util.Map;
 /**
  * Synced lyrics for the track {@link Media} reports, from LRCLIB (lrclib.net, community lyrics, no key): a local
  * {@code <client>/lyrics/<artist> - <title>.lrc} wins, then {@code /api/get} (title, artist, album, duration), then
- * {@code /api/search}; when those have no lyrics, lyrics.ovh is a final plain-text fallback. Synced lyrics are
- * preferred over plain ones from any step. Answers are cached on disk by
+ * {@code /api/search}; when those have no lyrics, lyrics.ovh is a final plain-text fallback. Every answer is ranked
+ * (see Q_*): LRCLIB's word-synced "lyricsfile" (hasWordSync) beats NetEase word timing beats line-synced LRC beats
+ * plain text, and a later, better answer replaces a shown one. Sped-up / slowed / nightcore uploads borrow the
+ * original's synced lyrics stretched to their length. Answers are cached on disk by
  * {@link Net}; nothing is bundled or re-shared. "On screen" is a karaoke panel: the current line fills word by word as
  * it is sung, instrumental breaks show three filling dots. "In world" follows River Client's lyric scene, projected by
  * the overlay itself ({@link Project}), no renderer code: words pop up near the crosshair as they are sung (Scatter),
@@ -32,7 +34,7 @@ final class Lyrics extends Module {
     private static final String[] SAMPLE = {"The line that was just sung", "The line being sung now", "The line that comes next"};
     private static final Media.State SAMPLE_TRACK = new Media.State("PREVIEW", "Track title", "Artist name", "Album name", "", true, 72, 214, 1, 0, true, true, true, true);
     private static final int IDLE = 0, LOADING = 1, SYNCED = 2, PLAIN = 3, INSTRUMENTAL = 4, NOT_FOUND = 5, OFFLINE = 6;
-    private static final String[] PROFILE_KEYS = {"enabled", "anchor", "ox", "oy", "scale", "color", "chroma", "labels", "labelColor", "shadow", "bg", "bgAlpha", "accent", "border",
+    private static final String[] PROFILE_KEYS = {"enabled", "textStyle", "pairWords", "anchor", "ox", "oy", "scale", "color", "chroma", "labels", "labelColor", "shadow", "bg", "bgAlpha", "accent", "border",
         "mode", "panelStyle", "lines", "align", "width", "songInfo", "albumArt", "trackProgress", "trackTime", "playerControls", "opacity", "paused", "upper", "panelKey",
         "wStyle", "worldSize", "dist", "follow", "viewLock", "airMode", "musicNotes", "worldIntro", "preset", "font", "lyricsColor", "glowColor", "glowColor2", "twoTone", "appear", "disappear", "animSpeed", "glow", "beatGlow", "motion", "blur", "outline", "curve", "varied", "stars", "motes", "streaks", "density", "ambientColor"};
 
@@ -47,6 +49,17 @@ final class Lyrics extends Module {
     private double[][] wS = new double[0][], wE = new double[0][];
     private boolean[] wTimed = new boolean[0];
     private int state = IDLE, stage;
+    /** rank of the lyrics shown (0 = none): a lookup answer only replaces them when it ranks higher */
+    private int quality;
+    private static final int Q_PLAIN = 1, Q_NE_LRC = 2, Q_LINE = 3, Q_WORD_STARTS = 5, Q_YRC = 6, Q_WORDS = 7, Q_LOCAL = 9;
+    /** title says sped up / slowed / nightcore (other lengths may be stretched), remix (tighter length match) */
+    private boolean speed, remix;
+    /** length ratio of the search record about to be accepted (stretched lyrics), 1 = as is */
+    private double scaleK = 1;
+    /** syllables per second this song is sung at (line-synced timing spreads words with it) */
+    private double songRate = 4.5;
+    private static final java.util.regex.Pattern SPEED = java.util.regex.Pattern.compile("(?i)\\b(sped\\s*up|speed\\s*up|slowed(\\s*(down|\\+|and|&)?\\s*(\\+\\s*)?reverb)?|nightcore|daycore)\\b");
+    private static final java.util.regex.Pattern REMIX = java.util.regex.Pattern.compile("(?i)\\b(remix|rmx|bootleg|mashup|flip|vip mix)\\b");
     private String trackKey = "", title = "", artist = "";
     private String lyricSource = "LRCLIB";
     private Media.State track;
@@ -93,18 +106,20 @@ final class Lyrics extends Module {
         add(Setting.bool("viewLock", "View lock", false).hint("Keep lyric words at the same angle in your view as you turn.").when(layout).when(() -> mode() == 1));
         add(Setting.choice("airMode", "Air style", "Chill", "Chill", "PvP").hint("Chill scatters with soft effects. PvP keeps words clean and quick.").when(layout).when(() -> mode() == 1 && str("wStyle").equals("Air")));
         add(Setting.bool("musicNotes", "Music notes", true).hint("Show drifting notes during instrumental sections, intros, or when lyrics are unavailable.").when(layout).when(() -> mode() == 1));
+        add(Setting.bool("pairWords", "Pair short words", true).hint("Air: short words like I or the float together with the next word, and stray punctuation is dropped.").when(layout).when(() -> mode() == 1 && str("wStyle").equals("Air")));
         add(Setting.bool("worldIntro", "Track intro title", true).hint("Briefly show the song title and artist when a new track starts.").when(layout).when(() -> mode() == 1));
 
         java.util.function.BooleanSupplier style = section("Themes & type");
-        add(Setting.choice("preset", "Theme preset", "HUD", "HUD", "Album", "Nether", "Ice", "Aurora", "Sunset", "Gold", "Violet", "Custom").hint("Album follows the cover art. Custom lets you pick both colors.").when(style));
-        add(Setting.choice("font", "Lyrics font", "Semibold", "Semibold", "Regular").hint("Uses Nether's active Pixel or Barlow typeface, at the weight you choose.").when(style));
+        add(Setting.choice("preset", "Theme preset", "HUD", THEME_NAMES).hint("Each theme has a text color and two glow colors. Album follows the cover art. Custom lets you pick all three.").when(style));
+        add(Setting.choice("font", "Lyrics font", "Righteous", FONT_NAMES).hint("Semibold and Regular use Nether's active Pixel or Barlow typeface. The others are display fonts for lyrics.").when(style));
+        add(Setting.choice("textStyle", "Text style", "Neon", "Neon", "Glow", "Clean").hint("Neon splits the text into its two glow colors like a neon sign. Glow is a soft halo. Clean is plain text with a shadow.").when(style));
         add(Setting.color("lyricsColor", "Custom highlight", "#FF6157").when(style).when(() -> str("preset").equals("Custom")));
-        add(Setting.color("glowColor", "Custom glow", "#FFB020").when(style).when(() -> str("preset").equals("Custom") && bool("twoTone")));
-        add(Setting.color("glowColor2", "Second glow color", "#55D9FF").when(style).when(() -> str("preset").equals("Custom") && bool("twoTone")));
-        add(Setting.bool("twoTone", "Two-color glow", false).hint("Adds a second soft color around active words.").when(style));
+        add(Setting.color("glowColor", "Custom glow", "#FFB020").when(style).when(() -> str("preset").equals("Custom") && (bool("twoTone") || !str("textStyle").equals("Glow"))));
+        add(Setting.color("glowColor2", "Second glow color", "#55D9FF").when(style).when(() -> str("preset").equals("Custom") && (bool("twoTone") || !str("textStyle").equals("Glow"))));
+        add(Setting.bool("twoTone", "Two-color glow", false).hint("Adds a second soft color around active words.").when(style).when(() -> str("textStyle").equals("Glow")));
 
         java.util.function.BooleanSupplier animation = section("Animation & effects");
-        add(Setting.choice("appear", "Word entrance", "Pop", "Fade", "Rise", "Pop").when(animation).when(() -> mode() == 1));
+        add(Setting.choice("appear", "Word entrance", "Pop", "Fade", "Rise", "Pop", "Neon").hint("Neon flickers each word on like a sign lighting up.").when(animation).when(() -> mode() == 1));
         add(Setting.choice("disappear", "Word exit", "Fade", "Fade", "Drift", "Float up").when(animation).when(() -> mode() == 1));
         add(Setting.slider("animSpeed", "Animation speed", 0.5, 2, 0.1, 1).when(animation).when(() -> mode() == 1));
         add(Setting.slider("glow", "Glow (%)", 0, 100, 5, 60).when(animation));
@@ -144,18 +159,40 @@ final class Lyrics extends Module {
         return () -> Setting.open.contains(key);
     }
 
+    /** Theme presets: text color, first and second glow color (Neon splits the text into the two glows). */
+    private static final String[] THEME_NAMES = {"HUD", "Album", "Nether", "Ice", "Aurora", "Sunset", "Gold", "Violet", "Neon pink", "Lavender", "Ocean", "Sakura",
+        "Vaporwave", "Galaxy", "Toxic", "Blood moon", "Candy", "Midnight", "Matrix", "Enchant", "Mono", "Custom"};
+    private static final Map<String, int[]> THEMES = new LinkedHashMap<>();
+    static {
+        THEMES.put("Nether", new int[] {0xFFFF705C, 0xFFFFB020, 0xFFFF2F4F});
+        THEMES.put("Ice", new int[] {0xFF9EE4FF, 0xFFDAFAFF, 0xFF4F7BFF});
+        THEMES.put("Aurora", new int[] {0xFF7CF0C4, 0xFF35E39A, 0xFF8A6BFF});
+        THEMES.put("Sunset", new int[] {0xFFFFB38F, 0xFFFF5F6D, 0xFFFFC371});
+        THEMES.put("Gold", new int[] {0xFFFFE08A, 0xFFFFB020, 0xFFFF7A2F});
+        THEMES.put("Violet", new int[] {0xFFD9C2FF, 0xFFA66BFF, 0xFF6E8BFF});
+        THEMES.put("Neon pink", new int[] {0xFFFFE6F2, 0xFFFF3D9A, 0xFF5FB4FF});
+        THEMES.put("Lavender", new int[] {0xFFF6F0FF, 0xFF9B6BFF, 0xFFE0C8FF});
+        THEMES.put("Ocean", new int[] {0xFFE4F6FF, 0xFF2E8BFF, 0xFF2EE0C8});
+        THEMES.put("Sakura", new int[] {0xFFFFF1F6, 0xFFFF86B4, 0xFFFFC2D9});
+        THEMES.put("Vaporwave", new int[] {0xFFFFFFFF, 0xFFFF5FC8, 0xFF00E1FF});
+        THEMES.put("Galaxy", new int[] {0xFFF0E8FF, 0xFF7B5CFF, 0xFF26C4FF});
+        THEMES.put("Toxic", new int[] {0xFFF1FFE2, 0xFF7CFF3A, 0xFFC4F000});
+        THEMES.put("Blood moon", new int[] {0xFFFFE8E6, 0xFFE0142F, 0xFFFF7A3D});
+        THEMES.put("Candy", new int[] {0xFFFFFFFF, 0xFFFF94D2, 0xFF94D8FF});
+        THEMES.put("Midnight", new int[] {0xFFE6ECFF, 0xFF3D5AFE, 0xFFA4B0FF});
+        THEMES.put("Matrix", new int[] {0xFFE4FFE8, 0xFF1ED760, 0xFF0B8A3A});
+        THEMES.put("Enchant", new int[] {0xFFEADCFF, 0xFFB45CFF, 0xFF5C8DFF});
+        THEMES.put("Mono", new int[] {0xFFFFFFFF, 0xFFA0A6B0, 0xFF4A4F58});
+    }
+    /** Lyric fonts: Nether's two weights, then Gfx's lyric display faces in order. */
+    private static final String[] FONT_NAMES = {"Semibold", "Regular", "Righteous", "Bebas Neue", "Poppins", "Lilita One", "Pacifico", "Kaushan Script", "Marker", "Neon script", "Monoton"};
+
     @Override int color() {
-        switch (str("preset")) {
-            case "Album": return albumColor();
-            case "Nether": return 0xFFFF705C;
-            case "Ice": return 0xFF75D6FF;
-            case "Aurora": return 0xFF65E6B4;
-            case "Sunset": return 0xFFFF9B70;
-            case "Gold": return 0xFFFFD166;
-            case "Violet": return 0xFFC7A0FF;
-            case "Custom": return bool("chroma") ? chroma() : Config.color(id, "lyricsColor", 0xFFFF6157);
-            default: return super.color();
-        }
+        String p = str("preset");
+        if (p.equals("Album")) return albumColor();
+        if (p.equals("Custom")) return bool("chroma") ? chroma() : Config.color(id, "lyricsColor", 0xFFFF6157);
+        int[] t = THEMES.get(p);
+        return t != null ? t[0] : super.color();
     }
 
     private int albumColor() {
@@ -164,25 +201,34 @@ final class Lyrics extends Module {
     }
 
     private int glowColor() {
-        if (str("preset").equals("Custom")) return Config.color(id, "glowColor", 0xFFFFB020);
-        switch (str("preset")) {
-            case "Album": return Gfx.mix(color(), 0xFFFFFFFF, 0.45f);
-            case "Nether": return 0xFFFFB020;
-            case "Ice": return 0xFFDAFAFF;
-            case "Aurora": return 0xFFB0FFD6;
-            case "Sunset": return 0xFFFFD19A;
-            case "Gold": return 0xFFFFF0B5;
-            case "Violet": return 0xFFF0D7FF;
-            default: return color();
-        }
+        String p = str("preset");
+        if (p.equals("Custom")) return Config.color(id, "glowColor", 0xFFFFB020);
+        if (p.equals("Album")) return Gfx.mix(color(), 0xFFFFFFFF, 0.45f);
+        int[] t = THEMES.get(p);
+        return t != null ? t[1] : Gfx.mix(color(), 0xFFFFB020, 0.45f);
     }
 
     private int glowColor2() {
-        if (str("preset").equals("Custom")) return Config.color(id, "glowColor2", 0xFF55D9FF);
-        return Gfx.mix(glowColor(), color(), 0.65f);
+        String p = str("preset");
+        if (p.equals("Custom")) return Config.color(id, "glowColor2", 0xFF55D9FF);
+        if (p.equals("Album")) return Gfx.mix(color(), 0xFF000000, 0.35f);
+        int[] t = THEMES.get(p);
+        return t != null ? t[2] : Gfx.mix(color(), 0xFF55D9FF, 0.5f);
     }
 
-    private int font() { return str("font").equals("Regular") ? Gfx.UI : Gfx.SEMI; }
+    /** Lyric typeface: Nether's (theme) Semibold / Regular, or one of the lyric display fonts. */
+    private int font() {
+        String f = str("font");
+        if (f.equals("Regular")) return Gfx.UI;
+        for (int i = 2; i < FONT_NAMES.length; i++) if (FONT_NAMES[i].equals(f)) return Gfx.lyricFace(i - 2);
+        return Gfx.SEMI;
+    }
+
+    /** For small text (top bar, player rows): script and outline display fonts are hard to read there. */
+    private int smallFont() {
+        String f = str("font");
+        return f.equals("Pacifico") || f.equals("Kaushan Script") || f.equals("Neon script") || f.equals("Monoton") ? Gfx.SEMI : font();
+    }
 
     @Override boolean available() { return Media.supported(); }
     @Override String lockNote() { return !available() ? "NOT AVAILABLE ON THIS OS" : super.lockNote(); }
@@ -210,6 +256,10 @@ final class Lyrics extends Module {
             if (!(Config.raw(id, "blur") instanceof Number)) Config.set(id, "blur", old * 0.83);
             if (!(Config.raw(id, "outline") instanceof Number)) Config.set(id, "outline", old * 1.5);
             Config.set(id, "v3", true);
+        }
+        if (Config.raw(id, "v4") == null) { // the Scatter layout became Air
+            if ("Scatter".equals(Config.raw(id, "wStyle"))) Config.set(id, "wStyle", "Air");
+            Config.set(id, "v4", true);
         }
     }
 
@@ -239,6 +289,11 @@ final class Lyrics extends Module {
             plainBest = null;
             stage = 0;
             retries = 0;
+            quality = 0;
+            scaleK = 1;
+            songRate = 4.5;
+            speed = SPEED.matcher(s.title).find();
+            remix = REMIX.matcher(s.title).find();
             set(LOADING);
             String[] ta = clean(s);
             title = ta[0];
@@ -249,13 +304,13 @@ final class Lyrics extends Module {
             local = false;
             lyricSource = "LRCLIB";
             next();
-            if (!local && !title.isEmpty()) nreq = Net.get(NE + "cloudsearch/pc?type=1&limit=8&s=" + enc((title + " " + artist).trim()), lookupTtl, 1 << 20);
+            if (!local && !title.isEmpty()) nreq = Net.get(NE + "cloudsearch/pc?type=1&limit=8&s=" + enc((title + " " + mainArtist(artist)).trim()), lookupTtl, 1 << 20);
         }
         track = s;
         if (req != null && req.done()) { Net.Req r = req; req = null; answer(r); }
         if (nreq != null && nreq.done()) { Net.Req r = nreq; nreq = null; neAnswer(r); }
         // a network blip does not lose the song: the failed step is tried again after 10, 20, 40 s
-        if (state == OFFLINE && req == null && retries < 3 && System.currentTimeMillis() - stateAt > 10_000L << retries) { retries++; stage--; set(LOADING); next(); }
+        if (state == OFFLINE && quality == 0 && req == null && retries < 3 && System.currentTimeMillis() - stateAt > 10_000L << retries) { retries++; stage--; set(LOADING); next(); }
     }
 
     private int retries;
@@ -321,24 +376,25 @@ final class Lyrics extends Module {
     /** Next lookup step: local file, LRCLIB lookup/search, then plain-only lyrics.ovh as a last resort. */
     private void next() {
         stage++;
+        if (quality > 0 && stage > 2) return; // lyrics shown: only the one search for word timing below runs
         Media.State s = track;
         switch (stage) {
             case 1: {
                 String lrc = local();
-                if (lrc != null) { stage = 9; local = true; accept(null, lrc); return; }
+                if (lrc != null) { stage = 9; local = true; take(lrc, Q_LOCAL, "Local file"); return; }
                 if (title.isEmpty() || artist.isEmpty()) { next(); return; }
                 StringBuilder u = new StringBuilder(API).append("get?track_name=").append(enc(title)).append("&artist_name=").append(enc(artist));
                 if (!s.album.isEmpty()) u.append("&album_name=").append(enc(s.album));
                 if (s.dur >= 1 && s.dur <= 3600) u.append("&duration=").append(Math.round(s.dur));
-                req = Net.get(u.toString(), lookupTtl, 1 << 20);
+                req = Net.get(u.toString(), lookupTtl, 4 << 20);
                 return;
             }
             case 2:
                 if (artist.isEmpty()) { next(); return; }
-                req = Net.get(API + "search?track_name=" + enc(title) + "&artist_name=" + enc(artist), lookupTtl, 1 << 20);
+                req = Net.get(API + "search?track_name=" + enc(title) + "&artist_name=" + enc(mainArtist(artist)), lookupTtl, 4 << 20);
                 return;
             case 3:
-                req = Net.get(API + "search?q=" + enc((title + " " + artist).trim()), lookupTtl, 1 << 20);
+                req = Net.get(API + "search?q=" + enc((title + " " + mainArtist(artist)).trim()), lookupTtl, 4 << 20);
                 return;
             case 4:
                 if (plainBest != null) { finish(NOT_FOUND); return; }
@@ -350,8 +406,10 @@ final class Lyrics extends Module {
         }
     }
 
-    /** Out of steps (or offline): the plain lyrics met on the way, else the given state. */
+    /** Out of steps (or offline): NetEase's line-synced lyrics, else the plain lyrics met on the way, else the given state. */
     private void finish(int st) {
+        if (quality > 0) return;
+        if (neLrc != null && !local && take(neLrc, Q_NE_LRC, "NetEase")) return;
         Map<String, Object> m = plainBest;
         plainBest = null;
         if (m == null || !plain(m)) set(st);
@@ -374,43 +432,194 @@ final class Lyrics extends Module {
             next();
             return;
         }
-        if (o instanceof Map) { if (!accept((Map<String, Object>) o, null)) next(); return; }
+        if (o instanceof Map) {
+            if (!accept((Map<String, Object>) o)) next();
+            else if (stage == 1 && quality == Q_LINE && !local) next(); // line-synced only: one search for a word-synced upload
+            return;
+        }
         if (!(o instanceof List)) { next(); return; }
-        // search: synced before plain before instrumental, then the closest duration (within 3 s when known)
+        // search: word-synced before synced before plain before instrumental, then the closest duration (within 3 s,
+        // 2 s for remixes); a sped-up / slowed track may take the original's synced lyrics, stretched to its length
         Map<String, Object> best = null;
-        double bestScore = -1;
-        double dur = track == null ? 0 : track.dur;
+        double bestScore = -1, bestK = 1;
+        double dur = track == null ? 0 : track.dur, tol = remix ? 2 : 3;
         for (Object e : (List<Object>) o) {
             if (!(e instanceof Map)) continue;
             Map<String, Object> m = (Map<String, Object>) e;
             Object d = m.get("duration");
-            double off = dur > 0 && d instanceof Number ? Math.abs(((Number) d).doubleValue() - dur) : 0;
-            if (off > 3) continue;
-            int kind = Boolean.TRUE.equals(m.get("instrumental")) ? 1 : has(m, "syncedLyrics") ? 3 : has(m, "plainLyrics") ? 2 : 0;
+            double rd = d instanceof Number ? ((Number) d).doubleValue() : 0;
+            double off = dur > 0 && rd > 0 ? Math.abs(rd - dur) : 0, k = 1;
+            int kind = Boolean.TRUE.equals(m.get("instrumental")) ? 1 : wordSynced(m) ? 4 : has(m, "syncedLyrics") ? 3 : has(m, "plainLyrics") ? 2 : 0;
+            if (off > tol) {
+                Object name = m.get("trackName");
+                if (!speed || kind < 3 || rd <= 0 || name instanceof String && SPEED.matcher((String) name).find()) continue;
+                k = dur / rd;
+                if (k < 0.55 || k > 1.6) continue;
+                off = 3 + Math.abs(1 - k) * 4; // an exact-length upload still wins
+            }
             double score = kind * 10 - off;
-            if (kind > 0 && score > bestScore) { best = m; bestScore = score; }
+            if (kind > 0 && score > bestScore) { best = m; bestScore = score; bestK = k; }
         }
-        if (best == null || !accept(best, null)) next();
+        scaleK = bestK;
+        boolean ok = best != null && accept(best);
+        scaleK = 1;
+        if (!ok && quality == 0) next();
     }
+
+    private static boolean wordSynced(Map<String, Object> m) { return Boolean.TRUE.equals(m.get("hasWordSync")) && has(m, "lyricsfile"); }
 
     private static boolean has(Map<String, Object> m, String k) { Object o = m.get(k); return o instanceof String && !((String) o).trim().isEmpty(); }
 
-    /** Takes a record (or a local .lrc text); false when it holds no synced lyrics (plain ones are kept for {@link #finish}). */
-    private boolean accept(Map<String, Object> m, String lrc) {
-        if (lrc == null && m != null) {
-            if (Boolean.TRUE.equals(m.get("instrumental"))) { set(INSTRUMENTAL); return true; }
-            if (!has(m, "syncedLyrics")) {
-                if (has(m, "plainLyrics") && plainBest == null) plainBest = m;
-                return false;
-            }
-            lrc = (String) m.get("syncedLyrics");
+    /**
+     * Takes an LRCLIB record: its word-synced lyricsfile, else its synced lyrics. False when it holds neither (plain
+     * ones are kept for {@link #finish}); true when it settles the lookup, also when what is shown already ranks higher.
+     */
+    private boolean accept(Map<String, Object> m) {
+        if (Boolean.TRUE.equals(m.get("instrumental"))) { if (quality == 0) set(INSTRUMENTAL); return true; }
+        if (wordSynced(m)) {
+            String w = lyricsFile((String) m.get("lyricsfile"));
+            if (w != null && take(w, fileEnds ? Q_WORDS : Q_WORD_STARTS, "LRCLIB")) return true;
         }
+        if (has(m, "syncedLyrics") && take((String) m.get("syncedLyrics"), Q_LINE, "LRCLIB")) return true;
+        if (has(m, "plainLyrics") && plainBest == null) plainBest = m;
+        return false;
+    }
+
+    /**
+     * Shows synced lyrics (LRC, enhanced LRC) of the given rank unless what is shown ranks at least as high (then true,
+     * nothing changes). False when the text holds no timed line.
+     */
+    private boolean take(String lrc, int rank, String source) {
+        if (rank <= quality) return true;
+        if (lrc == null || !TIMED.matcher(lrc).find()) return false;
         parse(lrc);
         if (texts.length == 0) return false;
+        if (scaleK != 1) { scale(scaleK); source += " (stretched)"; }
+        quality = rank;
+        lyricSource = source;
         plainBest = null;
-        lyricSource = local ? "Local file" : "LRCLIB";
         set(SYNCED);
+        clearWorld();
+        shownIdx = -2;
+        scroll = -9;
         return true;
+    }
+
+    private static final java.util.regex.Pattern TIMED = java.util.regex.Pattern.compile("(?m)^\\s*\\[\\d+:\\d+");
+
+    /** Every time (lines, words, ends) times k: the original's lyrics on a sped-up or slowed upload. */
+    private void scale(double k) {
+        for (int i = 0; i < times.length; i++) times[i] *= k;
+        for (double[] w : wordAt) for (int j = 0; j < w.length; j++) w[j] *= k;
+        for (int i = 0; i < endAt.length; i++) endAt[i] *= k;
+        songRate = Math.max(2.5, Math.min(10, songRate / k));
+    }
+
+    /** the last {@link #lyricsFile} had an end time for its words (held notes are real, not guessed) */
+    private boolean fileEnds;
+
+    /**
+     * LRCLIB's word-synced "lyricsfile" (a small YAML document: lines with text, start_ms, end_ms and words with text,
+     * start_ms, end_ms) as enhanced LRC, one stamp per word and one after the last word when the words carry end times
+     * (the line's own end_ms is often a guess and is not used). Word parts without a trailing space join the next part
+     * (syllables of one word). A gap over 4 s gets an empty line (the break dots). Null when fewer than 3 lines are timed.
+     */
+    private String lyricsFile(String y) {
+        if (y == null) return null;
+        List<long[]> lineAt = new ArrayList<>();
+        List<List<String>> wText = new ArrayList<>();
+        List<List<long[]>> wTime = new ArrayList<>();
+        List<String> lText = new ArrayList<>();
+        boolean ends = false;
+        int depth = -1; // 0 = in a line, 1 = in a word
+        for (String raw : y.split("\r?\n")) {
+            if (raw.startsWith("plain:")) break;
+            String t = raw.trim();
+            int ind = raw.length() - raw.replaceAll("^\\s+", "").length();
+            if (ind == 0 && t.startsWith("- text:")) {
+                lineAt.add(new long[] {-1, -1});
+                lText.add(yamlStr(t.substring(7)));
+                wText.add(new ArrayList<>());
+                wTime.add(new ArrayList<>());
+                depth = 0;
+            } else if (lineAt.isEmpty()) {
+                continue;
+            } else if (ind == 2 && t.startsWith("- text:")) {
+                wText.get(wText.size() - 1).add(yamlStr(t.substring(7)));
+                wTime.get(wTime.size() - 1).add(new long[] {-1, -1});
+                depth = 1;
+            } else if (t.startsWith("start_ms:") || t.startsWith("end_ms:")) {
+                long v;
+                try { v = Long.parseLong(t.substring(t.indexOf(':') + 1).trim()); } catch (NumberFormatException e) { continue; }
+                int slot = t.startsWith("start_ms:") ? 0 : 1;
+                if (depth == 1 && ind >= 4) wTime.get(wTime.size() - 1).get(wTime.get(wTime.size() - 1).size() - 1)[slot] = v;
+                else if (ind == 2) lineAt.get(lineAt.size() - 1)[slot] = v;
+            }
+        }
+        StringBuilder out = new StringBuilder();
+        long prevEnd = -1;
+        int lines = 0;
+        for (int i = 0; i < lineAt.size(); i++) {
+            List<String> ws = wText.get(i);
+            List<long[]> wt = wTime.get(i);
+            StringBuilder line = new StringBuilder();
+            long t0 = -1, end = -1;
+            boolean open = false;
+            for (int k = 0; k < ws.size(); k++) {
+                String part = ws.get(k);
+                long st = wt.get(k)[0];
+                if (wt.get(k)[1] > 0) { end = Math.max(end, wt.get(k)[1]); ends = true; }
+                if (part.trim().isEmpty() || st < 0) { if (!part.trim().isEmpty()) line.append(part.trim()); open = !part.endsWith(" ") && !part.trim().isEmpty(); continue; }
+                if (!open) {
+                    if (line.length() > 0) line.append(' ');
+                    line.append('<').append(ts(st)).append('>');
+                    if (t0 < 0) t0 = st;
+                }
+                line.append(part.trim());
+                open = !part.endsWith(" ");
+                end = Math.max(end, st);
+            }
+            long ls = lineAt.get(i)[0] >= 0 ? lineAt.get(i)[0] : t0;
+            if (ls < 0) continue;
+            if (t0 < 0) t0 = ls;
+            String text = lText.get(i).trim();
+            if (line.length() == 0) { // no timed words: the line as a whole
+                if (text.isEmpty()) continue;
+                line.append(text);
+                t0 = ls;
+            }
+            if (prevEnd >= 0 && t0 - prevEnd > 4000) out.append('[').append(ts(prevEnd)).append("]\n");
+            out.append('[').append(ts(Math.min(ls, t0))).append(']').append(line);
+            boolean wordEnds = false;
+            for (long[] w : wt) if (w[1] > 0) wordEnds = true;
+            if (wordEnds && end > t0) out.append('<').append(ts(end)).append('>');
+            out.append('\n');
+            prevEnd = wordEnds ? end : -1;
+            lines++;
+        }
+        if (lines < 3) return null;
+        fileEnds = ends;
+        return out.toString();
+    }
+
+    /** A YAML scalar: 'single' ('' = '), "double" (backslash escapes) or plain. */
+    private static String yamlStr(String v) {
+        v = v.trim();
+        if (v.length() >= 2 && v.startsWith("'") && v.endsWith("'")) return v.substring(1, v.length() - 1).replace("''", "'");
+        if (v.length() >= 2 && v.startsWith("\"") && v.endsWith("\"")) {
+            StringBuilder b = new StringBuilder();
+            for (int i = 1; i < v.length() - 1; i++) {
+                char c = v.charAt(i);
+                if (c != '\\' || i + 1 >= v.length() - 1) { b.append(c); continue; }
+                char n = v.charAt(++i);
+                if (n == 'n') b.append(' ');
+                else if (n == 't') b.append(' ');
+                else if (n == 'u' && i + 4 < v.length()) { try { b.append((char) Integer.parseInt(v.substring(i + 1, i + 5), 16)); i += 4; } catch (NumberFormatException e) { b.append('u'); } }
+                else b.append(n);
+            }
+            return b.toString();
+        }
+        return v;
     }
 
     // ---------------------------------------------------------------- NetEase: real word timing
@@ -427,32 +636,24 @@ final class Lyrics extends Module {
                 if (songs instanceof List) pickNe((List<Object>) songs);
             } else {
                 String y = yrc(neText(m, "yrc"));
-                if (y != null && !local && state != INSTRUMENTAL) {
-                    parse(y);
-                    lyricSource = "NetEase";
-                    req = null; // LRCLIB's answer, if still coming, is not needed
-                    stage = 9;
-                    plainBest = null;
-                    set(SYNCED);
-                    clearWorld();
-                    shownIdx = -2;
-                    scroll = -9;
+                if (y != null && state != INSTRUMENTAL && foreignOk(y) && Q_YRC > quality) {
+                    take(y, Q_YRC, "NetEase");
                     neIds.clear();
                     return;
                 }
                 String l = neText(m, "lrc");
-                if (neLrc == null && l != null && l.contains("[")) neLrc = noCredits(l);
+                if (neLrc == null && l != null && l.contains("[") && foreignOk(l)) neLrc = noCredits(l);
             }
         }
         if (!neIds.isEmpty()) { nreq = Net.get(NE + "song/lyric/v1?yv=1&lv=1&tv=-1&id=" + neIds.remove(0), lookupTtl, 1 << 20); return; }
-        if (neLrc != null && !local && (state == NOT_FOUND || state == PLAIN || state == OFFLINE)) { stage = 9; if (accept(null, neLrc)) lyricSource = "NetEase"; }
+        if (neLrc != null && !local && quality < Q_NE_LRC && (state == NOT_FOUND || state == PLAIN || state == OFFLINE)) take(neLrc, Q_NE_LRC, "NetEase");
     }
 
     /** Up to three search results with the same title, by the same artist or of the same length (within 1 s), closest first. */
     @SuppressWarnings("unchecked")
     private void pickNe(List<Object> songs) {
         double dur = track == null ? 0 : track.dur;
-        String t = norm(title), a = norm(artist);
+        String t = norm(title), a = norm(mainArtist(artist));
         List<double[]> c = new ArrayList<>();
         for (Object e : songs) {
             if (!(e instanceof Map)) continue;
@@ -558,6 +759,7 @@ final class Lyrics extends Module {
     }
 
     private boolean plain(Map<String, Object> m) {
+        if (quality >= Q_PLAIN) return true;
         List<String> l = new ArrayList<>();
         for (String s : ((String) m.get("plainLyrics")).split("\r?\n")) if (!s.trim().isEmpty()) l.add(s.trim());
         if (l.isEmpty()) return false;
@@ -566,6 +768,7 @@ final class Lyrics extends Module {
         splitWords(null);
         Object source = m.get("source");
         lyricSource = source instanceof String ? (String) source : "LRCLIB";
+        quality = Q_PLAIN;
         set(PLAIN);
         return true;
     }
@@ -606,6 +809,68 @@ final class Lyrics extends Module {
             for (double[] w : wordAt) for (int k = 0; k < w.length; k++) w[k] = Math.max(0, w[k] - off);
             for (int k = 0; k < endAt.length; k++) endAt[k] = Math.max(0, endAt[k] - off);
         }
+        songRate = rate();
+        breaks();
+    }
+
+    /**
+     * How fast this song is sung, in syllables per second: the busy end (75th percentile) of its lines that have a
+     * plausible length (0.7 to 8 s, two words or more), so a slow line is not stretched over a pause that follows it.
+     */
+    private double rate() {
+        List<Double> r = new ArrayList<>();
+        for (int i = 0; i + 1 < times.length; i++) {
+            double gap = !Double.isNaN(endAt[i]) ? endAt[i] - times[i] : times[i + 1] - times[i];
+            if (gap < 0.7 || gap > 8 || words[i].length < 2) continue;
+            int syl = 0;
+            for (String w : words[i]) syl += syllables(w);
+            r.add(syl / gap);
+        }
+        if (r.size() < 3) return 4.5;
+        java.util.Collections.sort(r);
+        return Math.max(2.5, Math.min(10, r.get(Math.min(r.size() - 1, (int) (r.size() * 0.75))) * 1.05));
+    }
+
+    /**
+     * An empty line (the break dots / music notes) where the singer stops for 5 s or more before the next line: after a
+     * line's end stamp, else after a generous guess at its end.
+     */
+    private void breaks() {
+        int n = texts.length;
+        List<Integer> at = new ArrayList<>();
+        List<Double> when = new ArrayList<>();
+        for (int i = 0; i + 1 < n; i++) {
+            if (texts[i].isEmpty() || texts[i + 1].isEmpty()) continue;
+            // a held last note can run long: without an end stamp a line keeps at least 9 s (3 s after its last word stamp)
+            double end;
+            if (!Double.isNaN(endAt[i])) end = endAt[i] + 0.3;
+            else {
+                int syl = 0;
+                double last = Double.NaN;
+                for (String w : words[i]) syl += syllables(w);
+                for (double w : wordAt[i]) if (!Double.isNaN(w)) last = Double.isNaN(last) ? w : Math.max(last, w);
+                end = Double.isNaN(last) ? Math.max(times[i] + 9, times[i] + syl / songRate * 1.6 + 1.0) : last + 3;
+            }
+            if (times[i + 1] - end >= 5) { at.add(i + 1); when.add(end); }
+        }
+        if (at.isEmpty()) return;
+        int m = n + at.size();
+        double[] t2 = new double[m], e2 = new double[m];
+        String[] x2 = new String[m];
+        String[][] w2 = new String[m][];
+        double[][] a2 = new double[m][];
+        for (int i = 0, j = 0, b = 0; i < n; i++) {
+            if (b < at.size() && at.get(b) == i) {
+                t2[j] = when.get(b); x2[j] = ""; w2[j] = new String[0]; a2[j] = new double[0]; e2[j] = Double.NaN;
+                j++; b++;
+            }
+            t2[j] = times[i]; x2[j] = texts[i]; w2[j] = words[i]; a2[j] = wordAt[i]; e2[j] = endAt[i];
+            j++;
+        }
+        times = t2; texts = x2; words = w2; wordAt = a2; endAt = e2;
+        wS = new double[m][];
+        wE = new double[m][];
+        wTimed = new boolean[m];
     }
 
     /** Words of every line, with the start time of each word stamp in the raw LRC body (bodies null = none). */
@@ -660,7 +925,7 @@ final class Lyrics extends Module {
         int[] syl = new int[n];
         boolean timed = n > 0;
         for (int k = 0; k < n; k++) { sum += syl[k] = syllables(ws[k]); timed &= !Double.isNaN(at[k]); }
-        double per = Math.min(Math.max(0.4, le - ls) * 0.85 / Math.max(1, sum), 0.45);
+        double per = Math.min(Math.max(0.4, le - ls) * 0.92 / Math.max(1, sum), 1 / songRate);
         for (int k = 0; k < n; k++) {
             s[k] = !Double.isNaN(at[k]) ? at[k] : k == 0 ? ls : s[k - 1] + syl[k - 1] * per;
             if (k > 0) s[k] = Math.max(s[k], s[k - 1]);
@@ -697,16 +962,53 @@ final class Lyrics extends Module {
 
     /** {title, artist} cleaned for lookup: no "(feat. ...)", "(Official Video)", "- Remastered", " - Topic"; "Artist - Song" browser titles split. */
     static String[] clean(Media.State s) {
-        String t = s.title, a = s.artist.replaceAll("(?i)\\s+-\\s+topic$", "").replaceAll("(?i)(vevo|\\s+official)$", "").trim();
-        boolean browser = s.app.matches("Chrome|Edge|Firefox|Opera|Brave|Vivaldi");
-        int dash = t.indexOf(" - ");
-        // "Artist - Song" from a video title; never "Song - Remastered 2011" / "Song - Live"
-        if (browser && dash > 0 && !t.substring(dash + 3).matches("(?i)\\s*(\\d{4}\\s+)?(remaster(ed)?|live|radio edit|single version|mono|stereo|bonus track)\\b.*")) { a = t.substring(0, dash).trim(); t = t.substring(dash + 3); }
+        String t = s.title.replaceFirst("^\\(\\d+\\)\\s*", "").replaceAll("(?i)\\s*[-–—|]\\s*youtube( music)?\\s*$", "").trim();
+        String a = s.artist.replaceAll("(?i)\\s+-\\s+topic$", "").replaceAll("(?i)(vevo|\\s+official)$", "").trim();
+        boolean browser = s.app.matches("Chrome|Edge|Firefox|Opera|Brave|Vivaldi|Arc|Zen|YouTube|YouTube Music");
+        // "Artist - Song" (also en / em dash) from a video title; "Song | Artist"; never "Song - Remastered 2011" / "Song - Live"
+        if (browser) for (String sep : new String[] {" - ", " – ", " — ", " | "}) {
+            int dash = t.indexOf(sep);
+            if (dash <= 0) continue;
+            String rest = t.substring(dash + sep.length());
+            if (rest.trim().isEmpty() || rest.matches("(?i)\\s*(\\d{4}\\s+)?(remaster(ed)?|live|radio edit|single version|mono|stereo|bonus track)\\b.*")) continue;
+            if (sep.equals(" | ")) t = t.substring(0, dash); else { a = t.substring(0, dash).trim(); t = rest; }
+            break;
+        }
+        t = SPEED.matcher(t.replaceAll("(?i)\\s*[(\\[][^)\\]]*\\b(sped|speed|slowed|nightcore|daycore|reverb|8d|bass boosted|extended)\\b[^)\\]]*[)\\]]", "")).replaceAll(" ").replaceAll("\\s+[-–—]\\s*$", "").replaceAll("\\s{2,}", " ").trim();
         String c = t.replaceAll("(?i)\\s*[(\\[](feat\\.?|ft\\.?|with|prod\\.?)\\s[^)\\]]*[)\\]]", "")
             .replaceAll("(?i)\\s*[(\\[][^)\\]]*(official|lyric|audio|video|visuali[sz]er|\\bhd\\b|\\bhq\\b|\\b4k\\b|explicit|\\bmv\\b|m/v)[^)\\]]*[)\\]]", "")
             .replaceAll("(?i)\\s+-\\s+(\\d{4}\\s+)?(remaster(ed)?|live|radio edit|single version|mono|stereo|bonus track)\\b.*$", "")
             .replaceAll("(?i)\\s+(feat\\.?|ft\\.)\\s.*$", "").trim();
         return new String[] {c.isEmpty() ? t.trim() : c, a};
+    }
+
+    /** The first of several credited artists ("A, B & C", "A x B", "A feat. B" all give A). */
+    static String mainArtist(String a) {
+        String r = a.split("(?i)\\s*(,|&|;|\\bx\\b|\\bfeat\\.?|\\bft\\.?|\\bwith\\b|/)\\s*")[0].trim();
+        return r.isEmpty() ? a.trim() : r;
+    }
+
+    /**
+     * False when an all-Latin title / artist got lyrics that are mostly Chinese characters without any kana: a NetEase
+     * cover or a translation, not the song. Japanese, Korean and any non-Latin title pass.
+     */
+    private boolean foreignOk(String lyr) {
+        String want = (track == null ? title + artist : track.title + track.artist);
+        for (int i = 0; i < want.length(); i++) {
+            char c = want.charAt(i);
+            if (Character.isLetter(c) && Character.UnicodeScript.of(c) != Character.UnicodeScript.LATIN) return true;
+        }
+        int han = 0, kana = 0, all = 0;
+        String body = lyr.replaceAll("\\[[^\\]]*\\]|<[^>]*>|\\(\\d+,\\d+,\\d+\\)", "");
+        for (int i = 0; i < body.length(); i++) {
+            char c = body.charAt(i);
+            if (!Character.isLetter(c)) continue;
+            all++;
+            Character.UnicodeScript sc = Character.UnicodeScript.of(c);
+            if (sc == Character.UnicodeScript.HAN) han++;
+            else if (sc == Character.UnicodeScript.HIRAGANA || sc == Character.UnicodeScript.KATAKANA || sc == Character.UnicodeScript.HANGUL) kana++;
+        }
+        return all == 0 || han < all * 0.6 || kana > all * 0.05;
     }
 
     private static String enc(String s) {
@@ -844,7 +1146,7 @@ final class Lyrics extends Module {
             ws[k] = disp(words[i][k]);
             f[k] = wTimed[i] ? (float) Math.max(0, Math.min(1, (t - wS[i][k]) / Math.max(0.02, wE[i][k] - wS[i][k]))) : (t >= wE[i][k] ? 1 : t >= wS[i][k] ? 0.5f : 0);
         }
-        fill(ws, f, size, left, right, false, cy, 1);
+        fill(smallFont(), ws, f, size, left, right, false, cy, 1);
         return true;
     }
 
@@ -917,7 +1219,7 @@ final class Lyrics extends Module {
         }
         String status = status();
         if (status != null) {
-            Gfx.text(font(), 10, centre ? (left + right) / 2 - Gfx.width(font(), 10, status) / 2 : left, cy0, labelColor(), status, bool("shadow"), 0);
+            Gfx.text(Gfx.SEMI, 10, centre ? (left + right) / 2 - Gfx.width(Gfx.SEMI, 10, status) / 2 : left, cy0, labelColor(), status, bool("shadow"), 0);
         } else {
             double t = now();
             int idx = index(t);
@@ -953,7 +1255,7 @@ final class Lyrics extends Module {
         float controlWidth = controls ? 53 : 0;
         float titleRight = right - controlWidth;
         if (bool("songInfo")) {
-            drawFit(font(), 11, left, top + 8, color(), disp(s.title), titleRight - left);
+            drawFit(Gfx.SEMI, 11, left, top + 8, color(), disp(s.title), titleRight - left);
             String sub = s.artist;
             if (!s.album.isEmpty()) sub = sub.isEmpty() ? s.album : sub + "  ·  " + s.album;
             if (!sub.isEmpty()) drawFit(Gfx.UI, 9, left, top + 21, Gfx.a(labelColor(), 0.92f), disp(sub), titleRight - left);
@@ -994,7 +1296,7 @@ final class Lyrics extends Module {
         if (has) Gfx.image(Media.ART, x, y, size, size, 0xFFFFFFFF, 4);
         else {
             String initial = s.title.trim().isEmpty() ? "♪" : s.title.trim().substring(0, 1).toUpperCase(Locale.ROOT);
-            Gfx.text(font(), 14, x + (size - Gfx.width(font(), 14, initial)) / 2, y + size / 2, Gfx.a(color(), 0.9f), initial, false, 0);
+            Gfx.text(Gfx.SEMI, 14, x + (size - Gfx.width(Gfx.SEMI, 14, initial)) / 2, y + size / 2, Gfx.a(color(), 0.9f), initial, false, 0);
         }
     }
 
@@ -1083,56 +1385,70 @@ final class Lyrics extends Module {
 
     /**
      * Words in a row, each filled left to right with the text colour by its share f (0..1), the rest in the label colour.
-     * The word being sung hops a little and glows softly. Shrinks to fit, never cut (the fill must stay readable).
+     * The word being sung hops a little and glows softly; Neon puts the two glow colours either side of the lit part, like
+     * a neon sign. Shrinks to fit, never cut (the fill must stay readable).
      */
-    private void fill(String[] ws, float[] f, float size, float left, float right, boolean centre, float cy, float a) {
-        float max = right - left, sp = Gfx.width(font(), size, " "), total = -sp;
-        for (String w : ws) total += Gfx.width(font(), size, w) + sp;
+    private void fill(String[] ws, float[] f, float size, float left, float right, boolean centre, float cy, float a) { fill(font(), ws, f, size, left, right, centre, cy, a); }
+
+    private void fill(int fo, String[] ws, float[] f, float size, float left, float right, boolean centre, float cy, float a) {
+        float max = right - left, sp = Gfx.width(fo, size, " "), total = -sp;
+        for (String w : ws) total += Gfx.width(fo, size, w) + sp;
         if (total > max) {
             size = Math.max(7, size * max / total);
-            sp = Gfx.width(font(), size, " ");
+            sp = Gfx.width(fo, size, " ");
             total = -sp;
-            for (String w : ws) total += Gfx.width(font(), size, w) + sp;
+            for (String w : ws) total += Gfx.width(fo, size, w) + sp;
         }
         float x = centre ? (left + right) / 2 - total / 2 : left, a0 = Gfx.alpha;
         boolean sh = bool("shadow"), calm = Config.calm();
+        String style = str("textStyle");
+        boolean neon = style.equals("Neon") && !calm, clean = style.equals("Clean");
         int col = color(), dim = labelColor(), glowCol = glowColor(), glowCol2 = glowColor2();
-        float glow = (float) num("glow") / 100;
+        float glow = (float) num("glow") / 100, so = Math.max(0.5f, size * 0.06f), sa = 0.3f + 0.45f * glow;
         Gfx.alpha = a0 * a;
         for (int k = 0; k < ws.length; k++) {
-            float ww = Gfx.width(font(), size, ws[k]), fk = f[k];
+            float ww = Gfx.width(fo, size, ws[k]), fk = f[k];
             boolean active = fk > 0 && fk < 1;
-            float motion = Config.calm() ? 0 : (float) num("motion") / 100;
+            float motion = calm ? 0 : (float) num("motion") / 100;
             float wy = cy - (!active ? 0 : (float) Math.sin(fk * Math.PI) * size * 0.07f * motion);
-            if (fk >= 1) Gfx.text(font(), size, x, wy, col, ws[k], sh, 0);
-            else {
-                Gfx.text(font(), size, x, wy, Gfx.a(dim, 0.8f), ws[k], sh, 0);
+            if (fk >= 1) {
+                if (neon) split(fo, size, x, wy, ws[k], so, glowCol, glowCol2, sa);
+                Gfx.text(fo, size, x, wy, neon ? Gfx.mix(col, 0xFFFFFFFF, 0.2f) : col, ws[k], sh, 0);
+            } else {
+                Gfx.text(fo, size, x, wy, Gfx.a(dim, 0.8f), ws[k], sh, 0);
                 if (active) {
-                    if (!calm && glow > 0) {
+                    if (!calm && glow > 0 && !clean) {
                         float beat = bool("beatGlow") ? 0.45f + 0.55f * (float) Math.sin(fk * Math.PI) : 1;
-                        int g = Gfx.a(col, (0.02f + 0.11f * glow) * beat);
-                        Gfx.text(font(), size, x - 1, wy, g, ws[k], false, 0);
-                        Gfx.text(font(), size, x + 1, wy, g, ws[k], false, 0);
-                        Gfx.text(font(), size, x, wy - 1, g, ws[k], false, 0);
-                        Gfx.text(font(), size, x, wy + 1, g, ws[k], false, 0);
-                        if (bool("twoTone")) {
+                        int g = Gfx.a(neon ? glowCol : col, (0.02f + 0.11f * glow) * beat);
+                        Gfx.text(fo, size, x - 1, wy, g, ws[k], false, 0);
+                        Gfx.text(fo, size, x + 1, wy, g, ws[k], false, 0);
+                        Gfx.text(fo, size, x, wy - 1, g, ws[k], false, 0);
+                        Gfx.text(fo, size, x, wy + 1, g, ws[k], false, 0);
+                        if (bool("twoTone") && style.equals("Glow")) {
                             int g1 = Gfx.a(glowCol, 0.035f + 0.08f * glow), g2 = Gfx.a(glowCol2, 0.035f + 0.08f * glow);
-                            Gfx.text(font(), size, x - 2, wy, g1, ws[k], false, 0);
-                            Gfx.text(font(), size, x + 2, wy, g2, ws[k], false, 0);
+                            Gfx.text(fo, size, x - 2, wy, g1, ws[k], false, 0);
+                            Gfx.text(fo, size, x + 2, wy, g2, ws[k], false, 0);
                         }
                     }
                     float fw = (ww + 2) * fk;
                     int[] pc = Gfx.clipIn(x - 1, wy - size, fw + 3, size * 2); // soft leading edge
-                    Gfx.text(font(), size, x, wy, Gfx.a(col, 0.5f), ws[k], false, 0);
+                    Gfx.text(fo, size, x, wy, Gfx.a(col, 0.5f), ws[k], false, 0);
                     Gfx.reclip(pc);
-                    pc = Gfx.clipIn(x - 1, wy - size, fw, size * 2);
-                    Gfx.text(font(), size, x, wy, col, ws[k], false, 0);
+                    pc = Gfx.clipIn(x - 2, wy - size, fw + 1, size * 2);
+                    if (neon) split(fo, size, x, wy, ws[k], so, glowCol, glowCol2, sa);
+                    Gfx.text(fo, size, x, wy, neon ? Gfx.mix(col, 0xFFFFFFFF, 0.2f) : col, ws[k], false, 0);
                     Gfx.reclip(pc);
                 }
             }
             x += ww + sp;
         }
         Gfx.alpha = a0;
+    }
+
+    /** Neon: the word twice, offset down-left in the first glow colour and up-right in the second, under its core. */
+    private static void split(int fo, float size, float x, float y, String w, float o, int ga, int gb, float alpha) {
+        Gfx.text(fo, size, x - o, y + o * 0.5f, Gfx.a(ga, alpha), w, false, 0);
+        Gfx.text(fo, size, x + o, y - o * 0.5f, Gfx.a(gb, alpha), w, false, 0);
     }
 
     /** Instrumental break: three dots light in turn over the gap, breathing, and shrink away just before the next line. */
@@ -1187,6 +1503,19 @@ final class Lyrics extends Module {
     private long followNs;
 
     private void clearWorld() { pieces.clear(); pending.clear(); spawnedIdx = -2; }
+
+    /** Air in PvP mode: words drawn without effects (set per frame by draw) */
+    private boolean plainWords;
+
+    /** A word without the punctuation around it (apostrophes and censoring stars kept). */
+    private static String trimWord(String w) {
+        int a = 0, b = w.length();
+        while (a < b && !keep(w.charAt(a))) a++;
+        while (b > a && !keep(w.charAt(b - 1))) b--;
+        return w.substring(a, b);
+    }
+
+    private static boolean keep(char c) { return Character.isLetterOrDigit(c) || c == '\'' || c == '*'; }
 
     private void fadeAll(long now) {
         for (Piece p : pieces) p.fadeAt = Math.min(p.fadeAt, now);
@@ -1246,10 +1575,11 @@ final class Lyrics extends Module {
         boolean playing = s != null && s.playing;
         boolean lyricData = state == SYNCED || state == PLAIN;
         int idx = lyricData ? index(now()) : -1;
-        boolean noteOnly = playing && bool("musicNotes") && (!lyricData || idx < 0);
+        boolean brk = lyricData && idx >= 0 && idx < texts.length && texts[idx].isEmpty(); // a break between lines
+        boolean noteOnly = playing && bool("musicNotes") && (!lyricData || idx < 0 || brk);
         if (!playing) { if (wasPlaying) fadeAll(nowMs); spawnedIdx = -2; }
         wasPlaying = playing;
-        if (playing && lyricData && idx >= 0) {
+        if (playing && lyricData && idx >= 0 && !(brk && noteOnly)) {
             double t = now();
             if (idx != spawnedIdx) { spawnedIdx = idx; setLine(idx, t, nowMs, c, W, H); }
         } else if (noteOnly && nowMs - notesAt > 780) {
@@ -1342,11 +1672,19 @@ final class Lyrics extends Module {
         } else if (lines) {
             addPiece(ws, at, until, scatter(eye, pitch, yaw, ws, 0, at[0], 4000, true, c, W, H), eye, 1, c, W, H).stamped = stamped;
         } else if (!row) { // scattered round the crosshair, each when it is sung (see frame)
-            for (int k = 0; k < n; k++) {
-                long fadeAt = at[k] + Math.max(MIN_LIFE, Math.min(until[k] - at[k] + TAIL, MAX_LIFE));
-                if (fadeAt < now) continue;
+            boolean pair = st.equals("Air") && bool("pairWords"); // short words ride with the next one, punctuation trimmed
+            for (int k = 0, slot = 0; k < n; k++) {
+                String w = pair ? trimWord(ws[k]) : ws[k];
+                if (w.isEmpty()) continue;
+                int first = k;
+                if (pair && w.replaceAll("[^\\p{L}\\p{N}]", "").length() <= 3 && k + 1 < n) {
+                    String nx = trimWord(ws[k + 1]);
+                    if (!nx.isEmpty()) { w = w + " " + nx; k++; }
+                }
+                long fadeAt = at[first] + Math.max(MIN_LIFE, Math.min(until[k] - at[first] + TAIL, MAX_LIFE));
+                if (fadeAt < now) { slot++; continue; }
                 Pending p = new Pending();
-                p.w = ws[k]; p.at = at[k]; p.until = until[k]; p.fadeAt = fadeAt; p.i = k; p.stamped = stamped;
+                p.w = w; p.at = at[first]; p.until = until[k]; p.fadeAt = fadeAt; p.i = slot++; p.stamped = stamped;
                 pending.add(p);
             }
         } else { // a row ahead, each word appearing as it is sung, the row fitted to the view
@@ -1512,9 +1850,10 @@ final class Lyrics extends Module {
         boolean pvpAir = wStyle().equals("Air") && str("airMode").equals("PvP");
         boolean beat = bool("beatGlow") && !pvpAir;
         if (pvpAir) { glow = 0; outline = 0; blurS = 0; bounce = 0; }
+        plainWords = pvpAir;
         float speed = Math.max(0.25f, (float) num("animSpeed"));
         float opacity = (float) num("opacity") / 100;
-        boolean riseOnEnter = str("appear").equals("Rise"), popOnEnter = str("appear").equals("Pop");
+        boolean riseOnEnter = str("appear").equals("Rise"), popOnEnter = str("appear").equals("Pop"), neonOnEnter = str("appear").equals("Neon");
         String exit = str("disappear");
         int col = color();
         double tanY = Math.tan(Math.toRadians(c[5]) / 2), u = unit();
@@ -1526,9 +1865,15 @@ final class Lyrics extends Module {
                 float appear = calm ? 1 : Math.max(0, Math.min(1, (now - p.at[0]) * speed / (float) APPEAR));
                 float fade = now < p.fadeAt ? 0 : Math.max(0, Math.min(1, (now - p.fadeAt) * speed / (float) FADE));
                 float alpha = easeOutCubic(appear) * (1 - fade) * opacity;
+                float pop = popOnEnter ? (1 - 0.6f * bounce * (1 - easeOutBack(appear, 2))) * (1 - 0.15f * fade) : 1;
+                if (neonOnEnter && !calm) { // a sign lighting up: quick on, two flickers, settling from a little larger
+                    float ms = (now - p.at[0]) * speed;
+                    float flick = ms < 230 && ((int) (ms / 38 + p.seed)) % 3 == 1 ? 0.3f : 1;
+                    alpha = Math.min(1, ms / 90f) * flick * (1 - fade) * opacity;
+                    pop = (1 + 0.22f * bounce * (1 - easeOutCubic(Math.min(1, ms / 240f)))) * (1 - 0.15f * fade);
+                }
                 if (alpha < 0.02f) continue;
                 float blur = blurS * Math.max(1 - appear, fade);
-                float pop = popOnEnter ? (1 - 0.6f * bounce * (1 - easeOutBack(appear, 2))) * (1 - 0.15f * fade) : 1;
                 double rise = riseOnEnter ? -0.4 * bounce * (1 - easeOutCubic(appear)) : 0;
                 double drift = exit.equals("Drift") ? Math.sin(now / 700.0 + p.seed) * 0.05 * bounce * fade : 0;
                 double floatUp = exit.equals("Float up") ? 0.32 * fade : 0;
@@ -1579,29 +1924,47 @@ final class Lyrics extends Module {
         }
     }
 
-    /** Glow halo, motion-blur smears and a dark outline ring, then the word on top; centre and size P in framebuffer px, unsnapped. */
+    /**
+     * Glow halo, motion-blur smears and a dark outline ring, then the word on top; centre and size P in framebuffer px,
+     * unsnapped. Neon: the halo in the two glow colours and the word split into them either side of a bright core.
+     * Clean: no halo, a soft drop shadow.
+     */
     private void word(String s, float cx, float cy, float P, float a, float blur, int col, float glow, float outline, float boost) {
-        float k = P / REF, x = cx - Gfx.widthFree(font(), P, s) / 2;
+        int fo = font();
+        String style = str("textStyle");
+        boolean neon = style.equals("Neon") && !plainWords, clean = style.equals("Clean");
+        float k = P / REF, x = cx - Gfx.widthFree(fo, P, s) / 2;
+        int ga1 = glowColor(), ga2 = glowColor2();
+        if (clean) { Gfx.textFree(fo, P, x + 1.2f * k, cy + 1.8f * k, Gfx.a(0xFF05070C, a * 0.5f), s); glow = 0; }
         if (glow > 0.02f) {
             float ga = a * (0.1f + 0.05f * glow) * boost, spread = 2 * (0.5f + 0.5f * glow) * (0.75f + 0.25f * boost) * k;
             if (ga > 0.02f) {
-                if (bool("twoTone")) for (int i = 0; i < GLOW.length; i++) { float[] o = GLOW[i]; int gc = i % 2 == 0 ? glowColor() : glowColor2(); Gfx.textFree(font(), P, x + o[0] * spread * 1.5f, cy + o[1] * spread * 1.5f, Gfx.a(gc, ga * 0.75f), s); }
-                for (float[] o : GLOW) Gfx.textFree(font(), P, x + o[0] * spread, cy + o[1] * spread, Gfx.a(col, ga), s);
+                if (neon) for (int i = 0; i < GLOW.length; i++) { float[] o = GLOW[i]; Gfx.textFree(fo, P, x + o[0] * spread * 1.6f, cy + o[1] * spread * 1.6f, Gfx.a(i % 2 == 0 ? ga1 : ga2, ga * 0.9f), s); }
+                else {
+                    if (bool("twoTone")) for (int i = 0; i < GLOW.length; i++) { float[] o = GLOW[i]; int gc = i % 2 == 0 ? ga1 : ga2; Gfx.textFree(fo, P, x + o[0] * spread * 1.5f, cy + o[1] * spread * 1.5f, Gfx.a(gc, ga * 0.75f), s); }
+                    for (float[] o : GLOW) Gfx.textFree(fo, P, x + o[0] * spread, cy + o[1] * spread, Gfx.a(col, ga), s);
+                }
             }
         }
         if (blur > 0.01f) for (int j = 1; j <= 2; j++) {
             int bc = Gfx.a(col, a * 0.3f / j);
             float dx = 2 * j * 1.6f * blur * k;
-            Gfx.textFree(font(), P, x - dx, cy, bc, s);
-            Gfx.textFree(font(), P, x + dx, cy, bc, s);
+            Gfx.textFree(fo, P, x - dx, cy, bc, s);
+            Gfx.textFree(fo, P, x + dx, cy, bc, s);
         }
         if (outline > 0.02f) {
             int in = Gfx.a(0xFF070A14, a * 0.34f * outline), out = Gfx.a(0xFF070A14, a * 0.16f * outline);
             for (float[] o : RING) {
-                Gfx.textFree(font(), P, x + o[0] * 1.1f * k, cy + o[1] * 1.1f * k, in, s);
-                Gfx.textFree(font(), P, x + o[0] * 2.2f * k, cy + o[1] * 2.2f * k, out, s);
+                Gfx.textFree(fo, P, x + o[0] * 1.1f * k, cy + o[1] * 1.1f * k, in, s);
+                Gfx.textFree(fo, P, x + o[0] * 2.2f * k, cy + o[1] * 2.2f * k, out, s);
             }
         }
-        Gfx.textFree(font(), P, x, cy, Gfx.a(col, a * (1 - 0.55f * blur)), s);
+        if (neon) {
+            float o = Math.max(0.8f, P * 0.055f), sa = a * (0.55f + 0.35f * Math.min(1, glow + 0.3f)) * (1 - 0.55f * blur);
+            Gfx.textFree(fo, P, x - o, cy + o * 0.5f, Gfx.a(ga1, sa), s);
+            Gfx.textFree(fo, P, x + o, cy - o * 0.5f, Gfx.a(ga2, sa), s);
+            col = Gfx.mix(col, 0xFFFFFFFF, 0.2f);
+        }
+        Gfx.textFree(fo, P, x, cy, Gfx.a(col, a * (1 - 0.55f * blur)), s);
     }
 }

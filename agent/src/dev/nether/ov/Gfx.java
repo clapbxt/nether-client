@@ -50,10 +50,14 @@ final class Gfx {
     private static FloatBuffer buf = BufferUtils.createFloatBuffer(FLOATS * 6 * 3000);
     private static int verts, penX, penY, rowH;
     private static final Font[] faces = new Font[8]; // 0-3 Nether Pixel, 4-7 Barlow
-    /** Nether Pixel (Minecraft themes) or Barlow (Glass themes); set by {@link #face}. */
+    /** v8 blend: HEAD (titles, nav, PLAY) in Nether Pixel, the rest in Barlow; false = Barlow everywhere. Set by {@link #face}. */
     static boolean pixel = true;
-    private static final Font[] fonts = new Font[5]; // 4 = fallback for characters our fonts lack (accents, Cyrillic, CJK)
-    private static final Glyph[][] fast = new Glyph[4 * 256][]; // ASCII glyphs per (font, pixel size): no boxing per char
+    /** first face index of the lyric display fonts ({@link #lyricFace}); they keep their own shapes whatever the theme */
+    static final int LYRIC0 = 5;
+    private static final String[] LYRIC_FILES = {"Righteous-Regular", "BebasNeue-Regular", "Poppins-SemiBold", "LilitaOne-Regular", "Pacifico-Regular", "KaushanScript-Regular", "PermanentMarker-Regular", "Neonderthaw-Regular", "Monoton-Regular"};
+    private static final Font[] fonts = new Font[LYRIC0 + LYRIC_FILES.length]; // 4 = fallback for characters our fonts lack (accents, Cyrillic, CJK)
+    private static final boolean[] lyricTried = new boolean[LYRIC_FILES.length];
+    private static final Glyph[][] fast = new Glyph[fonts.length * 256][]; // ASCII glyphs per (font, pixel size): no boxing per char
     private static final Map<Long, Font> derived = new HashMap<>();
     private static final Map<Long, Glyph> glyphs = new HashMap<>();
     private static final Map<String, Glyph> masks = new HashMap<>();
@@ -84,7 +88,7 @@ final class Gfx {
                 faces[i] = new Font((i & 3) == 3 ? Font.MONOSPACED : Font.SANS_SERIF, Font.PLAIN, 12);
             }
         }
-        System.arraycopy(faces, pixel ? 0 : 4, fonts, 0, 4);
+        pick();
         fonts[4] = new Font(Font.DIALOG, Font.PLAIN, 12);
         scratch = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
         g2 = scratch.createGraphics();
@@ -590,17 +594,43 @@ final class Gfx {
         quad(Math.round(x * s) - 1, Math.round(y * s) - 1, g.w, g.h, g.u0, g.v0, g.u1, g.v1, col, col, -1, 0);
     }
 
-    /** Nether Pixel is drawn at whole multiples of 8 px (one font pixel = a whole number of screen pixels); Barlow at any whole size. */
-    private static int pxSize(float size) {
+    /** Nether Pixel is drawn at whole multiples of 8 px (one font pixel = a whole number of screen pixels); Barlow and the lyric fonts at any whole size. */
+    private static int pxSize(int f, float size) {
         float px = Math.max(Math.max(5, minPx), size * s);
-        return pixel ? Math.max(8, Math.round(px / 8f) * 8) : Math.max(7, Math.round(px));
+        return pixel && f == HEAD ? Math.max(8, Math.round(px / 8f) * 8) : Math.max(7, Math.round(px));
+    }
+
+    /**
+     * Face index of lyric display font n (0-based, see LYRIC_FILES: Righteous, Bebas Neue, Poppins, Lilita One, Pacifico,
+     * Kaushan Script, Permanent Marker, Neonderthaw, Monoton; res/fonts/lyrics, OFL / Apache 2.0). Read from the agent jar
+     * the first time it is asked for, so unused fonts cost nothing; SEMI when it cannot be read.
+     */
+    static int lyricFace(int n) {
+        if (n < 0 || n >= LYRIC_FILES.length) return SEMI;
+        int f = LYRIC0 + n;
+        if (fonts[f] == null && !lyricTried[n]) {
+            lyricTried[n] = true;
+            try {
+                byte[] b = Hook.file.apply("fonts/lyrics/" + LYRIC_FILES[n] + ".ttf");
+                if (b != null) fonts[f] = Font.createFont(Font.TRUETYPE_FONT, new ByteArrayInputStream(b));
+            } catch (Throwable t) {
+                System.out.println("[nether-agent] lyric font " + LYRIC_FILES[n] + " unavailable: " + t);
+            }
+        }
+        return fonts[f] != null ? f : SEMI;
+    }
+
+    /** Fill the four theme slots: HEAD from Nether Pixel Bold when {@link #pixel}, everything else Barlow. */
+    private static void pick() {
+        System.arraycopy(faces, 4, fonts, 0, 4);
+        if (pixel) fonts[HEAD] = faces[0];
     }
 
     /** Switch the type face (theme change): drops every cached glyph so the atlas refills with the new face. */
     static void face(boolean px) {
         if (px == pixel) return;
         pixel = px;
-        if (faces[0] != null) System.arraycopy(faces, px ? 0 : 4, fonts, 0, 4);
+        if (faces[0] != null) pick();
         derived.clear();
         metrics.clear();
         glyphs.clear();
@@ -611,7 +641,7 @@ final class Gfx {
 
     /** Width in logical units. spacing is extra logical units per glyph. */
     static float width(int f, float size, String str, float spacing) {
-        int px = pxSize(size);
+        int px = pxSize(f, size);
         float w = 0;
         for (int i = 0; i < str.length(); i++) w += glyph(f, px, str.charAt(i)).adv + spacing * s;
         return w / s;
@@ -623,7 +653,7 @@ final class Gfx {
 
     /** Draws str with its left edge at x and capital letters centred on cy. Returns the logical width. */
     static float text(int f, float size, float x, float cy, int col, String str, boolean shadow, float spacing) {
-        int px = pxSize(size);
+        int px = pxSize(f, size);
         int[] m = met(f, px);
         float cap = px * 0.36f;
         float base = Math.round(cy * s + cap);
