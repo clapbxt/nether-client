@@ -216,7 +216,7 @@ final class CustomSky extends Module {
                 GL11.glBindTexture(GL11.GL_TEXTURE_2D, l.tex);
                 blend(l.blend, b);
                 GL11.glPushMatrix();
-                if (l.rotate) GL11.glRotatef(celestial * 360f * l.speed, l.ax, l.ay, l.az);
+                if (l.rotate) GL11.glRotatef(angle(l, celestial, total), l.ax, l.ay, l.az);
                 cube(l);
                 GL11.glPopMatrix();
             }
@@ -325,7 +325,9 @@ final class CustomSky extends Module {
         // 1.21.2 - 1.21.4 (no GlTexture yet): the game still has its target bound here
         int W = (Integer) wO, H = (Integer) hO, fb = idO instanceof Integer ? fbo((Integer) idO) : GL11.glGetInteger(0x8CA6);
         double[] cam = Game.camera();
-        if (fb == 0 || cam == null || !Project.begin(W, H)) return;
+        // the frame's own view rotation + projection (bobbing, hurt tilt, FOV effects); our camera model only as a fallback
+        boolean real = mats();
+        if (fb == 0 || cam == null || (!real && !Project.begin(W, H))) return;
         double cx = cam[0], cy = cam[1], cz = cam[2];
         GlBackend.targetFb = fb;
         Gfx.begin(W, H);
@@ -341,7 +343,7 @@ final class CustomSky extends Module {
                 Gfx.ensure();
                 Gfx.flush();
                 int tint = blendModern(l.blend, b);
-                double ang = l.rotate ? Math.toRadians(celestial * 360f * l.speed) : 0, cs = Math.cos(ang), sn = Math.sin(ang);
+                double ang = l.rotate ? Math.toRadians(angle(l, celestial, total)) : 0, cs = Math.cos(ang), sn = Math.sin(ang);
                 float iu = 0.5f / Math.max(1, l.w), iv = 0.5f / Math.max(1, l.h);
                 for (float[] f : FACES) {
                     float u0 = f[0] / 3f + iu, u1 = (f[0] + 1) / 3f - iu, v0 = f[1] / 2f + iv, v1 = (f[1] + 1) / 2f - iv;
@@ -352,8 +354,11 @@ final class CustomSky extends Module {
                             for (int x = 0; x < 3; x++) // bilinear over TL, TR, BR, BL
                                 v[x] = f[2 + x] + (f[5 + x] - f[2 + x]) * a + (f[11 + x] - f[2 + x]) * c + (f[2 + x] - f[5 + x] + f[8 + x] - f[11 + x]) * a * c;
                             if (ang != 0) rotate(v, l.ax, l.ay, l.az, cs, sn);
-                            if (!Project.to(cx + v[0] * 100, cy + v[1] * 100, cz + v[2] * 100)) ok = false;
-                            p[k * 2] = Project.sx(W); p[k * 2 + 1] = Project.sy(H);
+                            if (real) { if (!clip(v[0] * 100, v[1] * 100, v[2] * 100, W, H, p, k)) ok = false; }
+                            else {
+                                if (!Project.to(cx + v[0] * 100, cy + v[1] * 100, cz + v[2] * 100)) ok = false;
+                                p[k * 2] = Project.sx(W); p[k * 2 + 1] = Project.sy(H);
+                            }
                             uv[k * 2] = u0 + (u1 - u0) * a; uv[k * 2 + 1] = v0 + (v1 - v0) * c;
                         }
                         if (ok) Gfx.imageQuad(l.key, p, uv, tint);
@@ -365,6 +370,31 @@ final class CustomSky extends Module {
             Gfx.end();
             GlBackend.targetFb = 0;
         }
+    }
+
+    /** Layer turn in degrees, as OptiFine: a fractional speed also advances a fixed amount per day, so the sky does not jump back at each new day. */
+    private static float angle(Layer l, float celestial, long total) {
+        float start = 0;
+        if (l.speed != Math.round(l.speed)) {
+            long worldDay = (total + 18000L) / 24000L;
+            start = (float) ((worldDay * (double) (l.speed % 1f)) % 1.0);
+        }
+        return 360f * (start + celestial * l.speed);
+    }
+
+    private static final float[] VIEW = new float[16], PROJ = new float[16];
+    /** Copies this frame's LevelRenderer.renderLevel matrices into VIEW / PROJ; false when unknown. */
+    private static boolean mats() { return Project.matrices(VIEW, PROJ); }
+
+    /** Camera-relative point through VIEW then PROJ (column-major, as JOML) to pixels in out[k*2..]; false behind the camera. */
+    private static boolean clip(float x, float y, float z, int W, int H, float[] out, int k) {
+        float[] m = VIEW, q = PROJ;
+        float vx = m[0] * x + m[4] * y + m[8] * z + m[12], vy = m[1] * x + m[5] * y + m[9] * z + m[13], vz = m[2] * x + m[6] * y + m[10] * z + m[14], vw = m[3] * x + m[7] * y + m[11] * z + m[15];
+        float cx = q[0] * vx + q[4] * vy + q[8] * vz + q[12] * vw, cy = q[1] * vx + q[5] * vy + q[9] * vz + q[13] * vw, cw = q[3] * vx + q[7] * vy + q[11] * vz + q[15] * vw;
+        if (cw <= 1e-3f) return false;
+        out[k * 2] = (cx / cw + 1) * 0.5f * W;
+        out[k * 2 + 1] = (1 - cy / cw) * 0.5f * H;
+        return true;
     }
 
     /** v rotated about unit axis (x, y, z) by the angle with cos cs / sin sn (right hand, as glRotatef). */

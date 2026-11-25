@@ -233,6 +233,10 @@ public final class Hook {
     /** Custom sky (1.8.9 / 1.12.2): drawn at the end of RenderGlobal.renderSky with the game's camera matrices. */
     public static volatile java.util.function.Consumer<Float> skyDraw;
     public static volatile boolean skyHooked;
+    /** LevelRenderer.renderLevel arguments of the current frame: view rotation, projection (1.21.x), CameraRenderState (26.1). */
+    public static volatile Object levelView, levelProj, levelCam;
+    public static volatile long levelFrame, levelNs;
+    public static void levelMats(Object view, Object proj, Object cam) { levelView = view; levelProj = proj; levelCam = cam; levelFrame++; levelNs = System.nanoTime(); }
     /** Custom sky (1.21.2 - 26.1): drawn after SkyRenderer.renderSkyDisc, inside the world pass. */
     public static volatile Runnable skyModernDraw;
     public static void skyModern() {

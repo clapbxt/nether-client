@@ -165,6 +165,10 @@ public final class Agent {
         VIEW_HOOKS.put("net/minecraft/client/renderer/RenderGlobal", new String[] {"lsky", "func_174976_a", "(FI)V", "", ""}); // Forge 1.8.9 / 1.12.2 renderSky: custom sky layers at its end
         VIEW_HOOKS.put("net/minecraft/class_9975", new String[] {"sky", "method_62302", "", "", ""}); // Fabric SkyRenderer.renderSkyDisc (1.21.2+)
         VIEW_HOOKS.put("net/minecraft/client/renderer/SkyRenderer", new String[] {"sky", "renderSkyDisc", "", "", ""}); // Mojang names (26.x, Forge / NeoForge)
+        // LevelRenderer.renderLevel entry: the frame's real view rotation + projection (view bobbing, hurt tilt, FOV
+        // effects), so the custom sky projects exactly as the game's own sky does (1.21.2+; 26.1: its CameraRenderState)
+        VIEW_HOOKS.put("net/minecraft/class_761", new String[] {"lvlmat", "method_22710", "", "", ""});
+        VIEW_HOOKS.put("net/minecraft/client/renderer/LevelRenderer", new String[] {"lvlmat", "renderLevel", "", "", ""});
         String[] a = String.valueOf(System.getProperty("sun.java.command")).split(" ");
         String v = null;
         for (int i = 0; i + 1 < a.length; i++) if (a[i].equals("--version")) v = a[i + 1];
@@ -233,6 +237,7 @@ public final class Agent {
         viewRow(rows, "tag", "net.minecraft.class_897", "method_62425", null, null);
         viewRow(rows, "mount", "net.minecraft.class_922", null, null, null);
         viewRow(rows, "sky", "net.minecraft.class_9975", "method_62302", null, null);
+        viewRow(rows, "lvlmat", "net.minecraft.class_761", "method_22710", null, null);
         if (rows.containsKey("net.minecraft.class_12249")) viewRow(rows, "armor", "net.minecraft.class_10197", null, "method_75966", "net.minecraft.class_12249");
         else viewRow(rows, "armor", "net.minecraft.class_10197", null, "method_25448", "net.minecraft.class_1921"); // 1.21.4-1.21.10: RenderType
         String[] ps = rows.get("net.minecraft.class_4587");
@@ -1003,6 +1008,27 @@ public final class Agent {
                                 public void visitInsn(int op) {
                                     if (op == Opcodes.RETURN) { n[0]++; super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "skyModern", "()V", false); }
                                     super.visitInsn(op);
+                                }
+                            };
+                        }
+                        if (kind.equals("lvlmat")) { // LevelRenderer.renderLevel: hand its first two matrices (view rotation, projection) and a CameraRenderState arg (26.1) to the sky
+                            if (!named || stat) return mv;
+                            int m0 = -1, m1 = -1, cs = -1;
+                            for (int k = 0; k < at.length; k++) {
+                                if (at[k].getSort() != Type.OBJECT) continue;
+                                String in = at[k].getInternalName();
+                                if (in.equals("org/joml/Matrix4f") || in.equals("org/joml/Matrix4fc")) { if (m0 < 0) m0 = k; else if (m1 < 0) m1 = k; }
+                                else if (in.endsWith("/CameraRenderState") && cs < 0) cs = k;
+                            }
+                            if (m0 < 0 && cs < 0) return mv;
+                            final int s0 = m0 < 0 ? -1 : slot(at, m0), s1 = m1 < 0 ? -1 : slot(at, m1), s2 = cs < 0 ? -1 : slot(at, cs);
+                            return new MethodVisitor(Opcodes.ASM9, mv) {
+                                @Override
+                                public void visitCode() {
+                                    super.visitCode();
+                                    n[0]++;
+                                    for (int s : new int[] {s0, s1, s2}) { if (s < 0) super.visitInsn(Opcodes.ACONST_NULL); else super.visitVarInsn(Opcodes.ALOAD, s); }
+                                    super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "levelMats", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V", false);
                                 }
                             };
                         }
