@@ -406,7 +406,7 @@ final class Menu {
         String v = ed ? editBuf : value;
         float t = an("fld" + key, ed || in(x, y, w, h));
         Gfx.rect(x, y, w, h, 6, Gfx.a(Th.ov, 0.035f + 0.03f * t));
-        Gfx.ring(x, y, w, h, 6, 1, ed ? Th.ac : Gfx.mix(Th.ln, Th.ln2, t));
+        Gfx.ring(x, y, w, h, 6, 1, ed ? Th.dim : Gfx.mix(Th.ln, Th.ln2, t));
         int font = kind == HEX || kind == NUM ? Gfx.MONO : Gfx.UI;
         float tx = x + 10, cy = y + h / 2;
         if (kind == HEX) tx += Gfx.text(Gfx.MONO, 12, tx, cy, Th.mut, "#") + 1;
@@ -521,7 +521,7 @@ final class Menu {
         boolean hv = in(x, y, w, 28);
         float t = an("k" + cid, hv || cap);
         Gfx.rect(x, y, w, 28, 6, Gfx.a(Th.ov, 0.035f + 0.04f * t));
-        Gfx.ring(x, y, w, 28, 6, 1, cap || clash ? Th.ac : Gfx.mix(Th.ln, Th.ln2, t));
+        Gfx.ring(x, y, w, 28, 6, 1, cap ? Th.dim : clash ? 0xFFE5372D : Gfx.mix(Th.ln, Th.ln2, t));
         Gfx.textC(Gfx.SEMI, 11, x + w / 2, y + 14, code < 0 && !cap ? Th.mut : Th.tx, name, 1f);
         if (hit(x, y, w, 28) || used(f) != 0) capture = cid;
     }
@@ -861,8 +861,8 @@ final class Menu {
             if (tab != i) {
                 Gfx.alpha = a0 * k(tS, 0.05f + i * 0.03f, 0.24f);
                 float h = an("chh" + i, in(x + cxs[i], y, cws[i], 28));
-                Gfx.rect(x + cxs[i], y, cws[i], 28, 14, Gfx.mix(Gfx.a(Th.s2, 0.7f), Th.s3, h));
-                Gfx.ring(x + cxs[i], y, cws[i], 28, 14, 1, Th.ln2);
+                // Feather category pills: filled quiet plates, no outline; the open one is the accent
+                Gfx.rect(x + cxs[i], y, cws[i], 28, 6, Gfx.mix(Th.s2, Th.s3, h));
             }
         }
         Gfx.alpha = a0;
@@ -871,7 +871,7 @@ final class Menu {
             float f0 = Math.min(1, Gfx.dt * 14);
             pillX += (cxs[tab] - pillX) * f0;
             pillW += (cws[tab] - pillW) * f0;
-            Gfx.rect(x + pillX, y, pillW, 28, 14, Th.ac);
+            Gfx.rect(x + pillX, y, pillW, 28, 6, Th.ac);
         }
         for (int i = 0; i < T_WARDROBE; i++) {
             String c = String.valueOf(count(i));
@@ -950,7 +950,7 @@ final class Menu {
             if (hit(sx + 12, cy - 14, 28, 28)) toHub();
         }
         if (icon == null) { Logo.draw(tx, cy - 12, 24); tx += Logo.width(24) + 10; }
-        else { if (!ModIcons.drawItem(icon, tx, cy - 9, 18)) ModIcons.draw(icon, tx, cy - 9, 18, Th.ac2); tx += 28; }
+        else { if (!ModIcons.drawItem(icon, tx, cy - 9, 18)) ModIcons.draw(icon, tx, cy - 9, 18, Th.tx); tx += 28; }
         float tw = Gfx.text(Gfx.HEAD, 16, tx, cy, Th.tx, title);
         float cx = sx + pw - 16 - 28;
         if (!pg) {
@@ -979,7 +979,7 @@ final class Menu {
         if (hit(sx0, cy - 15, 250, 30)) searchFocus = true;
         float st = an("search", searchFocus || sh0);
         Gfx.rect(sx0, cy - 15, 250, 30, 4, Gfx.a(Th.s1, 0.5f));
-        Gfx.ring(sx0, cy - 15, 250, 30, 4, 1, Gfx.mix(Th.ln2, Th.ac, searchFocus ? st : 0));
+        Gfx.ring(sx0, cy - 15, 250, 30, 6, 1, Gfx.mix(Th.ln, Th.ln2, searchFocus ? 1 : st));
         ModIcons.draw("zoom", sx0 + 9, cy - 7, 14, Th.mut);
         if (search.isEmpty() && !searchFocus) {
             Gfx.text(Gfx.UI, 12, sx0 + 30, cy, Th.mut, "Search modules");
@@ -1122,8 +1122,8 @@ final class Menu {
         boolean on = m.enabled(), lock = m.locked(), hv = in(x, y, w, CARD_H);
         float t = an("r" + m.id, hv || f && kbNav), on1 = an("on" + m.id, on);
         y -= t * 2;
-        Gfx.rect(x, y, w, CARD_H, Th.R, Gfx.mix(Th.s2, Th.s3, t * 0.7f));
-        Gfx.ring(x, y, w, CARD_H, Th.R, 1, Gfx.mix(Th.ln, Gfx.mix(Th.ln2, Th.ac, on1 * 0.35f), Math.max(t, on1 * 0.6f)));
+        Gfx.rect(x, y, w, CARD_H, Th.R, Gfx.mix(Th.s2, Th.s3, t * 0.8f));
+        Gfx.ring(x, y, w, CARD_H, Th.R, 1, Gfx.mix(Th.ln, Th.ln2, t));
         float a0 = Gfx.alpha;
         if (lock) Gfx.alpha = a0 * 0.55f;
         // name + star
@@ -1150,10 +1150,10 @@ final class Menu {
         boolean cogHit = hit(gx, by, bh, bh);
         float bx = gx + bh + 6, bw = x + w - 10 - bx;
         float bt = an("tg" + m.id, in(bx, by, bw, bh));
-        // ENABLED sits on a darker bevel lip (Minecraft button edge); DISABLED is a flat neutral plate
-        if (on1 > 0.01f) Gfx.rect(bx, by + 2, bw, bh, 5, Gfx.a(Gfx.mix(Th.ac, 0xFF000000, 0.45f), on1));
-        Gfx.rect(bx, by, bw, bh, 5, Gfx.mix(Gfx.a(Th.ov, 0.06f + 0.05f * bt), Gfx.mix(Th.ac, Th.ac2, bt * 0.6f), on1));
-        Gfx.textC(Gfx.SEMI, 10, bx + bw / 2, by + bh / 2, Gfx.mix(Th.dim, Th.onAccent(), on1), lock ? "UNAVAILABLE" : on ? "ENABLED" : "DISABLED", 0.6f);
+        // Feather: Enabled = green plate with green text, Disabled = quiet grey plate (state colours, not the accent)
+        int gOn = Th.light() ? 0xFFCFF2D8 : 0xFF1D5C2A, gTx = Th.light() ? 0xFF167C35 : 0xFF6BE58A;
+        Gfx.rect(bx, by, bw, bh, 5, Gfx.mix(Gfx.a(Th.ov, 0.06f + 0.05f * bt), Gfx.mix(gOn, 0xFFFFFFFF, 0.08f * bt), on1));
+        Gfx.textC(Gfx.UI, 10.5f, bx + bw / 2, by + bh / 2, Gfx.mix(Th.dim, gTx, on1), lock ? "Unavailable" : on ? "Enabled" : "Disabled", 0);
         Gfx.alpha = a0;
         if (lock && hv && m.lockNote() != null) tip = m.lockNote();
         int u = used(f);
@@ -1168,7 +1168,6 @@ final class Menu {
         float hv0 = in(x, y, w, ROW) ? 1 : 0;
         float t = an("r" + m.id, hv0 > 0), o = an("ro" + m.id, open), on1 = an("on" + m.id, on);
         Gfx.rect(x, y, w, ROW, 4, Gfx.a(Th.ov, 0.04f * t + 0.05f * o));
-        if (o > 0.02f) Gfx.rect(x, y + 5, 2, ROW - 10, 1, Gfx.a(Th.ac, o));
         float a0 = Gfx.alpha;
         if (lock) Gfx.alpha = a0 * 0.55f;
         Gfx.rect(x + 12, y + (ROW - 28) / 2, 28, 28, 4, Gfx.a(Th.ov, 0.06f));
@@ -1176,7 +1175,7 @@ final class Menu {
         Gfx.alpha = a1 * (0.55f + 0.45f * on1); // item icons keep their colours: off = faded
         boolean item = ModIcons.drawItem(m.id, x + 18, y + ROW / 2f - 8, 16);
         Gfx.alpha = a1;
-        if (!item && !ModIcons.draw(m.id, x + 12 + 6.5f, y + ROW / 2f - 7.5f, 15, Gfx.mix(Th.dim, Th.ac2, on1)))
+        if (!item && !ModIcons.draw(m.id, x + 12 + 6.5f, y + ROW / 2f - 7.5f, 15, Gfx.mix(Th.dim, Th.tx, on1)))
             Gfx.textC(Gfx.HEAD, 12, x + 26, y + ROW / 2f, Th.dim, m.name.substring(0, 1), 0);
         // right side first: pill, key chip, star
         float rx = x + w - 14 - 30;
@@ -1315,8 +1314,7 @@ final class Menu {
         float yy = y + 6;
         String note = m.lockNote();
         if (note != null) {
-            Gfx.rect(lx, yy, lw, 34, 4, Gfx.a(Th.ac, 0.12f));
-            Gfx.rect(lx, yy, 3, 34, 1, Th.ac2);
+            Gfx.rect(lx, yy, lw, 34, 6, Gfx.a(Th.ov, 0.06f));
             Gfx.text(Gfx.UI, 11, lx + 14, yy + 17, Th.tx, note);
             yy += 42;
         }
@@ -1393,7 +1391,7 @@ final class Menu {
                     boolean hv = in(x, by, bw, 28);
                     float t = an("cl" + id, hv || op);
                     Gfx.rect(x, by, bw, 28, 4, Gfx.a(Th.ov, 0.035f + 0.03f * t));
-                    Gfx.ring(x, by, bw, 28, 4, 1, op ? Th.ac : Gfx.mix(Th.ln, Th.ln2, t));
+                    Gfx.ring(x, by, bw, 28, 4, 1, op ? Th.dim : Gfx.mix(Th.ln, Th.ln2, t));
                     ColorPicker.swatch(x + 7, by + 6, 16, 16, col);
                     Gfx.text(Gfx.UI, 11, x + 31, by + 14, Th.tx, ch ? "RAINBOW" : Config.hex(col));
                     chevron(x + bw - 15, by + 14, op, Gfx.mix(Th.dim, Th.tx, t));
@@ -1491,7 +1489,7 @@ final class Menu {
             float w = Gfx.width(Gfx.UI, 12, names[i]) + 28;
             boolean sel = sub == i, hv = in(x, y, w, 28);
             float t = an("ss" + i, sel);
-            Gfx.rect(x, y, w, 28, 4, Gfx.a(Th.ac, 0.16f * t));
+            Gfx.rect(x, y, w, 28, 4, Gfx.a(Th.ov, 0.10f * t));
             if (!sel && hv) Gfx.rect(x, y, w, 28, 4, Gfx.a(Th.ov, 0.07f));
             Gfx.textC(Gfx.UI, 12, x + w / 2, y + 14, Gfx.mix(Th.dim, Th.tx, t), names[i], 0);
             if (hit(x, y, w, 28) && sub != i) { sub = i; scroll = scrollT = 0; fCur = -1; commitEdit(); }
@@ -1514,9 +1512,8 @@ final class Menu {
         for (int i = 0; i < Th.NAMES.length; i++) {
             boolean sel = Th.theme == i, hv = in(cx, yy + 8, 90, 28);
             float t = an("th" + i, sel);
-            Gfx.rect(cx, yy + 8, 90, 28, 4, Gfx.a(Th.ac, 0.16f * t));
-            Gfx.ring(cx, yy + 8, 90, 28, 4, 1, Gfx.mix(Th.ln2, Th.ac, t));
-            Gfx.textC(Gfx.UI, 11, cx + 45, yy + 22, Gfx.mix(Th.dim, Th.tx, Math.max(t, hv ? 1 : 0)), Th.LABELS[i], 0);
+            Gfx.rect(cx, yy + 8, 90, 28, 6, Gfx.mix(Gfx.a(Th.ov, 0.05f), Th.ac, t));
+            Gfx.textC(Gfx.UI, 11, cx + 45, yy + 22, Gfx.mix(Gfx.mix(Th.dim, Th.tx, hv ? 1 : 0), 0xFFFFFFFF, t), Th.LABELS[i], 0);
             if (hit(cx, yy + 8, 90, 28)) Config.set("client", "theme", Th.NAMES[i]);
             cx += 96;
         }
@@ -1614,7 +1611,7 @@ final class Menu {
             boolean nh = in(nx - 8, cy - 14, nw, 28);
             float nt = an("wpn" + i, nh || ed);
             Gfx.rect(nx - 8, cy - 14, nw, 28, 6, Gfx.a(Th.ov, 0.045f * nt));
-            Gfx.ring(nx - 8, cy - 14, nw, 28, 6, 1, ed ? Th.ac : Gfx.a(Th.ln2, nt));
+            Gfx.ring(nx - 8, cy - 14, nw, 28, 6, 1, ed ? Th.dim : Gfx.a(Th.ln2, nt));
             String nm = ed ? editBuf : Waypoints.str(p, "name", "Waypoint");
             float tw = Gfx.text(Gfx.UI, 13, nx, cy, Th.tx, nm);
             if (ed && (Config.calm() || (System.currentTimeMillis() / 530) % 2 == 0)) Gfx.rect(nx + tw + 1, cy - 8, 1.5f, 16, 0, Th.ac2);
