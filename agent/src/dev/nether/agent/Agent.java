@@ -855,7 +855,19 @@ public final class Agent {
                             for (int k = 0; k < at.length && pi < 0; k++) if (at[k].getSort() == Type.OBJECT && POSES.contains(at[k].getInternalName())) pi = k;
                             final boolean wrap = named && stat && pi >= 0;
                             final int poseSlot = wrap ? slot(at, pi) - 1 : 0; // static: no this
-                            if (!named && !helpers.contains(mname)) return mv;
+                            if (!named && !helpers.contains(mname)) { // renderScreenEffect: its isOnFire check, so the live fire editor shows the real overlay
+                                if (stat) return mv;
+                                return new MethodVisitor(Opcodes.ASM9, mv) {
+                                    @Override
+                                    public void visitMethodInsn(int op, String o, String nm, String d, boolean itf) {
+                                        super.visitMethodInsn(op, o, nm, d, itf);
+                                        if (op == Opcodes.INVOKEVIRTUAL && "()Z".equals(d) && (nm.equals("method_5809") || nm.equals("isOnFire"))) {
+                                            n[0]++;
+                                            super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "fireShown", "(Z)Z", false);
+                                        }
+                                    }
+                                };
+                            }
                             return new MethodVisitor(Opcodes.ASM9, mv) {
                                 @Override
                                 public void visitCode() {

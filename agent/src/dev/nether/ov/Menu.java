@@ -25,6 +25,8 @@ final class Menu {
     private static int sub;
 
     static boolean hudEdit;
+    /** Live view editor: the menu steps aside so the real game shows the module (fire, shield, hand, mount); null = off. */
+    static Module live;
     /** The menu key opens on the hub (logo + settings / MODS / wardrobe); a hub button opens the panel on that tab. */
     static boolean hub = true;
     static String page;
@@ -86,6 +88,8 @@ final class Menu {
         drag = capture = null;
         searchFocus = false;
         hudEdit = false;
+        live = null;
+        dev.nether.agent.Hook.fireForce = false;
         WpDialog.open = false;
         Splashes.open = false;
         WorldShare.open = false;
@@ -320,6 +324,7 @@ final class Menu {
         if (Wardrobe.ask) { Wardrobe.ask = false; return; }
         if (fieldFocus()) { editWp = -1; editSet = null; return; }
         if (hudEdit) { if (!HudEditor.esc()) { hudEdit = false; HudEditor.reset(); } return; }
+        if (live != null) { live = null; return; }
         if (ColorPicker.id != null) { ColorPicker.close(); return; }
         if (page == null && (searchFocus || !search.isEmpty())) { search = ""; searchFocus = false; scroll = scrollT = 0; fCur = -1; return; }
         if (page != null) { commitEdit(); page = null; gridT = 0; scroll = scrollT = gridScroll; fCur = kbNav ? gridFocus : -1; return; }
@@ -651,7 +656,10 @@ final class Menu {
                     Gfx.s = sc;
                     Gfx.alpha = e;
                 }
-                if (Screenshots.open) Screenshots.drawBrowser(e, wheel);
+                if (live != null && !liveOk(live)) live = null;
+                dev.nether.agent.Hook.fireForce = live instanceof Views.Fire;
+                if (live != null) liveEdit(e, wheel);
+                else if (Screenshots.open) Screenshots.drawBrowser(e, wheel);
                 else if (PackBrowser.open) PackBrowser.draw(e, wheel);
                 else if (PackMixer.open) PackMixer.draw(e, wheel);
                 else if (WorldShare.open) WorldShare.draw(e, wheel);
@@ -1210,6 +1218,82 @@ final class Menu {
         else if (a < 0 && open) { commitEdit(); ColorPicker.close(); page = null; }
     }
 
+    // ---------------------------------------------------------------- live view editor (fire, shield, hand, mount)
+
+    /** A view module that can be edited over the running game (in a world, its hook in place). */
+    static boolean liveOk(Module m) {
+        return (m instanceof Views.Fire || m instanceof Views.Shield || m instanceof Views.Hand || m instanceof Views.Ride)
+            && Game.player0() != null && !MainMenu.title && m.available();
+    }
+
+    private static boolean liveDrag;
+    private static float liveX0, liveY0;
+    private static double liveA, liveB;
+    private static float liveScroll;
+
+    /**
+     * The game shows through (no dim, no panel over the middle): a settings sheet on the left, a status chip on top.
+     * Dragging anywhere else moves the effect (fire / shield height; hand sideways + height). The fire overlay is
+     * forced on while this is open (Hook.fireForce), so it is the game's own overlay, not a picture of it.
+     */
+    private static void liveEdit(float e, float wheel) {
+        Module m = live;
+        float pw = 392, px = 20, py = 20, top = 64, foot = 54;
+        float rows = 0;
+        for (int i = 0; i < m.settings.size(); i++) if (m.row(i)) rows += SROW;
+        float ph = Math.min(H - 40, top + rows + foot), view = ph - top - foot;
+        float a0 = Gfx.alpha;
+        Gfx.rect(px, py + 4, pw, ph, 12, Gfx.a(Gfx.BLACK, 0.35f * e));
+        Gfx.rect(px, py, pw, ph, 12, Gfx.a(Th.s1, 0.94f));
+        Gfx.ring(px, py, pw, ph, 12, 1, Th.ln2);
+        Gfx.rect(px + 18, py + 22, 7, 7, 4, Th.ac);
+        Gfx.text(Gfx.UI, 10, px + 32, py + 26, Th.ac2, "LIVE", false, 1.4f);
+        Gfx.text(Gfx.SEMI, 15, px + 18, py + 46, Th.tx, m.name);
+        boolean on = m.enabled();
+        String tl = on ? "ON" : "OFF";
+        pill("lv" + m.id, px + pw - 52, py + 38, on);
+        Gfx.text(Gfx.UI, 10, px + pw - 60 - Gfx.width(Gfx.UI, 10, tl, 1.2f), py + 47, on ? Th.tx : Th.mut, tl, false, 1.2f);
+        if (hit(px + pw - 62, py + 30, 56, 34)) { Config.set(m.id, "enabled", !on); Sfx.toggle(!on); }
+        // the rows scroll when they are taller than the screen (Ride View Editor)
+        float maxS = Math.max(0, rows - view);
+        if (in(px, py, pw, ph)) liveScroll = Math.max(0, Math.min(maxS, liveScroll - wheel * 40));
+        liveScroll = Math.min(liveScroll, maxS);
+        Gfx.clip(px, py + top, pw, view);
+        settingRows(m, px + 20, py + top - liveScroll, pw - 40);
+        Gfx.unclip();
+        float fy = py + ph - foot + 12;
+        Gfx.rect(px + 1, py + ph - foot, pw - 2, 1, 0, Th.ln2);
+        if (fbutton("livedone", "DONE", px + 20, fy, 96, 30, true)) live = null;
+        if (fbutton("livereset", "RESET", px + 124, fy, 86, 30, false)) { ColorPicker.close(); m.reset(); }
+
+        // status chip, top centre of the game view
+        String note = !on ? "Turn it on to see your changes"
+            : m instanceof Views.Fire ? "This is the game's own fire  \u00b7  drag up or down to move it"
+            : m instanceof Views.Shield ? "Hold a shield to see it  \u00b7  drag up or down to move it"
+            : m instanceof Views.Hand ? "Drag to move your hand and held item"
+            : "Ride a horse, pig, camel or other mount to see it";
+        float cx = px + pw + (W - px - pw) / 2, nw = Gfx.width(Gfx.UI, 12, note) + 36;
+        Gfx.rect(cx - nw / 2, 18, nw, 32, 16, 0xD9101014);
+        Gfx.ring(cx - nw / 2, 18, nw, 32, 16, 1, Gfx.a(0xFFFFFFFF, 0.12f));
+        Gfx.textC(Gfx.UI, 12, cx, 34, 0xF2FFFFFF, note, 0);
+
+        // drag on the game view (outside the sheet) moves the effect, relative to where the drag began
+        boolean movable = m instanceof Views.Fire || m instanceof Views.Shield || m instanceof Views.Hand;
+        if (movable && click && !in(px, py, pw, ph) && !in(cx - nw / 2, 18, nw, 32)) {
+            liveDrag = true; liveX0 = L; liveY0 = T; click = false;
+            if (m instanceof Views.Hand) { liveA = m.num("x"); liveB = m.num("y"); }
+            else liveA = m.num("height");
+        }
+        if (liveDrag && !Input.btn[0]) liveDrag = false;
+        if (liveDrag) {
+            if (m instanceof Views.Hand) {
+                Config.set(m.id, "x", Math.round(Math.max(-0.6, Math.min(0.6, liveA + (L - liveX0) / W * 1.2)) * 100) / 100.0);
+                Config.set(m.id, "y", Math.round(Math.max(-0.6, Math.min(0.6, liveB - (T - liveY0) / H * 1.2)) * 100) / 100.0);
+            } else Config.set(m.id, "height", Math.round(Math.max(-0.5, Math.min(0, liveA - (T - liveY0) / H)) * 100) / 100.0);
+        }
+        Gfx.alpha = a0;
+    }
+
     // ---------------------------------------------------------------- settings of one module, inline under its row
 
     private static final float SROW = 46;
@@ -1221,6 +1305,7 @@ final class Menu {
         h += SROW; // the Enabled-free footer: reset buttons
         if (m instanceof Waypoints) h += wpHeight((Waypoints) m);
         if (ViewEditor.has(m)) h += ViewEditor.H + 12;
+        if (liveOk(m)) h += 40;
         return h;
     }
 
@@ -1240,6 +1325,10 @@ final class Menu {
         Waypoints wp = m instanceof Waypoints ? (Waypoints) m : null;
         if (wp == null && editWp >= 0) commitEdit();
         if (ViewEditor.has(m)) { ViewEditor.draw(m, lx, yy + 4, lw, "ve" + m.id); yy += ViewEditor.H + 12; }
+        if (liveOk(m)) {
+            if (fbutton("live" + m.id, "EDIT LIVE IN GAME", lx, yy + 4, Math.min(lw, 220), 30, true)) { commitEdit(); ColorPicker.close(); live = m; liveDrag = false; }
+            yy += 40;
+        }
         yy = settingRows(m, lx, yy, lw);
         if (wp != null) { wpList(wp, lx, yy, lw); yy += wpHeight(wp); }
         String rl = "Reset to default";

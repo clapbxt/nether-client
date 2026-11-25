@@ -190,6 +190,9 @@ public final class Hook {
         try { if (p != null && ps != null) p.pop(ps); } catch (Throwable t) { viewFail(t); }
     }
     /** The fire quads' alpha (float colour, or packed ARGB on 26.x). */
+    /** The live fire editor shows the game's own fire overlay while it is open, burning or not. */
+    public static volatile boolean fireForce;
+    public static boolean fireShown(boolean burning) { return burning || fireForce; }
     public static float fireA(float a) { float f = fireAlpha; return f < 0 ? a : f; }
     public static int fireArgb(int c) { float f = fireAlpha; return f < 0 ? c : (c & 0xFFFFFF) | (Math.round(Math.max(0, Math.min(1, f)) * 255) << 24); }
 
