@@ -43,7 +43,7 @@ component RailBtn inherits Rectangle {
     in property <string> d;
     in property <string> label;
     in property <bool> active;
-    // filled symbol (a brand mark such as Discord's, shown in white as its rules allow) instead of a line icon
+    // filled symbol (a brand mark such as Discord's, white on Dark and black on Light, as its rules allow) instead of a line icon
     in property <bool> filled;
     callback clicked();
     width: 48px; height: 48px; border-radius: Theme.r3;
@@ -52,7 +52,7 @@ component RailBtn inherits Rectangle {
     if root.active: Rectangle { x: -14px; y: 12px; width: 3px; height: 24px; border-radius: 1.5px; background: Theme.red; }
     Path {
         x: 13px; y: 13px; width: 22px; height: 22px; viewbox-width: 20; viewbox-height: 20;
-        commands: root.d; fill: root.filled ? #ffffff : transparent; fill-rule: evenodd; stroke-width: root.filled ? 0px : 1.6px;
+        commands: root.d; fill: root.filled ? (Theme.light ? #000000 : #ffffff) : transparent; fill-rule: evenodd; stroke-width: root.filled ? 0px : 1.6px;
         stroke: root.active ? Theme.red2 : (ta.has-hover ? Theme.tx : Theme.dim);
         opacity: root.filled && !ta.has-hover ? 0.62 : 1;
     }
@@ -231,7 +231,7 @@ export component AppWindow inherits Window {
             if root.has-inst: Rectangle {
                 x: 20px; y: 8px; height: 40px; width: ql.preferred-width + 36px + Math.min(Backend.instances.length, 10) * 40px; border-radius: Theme.r2;
                 background: Theme.s1; border-width: 1px; border-color: Theme.ln;
-                ql := Text { x: 14px; height: parent.height; vertical-alignment: center; text: "QUICK PLAY"; color: Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; }
+                ql := Text { x: 14px; height: parent.height; vertical-alignment: center; text: "QUICK PLAY"; color: Theme.dim; font-family: Theme.pix; font-size: 16px; font-weight: 700; }
                 for it[i] in Backend.instances: Rectangle {
                     visible: i < 10;
                     x: ql.preferred-width + 28px + i * 40px; y: 4px; width: 32px; height: 32px; border-radius: Theme.r1;
@@ -457,7 +457,7 @@ export component AppWindow inherits Window {
             // only the top strip drags the window (like the top bar everywhere else)
             TouchArea { pointer-event(e) => { if e.kind == PointerEventKind.down && e.button == PointerEventButton.left && self.mouse-y < root.top { Backend.win-drag(); } } }
             Image { source: @image-url("assets/nether-logo.svg"); x: 20px; y: 10px; width: 36px; height: 36px; }
-            Text { x: 66px; height: root.top; text: "Nether"; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; vertical-alignment: center; }
+            Text { x: 66px; height: root.top; text: "Nether"; color: Theme.tx; font-family: Theme.pix; font-size: 24px; font-weight: 700; vertical-alignment: center; }
             // right: the banner (art/wide_banner.png) on a plate
             Rectangle {
                 x: root.W - 600px; y: root.top; width: 560px; height: root.H - root.top - 40px; background: Theme.s1; border-radius: Theme.r2; clip: true;
@@ -512,7 +512,7 @@ export component AppWindow inherits Window {
                 Text { x: 74px; y: 176px; width: 760px; text: "The game closed unexpectedly. Here is what went wrong and how to fix it."; color: Theme.dim; font-family: Theme.ui; font-size: 17px; wrap: word-wrap; }
 
                 // 01 our own diagnosis (with one-click fixes)
-                                Text { x: 74px; y: 248px; text: "WHAT WE FOUND"; color: Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; }
+                                Text { x: 74px; y: 248px; text: "WHAT WE FOUND"; color: Theme.dim; font-family: Theme.pix; font-size: 16px; font-weight: 700; }
                 if Backend.crash-items.length == 0: Text { x: 74px; y: 282px; width: 760px; text: "Nothing we recognise. The mclo.gs analysis below knows many more crash causes."; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; }
                 for c[i] in Backend.crash-items: Rectangle {
                     x: 72px; y: 280px + i * 126px; width: 760px; height: 116px; visible: i < 5;
@@ -578,7 +578,7 @@ export component AppWindow inherits Window {
                 TouchArea { }
                 Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: pd.n > 0 ? Theme.red : Theme.ice; }
                 Eyebrow { x: 32px; y: 30px; text: pd.n > 0 ? "BEFORE YOU PLAY" : "ALL FIXED"; color: pd.n > 0 ? Theme.redtx : Theme.dim; }
-                Text { x: 32px; y: 50px; width: parent.width - 64px; text: Backend.pre-inst.to-uppercase(); color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800;  overflow: elide; }
+                Text { x: 32px; y: 50px; width: parent.width - 64px; text: Backend.pre-inst.to-uppercase(); color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 800;  overflow: elide; }
                 Text { x: 32px; y: 98px; width: parent.width - 64px; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap;
                     text: pd.n == 0 ? "Everything we found is fixed. Ready when you are." : (pd.n == 1 ? "One thing would likely stop the game. Fix it here, or launch anyway." : "\{pd.n} things would likely stop the game. Fix them here, or launch anyway."); }
                 Flickable {
@@ -613,7 +613,7 @@ export component AppWindow inherits Window {
                 TouchArea { }
                 Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: Theme.red; }
                 Eyebrow { x: 32px; y: 30px; text: "WORLD INVITE"; color: Theme.redtx; }
-                Text { x: 32px; y: 50px; width: parent.width - 64px; text: WorldInvite.world.to-uppercase(); color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800; overflow: elide; }
+                Text { x: 32px; y: 50px; width: parent.width - 64px; text: WorldInvite.world.to-uppercase(); color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 800; overflow: elide; }
                 Text { x: 32px; y: 98px; width: parent.width - 64px; text: WorldInvite.from + " invited you to play in their world."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; overflow: elide; }
                 Rectangle {
                     x: 32px; y: 134px; width: parent.width - 64px; height: 60px;
@@ -649,7 +649,7 @@ export component AppWindow inherits Window {
                 background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
                 TouchArea { }
                 Eyebrow { x: 32px; y: 30px; text: "UPDATE " + (Backend.upd-rows.length == 1 ? "1 FILE" : "\{Backend.upd-rows.length} FILES"); }
-                Text { x: 32px; y: 50px; width: parent.width - 64px; text: Backend.upd-inst.to-uppercase(); color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800;  overflow: elide; }
+                Text { x: 32px; y: 50px; width: parent.width - 64px; text: Backend.upd-inst.to-uppercase(); color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 800;  overflow: elide; }
                 Text { x: 32px; y: 98px; width: parent.width - 64px; text: "Read what changes first. The current files and configs are kept, so one click undoes the update."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
                 if Backend.upd-state == 0: Waiting { x: 32px; y: 150px; width: 400px; text: "Reading changelogs"; }
                 Flickable { visible: Backend.upd-state != 0;
@@ -689,7 +689,7 @@ export component AppWindow inherits Window {
                 background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
                 TouchArea { }
                 Eyebrow { x: 32px; y: 30px; text: "UPDATE HISTORY"; }
-                Text { x: 32px; y: 50px; width: parent.width - 64px; text: Backend.hist-inst.to-uppercase(); color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800;  overflow: elide; }
+                Text { x: 32px; y: 50px; width: parent.width - 64px; text: Backend.hist-inst.to-uppercase(); color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 800;  overflow: elide; }
                 Text { x: 32px; y: 98px; width: parent.width - 64px; text: "Undo puts the files and configs back exactly as they were before that update. The last 5 updates are kept."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
                 Flickable {
                     x: 32px; y: 134px; width: parent.width - 64px; height: hd.list-h; content-height: hd.n * 84px;
@@ -718,7 +718,7 @@ export component AppWindow inherits Window {
                 background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
                 TouchArea { }
                 Rectangle { x: 0px; width: 4px; background: Backend.ask-danger ? Theme.red2 : Theme.ice; }
-                Text { x: 32px; y: 28px; width: 456px; text: Backend.ask-title; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700;  overflow: elide; }
+                Text { x: 32px; y: 28px; width: 456px; text: Backend.ask-title; color: Theme.tx; font-family: Theme.pix; font-size: 24px; font-weight: 700;  overflow: elide; }
                 at := Text { x: 32px; y: 72px; width: 456px; text: Backend.ask-text; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
                 Btn { x: 32px; y: parent.height - 62px; text: Backend.ask-yes; solid: !Backend.ask-danger; danger: Backend.ask-danger; clicked => { Backend.ask-answer(true); } }
                 LinkBtn { x: parent.width - 32px - self.width; y: parent.height - 56px; text: "CANCEL"; clicked => { Backend.ask-answer(false); } }
@@ -734,7 +734,7 @@ export component AppWindow inherits Window {
                 background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
                 TouchArea { }
                 Rectangle { x: 0px; width: 4px; background: Theme.red2; }
-                Text { x: 32px; y: 28px; width: 456px; text: "Apply your new look?"; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; overflow: elide; }
+                Text { x: 32px; y: 28px; width: 456px; text: "Apply your new look?"; color: Theme.tx; font-family: Theme.pix; font-size: 24px; font-weight: 700; overflow: elide; }
                 Text { x: 32px; y: 72px; width: 456px; text: "You picked capes or cosmetics in the Wardrobe that aren't applied yet. Nobody sees them until you apply."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
                 ab := Btn { x: 32px; y: parent.height - 62px; text: "APPLY & LEAVE"; solid: true; icon: Ico.check; enabled: Backend.acct-state == 2; clicked => { root.ward-go(true); } }
                 Btn { x: ab.x + ab.width + 10px; y: parent.height - 62px; text: "DISCARD"; clicked => { root.ward-go(false); } }
@@ -752,7 +752,7 @@ export component AppWindow inherits Window {
                 background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
                 TouchArea { }
                 Eyebrow { x: 32px; y: 30px; text: "RESTORE POINT · " + Backend.rpoints[Backend.rp-ask].kind; }
-                Text { x: 32px; y: 50px; width: parent.width - 64px; text: Backend.rpoints[Backend.rp-ask].date.to-uppercase(); color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800;  overflow: elide; }
+                Text { x: 32px; y: 50px; width: parent.width - 64px; text: Backend.rpoints[Backend.rp-ask].date.to-uppercase(); color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 800;  overflow: elide; }
                 Text { x: 32px; y: 98px; width: parent.width - 64px; text: rd.nm + " as it was then: mods, worlds, configs, settings, version and loader (" + Backend.rpoints[Backend.rp-ask].size + ")."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
                 for o[i] in [{t: "As a new instance", s: "A copy next to this one. Nothing in " + rd.nm + " changes."}, {t: "Replace " + rd.nm, s: "Goes back to that point. Its current state is saved as a restore point first."}]: Rectangle {
                     x: 32px; y: 150px + i * 70px; width: parent.width - 64px; height: 62px;
@@ -835,7 +835,7 @@ export component AppWindow inherits Window {
                 TouchArea { }
                 Rectangle { y: 0px; height: 3px; background: Theme.red2; }
                 Eyebrow { x: 36px; y: 34px; text: "UPDATE REQUIRED"; }
-                Text { x: 36px; y: 54px; width: parent.width - 72px; text: "A NEW NETHER IS HERE"; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800; overflow: elide; }
+                Text { x: 36px; y: 54px; width: parent.width - 72px; text: "A NEW NETHER IS HERE"; color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 800; overflow: elide; }
                 Rectangle { x: 36px; y: 108px; width: parent.width - 72px; height: 56px; background: Theme.s1; border-width: 1px; border-color: Theme.ln; border-radius: Theme.r2;
                     Text { x: 20px; y: 10px; text: "YOU HAVE"; color: Theme.mut; font-family: Theme.ui; font-size: 11px * Theme.ts; font-weight: 600; letter-spacing: 0.8px; }
                     Text { x: 20px; y: 26px; text: Backend.app-version; color: Theme.dim; font-family: Theme.mono; font-size: 15px * Theme.ts; }
@@ -870,7 +870,7 @@ export component AppWindow inherits Window {
             animate opacity { duration: Theme.mid; }
             animate y { duration: Theme.slow; easing: ease-out-quint; }
             Rectangle { x: 0px; width: 4px; background: Backend.toast-err ? Theme.red2 : Theme.ice; }
-            if Backend.toast-err: Text { x: 20px; y: 10px; text: "SOMETHING WENT WRONG"; color: Theme.redtx; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.9px; }
+            if Backend.toast-err: Text { x: 20px; y: 10px; text: "SOMETHING WENT WRONG"; color: Theme.redtx; font-family: Theme.pix; font-size: 16px; font-weight: 700; letter-spacing: 0.9px; }
             if Backend.toast-err: Text { x: 20px; y: 30px; width: 520px - toast.act-w; height: 46px; text: Backend.toast-text; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; overflow: elide; }
             tt := Text { x: 20px; width: parent.width - 40px - toast.act-w; visible: !Backend.toast-err; text: Backend.toast-text; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 500; vertical-alignment: center; overflow: elide; }
             if Backend.toast-action != "": Btn { x: parent.width - self.width - 14px; y: (parent.height - self.height) / 2; height: 32px; text: Backend.toast-action; clicked => { Backend.toast-act(); } }

@@ -43,7 +43,7 @@ export component CardGrid inherits Rectangle {
             }
             Rectangle { background: @linear-gradient(180deg, #00000000 35%, #000000b8 72%, #000000eb 100%); }
             if !cd.lit: Rectangle { background: #00000033; }
-            Text { x: 16px; y: parent.height - 74px; height: 42px; text: c.fam; color: #FFFFFF; font-family: Theme.disp; font-size: 40px; font-weight: 800; vertical-alignment: center; }
+            Text { x: 16px; y: parent.height - 74px; height: 42px; text: c.fam; color: #FFFFFF; font-family: Theme.pix; font-size: 40px; font-weight: 800; vertical-alignment: center; }
             Text { x: 16px; y: parent.height - 32px; width: parent.width - 32px; height: 18px; text: c.name; color: #ffffffd0; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; vertical-alignment: center; overflow: elide; }
             // ways to play, top right
             Rectangle {
@@ -89,7 +89,7 @@ export component CardPanel inherits Rectangle {
         Rectangle { background: @linear-gradient(180deg, #00000030 0%, #00000000 30%, Theme.s1.with-alpha(0.85) 82%, Theme.s1 100%); }
     }
     Text { x: 32px; y: 186px; height: 20px; text: "NETHER"; color: Theme.red2; font-family: Theme.mono; font-size: 12px * Theme.ts; font-weight: 700; letter-spacing: 2px; vertical-alignment: center; }
-    Text { x: 30px; y: 204px; height: 64px; text: root.c.fam; color: Theme.tx; font-family: Theme.disp; font-size: 64px; font-weight: 800; vertical-alignment: center; }
+    Text { x: 30px; y: 204px; height: 64px; text: root.c.fam; color: Theme.tx; font-family: Theme.pix; font-size: 64px; font-weight: 800; vertical-alignment: center; }
     Text { x: 32px; y: 268px; width: parent.width - 64px; height: 22px; text: root.c.name; color: Theme.dim; font-family: Theme.ui; font-size: 16px * Theme.ts; font-weight: 500; vertical-alignment: center; overflow: elide; }
 
     // version
@@ -192,7 +192,7 @@ export component HorizonHero inherits Rectangle {
             x: parent.width - self.width - 16px; y: 16px; width: vt.preferred-width + 14px; height: 20px; border-radius: 4px; background: #000000a0;
             vt := Text { text: "26.3"; color: #ffffffc8; font-family: Theme.mono; font-size: 10px; font-weight: 700; letter-spacing: 1px; horizontal-alignment: center; vertical-alignment: center; }
         }
-        Text { x: 24px; y: parent.height - 118px; height: 64px; text: "HORIZON"; color: #FFFFFF; font-family: Theme.disp; font-size: 64px; font-weight: 800; vertical-alignment: center; }
+        Text { x: 24px; y: parent.height - 118px; height: 64px; text: "HORIZON"; color: #FFFFFF; font-family: Theme.pix; font-size: 64px; font-weight: 800; vertical-alignment: center; }
         Text { x: 26px; y: parent.height - 52px; width: parent.width - 52px; height: 22px; text: "Minecraft: Java Edition 26.3, rewritten from scratch in Rust";
             color: #ffffffd0; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; vertical-alignment: center; overflow: elide; }
         Rectangle { border-radius: Theme.r2; border-width: 1px; border-color: ht.has-hover ? #ffffff40 : #ffffff14; animate border-color { duration: Theme.fast; } }
@@ -226,7 +226,7 @@ export component HorizonPanel inherits Rectangle {
         Rectangle { background: @linear-gradient(180deg, #00000030 0%, #00000000 30%, Theme.s1.with-alpha(0.85) 82%, Theme.s1 100%); }
     }
     Text { x: 32px; y: 186px; height: 20px; text: "HORIZON"; color: Theme.red2; font-family: Theme.mono; font-size: 12px * Theme.ts; font-weight: 700; letter-spacing: 2px; vertical-alignment: center; }
-    Text { x: 30px; y: 204px; height: 64px; text: "26.3"; color: Theme.tx; font-family: Theme.disp; font-size: 64px; font-weight: 800; vertical-alignment: center; }
+    Text { x: 30px; y: 204px; height: 64px; text: "26.3"; color: Theme.tx; font-family: Theme.pix; font-size: 64px; font-weight: 800; vertical-alignment: center; }
     Text { x: 32px; y: 268px; width: parent.width - 64px; height: 22px; text: "Minecraft rewritten in Rust"; color: Theme.dim; font-family: Theme.ui; font-size: 16px * Theme.ts; font-weight: 500; vertical-alignment: center; overflow: elide; }
 
     Text { x: 32px; y: 322px; height: 18px; text: "BUILD"; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 1.4px; vertical-alignment: center; }

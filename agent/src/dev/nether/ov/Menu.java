@@ -935,15 +935,11 @@ final class Menu {
         sx = (W - pw) / 2 + tDir * (1 - kk) * 70;
         sy = pg ? nh + 14 + Math.max(0, (H - nh - 30 - ph) / 2) * 0.35f + (1 - e) * 10 + (tDir == 0 ? (1 - kk) * 16 : 0)
             : (H - ph) / 2 + (1 - e) * 14 + (tDir == 0 ? (1 - kk) * 26 : 0);
-        // Glass: see-through panel, larger radius and a soft top sheen; Minecraft: near-opaque square plate with a 2 px edge
-        if (Th.round()) {
-            Gfx.rect(sx, sy, pw, ph, 14, Gfx.a(Th.s1, Th.light() ? 0.82f : 0.74f));
-            Gfx.rectG(sx, sy, pw, Math.min(ph, 180), 14, Gfx.a(0xFFFFFFFF, Th.light() ? 0.30f : 0.05f), 0);
-            Gfx.ring(sx, sy, pw, ph, 14, 1, Th.ln2);
-        } else {
-            Gfx.rect(sx, sy, pw, ph, 0, Gfx.a(Th.s1, 0.94f));
-            Gfx.ring(sx, sy, pw, ph, 0, 2, Th.ln2);
-        }
+        // v8: a near-solid charcoal / paper panel (Feather), small radius, faint top sheen and a soft drop shadow
+        Gfx.rect(sx - 2, sy + 4, pw + 4, ph + 6, Th.R + 4, Gfx.a(0xFF000000, Th.light() ? 0.10f : 0.30f));
+        Gfx.rect(sx, sy, pw, ph, Th.R, Gfx.a(Th.s1, Th.light() ? 0.94f : 0.90f));
+        Gfx.rectG(sx, sy, pw, Math.min(ph, 120), Th.R, Gfx.a(0xFFFFFFFF, Th.light() ? 0.25f : 0.03f), 0);
+        Gfx.ring(sx, sy, pw, ph, Th.R, 1, Th.ln2);
         float cy = sy + TOP / 2f;
         float tx = sx + 50;
         if (pg) tx = sx + 20; // the bar is the way back: no arrow, no close
@@ -1098,7 +1094,7 @@ final class Menu {
         for (String s : secs) {
             int n = 0;
             for (Module m : list) if ((tab == 1 ? m.cat : TABS[tab]).equals(s)) n++;
-            float tw = Gfx.text(Gfx.HEAD, 12, x + 4, y + 12, Th.dim, s);
+            float tw = Gfx.text(Gfx.SEMI, 12, x + 4, y + 12, Th.dim, s);
             String c = String.valueOf(n);
             float bw0 = Gfx.width(Gfx.UI, 10, c) + 12;
             Gfx.rect(x + 4 + tw + 10, y + 4, bw0, 16, 8, Th.s3);
@@ -1126,15 +1122,15 @@ final class Menu {
         boolean on = m.enabled(), lock = m.locked(), hv = in(x, y, w, CARD_H);
         float t = an("r" + m.id, hv || f && kbNav), on1 = an("on" + m.id, on);
         y -= t * 2;
-        Gfx.rect(x, y, w, CARD_H, 8, Gfx.mix(Gfx.a(Th.s2, 0.92f), Th.s3, t * 0.7f));
-        Gfx.ring(x, y, w, CARD_H, 8, 1, Gfx.mix(Th.ln, Th.ln2, t));
+        Gfx.rect(x, y, w, CARD_H, Th.R, Gfx.mix(Th.s2, Th.s3, t * 0.7f));
+        Gfx.ring(x, y, w, CARD_H, Th.R, 1, Gfx.mix(Th.ln, Gfx.mix(Th.ln2, Th.ac, on1 * 0.35f), Math.max(t, on1 * 0.6f)));
         float a0 = Gfx.alpha;
         if (lock) Gfx.alpha = a0 * 0.55f;
         // name + star
         boolean fav = m.fav();
         float sx = x + w - 28, sy = y + 6;
         boolean sh = in(sx, sy, 22, 22);
-        Gfx.text(Gfx.UI, 13, x + 12, y + 17, Gfx.mix(Th.dim, Th.tx, Math.max(t, on1)), fit(m.name, Gfx.UI, 13, w - 46, 0));
+        Gfx.text(Gfx.SEMI, 13, x + 12, y + 17, Gfx.mix(Th.dim, Th.tx, Math.max(t, on1)), fit(m.name, Gfx.SEMI, 13, w - 46, 0));
         if (fav || hv) drawStar(sx + 11, sy + 11, fav, fav ? 0xFFFFB020 : Gfx.mix(Th.mut, Th.tx, an("star" + m.id, sh)));
         boolean starHit = (fav || hv) && hit(sx, sy, 22, 22);
         // icon
@@ -1154,7 +1150,9 @@ final class Menu {
         boolean cogHit = hit(gx, by, bh, bh);
         float bx = gx + bh + 6, bw = x + w - 10 - bx;
         float bt = an("tg" + m.id, in(bx, by, bw, bh));
-        Gfx.rect(bx, by, bw, bh, 5, Gfx.mix(Gfx.a(Th.ov, 0.06f + 0.05f * bt), Gfx.mix(Th.ac, Th.ac2, bt), on1));
+        // ENABLED sits on a darker bevel lip (Minecraft button edge); DISABLED is a flat neutral plate
+        if (on1 > 0.01f) Gfx.rect(bx, by + 2, bw, bh, 5, Gfx.a(Gfx.mix(Th.ac, 0xFF000000, 0.45f), on1));
+        Gfx.rect(bx, by, bw, bh, 5, Gfx.mix(Gfx.a(Th.ov, 0.06f + 0.05f * bt), Gfx.mix(Th.ac, Th.ac2, bt * 0.6f), on1));
         Gfx.textC(Gfx.SEMI, 10, bx + bw / 2, by + bh / 2, Gfx.mix(Th.dim, Th.onAccent(), on1), lock ? "UNAVAILABLE" : on ? "ENABLED" : "DISABLED", 0.6f);
         Gfx.alpha = a0;
         if (lock && hv && m.lockNote() != null) tip = m.lockNote();
@@ -1510,10 +1508,10 @@ final class Menu {
         float yy = top + 8 - scroll;
         // theme
         Gfx.text(Gfx.UI, 13, lx, yy + 15, Th.tx, "Theme");
-        float cx = lx + lw - 4 * 96;
+        float cx = lx + lw - Th.NAMES.length * 96;
         Gfx.text(Gfx.UI, 10, lx, yy + 31, Th.mut,
-            fit("Glass is rounded and smooth, Minecraft square and pixel. Also the launcher.", Gfx.UI, 10, cx - lx - 12, 0));
-        for (int i = 0; i < 4; i++) {
+            fit("Dark or Light. Your accent is the only colour that changes. Also the launcher.", Gfx.UI, 10, cx - lx - 12, 0));
+        for (int i = 0; i < Th.NAMES.length; i++) {
             boolean sel = Th.theme == i, hv = in(cx, yy + 8, 90, 28);
             float t = an("th" + i, sel);
             Gfx.rect(cx, yy + 8, 90, 28, 4, Gfx.a(Th.ac, 0.16f * t));

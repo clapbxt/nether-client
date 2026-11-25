@@ -110,7 +110,9 @@ final class TitleNav {
         x += 30;
         boolean tight = W < 980; // narrow windows: smaller tabs so the right cluster never runs into them
         float fs = tight ? 13 : 15, pad = tight ? 20 : 28;
-        float bw = Gfx.text(Gfx.HEAD, fs, x, cy, Gfx.ICE, "NETHER", false, 1.2f);
+        // Nether Pixel (HEAD) runs wide and snaps to 16: narrow windows set the bar in Barlow so the tabs still fit
+        int nf = tight ? Gfx.SEMI : Gfx.HEAD;
+        float bw = Gfx.text(nf, fs, x, cy, Gfx.ICE, "NETHER", false, 1.2f);
         x += bw + (tight ? 24 : 30);
         Gfx.rect(x - 15, cy - 11, 1, 22, 0, Gfx.a(Gfx.ICE, 0.12f));
 
@@ -119,13 +121,13 @@ final class TitleNav {
         float tx = x;
         float[] txs = new float[TABS.length], tws = new float[TABS.length];
         for (int i = 0; i < TABS.length; i++) {
-            float w = Gfx.width(Gfx.HEAD, fs, TABS[i], 1.4f) + pad;
+            float w = Gfx.width(nf, fs, TABS[i], 1.4f) + pad;
             txs[i] = tx;
             tws[i] = w;
             boolean on = cur == i, hv = over(tx, 0, w, H);
             float t = an("t" + i, hv), a = an("a" + i, on);
             int col = Gfx.mix(Gfx.mix(Gfx.DIM, Gfx.ICE, t * 0.8f), Gfx.ICE, a);
-            Gfx.textC(Gfx.HEAD, fs, tx + w / 2, cy, col, TABS[i], 1.4f);
+            Gfx.textC(nf, fs, tx + w / 2, cy, col, TABS[i], 1.4f);
             if (i == SOCIAL) badge(tx + w - 10, cy - 12, Friends.badge() + Party.badge());
             if (hit(tx, 0, w, H)) go(i);
             tx += w;

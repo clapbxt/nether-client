@@ -23,7 +23,8 @@ pub struct LauncherPrefs {
     pub calm: bool,
     /// accent colour (settings::ACCENTS index, 0 = fire)
     pub accent: i32,
-    /// theme (settings::THEME_NAMES index, 0 = NetherGlass Dark, the default); key "look" since v7 (old "theme" = OLED/Obsidian/Slate/Ice)
+    /// theme (settings::THEME_NAMES index, 0 = Nether Dark, the default, 1 = Nether Light; pre-v8 values 2/3 fold onto them
+    /// via settings::theme_idx); key "look" since v7 (old "theme" = OLED/Obsidian/Slate/Ice)
     #[serde(rename = "look")]
     pub theme: i32,
     /// reading-text size: 0 default, 1 large, 2 larger
@@ -65,6 +66,7 @@ pub fn load(paths: &Paths) -> LauncherPrefs {
     let mut p: LauncherPrefs = serde_json::from_value(v.clone()).unwrap_or_default();
     // pre-v7 themes: Ice (3) was the light one, every other one becomes NetherGlass Dark
     if v.get("look").is_none() && v["theme"].as_i64() == Some(3) { p.theme = 1; }
+    p.theme = crate::settings::theme_idx(p.theme) as i32;
     p
 }
 

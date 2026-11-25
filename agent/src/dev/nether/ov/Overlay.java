@@ -88,6 +88,7 @@ public final class Overlay {
                     String pg = System.getProperty("nether.page");
                     if (pg != null && Modules.byId(pg) != null) Menu.page = pg;
                     String tb = System.getProperty("nether.tab");
+                    if (tb != null) Menu.hub = false; // a tab asked for = the MODS grid, not the hub
                     if (tb != null) Menu.tab = Math.max(0, Math.min(Menu.TABS.length - 1, Integer.parseInt(tb)));
                     // -Dnether.picker=<module>:<colour key> opens that module's page with the colour picker open
                     String pk = System.getProperty("nether.picker");
