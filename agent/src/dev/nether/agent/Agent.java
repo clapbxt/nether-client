@@ -823,6 +823,8 @@ public final class Agent {
                 ClassReader cr = new ClassReader(bytes);
                 ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
                 final int[] n = {0}, shields = {0}, hands = {0};
+                // legacy fire: which ()Z call guards the call of renderFireInFirstPerson (player.isBurning(), IFEQ, the call)
+                final Map<String, Integer> burnAt = kind.equals("lfire") ? burning(cr, names) : Collections.<String, Integer>emptyMap();
                 cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
                     @Override
                     public MethodVisitor visitMethod(int access, String mname, String desc, String sig, String[] ex) {
@@ -1002,6 +1004,20 @@ public final class Agent {
                                 }
                             };
                         }
+                        if (kind.equals("lfire") && !named && burnAt.containsKey(mname + desc)) { // renderOverlays: its isBurning check (live fire editor)
+                            final int at0 = burnAt.get(mname + desc);
+                            return new MethodVisitor(Opcodes.ASM9, mv) {
+                                int z;
+                                @Override
+                                public void visitMethodInsn(int op, String o, String nm, String d, boolean itf) {
+                                    super.visitMethodInsn(op, o, nm, d, itf);
+                                    if (op == Opcodes.INVOKEVIRTUAL && "()Z".equals(d) && z++ == at0) {
+                                        n[0]++;
+                                        super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "fireShown", "(Z)Z", false);
+                                    }
+                                }
+                            };
+                        }
                         if (kind.equals("lfire")) { // 1.8.9 / 1.12.2 renderFireInFirstPerson: translate y -0.3F and colour alpha 0.9F
                             if (!named) return mv;
                             return new MethodVisitor(Opcodes.ASM9, mv) {
@@ -1091,6 +1107,38 @@ public final class Agent {
                 System.out.println("[nether-agent] view " + kind + " hook failed: " + t);
                 return null;
             }
+        }
+
+        /**
+         * Methods that call the fire method (names) right after "if (x.someBoolean())": method name + desc -> the index
+         * of that ()Z INVOKEVIRTUAL among the method's ()Z INVOKEVIRTUALs. Shape only, so no obfuscated names needed.
+         */
+        private static Map<String, Integer> burning(ClassReader cr, final Set<String> names) {
+            final Map<String, Integer> out = new HashMap<>();
+            cr.accept(new ClassVisitor(Opcodes.ASM9) {
+                @Override
+                public MethodVisitor visitMethod(int access, final String mname, final String desc, String sig, String[] ex) {
+                    if (names.contains(mname)) return null;
+                    return new MethodVisitor(Opcodes.ASM9) {
+                        int z = -1, cand = -1, since = 99;
+                        boolean armed;
+                        private void step() { since++; }
+                        @Override public void visitMethodInsn(int op, String o, String nm, String d, boolean itf) {
+                            if (op == Opcodes.INVOKEVIRTUAL && "()Z".equals(d)) { z++; cand = z; armed = false; since = 0; return; }
+                            if (armed && since <= 6 && names.contains(nm) && !out.containsKey(mname + desc)) out.put(mname + desc, cand);
+                            step();
+                        }
+                        @Override public void visitJumpInsn(int op, dev.nether.shaded.asm.Label l) { armed = op == Opcodes.IFEQ && since == 0; step(); }
+                        @Override public void visitVarInsn(int op, int v) { step(); }
+                        @Override public void visitInsn(int op) { step(); }
+                        @Override public void visitFieldInsn(int op, String o, String nm, String d) { step(); }
+                        @Override public void visitLdcInsn(Object v) { step(); }
+                        @Override public void visitTypeInsn(int op, String t) { step(); }
+                        @Override public void visitIntInsn(int op, int v) { step(); }
+                    };
+                }
+            }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            return out;
         }
 
         /** Local slot of argument i of an instance method. */
