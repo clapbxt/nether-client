@@ -287,7 +287,9 @@ final class Modules {
         boolean menu = Input.menuOpen;
         if (!menu && (!inGame() || Game.hudHidden() || (Game.screenOpen() && !Game.chatOpen()))) {
             for (Module m : all) m.tick();
+            if (!Input.inWorld() || (Game.screenOpen() && !Game.chatOpen())) Hits.clear();
             if (!Game.hudHidden() && LYRICS.enabled()) menuLyrics(fbW, fbH);
+            if (LYRICS.enabled() && Input.inWorld() && !Game.screenOpen() && LyricsWorldPanel.visible()) LyricsWorldPanel.draw(fbW, fbH);
             return;
         }
         float[] chat = null;
@@ -333,7 +335,7 @@ final class Modules {
         if (WAYPOINTS.enabled() && world) WAYPOINTS.drawMarkers(fbW, fbH);
         if (TntTimer.M.enabled() && world) TntTimer.M.drawWorld(fbW, fbH);
         if (LYRICS.enabled() && world) LYRICS.drawWorld(fbW, fbH);
-        if (LYRICS.enabled() && Input.inWorld() && (world || Input.worldGuiOpen)) LyricsWorldPanel.draw(fbW, fbH);
+        if (LYRICS.enabled() && Input.inWorld() && (world || LyricsWorldPanel.visible() || Input.worldGuiOpen)) LyricsWorldPanel.draw(fbW, fbH);
         SELFTAG.drawWorld(fbW, fbH, SELFTAG.enabled() && world);
         if (world) { Toast.draw(fbW); SHOTS.drawCard(fbW); menuHint(fbW); }
     }

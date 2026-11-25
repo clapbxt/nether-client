@@ -77,9 +77,12 @@ pub fn save(paths: &Paths, p: &LauncherPrefs) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Apply the GPU preference. Call once at startup, before the window is created: off selects Slint's software renderer.
+/// Apply the GPU preference before creating the window. Both paths use Skia's platform font rasterizer; the setting
+/// selects its OpenGL or software surface.
 pub fn apply_renderer(paths: &Paths) {
-    if !load(paths).gpu && std::env::var_os("SLINT_BACKEND").is_none() { std::env::set_var("SLINT_BACKEND", "winit-software"); }
+    if std::env::var_os("SLINT_BACKEND").is_none() {
+        std::env::set_var("SLINT_BACKEND", if load(paths).gpu { "winit-skia-opengl" } else { "winit-skia-software" });
+    }
 }
 
 /// Add or remove the launcher from Windows startup (HKCU Run key).

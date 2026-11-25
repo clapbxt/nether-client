@@ -272,12 +272,12 @@ final class Menu {
             if (k == 86) { typedSearch(Plat.cur.clipboard()); return; }                                                                // Ctrl+V
             return;
         }
-        if (hub) { // Left / Right / Tab move between the three buttons, Enter / Space press one (MODS when none is focused)
-            if (k == 262 || k == 263 || k == 258) {
-                int d = k == 263 || (k == 258 && shift) ? -1 : 1;
+        if (hub) { // arrows move in the 2x2 grid (0 MODS, 1 WARDROBE, 2 FRIENDS, 3 SETTINGS), Tab cycles, Enter / Space press one (MODS when none is focused)
+            if (k == 262 || k == 263 || k == 258 || k == 264 || k == 265) {
+                int d = k == 264 || k == 265 ? (k == 264 ? 2 : -2) : k == 263 || (k == 258 && shift) ? -1 : 1;
                 fCur = fCur < 0 ? (d > 0 ? 0 : 3) : Math.floorMod(fCur + d, 4);
                 kbNav = true;
-            } else if (press && (k == 257 || k == 335 || k == 32)) { if (fCur < 0) fCur = 1; act = 257; kbNav = true; }
+            } else if (press && (k == 257 || k == 335 || k == 32)) { if (fCur < 0) fCur = 0; act = 257; kbNav = true; }
             return;
         }
         if (k == 259) {
@@ -525,9 +525,9 @@ final class Menu {
 
     /** Open the Nether menu at a tab (the party lobby's CHANGE OUTFIT). */
     static void openTab(int t) {
-        hub = false;
-        tab = t;
         Input.setMenu(true);
+        // Opening the menu runs opened(), which resets it to the hub. Navigate only after that reset.
+        go(t);
     }
 
     /** Title screen with the top bar: every Menu screen is a page under it (TitleNav). */
@@ -702,30 +702,31 @@ final class Menu {
     private static void hub(float e) {
         // over the title screen the hub is the only thing to look at: its buttons and logo recede further
         Gfx.rect(0, 0, W, H, 0, Gfx.a(0xFF000000, (Th.light() ? 0.18f : 0.34f) + (MainMenu.title ? 0.26f : 0)));
-        float lh = 150, sq = 52, mw = 232, gap = 8, rw = sq * 3 + mw + gap * 3; // fireball + NETHER CLIENT wordmark
-        float y = (H - (lh + 24 + sq)) / 2 + (1 - e) * 14, x = (W - rw) / 2, by = y + lh + 24;
-        float a0 = Gfx.alpha, kl = k(tS, 0, 0.34f), ks = k(tS, 0.12f, 0.3f), km = k(tS, 0.07f, 0.3f);
+        // 2x2 grid: MODS / WARDROBE over FRIENDS / SETTINGS, equal tiles (icon + label)
+        float lh = 150, bw0 = 196, bh = 56, gap = 10, rw = bw0 * 2 + gap, gh = bh * 2 + gap;
+        float y = (H - (lh + 24 + gh)) / 2 + (1 - e) * 14, x = (W - rw) / 2, by = y + lh + 24;
+        float a0 = Gfx.alpha, kl = k(tS, 0, 0.34f), k0 = k(tS, 0.07f, 0.3f), k1 = k(tS, 0.12f, 0.3f);
         Gfx.alpha = a0 * kl;
         Logo.brand(W / 2 - Logo.brandWidth(lh) / 2, y - (1 - kl) * 18, lh);
-        Gfx.alpha = a0 * ks;
-        boolean bs = hubBtn("hs", x - (1 - ks) * 16, by + (1 - ks) * 14, sq, sq, "settings", null);
-        Gfx.alpha = a0 * km;
-        boolean bm = hubBtn("hm", x + sq + gap, by + (1 - km) * 14, mw, sq, null, "MODS");
-        Gfx.alpha = a0 * ks;
-        boolean bw = hubBtn("hw", x + sq + mw + gap * 2 + (1 - ks) * 16, by + (1 - ks) * 14, sq, sq, "wardrobe", null);
-        float fx = x + sq * 2 + mw + gap * 3 + (1 - ks) * 16, fy = by + (1 - ks) * 14;
-        boolean bf = hubBtn("hf", fx, fy, sq, sq, "friends", null);
+        Gfx.alpha = a0 * k0;
+        boolean bm = hubBtn("hm", x, by + (1 - k0) * 14, bw0, bh, "all", "MODS");
+        boolean bw = hubBtn("hw", x + bw0 + gap, by + (1 - k0) * 14, bw0, bh, "wardrobe", "WARDROBE");
+        Gfx.alpha = a0 * k1;
+        float fx = x, fy = by + bh + gap + (1 - k1) * 14;
+        boolean bf = hubBtn("hf", fx, fy, bw0, bh, "friends", "FRIENDS");
+        boolean bs = hubBtn("hs", x + bw0 + gap, fy, bw0, bh, "settings", "SETTINGS");
+        float ks = k1;
         int badge = Friends.badge();
         if (badge > 0) { // requests + asks to join
             String b = badge > 9 ? "9+" : String.valueOf(badge);
-            float bw0 = Math.max(16, Gfx.width(Gfx.UI, 10, b) + 8);
-            Gfx.rect(fx + sq - bw0 + 4, fy - 4, bw0, 16, 8, Th.ac);
-            Gfx.textC(Gfx.UI, 10, fx + sq - bw0 / 2 + 4, fy + 4, 0xFFFFFFFF, b, 0);
+            float bw1 = Math.max(16, Gfx.width(Gfx.UI, 10, b) + 8);
+            Gfx.rect(fx + bw0 - bw1 + 4, fy - 4, bw1, 16, 8, Th.ac);
+            Gfx.textC(Gfx.UI, 10, fx + bw0 - bw1 / 2 + 4, fy + 4, 0xFFFFFFFF, b, 0);
         }
         int n = Friends.everyone;
         if (n > 0) { // live count under the buttons: green dot + "1,284 players online"
             String t = String.format(java.util.Locale.US, "%,d", n), u = n == 1 ? "  player online" : "  players online";
-            float tw = Gfx.width(Gfx.SEMI, 12, t), uw = Gfx.width(Gfx.UI, 12, u), lx = W / 2 - (14 + tw + uw) / 2, ly = by + sq + 22 + (1 - ks) * 14;
+            float tw = Gfx.width(Gfx.SEMI, 12, t), uw = Gfx.width(Gfx.UI, 12, u), lx = W / 2 - (14 + tw + uw) / 2, ly = by + gh + 22 + (1 - ks) * 14;
             Gfx.alpha = a0 * ks * 0.92f;
             Gfx.rect(lx, ly - 5, 10, 10, 5, Gfx.a(0xFF3FB950, 0.2f));
             Gfx.rect(lx + 2, ly - 3, 6, 6, 3, 0xFF3FB950);
@@ -747,7 +748,11 @@ final class Menu {
         Gfx.ring(x, y, w, h, 6, 1, Gfx.mix(Th.ln2, Gfx.a(Th.tx, 0.4f), t));
         int c = Gfx.mix(Th.dim, Th.tx, 0.4f + 0.6f * t);
         float dy = down ? 1 : 0;
-        if (icon != null) ModIcons.draw(icon, x + w / 2 - 11, y + h / 2 - 11 + dy, 22, c);
+        if (icon != null && label != null) { // icon + label, centred as a pair
+            float lw = Gfx.width(Gfx.SEMI, 15, label), ix = x + (w - (22 + 10 + lw)) / 2;
+            ModIcons.draw(icon, ix, y + h / 2 - 11 + dy, 22, c);
+            Gfx.text(Gfx.SEMI, 15, ix + 32, y + h / 2 + dy, c, label);
+        } else if (icon != null) ModIcons.draw(icon, x + w / 2 - 11, y + h / 2 - 11 + dy, 22, c);
         else Gfx.textC(Gfx.SEMI, 16, x + w / 2, y + h / 2 + dy, c, label, 0);
         return hit(x, y, w, h) | used(f) != 0;
     }
@@ -770,7 +775,7 @@ final class Menu {
         hub = true;
         tS = 0;
         tDir = 0;
-        fCur = kbNav ? (tab == T_SETTINGS ? 0 : tab == T_WARDROBE ? 2 : tab == T_FRIENDS ? 3 : 1) : -1;
+        fCur = kbNav ? (tab == T_SETTINGS ? 3 : tab == T_WARDROBE ? 1 : tab == T_FRIENDS ? 2 : 0) : -1;
     }
 
     /** Leave the hub for the screen of tab t. */

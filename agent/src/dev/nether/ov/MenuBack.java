@@ -8,18 +8,12 @@ package dev.nether.ov;
 final class MenuBack {
     private MenuBack() {}
 
-    /** eased cursor offset from the centre, -1..1 (parallax) */
-    private static float px, py;
-
     /** Whole-screen backdrop, W x H units at the current Gfx.s. legacy: 1.8.9 draws its logo and brand lines itself, the panorama gets covered there. */
-    static void draw(float W, float H, boolean legacy, float mx, float my) {
+    static void draw(float W, float H, boolean legacy) {
         Module m = MainMenu.MODULE;
         boolean anim = m.bool("motion") && !Config.calm();
-        float e = anim ? Math.min(1, Gfx.dt * 2.5f) : 1;
-        px += ((anim ? mx / W * 2 - 1 : 0) - px) * e;
-        py += ((anim ? my / H * 2 - 1 : 0) - py) * e;
         float dim = (float) m.num("dim");
-        boolean ours = Pano.title(W, H, m.str("pano"), anim, px, py);
+        boolean ours = Pano.title(W, H, m.str("pano"), anim);
         Gfx.rect(0, 0, W, H, 0, Gfx.a(Gfx.BLACK, dim));
         if (!ours && legacy) { // vanilla's panorama runs underneath until ours has loaded
             // the logo ends 74 GUI px down; 1.12's "Java Edition" banner under it ends at 81 (2 units per GUI px)

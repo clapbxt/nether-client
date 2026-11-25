@@ -340,14 +340,20 @@ fn play(ui: &AppWindow, sh: &Arc<Shared>) {
     let client_pack = (ver == "1.8.9").then(|| netherpack::find(&sh.paths, "pvp")).flatten();
     crate::client::setup_instance(&sh.paths, &name, client_pack.as_ref().and_then(|c| c.client.as_ref()));
     refresh(ui, sh);
-    let pack = (way == 1).then(|| netherpack::find(&sh.paths, "essentials")).flatten();
-    let Some(pack) = pack else { b.invoke_play(name.into()); return };
+    if way != 1 { b.invoke_play(name.into()); return; }
     let (weak, sh) = (ui.as_weak(), sh.clone());
     std::thread::spawn(move || {
+        let c = client();
+        // Use the latest verified default list when creating a new preset profile; old profiles are never touched.
+        let _ = nether_core::backend::packs(&c);
+        let Some(pack) = netherpack::find(&sh.paths, "essentials") else {
+            ui_do(&weak, move |ui| ui.global::<Backend>().invoke_play(name.into()));
+            return;
+        };
         let key = format!("preset:{name}");
         let (w2, k2) = (weak.clone(), key.clone());
         let prog: nether_core::Progress = Arc::new(move |m: &str, f: f32| { let (m, k) = (m.to_string(), k2.clone()); ui_do(&w2, move |ui| crate::job(ui, &k, &m, f)); });
-        let missing = match netherpack::install(&client(), &pack, &ver, &instances::content_dir(&sh.paths, &name, 0), &prog) {
+        let missing = match netherpack::install(&c, &pack, &ver, &instances::content_dir(&sh.paths, &name, 0), &prog) {
             Ok((_, miss)) => miss.into_iter().filter(|m| CORE.contains(&m.as_str())).collect(),
             Err(e) => vec![format!("{} ({e:#})", pack.name)],
         };

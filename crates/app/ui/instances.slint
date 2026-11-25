@@ -935,7 +935,7 @@ export component InstancesScreen inherits Rectangle {
             property <bool> raw: false;
             property <string> name;
             property <bool> nether: Backend.create-nether;
-            property <[{t: string, s: int}]> steps: [{t: dlg.nether ? "HOW TO PLAY" : "LOADER", s: 0}, {t: "VERSION", s: 1}, {t: "NETHER PACK", s: 2}, {t: "RESOURCE PACKS", s: 4}, {t: "FINISH", s: 5}];
+            property <[{t: string, s: int}]> steps: [{t: dlg.nether ? "HOW TO PLAY" : "LOADER", s: 0}, {t: "VERSION", s: 1}, {t: "DEFAULT MODS", s: 2}, {t: "RESOURCE PACKS", s: 4}, {t: "FINISH", s: 5}];
             property <[string]> vers: dlg.nether ? (dlg.loader == 1 ? Backend.nether-fabric-versions : (dlg.loader == 2 ? Backend.nether-forge-versions : (dlg.loader == 6 ? ["1.12.2", "1.8.9"] : Backend.nether-versions)))
                 : (dlg.loader == 1 ? Backend.fabric-versions : (dlg.loader == 2 ? Backend.forge-versions : (dlg.loader == 3 ? Backend.neoforge-versions
                 : (dlg.loader == 4 ? Backend.quilt-versions : (dlg.loader == 5 ? Backend.legacy-versions : Backend.mc-versions)))));
@@ -949,7 +949,7 @@ export component InstancesScreen inherits Rectangle {
             }
             x: (parent.width - 1040px) / 2; y: 30px; width: 1040px; height: 728px;
             background: Theme.s1; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
-            init => { Backend.cover-for(dlg.ver); Wizard.pick-pack(""); Wizard.load-rps(""); }
+            init => { Backend.cover-for(dlg.ver); Wizard.pick-pack(dlg.nether && dlg.loader == 1 ? "essentials" : ""); Wizard.load-rps(""); }
             TouchArea { }
             Heading { x: 30px; y: 44px; text: dlg.raw ? "RAW PROFILE" : (dlg.nether ? "NEW NETHER PROFILE" : "NEW VANILLA PROFILE"); font-size: 48px; }
             IconBtn { x: parent.width - 32px - 34px; y: 28px; size: 34px; d: Ico.close; tip: "Close"; clicked => { Backend.create-open = false; } }
@@ -1039,15 +1039,15 @@ export component InstancesScreen inherits Rectangle {
             // ---- 03 Nether pack ----
             if dlg.step == 2: Rectangle {
                 x: 32px; y: 166px; width: parent.width - 64px; height: 450px;
-                Text { x: 0px; y: 0px; text: "Small bundles we pick and keep working. Mods download for " + dlg.ver + "; any without a build are skipped."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; }
+                Text { x: 0px; y: 0px; text: "Choose whether to install Nether's current built-in mods for " + dlg.ver + ". Existing profiles are never changed."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; }
                 Flickable {
                     y: 32px; height: parent.height - 32px; content-height: (Wizard.packs.length + 1) * 74px;
                     Rectangle {
                         y: 0px; height: 66px;
                         background: Wizard.pack == "" ? Theme.red.with-alpha(0.094) : (n0.has-hover ? Theme.s2 : Theme.s1);
                         border-width: 1px; border-color: Wizard.pack == "" ? Theme.red2 : Theme.ln; border-radius: Theme.r2;
-                        Text { x: 22px; y: 12px; text: "No pack"; color: Theme.tx; font-family: Theme.ui; font-size: 16px * Theme.ts; font-weight: 600; }
-                        Text { x: 22px; y: 36px; text: "Start empty and add mods yourself."; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
+                        Text { x: 22px; y: 12px; text: "No built-in mods"; color: Theme.tx; font-family: Theme.ui; font-size: 16px * Theme.ts; font-weight: 600; }
+                        Text { x: 22px; y: 36px; text: "Create an empty Fabric profile and add mods yourself."; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
                         n0 := TouchArea { mouse-cursor: pointer; clicked => { Wizard.pick-pack(""); } }
                     }
                     for p[i] in Wizard.packs: Rectangle {
@@ -1056,8 +1056,8 @@ export component InstancesScreen inherits Rectangle {
                         border-width: 1px; border-color: Wizard.pack == p.id ? Theme.red2 : Theme.ln; border-radius: Theme.r2;
                         Rectangle { border-radius: Theme.r2; x: 14px; y: 13px; width: 40px; height: 40px; background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
                             Image { x: 6px; y: 6px; width: 28px; height: 28px; source: @image-url("assets/nether-icon.png"); image-fit: contain; } }
-                        Text { x: 70px; y: 12px; width: parent.width - 300px; text: p.name; color: Theme.tx; font-family: Theme.ui; font-size: 16px * Theme.ts; font-weight: 600; overflow: elide; }
-                        Text { x: 70px; y: 36px; width: parent.width - 300px; text: p.sub; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
+                        Text { x: 70px; y: 12px; width: parent.width - 300px; text: "Nether built-in mods"; color: Theme.tx; font-family: Theme.ui; font-size: 16px * Theme.ts; font-weight: 600; overflow: elide; }
+                        Text { x: 70px; y: 36px; width: parent.width - 300px; text: "Current defaults for new Fabric Nether profiles. No updates to existing profiles."; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
                         if p.ok == 1: Chip { x: parent.width - 220px; y: 21px; text: "CLIENT SETTINGS"; }
                         Text { x: parent.width - 90px; width: 70px; text: p.meta; color: Theme.dim; font-family: Theme.mono; font-size: 12px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; }
                         pt := TouchArea { mouse-cursor: pointer; clicked => { Wizard.pick-pack(p.id); } }

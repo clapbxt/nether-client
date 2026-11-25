@@ -18,9 +18,9 @@ import dev.nether.agent.Hook;
 /** LWJGL3 backend: its own GL 150 core program + VAO; the whole touched state is saved and restored by hand. */
 final class GlCore extends GlBackend {
     private static final String VS = "#version 150 core\n"
-        + "in vec2 pos; in vec2 uv; in vec4 col; in vec2 loc; in vec4 par; uniform vec2 res;\n"
+        + "in vec2 pos; in vec2 uv; in vec4 col; in vec2 loc; in vec4 par; uniform vec2 res; uniform mat3 map;\n"
         + "out vec2 vuv; out vec4 vcol; out vec2 vloc; out vec4 vpar;\n"
-        + "void main(){ vec2 p = pos / res * 2.0 - 1.0; gl_Position = vec4(p.x, -p.y, 0.0, 1.0); vuv = uv; vcol = col; vloc = loc; vpar = par; }";
+        + "void main(){ vec3 q = map * vec3(pos, 1.0); vec2 p = q.xy / res * 2.0 - 1.0; gl_Position = vec4(p.x * q.z, -p.y * q.z, 0.0, q.z); vuv = uv; vcol = col; vloc = loc; vpar = par; }";
     private static final String FS = "#version 150 core\n"
         + "in vec2 vuv; in vec4 vcol; in vec2 vloc; in vec4 vpar; uniform sampler2D tex; uniform sampler2D img; out vec4 o;\n"
         + "void main(){ float a; vec4 c = vcol;\n"
@@ -33,11 +33,12 @@ final class GlCore extends GlBackend {
         + " o = vec4(c.rgb, c.a * a); }";
     private static final int FLOATS = 14, CLAMP_TO_EDGE = 0x812F;
 
-    private int program, vao, vbo, uRes, uTex, uImg, atlas;
+    private int program, vao, vbo, uRes, uMap, uTex, uImg, atlas;
     /** unit 1 (image textures): the game's binding there is saved on first use in a frame and put back by restore */
     private boolean unit1;
     private int prevTex1, prevSampler1;
     private final IntBuffer ib = BufferUtils.createIntBuffer(16);
+    private final FloatBuffer mapBuf = BufferUtils.createFloatBuffer(9);
 
     // saved state
     private int prevProg, prevVao, prevBuf, prevFb, prevActive, prevTex, prevSampler, align, polyF, polyB;
@@ -73,6 +74,7 @@ final class GlCore extends GlBackend {
         GL20.glDeleteShader(vs);
         GL20.glDeleteShader(fs);
         uRes = GL20.glGetUniformLocation(program, "res");
+        uMap = GL20.glGetUniformLocation(program, "map");
         uTex = GL20.glGetUniformLocation(program, "tex");
         uImg = GL20.glGetUniformLocation(program, "img");
         samplers = GL.getCapabilities().OpenGL33;
@@ -97,8 +99,10 @@ final class GlCore extends GlBackend {
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, atlas);
         GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, 1);
         GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_R8, size, size, 0, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, (ByteBuffer) null);
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+        // Glyphs and shape masks are rasterised at their final framebuffer size. Nearest filtering preserves those
+        // coverage pixels instead of blending them again and softening every edge.
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, CLAMP_TO_EDGE);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, CLAMP_TO_EDGE);
         GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, pAlign);
@@ -234,10 +238,21 @@ final class GlCore extends GlBackend {
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, atlas);
         GL20.glUseProgram(program);
         GL20.glUniform2f(uRes, w, hh);
+        identityMap();
         GL20.glUniform1i(uTex, 0);
         GL20.glUniform1i(uImg, 1);
         GL30.glBindVertexArray(vao);
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
+    }
+
+    private void identityMap() {
+        mapBuf.clear(); mapBuf.put(new float[] {1, 0, 0, 0, 1, 0, 0, 0, 1}).flip();
+        GL20.glUniformMatrix3fv(uMap, false, mapBuf);
+    }
+
+    @Override void map(float[] matrix) {
+        mapBuf.clear(); mapBuf.put(matrix).flip();
+        GL20.glUniformMatrix3fv(uMap, false, mapBuf);
     }
 
     @Override void draw(FloatBuffer data, int verts) {

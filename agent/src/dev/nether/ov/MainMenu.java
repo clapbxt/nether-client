@@ -381,7 +381,7 @@ final class MainMenu {
         if (panelOpen && click && !inPanel && !inside(custBox)) { panelOpen = false; click = false; modal = null; }
         account();
 
-        MenuBack.draw(W, H, legacy, MX, MY);
+        MenuBack.draw(W, H, legacy);
         float a0 = Gfx.alpha;
         Gfx.alpha = a0 * e;
         float rise = (1 - e) * 8;

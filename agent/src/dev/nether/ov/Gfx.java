@@ -46,6 +46,7 @@ final class Gfx {
     private static boolean ready;
 
     private static final int FLOATS = 14, ATLAS = 2048;
+    private static final float[] IDENTITY_MAP = {1, 0, 0, 0, 1, 0, 0, 0, 1};
     private static FloatBuffer buf = BufferUtils.createFloatBuffer(FLOATS * 6 * 3000);
     private static int verts, penX, penY, rowH;
     private static final Font[] faces = new Font[8]; // 0-3 Nether Pixel, 4-7 Barlow
@@ -59,7 +60,9 @@ final class Gfx {
     private static final Map<Long, int[]> metrics = new HashMap<>();
     private static BufferedImage scratch;
     private static Graphics2D g2;
-    private static final FontRenderContext FRC = new FontRenderContext(null, true, true);
+    // Overlay text lands on framebuffer pixels. Fractional metrics create fractional advances which are then rounded
+    // when quads are emitted, making neighboring glyphs look softer and uneven at common GUI scales.
+    private static final FontRenderContext FRC = new FontRenderContext(null, true, false);
 
     private static final class Glyph {
         float u0, v0, u1, v1, adv;
@@ -86,7 +89,7 @@ final class Gfx {
         scratch = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
         g2 = scratch.createGraphics();
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-        g2.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
     }
 
     // ---------------------------------------------------------------- frame
@@ -127,6 +130,19 @@ final class Gfx {
         GlBackend.cur.draw(buf, verts);
         buf.clear();
         verts = 0;
+    }
+
+    /** Applies a projective map to following quads; used by the world-anchored panel. */
+    static void map(float[] matrix) {
+        ensure();
+        flush();
+        GlBackend.cur.map(matrix);
+    }
+
+    static void unmap() {
+        ensure();
+        flush();
+        GlBackend.cur.map(IDENTITY_MAP);
     }
 
     static void clip(float x, float y, float w, float h) {
@@ -508,7 +524,7 @@ final class Gfx {
             scratch = new BufferedImage(Math.max(w, scratch.getWidth()), Math.max(h, scratch.getHeight()), BufferedImage.TYPE_INT_ARGB);
             g2 = scratch.createGraphics();
             g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-            g2.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
         }
         g2.setComposite(AlphaComposite.Clear);
         g2.fillRect(0, 0, scratch.getWidth(), scratch.getHeight());
@@ -630,8 +646,8 @@ final class Gfx {
     }
 
     /**
-     * Text at any pixel size and sub-pixel spot (framebuffer px; x = left edge, cy = capital centre): rasterised at the
-     * next whole 8 px and drawn scaled down, so text moving or zooming in the world glides instead of stepping.
+     * Text in framebuffer pixels. Rasterise close to the final size so projected labels do not get softened by
+     * scaling a much larger glyph down from the next 8 px step.
      */
     static void textFree(int f, float size, float x, float cy, int col, String str) {
         int px = freePx(size);
@@ -652,7 +668,7 @@ final class Gfx {
         return w * size / px;
     }
 
-    private static int freePx(float size) { return Math.min(248, Math.max(8, (int) Math.ceil(size / 8) * 8)); }
+    private static int freePx(float size) { return Math.min(248, Math.max(5, Math.round(size))); }
 
     static float textC(int f, float size, float cx, float cy, int col, String str, float spacing) {
         float w = width(f, size, str, spacing) - spacing;

@@ -53,4 +53,20 @@ final class Project {
     /** Screen x / y of the last projection in a W x H space (same units as {@link #begin}). */
     static float sx(float W) { return (float) ((nx + 1) / 2 * W); }
     static float sy(float H) { return (float) ((1 - ny) / 2 * H); }
+
+    /** Screen pixel and forward depth for a world point; null when it is behind the camera. */
+    static float[] screen(double x, double y, double z, float W, float H) {
+        if (!to(x, y, z) || depth <= 0.05) return null;
+        return new float[] {sx(W), sy(H), (float) depth};
+    }
+
+    /** World-space ray through a framebuffer pixel. The camera basis and FOV come from the last begin call. */
+    static double[] ray(float px, float py, float W, float H) {
+        double nx = (px / W * 2 - 1) * tanX;
+        double ny = (1 - py / H * 2) * tanY;
+        double x = fx + rx * nx + ux * ny, y = fy + uy * ny, z = fz + rz * nx + uz * ny;
+        double n = Math.sqrt(x * x + y * y + z * z);
+        if (n < 1e-8) return null;
+        return new double[] {x / n, y / n, z / n};
+    }
 }
