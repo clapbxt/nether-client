@@ -84,7 +84,7 @@ final class Lyrics extends Module {
     private boolean local;
 
     Lyrics() {
-        super("lyrics", "Lyrics", "HUD", "Synced lyrics for the song in Media Player, as a karaoke panel or floating in the world. Searches LRCLIB, then lyrics.ovh for plain lyrics; music.163.com can add word timing. Answers are cached on this PC.", true, false, 0.35, 0.6);
+        super("lyrics", "Lyrics", "HUD", "Synced lyrics for the song in Media Player, as a karaoke panel or floating in the world, lit word by word as they are sung. Answers are cached on this PC.", true, false, 0.35, 0.6);
         java.util.function.BooleanSupplier layout = section("Layout");
         add(Setting.choice("mode", "Display", "On screen", "On screen", "In world").hint("On screen: a karaoke panel. In world: words float where you look as they are sung.").when(layout));
         add(Setting.choice("panelStyle", "Screen layout", "Karaoke", "Karaoke", "Focus", "Minimal").hint("Karaoke shows the lines around the current one. Focus and Minimal keep attention on the sung line.").when(layout).when(() -> mode() == 0));
@@ -231,6 +231,8 @@ final class Lyrics extends Module {
     }
 
     @Override boolean available() { return Media.supported(); }
+    /** A HUD box only on screen; in world mode the words float in the world (the box stands in only where the camera is unknown). */
+    @Override boolean hudPiece() { return mode() == 0 || noWorld && !Menu.editing(); }
     @Override String lockNote() { return !available() ? "NOT AVAILABLE ON THIS OS" : super.lockNote(); }
 
     // ---------------------------------------------------------------- lookup
@@ -1364,10 +1366,11 @@ final class Lyrics extends Module {
         }
     }
 
-    /** Footer: attribution (required courtesy to LRCLIB), or the timing just nudged. */
+    /** Footer: the timing just nudged, else UNSYNCED for plain lyrics, else nothing. */
     private void foot(float cy, float right, String extra) {
         boolean nudged = System.currentTimeMillis() - nudgeAt < 1500;
-        String s = nudged ? String.format(Locale.ROOT, "TIMING %+d MS", Math.round(num("offset") + trackOffset())) : (extra != null ? extra + "  ·  " : "") + "LYRICS: " + lyricSource;
+        String s = nudged ? String.format(Locale.ROOT, "TIMING %+d MS", Math.round(num("offset") + trackOffset())) : extra;
+        if (s == null) return;
         int c = nudged ? color() : Gfx.a(labelColor(), 0.7f);
         Gfx.text(Gfx.MONO, 8, right - Gfx.width(Gfx.MONO, 8, s), cy, c, s, false, 0);
     }

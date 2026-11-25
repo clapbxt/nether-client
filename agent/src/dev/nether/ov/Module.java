@@ -141,6 +141,8 @@ abstract class Module {
     /** switched on in the config (ignores locks) */
     boolean wantedOn() { return Config.bool(id, "enabled", defOn); }
     boolean enabled() { return wantedOn() && !locked(); }
+    /** laid out as a box on the HUD (and in the HUD editor) now; a HUD module may draw elsewhere instead (Lyrics in world mode) */
+    boolean hudPiece() { return hud; }
     /** worth refreshing data for: on, or being previewed in the menu */
     boolean live() { return enabled() || (Input.menuOpen && id.equals(Menu.page)); }
     float scale() { return (float) Config.num(id, "scale", 1.0); }

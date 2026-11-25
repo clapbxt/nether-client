@@ -169,7 +169,7 @@ final class Modules {
         fixed.clear();
         for (Module m : all) {
             m.placed = false;
-            if (!m.hud || !m.enabled() || !(edit || m.visible())) continue;
+            if (!m.hud || !m.hudPiece() || !m.enabled() || !(edit || m.visible())) continue;
             m.lk = m.layout();
             m.placed = true;
             float bw = m.w * m.lk, bh = m.h * m.lk;

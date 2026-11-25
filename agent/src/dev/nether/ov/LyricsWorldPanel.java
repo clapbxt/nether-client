@@ -14,8 +14,8 @@ final class LyricsWorldPanel {
     private static final float BORDER_UI = 16;
     private static final String[] PAGES = {"LOOK", "DISPLAY", "EFFECTS", "SYNC"};
     private static final String[][] KEYS = {
-        {"preset", "font", "lyricsColor", "glowColor", "glowColor2", "twoTone", "glow", "beatGlow"},
-        {"mode", "panelStyle", "lines", "align", "width", "opacity", "paused", "wStyle", "worldSize", "dist", "follow", "viewLock", "airMode", "musicNotes", "worldIntro"},
+        {"preset", "font", "textStyle", "lyricsColor", "glowColor", "glowColor2", "twoTone", "glow", "beatGlow"},
+        {"mode", "panelStyle", "lines", "align", "width", "opacity", "paused", "wStyle", "worldSize", "dist", "follow", "viewLock", "airMode", "pairWords", "musicNotes", "worldIntro"},
         {"appear", "disappear", "animSpeed", "motion", "blur", "outline", "curve", "varied", "stars", "motes", "streaks", "density", "ambientColor"},
         {"offset", "laterKey", "earlierKey", "panelKey", "refetch", "profileSlot", "saveProfile", "loadProfile", "deleteProfile", "resetLyrics"}
     };
@@ -376,7 +376,7 @@ final class LyricsWorldPanel {
         }
         if (s.t == Setting.CHOICE) {
             String value = Config.str(Modules.LYRICS.id, s.key, (String) s.def);
-            fit(Gfx.UI, 8, x + 3, y + 16, x + w - 6, Modules.LYRICS.labelColor(), s.label);
+            fit(Gfx.UI, 8, x + 3, y + 16, x + w - 102, Modules.LYRICS.labelColor(), s.label);
             button(hit, value, x + w - 96, y + 3, 92, 18, () -> {
                 int i = Arrays.asList(s.opts).indexOf(Config.str(Modules.LYRICS.id, s.key, (String) s.def));
                 Config.set(Modules.LYRICS.id, s.key, s.opts[(i + 1 + s.opts.length) % s.opts.length]);
