@@ -469,16 +469,17 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
         if let Some(g) = &opts.groups { jvm.insert(0, format!("-Dnether.groups={g}")); }
         jvm.insert(0, format!("-Dnether.config={}", crate::agent::global_config(paths).display()));
         crate::agent::ensure_pack(&opts.game_dir, if v.legacy_args.is_some() { cp.last().map(|p| p.as_path()) } else { None });
-        // Nether capes (backend content + cape API); unset = the agent skips capes. The agent looks up the players
-        // it sees (UUIDs only) at the API, so Settings > Privacy can turn capes off (config.json launcher.capes).
+        // capes and cosmetics (player API); unset = the agent shows none. The agent looks up the players it sees
+        // (hash prefixes only) at the API, so Settings > Privacy can turn them off (config.json launcher.capes).
         let capes = crate::store::config(paths)["launcher"]["capes"].as_bool().unwrap_or(true);
-        let (content, api) = if capes { (crate::backend::content_url(), crate::backend::api_url()) } else { (String::new(), String::new()) };
-        if !content.is_empty() { jvm.insert(0, format!("-Dnether.capeContent={content}")); }
-        if !api.is_empty() { jvm.insert(0, format!("-Dnether.capeApi={api}")); }
-        // the agent only accepts cape PNGs whose sha256 is in the signed manifest (none verified = no capes)
-        if !content.is_empty() {
-            if let Some(f) = crate::backend::cape_sums_file(&c) { jvm.insert(0, format!("-Dnether.capeSums={}", f.display())); }
-            if let Some(f) = crate::backend::cosmetic_sums_file(&c) { jvm.insert(0, format!("-Dnether.cosSums={}", f.display())); }
+        let api = if capes { crate::backend::api_url() } else { String::new() };
+        if !api.is_empty() {
+            jvm.insert(0, format!("-Dnether.capeApi={api}"));
+            // agents before the catalog merge only draw capes when this is set; current ones ignore it
+            jvm.insert(0, format!("-Dnether.capeContent={}", crate::backend::content_url()));
+            // checksums of this player's own items (private uploads too); public ones the agent checks with the API
+            if let Some(f) = crate::ugc::cape_sums_file() { jvm.insert(0, format!("-Dnether.capeSums={}", f.display())); }
+            if let Some(f) = crate::ugc::cosmetic_sums_file() { jvm.insert(0, format!("-Dnether.cosSums={}", f.display())); }
         }
         // check in as a Nether player so others see the nametag icon (background, best effort; the API never gets the
         // Minecraft token, see backend::hello)

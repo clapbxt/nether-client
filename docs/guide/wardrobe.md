@@ -13,22 +13,25 @@ Your **skin library** keeps skins on your PC so you can switch with one click.
 
 Removing a skin from the library doesn't change the skin your account is wearing.
 
-## Capes
+## Capes and cosmetics
 
-- **Minecraft capes** you own from Mojang can be switched here.
-- **Nether capes** are shown to other Nether Client players in game. You can turn Nether capes off in
-  **Settings → Privacy → Nether capes in game**.
+Capes and cosmetics (hats, headbands, masks, back items, wings, auras and pets) are one public list per type, shown to
+every Nether Client player in game. It holds Nether's own items (credited to **Nether**) and everything players upload.
+Search by name or creator, sort by **Top** (most worn) or **New**, and switch to **Mine** for your own uploads.
 
-## Cosmetics
+- Pick **None** to take a slot off.
+- **Minecraft capes** you own from Mojang are at the top of the Capes page. A Minecraft cape shows only when you wear
+  no public cape.
+- You can turn capes and cosmetics off in **Settings → Privacy → Capes and cosmetics in game**.
 
-Nether cosmetics (hats, auras and more) are worn per slot. Pick **None** to take a slot off.
+The in-game wardrobe (**Right Shift → Wardrobe**) lists the most worn items of each type plus your own uploads and
+picks; the launcher's Wardrobe has the whole list.
 
-## Community uploads
+## Uploading
 
-The **Community** tab has capes and cosmetics made by players. Search by name or creator.
-
-**Upload yours** from the same tab. You can upload Blockbench models, Bedrock / GeckoLib models, Lunar cosmetic files,
-`.obj` models, PNG textures (animated ones too), or a zip of them. Every upload is checked before anyone else sees it.
+**Upload yours** from any Capes or cosmetics page. You can upload Blockbench models, Bedrock / GeckoLib models, Lunar
+cosmetic files, `.obj` models, PNG textures (animated ones too), or a zip of them. Every upload is checked before anyone
+else sees it.
 
 If something breaks the rules, use **Report**. Enough reports take an upload down for everyone. You can delete your
 own uploads at any time; players wearing one then see nothing in its place.

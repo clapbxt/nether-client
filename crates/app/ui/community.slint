@@ -1,6 +1,6 @@
-// Wardrobe COMMUNITY: capes and cosmetics players upload (Rust: community.rs, core ugc.rs + cosimport.rs). One NETHER |
-// COMMUNITY switch for the capes page and every cosmetic page; browse by most used / newest, search names and creators,
-// report; your uploads show whether they are public. Upload converts the files here (Blockbench, Bedrock /
+// Wardrobe capes and cosmetics: one public list per page (Rust: community.rs, core ugc.rs + cosimport.rs) with players'
+// uploads and Nether's own (credited to "Nether"); browse by most used / newest, search names and creators, report;
+// your uploads show whether they are public. Upload converts the files here (Blockbench, Bedrock /
 // GeckoLib, Lunar .gek, .obj, images, zips) and the service checks every upload before anyone else sees it.
 import { Theme } from "theme.slint";
 import { Backend } from "structs.slint";
@@ -10,8 +10,6 @@ import { Eyebrow, Btn, Seg, IconBtn, Icon, Ico, Hatch, Field, LinkBtn, Scrim, To
 export struct CommItem { id: string, name: string, by: string, uses: string, img: image, has-img: bool, mine: bool, status: int, note: string }
 
 export global Community {
-    // 0 = the Nether catalog, 1 = community uploads (one switch for every wardrobe page)
-    in-out property <int> source: 0;
     // 0 every public item, 1 your uploads · 0 most equipped, 1 newest
     in-out property <int> filter: 0;
     in-out property <int> sort: 0;
@@ -26,6 +24,7 @@ export global Community {
     in-out property <int> page: -1;
     callback load(int);
     callback load-more();
+    // a card picked ("" = the None card: take that slot off)
     callback pick(string);
     callback remove(string);
     callback report(string, string);
@@ -53,19 +52,17 @@ export global Community {
     in-out property <string> delete-name;
 }
 
-// NETHER | COMMUNITY, and in COMMUNITY the search, filter, sort and UPLOAD.
+// above the list: what it is, UPLOAD, then search, filter and sort
 export component CommBar inherits Rectangle {
     in property <int> page;
     in property <bool> signed;
     property <bool> typing;
-    height: Community.source == 1 ? 80px : 34px;
-    Seg { x: 0px; y: 0px; items: ["NETHER", "COMMUNITY"]; current: Community.source;
-        changed(i) => { Community.source = i; Backend.hover-cos(""); if i == 1 { Community.load(root.page); } } }
-    if Community.source == 1: Text { x: 300px; y: 0px; height: 34px; width: up.x - self.x - 16px; overflow: elide; vertical-alignment: center; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts;
-        text: "Made by players · every upload is checked before anyone else sees it"; }
-    up := Btn { x: parent.width - self.width; y: 0px; height: 34px; visible: Community.source == 1; text: Community.up-state == 3 ? "UPLOADING…" : "UPLOAD"; icon: Ico.export; solid: true;
+    height: 80px;
+    Text { x: 0px; y: 0px; height: 34px; width: up.x - self.x - 16px; overflow: elide; vertical-alignment: center; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts;
+        text: "Made by players and by Nether · every upload is checked before anyone else sees it"; }
+    up := Btn { x: parent.width - self.width; y: 0px; height: 34px; text: Community.up-state == 3 ? "UPLOADING…" : "UPLOAD"; icon: Ico.export; solid: true;
         enabled: root.signed && Community.up-state == 0; clicked => { Community.upload-pick(); } }
-    if Community.source == 1: Rectangle {
+    Rectangle {
         y: 46px; height: 34px;
         sf := Field { x: 0px; y: -3px; width: 360px; search: true; placeholder: "Search by name or creator"; text <=> Community.query;
             edited => { root.typing = true; } accepted => { root.typing = false; Community.load(root.page); } }
@@ -108,7 +105,7 @@ component CommCard inherits Rectangle {
             sp := Text { text: root.item.status == 1 ? "ONLY YOU" : root.item.status == 2 ? "CHECKING" : "REMOVED"; color: root.item.status == 3 ? Theme.redtx : Theme.tx;
                 font-family: Theme.ui; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 0.6px; horizontal-alignment: center; vertical-alignment: center; }
         }
-        // selection pill (same as the Nether cards)
+        // selection pill
         if root.item.status != 3 && (root.worn || ta.has-hover): Rectangle {
             x: parent.width - self.width - 8px; y: 8px; height: 22px; width: pl.preferred-width + 18px; border-radius: Theme.r3;
             background: root.worn ? Theme.red : Theme.s3;
@@ -129,22 +126,61 @@ component CommCard inherits Rectangle {
     Rectangle { border-radius: Theme.r2; border-width: root.worn ? 2px : 1px; border-color: root.worn ? Theme.red2 : (root.hot ? Theme.ln2 : Theme.ln); }
 }
 
-// the community grid of one wardrobe page (1 capes, 2.. cosmetic slots)
+// the None card: nothing in this slot (picked = nothing is picked here)
+component NoneCard inherits Rectangle {
+    in property <string> label;
+    in property <bool> worn;
+    in property <bool> applied;
+    in property <bool> busy;
+    callback clicked();
+    width: 220px; height: 276px;
+    border-radius: Theme.r2;
+    background: ta.has-hover ? Theme.s2 : Theme.s1;
+    opacity: root.busy && !root.worn ? 0.6 : 1;
+    animate background { duration: Theme.fast; }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { if !root.busy && !root.worn { root.clicked(); } } }
+    Rectangle {
+        x: 6px; y: 6px; width: parent.width - 12px; height: 196px; background: Theme.bg; border-radius: Theme.r1; clip: true;
+        Hatch { width: parent.width; height: parent.height; }
+        Rectangle { x: (parent.width - 56px) / 2; y: (parent.height - 56px) / 2; width: 56px; height: 56px; border-radius: 28px; border-width: 1px; border-color: Theme.ln2;
+            Icon { x: 20px; y: 20px; d: Ico.close; tint: Theme.mut; } }
+        if root.worn || ta.has-hover: Rectangle {
+            x: parent.width - self.width - 8px; y: 8px; height: 22px; width: pl.preferred-width + 18px; border-radius: Theme.r3;
+            background: root.worn ? Theme.red : Theme.s3;
+            pl := Text { text: root.worn ? (root.applied ? "NOTHING" : "SELECTED") : "TAKE OFF"; color: root.worn ? #ffffff : Theme.tx;
+                font-family: Theme.ui; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 0.6px; horizontal-alignment: center; vertical-alignment: center; }
+        }
+    }
+    Text { x: 14px; y: 210px; width: parent.width - 28px; height: 26px; text: "None"; color: Theme.tx; font-family: Theme.disp; font-size: 15px; font-weight: 700; vertical-alignment: center; }
+    Text { x: 14px; y: 240px; width: parent.width - 28px; height: 20px; text: root.label; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; overflow: elide; }
+    Rectangle { border-radius: Theme.r2; border-width: root.worn ? 2px : 1px; border-color: root.worn ? Theme.red2 : (ta.has-hover ? Theme.ln2 : Theme.ln); }
+}
+
+// the public grid of one wardrobe page (1 capes, 2.. cosmetic slots): None first (browsing everything), then the items.
+// Children go above the grid (head-h tall): the capes page puts the Minecraft account's capes there.
 export component CommGrid inherits Flickable {
     in property <int> page;
     in property <bool> signed;
+    in property <length> head-h: 0px;
+    in property <string> none-label: "Take this slot off";
     property <int> slot: root.page - 2;
     property <string> sel: root.page == 1 ? Backend.ncape-sel : Backend.cos-sel[root.slot];
     property <string> worn: root.page == 1 ? Backend.ncape-worn : Backend.cos-worn[root.slot];
-    // MINE ends in an add tile
-    property <int> tiles: Community.items.length + (Community.filter == 1 && root.signed ? 1 : 0);
-    content-height: Math.ceil(root.tiles / 4) * 288px + (Community.more ? 64px : 0px) + 100px;
+    // the None card leads ALL (not a search); MINE ends in an add tile
+    property <int> lead: Community.filter == 0 && Community.query == "" ? 1 : 0;
+    property <int> tiles: root.lead + Community.items.length + (Community.filter == 1 && root.signed ? 1 : 0);
+    content-height: root.head-h + Math.ceil(root.tiles / 4) * 288px + (Community.more ? 64px : 0px) + 100px;
     init => { if Community.page != root.page || Community.state == 0 { Community.load(root.page); } }
     changed page => { Community.load(root.page); }
+    @children
+    if root.lead == 1: NoneCard {
+        x: 0px; y: root.head-h; label: root.none-label; worn: root.sel == ""; applied: root.worn == ""; busy: Backend.look-busy;
+        clicked => { Community.pick(""); }
+    }
     if Community.state == 2 || (Community.state == 1 && Community.items.length > 0): Rectangle {
-        height: parent.content-height;
+        y: root.head-h; height: parent.content-height - root.head-h;
         for c[i] in Community.items: CommCard {
-            x: mod(i, 4) * 232px; y: floor(i / 4) * 288px;
+            x: mod(i + root.lead, 4) * 232px; y: floor((i + root.lead) / 4) * 288px;
             item: c; worn: root.sel == c.id; applied: root.worn == c.id; busy: Backend.look-busy; signed: root.signed;
             clicked => { Community.pick(c.id); }
             hovered(on) => { if root.page >= 2 { Backend.hover-cos(on ? c.id : ""); } }
@@ -161,12 +197,14 @@ export component CommGrid inherits Flickable {
         }
         if Community.more: Btn { x: (916px - self.width) / 2; y: Math.ceil(root.tiles / 4) * 288px + 8px; text: Community.busy-more ? "LOADING…" : "LOAD MORE"; enabled: !Community.busy-more; clicked => { Community.load-more(); } }
     }
-    if (Community.state != 2 && !(Community.state == 1 && Community.items.length > 0)) || (Community.state == 2 && root.tiles == 0): Rectangle {
-        y: 0px; width: 916px; height: 110px; background: Theme.s1; border-radius: Theme.r2; border-width: 1px; border-color: Theme.ln;
+    // loading, failed, or nothing to show (beside the None card when it leads)
+    if (Community.state != 2 && !(Community.state == 1 && Community.items.length > 0)) || (Community.state == 2 && Community.items.length == 0 && !(Community.filter == 1 && root.signed)): Rectangle {
+        x: root.lead * 232px; y: root.head-h; width: 916px - self.x; height: 110px; background: Theme.s1; border-radius: Theme.r2; border-width: 1px; border-color: Theme.ln;
         Text { x: 28px; width: parent.width - 56px; vertical-alignment: center; color: Theme.dim; font-family: Theme.ui; font-size: 15px * Theme.ts; wrap: word-wrap;
-            text: Community.state == 1 ? "Loading community uploads…" : Community.state == 3 ? Community.message
+            text: Community.state == 1 ? "Loading…" : Community.state == 3 ? Community.message
                 : Community.query != "" ? "Nothing matches “\{Community.query}”."
-                : "No uploads here yet. Be the first: UPLOAD at the top right."; }
+                : Community.filter == 1 ? "You haven't uploaded anything here yet."
+                : "Nothing here yet. Be the first: UPLOAD at the top right."; }
     }
 }
 

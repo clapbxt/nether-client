@@ -21,8 +21,8 @@ your player UUID and nothing else.
 | Mod loaders | meta.fabricmc.net, meta.quiltmc.org, maven.minecraftforge.net, maven.neoforged.net | Installing a loader |
 | Mods and modpacks | api.modrinth.com, cdn.modrinth.com | Searches and downloads you start |
 | Skins, capes, news | sessionserver.mojang.com, api.mojang.com, textures.minecraft.net, launchercontent.mojang.com | Showing your skin and Mojang's news |
-| Nether news, packs, cape list | the Nether service (signed files) | Opening Home and Wardrobe |
-| Nether capes | the Nether cape service (Cloudflare) | Wearing a cape, and checking in at game start so others see your icon |
+| Nether news, packs | the Nether service (signed files) | Opening Home |
+| Capes and cosmetics | the Nether player service (Cloudflare) | Opening Wardrobe, wearing a cape or cosmetic, and checking in at game start so others see your icon |
 | Updates | api.github.com, github.com | Checking for and downloading signed updates |
 | OptiFine (Nether + OptiFine profiles, 1.8.9 / 1.12.2) | bmclapi2.bangbang93.com (the OptiFine mirror HMCL and XMCL use) | Only the first launch of an OptiFine profile |
 | Hosting | api.playit.gg, api.ipify.org, api.mcstatus.io, fill.papermc.io | Only while you use the Host tab |
@@ -33,10 +33,10 @@ your player UUID and nothing else.
 
 ## In game
 
-- **Nether capes.** To find the Nether players in your tab list, the client sends the cape service only the first
+- **Capes and cosmetics.** To find the Nether players in your tab list, the client sends the player service only the first
   4 characters of a hash of each player's UUID. The service answers with every Nether player under those prefixes
   and the client picks the matches itself, so the service never learns whom you play with. It asks at most once per
-  player every 10 minutes. You can turn this off with **Settings → Privacy → Nether capes in game**.
+  player every 10 minutes. You can turn this off with **Settings → Privacy → Capes and cosmetics in game**.
 - **Lyrics** (off by default) send the song title, artist, album and length to lrclib.net. If LRCLIB has no lyrics,
   the title and artist are also sent to api.lyrics.ovh for plain-text lyrics. The title and artist are sent to
   music.163.com (NetEase Cloud Music) for word-by-word timing. Lyrics are cached on your PC.
@@ -67,10 +67,10 @@ your player UUID and nothing else.
 
 ## What we store
 
-The cape service stores, per player who checked in: your UUID, the Nether cape and cosmetics (hat, headband, mask, back, wings, aura,
+The player service stores, per player who checked in: your UUID, the cape and cosmetics (hat, headband, mask, back, wings, aura,
 pet) you chose, and when you were last seen. Players unseen for 180 days are deleted automatically.
 
-Turning **Nether capes in game** off deletes your entry right away (if you are signed out or offline, at your next
+Turning **Capes and cosmetics in game** off deletes your entry right away (if you are signed out or offline, at your next
 sign-in).
 
 The friends service stores your friends list (at most 67 friends), pending requests (deleted after 14 days), blocks,
