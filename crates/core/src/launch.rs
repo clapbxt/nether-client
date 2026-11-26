@@ -67,10 +67,8 @@ impl Loader {
 /// File in an instance folder that pins the Fabric/Quilt loader version (written by modpack import; absent = newest).
 pub const LOADER_PIN: &str = "nether-loader.txt";
 
-/// A loader version as loader metas write them ("0.16.9", "0.26.4-beta.5"); it ends up in meta URLs, so nothing else.
-pub fn valid_loader_version(v: &str) -> bool {
-    (1..=48).contains(&v.len()) && v.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'+' | b'_')) && !v.contains("..")
-}
+// lives in mojang.rs so forge.rs can use it without depending on launch.rs; kept here under its old path
+pub use crate::mojang::valid_loader_version;
 
 pub struct LaunchOpts {
     pub loader: Loader,

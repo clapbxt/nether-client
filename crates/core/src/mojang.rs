@@ -233,3 +233,8 @@ pub fn version_json(c: &Client, paths: &Paths, id: &str) -> Result<VersionJson> 
     fetch(c, &mv.url, &file, if sha.is_empty() { Check::None } else { Check::Sha1(&sha) })?;
     Ok(serde_json::from_slice(&std::fs::read(&file)?)?)
 }
+
+/// A loader version as loader metas write them ("0.16.9", "0.26.4-beta.5"); it ends up in meta URLs, so nothing else.
+pub fn valid_loader_version(v: &str) -> bool {
+    (1..=48).contains(&v.len()) && v.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'+' | b'_')) && !v.contains("..")
+}

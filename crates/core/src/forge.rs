@@ -112,7 +112,7 @@ fn fetch_installer(c: &Client, url: &str, dest: &Path) -> Result<()> {
 }
 
 fn installer(c: &Client, paths: &Paths, kind: Kind, mc: &str, ver: &str) -> Result<PathBuf> {
-    if !crate::launch::valid_loader_version(ver) { bail!("unexpected loader version {ver}"); }
+    if !crate::mojang::valid_loader_version(ver) { bail!("unexpected loader version {ver}"); }
     match kind {
         Kind::NeoForge => {
             let dest = paths.libraries().join(format!("net/neoforged/neoforge/{ver}/neoforge-{ver}-installer.jar"));
