@@ -8,6 +8,7 @@ import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL30;
@@ -193,7 +194,7 @@ final class GlCore extends GlBackend {
         GL11.glColorMask(true, true, true, true);
         GL11.glEnable(GL11.GL_BLEND);
         GL20.glBlendEquationSeparate(0x8006, 0x8006);
-        GL20.glBlendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL14.glBlendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ONE_MINUS_SRC_ALPHA);
         if (polyF != GL11.GL_FILL || polyB != GL11.GL_FILL) GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_FILL);
         if (samplers) GL33.glBindSampler(0, 0);
     }
@@ -226,7 +227,7 @@ final class GlCore extends GlBackend {
         GL11.glDepthMask(depthMask);
         GL11.glColorMask(cm[0], cm[1], cm[2], cm[3]);
         GL20.glBlendEquationSeparate(eqRgb, eqA);
-        GL20.glBlendFuncSeparate(srcRgb, dstRgb, srcA, dstA);
+        GL14.glBlendFuncSeparate(srcRgb, dstRgb, srcA, dstA);
     }
 
     private static void set(int cap, boolean on) {
