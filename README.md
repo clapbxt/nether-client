@@ -15,7 +15,7 @@ This repository holds the launcher, the in-game client, the installer and the we
 signed content, capes and cosmetics is private.
 
 - **Users:** download the installer from [Releases](https://github.com/clapbxt/nether-client/releases/latest) or the
-  [website](https://clapbxt.github.io/nether-client/). Help and community: [Discord](https://discord.gg/R5vxAxVjwu).
+  [website](https://nether.clapbxt.com). Help and community: [Discord](https://discord.gg/R5vxAxVjwu).
 - **Developers:** read on. Contributions are welcome under the terms in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Contents
