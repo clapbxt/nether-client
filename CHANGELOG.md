@@ -13,6 +13,8 @@ This is the launcher's changelog. The in-game client has its own, in
 - New **Host** page: run a server from a Vanilla or Fabric profile. Set it up and start it in two clicks, agree to
   the EULA yourself, then watch the console, manage players, whitelist and ops, change settings, copy a world in and
   make backups. It shows the address to share, and can check whether the internet can reach it.
+- Install Packs can filter by loader and sort by relevance (the default while you search). A slow search no longer
+  replaces the results of a newer one.
 - The in-game client now updates by itself. When the launcher starts, it installs a newer client release into all
   your instances, so a client fix no longer needs a launcher update. Each instance keeps its own copy of the client.
 

@@ -175,9 +175,12 @@ export global Backend {
     in-out property <[Row]> pack-rows;
     in-out property <bool> pack-loading: false;
     in-out property <string> pack-query;
+    // packs.rs SORTS: 0 relevance (downloads while the search box is empty), 1 downloads, 2 follows, 3 newest, 4 updated
     in-out property <int> pack-sort: 0;
     // Modrinth modpack category (0 = all; packs.rs PACK_CATS)
     in-out property <int> pack-cat: 0;
+    // Modrinth modpack loader (0 = any; packs.rs PACK_LOADERS)
+    in-out property <int> pack-loader: 0;
     in-out property <bool> detail-pack: false;
     callback load-packs();
     callback open-pack(int);

@@ -28,7 +28,8 @@ shows name, Minecraft version, loader and when you last played. From here you ca
 
 ## Install Packs
 
-Search modpacks on Modrinth, sort and filter them, and install one as a new profile in one step.
+Search modpacks on Modrinth, filter them by loader and category, sort them (by relevance while you search), and
+install one as a new profile in one step.
 
 ## Host
 
