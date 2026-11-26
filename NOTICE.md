@@ -5,7 +5,7 @@ their own licenses.
 
 | Component | Where | License |
 |---|---|---|
-| Velo Client: HUD auto-layout approach | `agent/src/dev/nether/ov/Modules.java` | MIT, see [`agent/NOTICE.md`](agent/NOTICE.md) |
+| Velo Client: HUD auto-layout approach | `agent/src/dev/nether/ov/framework/Modules.java` | MIT, see [`agent/NOTICE.md`](agent/NOTICE.md) |
 | Lumes Texture Combiner (Kzxmi) | `crates/core/src/combine.rs` | MIT, notice below |
 | Barlow, JetBrains Mono, Nether Pixel fonts | `crates/app/ui/fonts`, `site/assets/fonts`, `agent/res/fonts` | SIL Open Font License 1.1, [`crates/app/ui/fonts/OFL.txt`](crates/app/ui/fonts/OFL.txt) |
 | Righteous, Bebas Neue, Poppins, Lilita One, Pacifico, Kaushan Script, Neonderthaw, Monoton fonts (unmodified, from google/fonts) | `agent/res/fonts/lyrics` | SIL Open Font License 1.1, `agent/res/fonts/lyrics/OFL-*.txt` |

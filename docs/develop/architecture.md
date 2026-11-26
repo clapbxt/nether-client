@@ -51,7 +51,20 @@ A `java.lang.instrument` agent, not a mod, so it runs the same on every loader.
 - `dev.nether.agent` bootstraps it and installs a small number of ASM hooks (frame end, input, chat, game arguments).
 - `dev.nether.ov` holds everything else. It reads game state by reflection through per-version name tables
   (`res/names/*.txt`) and draws its own overlay on the finished frame (GL core/compat; LWJGL 2, LWJGL 3 and SDL3
-  back ends).
+  back ends). It is split into layers, lowest first, each a package with a `package-info.java` saying what it holds:
+
+  | Package | Job |
+  |---|---|
+  | `ov` | `Overlay` (entry point, started by the agent) and `Schema` (build-time settings dump) |
+  | `ov.platform` | windowing, input and GL per game generation; the only code that touches LWJGL |
+  | `ov.game` | reading the game by reflection, name tables, resource-pack assets |
+  | `ov.framework` | `Module`, `Setting`, the module registry and HUD loop, config, input routing, HTTP |
+  | `ov.ui` | the 2D renderer (`Gfx`), theme, icons, toasts, shared widgets |
+  | `ov.menu`, `ov.menu.title` | the in-game menu and settings pages; the title screen |
+  | `ov.features.*` | one package per client feature: `hud`, `performance`, `visual`, `lyrics`, `media`, `cosmetics`, `social`, `packs`, `screenshots` |
+
+  A package should only use the ones above it in the table. A few older paths still break that (the registry and
+  the menu reach into features); don't add new ones.
 - It never patches renderer classes, so Sodium, Iris, Embeddium and Distant Horizons are unaffected.
 - Lookups are null-safe: a field missing on a version hides that feature instead of crashing the game. See
   [`agent/SAFETY.md`](../../agent/SAFETY.md).

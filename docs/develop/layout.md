@@ -9,7 +9,7 @@ crates/
   installer/    NetherClientSetup.exe (setup wizard, uninstall, update applier)
 agent/          in-game client
   src/dev/nether/agent   bootstrap and hooks
-  src/dev/nether/ov      overlay, modules, menus, title screen, party, wardrobe
+  src/dev/nether/ov      the overlay: platform/, game/, framework/, ui/, menu/ (title/), features/<area>/
   res/                   fonts, icons, name tables, brand art, panoramas
   tools/                 names.js (name tables), Relocate.java (bundles ASM as dev.nether.shaded.asm)
   build.gradle.kts       builds nether-agent.jar, nether-agent-boot.jar and schema.json into agent/build
