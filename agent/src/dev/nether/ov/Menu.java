@@ -280,6 +280,7 @@ final class Menu {
         }
         if (!press && k != 259 && k != 258 && (k < 262 || k > 267)) return; // held keys repeat only Backspace, Tab, arrows, paging
         if (ctrl) {
+            if (k == 70 && page != null && !hub && tab < T_WARDROBE && SettingsPage.takesTyping(page)) { SettingsPage.search(null); return; } // Ctrl+F on a page: its settings
             if (k == 70) { commitEdit(); ColorPicker.close(); hub = false; page = null; if (tab >= T_WARDROBE) setTab(1); searchFocus = true; return; } // Ctrl+F
             if (k == 69) { commitEdit(); ColorPicker.close(); page = null; hudEdit = true; return; }                                   // Ctrl+E
             if (k == 86) { typedSearch(Plat.cur.clipboard()); return; }                                                                // Ctrl+V
@@ -331,11 +332,13 @@ final class Menu {
     /** Esc steps back one level: typing -> layout editor selection -> layout editor -> colour picker -> search -> page -> hub -> close. */
     private static void esc() {
         if (Wardrobe.ask) { Wardrobe.ask = false; return; }
+        if (editSet != null && editKind == QUERY) { SettingsPage.clearSearch(); return; }
         if (fieldFocus()) { editWp = -1; editSet = null; return; }
         if (hudEdit) { if (!HudEditor.esc()) { hudEdit = false; HudEditor.reset(); } return; }
         if (live != null) { live = null; return; }
         if (ColorPicker.id != null) { ColorPicker.close(); return; }
         if (page == null && (searchFocus || !search.isEmpty())) { search = ""; searchFocus = false; scroll = scrollT = 0; fCur = -1; return; }
+        if (page != null && SettingsPage.clearSearch()) return;
         if (page != null) { commitEdit(); page = null; gridT = 0; scroll = scrollT = gridScroll; fCur = kbNav ? gridFocus : -1; return; }
         if (!hub) { toHub(); return; }
         Input.setMenu(false);
@@ -343,6 +346,7 @@ final class Menu {
 
     private static void typedSearch(String t) {
         if (hudEdit || capture != null || t.isEmpty() || (!hub && tab >= T_WARDROBE)) return;
+        if (!hub && page != null && SettingsPage.takesTyping(page)) { if (!t.trim().isEmpty()) SettingsPage.search(t); return; } // a module page searches its settings
         String q = (search + t.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')).replaceFirst("^\\s+", "");
         q = q.substring(0, Math.min(24, q.length()));
         if (q.equals(search)) return; // a lone space: nothing to search for (Space toggles the focused card)
@@ -358,7 +362,8 @@ final class Menu {
 
     // ---------------------------------------------------------------- text fields
 
-    static final int TXT = 0, NUM = 1, HEX = 2, NAME = 3;
+    /** QUERY: a module page's settings search ({@link SettingsPage}), filtered live while typed. */
+    static final int TXT = 0, NUM = 1, HEX = 2, NAME = 3, QUERY = 4;
     static int editWp = -1, editMax = 64, editKind;
     static String editBuf = "";
     /** Field being typed into: "<module id>:<key>" (Enter or a click elsewhere saves, Esc cancels). */
@@ -398,6 +403,7 @@ final class Menu {
                 }
                 case HEX: ColorPicker.hex(id, key, v); break;
                 case NAME: Profiles.nameBuf = v; break;
+                case QUERY: SettingsPage.query = v; break;
                 default: Config.set(id, key, v);
             }
         }
@@ -665,6 +671,7 @@ final class Menu {
                     Gfx.s = sc;
                     Gfx.alpha = e;
                 }
+                SettingsPage.before();
                 if (live != null && !liveOk(live)) live = null;
                 dev.nether.agent.Hook.fireForce = live instanceof Views.Fire;
                 if (live instanceof Lyrics) LyricsStudio.live((Lyrics) live, e, wheel);
@@ -701,6 +708,8 @@ final class Menu {
                     clickRt = c1;
                     Wardrobe.askDraw(e);
                 } else if (hub) hub(e); else panel(wheel, e);
+                SettingsPage.after();
+                if (tip != null && live != null) tooltip(0);
                 if (want && pageMode()) { TitleNav.drawOver(fbW, fbH); Gfx.s = sc; }
             } finally { Gfx.round = false; }
             if (click && fieldFocus()) commitEdit(); // clicked somewhere else
@@ -899,7 +908,7 @@ final class Menu {
         Gfx.alpha = a0;
         float top = sy + TOP + 48;
         list(sx, top, sw, sh - (top - sy) - FOOT, wheel);
-        footer(page != null ? "Esc back to modules" : "Arrows move  \u00b7  Space toggle  \u00b7  Enter settings  \u00b7  Esc back");
+        footer(page != null ? (SettingsPage.takesTyping(page) ? "Type to search settings  ·  Arrows move  ·  Left / Right adjust  ·  Esc back to modules" : "Esc back to modules") : "Arrows move  \u00b7  Space toggle  \u00b7  Enter settings  \u00b7  Esc back");
     }
 
     /** Settings: gear + SETTINGS; General / Controls / Profiles. */
@@ -1060,21 +1069,7 @@ final class Menu {
             Module pm = null;
             for (Module m : Modules.all) if (m.id.equals(page)) pm = m;
             if (pm instanceof Lyrics) { navCols = 1; LyricsStudio.page((Lyrics) pm, lx, top, lw, viewH, wheel); return; }
-            if (pm != null) {
-                navCols = 1;
-                float contentH = 16 + ROW + expH(pm);
-                float maxS = scrollTo(contentH, viewH, wheel);
-                beginClip(lx, top, lw, viewH);
-                float y = top + 8 - scroll, a0 = Gfx.alpha, pk = k(pageT, 0, 0.26f);
-                Gfx.alpha = a0 * pk;
-                x += (1 - pk) * 40;
-                row(pm, x, y, w, focus(x, y, w, ROW), true);
-                expand(pm, x, y + ROW, w);
-                Gfx.alpha = a0;
-                endClip();
-                scrollBar(lx, top, lw, viewH, contentH, maxS);
-                return;
-            }
+            if (pm != null) { SettingsPage.page(pm, lx, top, lw, viewH, wheel); return; }
             page = null;
         }
         List<Module> list = filtered();
@@ -1248,8 +1243,7 @@ final class Menu {
     private static void liveEdit(float e, float wheel) {
         Module m = live;
         float pw = 392, px = 20, py = 20, top = 64, foot = 54;
-        float rows = 0;
-        for (int i = 0; i < m.settings.size(); i++) if (m.row(i)) rows += SROW;
+        float rows = SettingsPage.flatH(m, pw - 40);
         float ph = Math.min(H - 40, top + rows + foot), view = ph - top - foot;
         float a0 = Gfx.alpha;
         Gfx.rect(px, py + 4, pw, ph, 12, Gfx.a(Gfx.BLACK, 0.35f * e));
@@ -1268,7 +1262,7 @@ final class Menu {
         if (in(px, py, pw, ph)) liveScroll = Math.max(0, Math.min(maxS, liveScroll - wheel * 40));
         liveScroll = Math.min(liveScroll, maxS);
         Gfx.clip(px, py + top, pw, view);
-        settingRows(m, px + 20, py + top - liveScroll, pw - 40);
+        SettingsPage.flat(m, px + 20, py + top - liveScroll, pw - 40);
         Gfx.unclip();
         float fy = py + ph - foot + 12;
         Gfx.rect(px + 1, py + ph - foot, pw - 2, 1, 0, Th.ln2);
@@ -1303,52 +1297,12 @@ final class Menu {
         Gfx.alpha = a0;
     }
 
-    // ---------------------------------------------------------------- settings of one module, inline under its row
+    // ---------------------------------------------------------------- one setting row (the Lyrics studio's rows; other pages use SettingsPage)
 
     private static final float SROW = 46;
 
-    private static float expH(Module m) {
-        float h = 10;
-        if (m.lockNote() != null) h += 42;
-        for (int i = 0; i < m.settings.size(); i++) { Setting s = m.settings.get(i); if (m.row(i)) h += SROW + (s.t == Setting.COLOR && ColorPicker.isOpen(m.id, s.key) ? ColorPicker.H : 0); }
-        h += SROW; // the Enabled-free footer: reset buttons
-        if (m instanceof Waypoints) h += wpHeight((Waypoints) m);
-        if (ViewEditor.has(m)) h += ViewEditor.H + 12;
-        if (liveOk(m)) h += 40;
-        return h;
-    }
-
-    private static void expand(Module m, float x, float y, float w) {
-        if (ColorPicker.id != null && !ColorPicker.id.equals(m.id)) ColorPicker.close();
-        float h = expH(m);
-        Gfx.rect(x + 6, y, w - 12, h - 4, 4, Gfx.a(Th.ov, 0.025f));
-        float lx = x + 52, lw = w - 52 - 20;
-        float yy = y + 6;
-        String note = m.lockNote();
-        if (note != null) {
-            Gfx.rect(lx, yy, lw, 34, 6, Gfx.a(Th.ov, 0.06f));
-            Gfx.text(Gfx.UI, 11, lx + 14, yy + 17, Th.tx, note);
-            yy += 42;
-        }
-        Waypoints wp = m instanceof Waypoints ? (Waypoints) m : null;
-        if (wp == null && editWp >= 0) commitEdit();
-        if (ViewEditor.has(m)) { ViewEditor.draw(m, lx, yy + 4, lw, "ve" + m.id); yy += ViewEditor.H + 12; }
-        if (liveOk(m)) {
-            if (fbutton("live" + m.id, "EDIT LIVE IN GAME", lx, yy + 4, Math.min(lw, 220), 30, true)) { commitEdit(); ColorPicker.close(); live = m; liveDrag = false; }
-            yy += 40;
-        }
-        yy = settingRows(m, lx, yy, lw);
-        if (wp != null) { wpList(wp, lx, yy, lw); yy += wpHeight(wp); }
-        String rl = "Reset to default";
-        float rw = Gfx.width(Gfx.SEMI, 11, rl, 1.2f) + 32;
-        if (fbutton("reset" + m.id, rl, lx, yy + 6, rw, 28, false)) { ColorPicker.close(); m.reset(); }
-    }
-
-    /** The setting rows of module m from y; returns the y after them. */
-    private static float settingRows(Module m, float lx, float y, float lw) {
-        for (int si = 0; si < m.settings.size(); si++) if (m.row(si)) y = settingRow(m, m.settings.get(si), lx, y, lw);
-        return y;
-    }
+    /** Opens the live view editor of m (the menu steps aside over the game). */
+    static void startLive(Module m) { live = m; liveDrag = false; }
 
     /** One setting row of module m at y (header, toggle, slider, colour, choice, key, text, action); returns the y after it. */
     static float settingRow(Module m, Setting s, float lx, float y, float lw) {
@@ -1513,7 +1467,7 @@ final class Menu {
         if (sub == 1) { float sp = PH; PH -= 40; Controls.draw(cpx, cpy + 40, wheel); PH = sp; return; }
         if (sub == 2) { float sp = PH; PH -= 40; Profiles.draw(cpx, cpy + 40, wheel); PH = sp; return; }
         float lx = mx + 20, lw = mw - 40, top = py + TOP + 48, viewH = py + ph - FOOT - top;
-        float contentH = 8 + 62 + 62 + 62 + 30 + (page != null && page.equals("menu") ? expH(MainMenu.MODULE) : 0) + ROW + 20;
+        float contentH = 8 + 62 + 62 + 62 + 30 + (page != null && page.equals("menu") ? SettingsPage.inlineH(MainMenu.MODULE, lw) + 10 : 0) + ROW + 20;
         float maxS = Math.max(0, contentH - viewH);
         scrollT = Math.max(0, Math.min(maxS, scrollT - wheel * 46));
         scroll = Config.calm() ? scrollT : scroll + (scrollT - scroll) * Math.min(1, Gfx.dt * 16);
@@ -1571,7 +1525,7 @@ final class Menu {
         chevron(lx + lw - 20, yy + ROW / 2f, open, Th.dim);
         if (hit(lx, yy, lw, ROW) || used(f) != 0) { commitEdit(); ColorPicker.close(); page = open ? null : "menu"; }
         yy += ROW + 2;
-        if (open) expand(mm, lx, yy, lw);
+        if (open) SettingsPage.inline(mm, lx, yy + 8, lw);
         endClip();
         if (maxS > 0) {
             float th = Math.max(30, viewH * viewH / contentH);
@@ -1581,12 +1535,12 @@ final class Menu {
 
     // ---------------------------------------------------------------- waypoint list (settings page of Waypoints)
 
-    private static float wpHeight(Waypoints w) {
+    static float wpHeight(Waypoints w) {
         List<Map<String, Object>> l = w.list(false);
         return 66 + Math.max(1, l == null ? 0 : l.size()) * 46;
     }
 
-    private static void wpList(Waypoints w, float lx, float y, float lw) {
+    static void wpList(Waypoints w, float lx, float y, float lw) {
         float xr = lx + lw;
         String k = w.world();
         Gfx.text(Gfx.MONO, 9, lx, y + 33, Th.mut, "THIS WORLD", false, 2f);

@@ -18,14 +18,17 @@ final class Waypoints extends Module {
 
     Waypoints() {
         super("waypoints", "Waypoints", "Utility", "Mark places and see them on screen with their distance. Saved per server, world and dimension.", false, true, 0, 0);
+        add(Setting.header("Keys"));
         add(Setting.key("addKey", "Add waypoint key", 66));
         add(Setting.key("toggleKey", "Show / hide key", 72).hint("Default H. Hides or shows every marker at once (the list is kept)."));
+        add(Setting.header("Markers"));
         add(Setting.bool("shown", "Show markers", true));
         add(Setting.bool("distance", "Show distance", true));
         add(Setting.bool("edge", "Keep off-screen markers at the edge", true));
         add(Setting.slider("size", "Marker size", 0.6, 2, 0.05, 1));
         add(Setting.slider("maxDist", "Hide beyond (blocks, 0 = never)", 0, 5000, 50, 0));
         add(Setting.slider("near", "Fade out closer than (blocks)", 0, 32, 1, 4).hint("Markers fade as you reach them, so they never sit in your face. 0 = always fully shown."));
+        add(Setting.header("Behaviour"));
         add(Setting.bool("death", "Mark where you die", true).hint("Adds a 'Death' waypoint at the spot (the old one is replaced), so you can find your items. It clears when you get there."));
         needs(4);
     }

@@ -6,6 +6,7 @@ import java.util.Locale;
 final class Reach extends RowsModule {
     Reach() {
         super("reach", "Reach Display", "HUD", "Shows how far away your last attack on a player or mob was.", false, 0.15, 0.35);
+        add(Setting.header("Display"));
         add(Setting.slider("decimals", "Decimals", 0, 3, 1, 2).hint("Digits after the point."));
         add(Setting.bool("tint", "Color by range", true).hint("Green up to 3 blocks, amber up to 3.5, red beyond."));
         add(Setting.slider("hideAfter", "Hide after (s, 0 = keep)", 0, 30, 1, 5).hint("The value disappears this long after the attack."));

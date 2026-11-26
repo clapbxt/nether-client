@@ -4,7 +4,9 @@ package dev.nether.ov;
 final class Combo extends RowsModule {
     Combo() {
         super("combo", "Combo Counter", "HUD", "Hits in a row on your target, reset when you are hit or stop attacking.", false, 0.15, 0.43);
+        add(Setting.header("Counting"));
         add(Setting.slider("timeout", "Reset after (s)", 1, 5, 0.5, 2.5).hint("No hit for this long ends the combo."));
+        add(Setting.header("Display"));
         add(Setting.bool("best", "Show best", true).hint("Your best combo this session."));
         add(Setting.bool("hideZero", "Hide at 0", true).hint("Only shown while a combo is running."));
         needs(1);

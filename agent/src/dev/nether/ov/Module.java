@@ -68,8 +68,9 @@ abstract class Module {
     Module(String id, String name, String cat, String desc, boolean hud, boolean defOn, double dx, double dy) {
         this.id = id; this.name = name; this.cat = cat; this.desc = desc; this.hud = hud; this.defOn = defOn; this.dx = dx; this.dy = dy;
         if (hud) {
-            // the shared look of every HUD box: a folded "Style" group kept after the module's own settings (see add)
-            Setting h = Setting.header("Style");
+            // the shared look of every HUD box: a folding "Appearance" group kept after the module's own settings (see add);
+            // its fold id stays "<id>#Style" (the settings page shows it as an open card)
+            Setting h = Setting.header("Appearance");
             h.fold = id + "#Style";
             String f = h.fold;
             java.util.function.BooleanSupplier op = () -> Setting.open.contains(f);
@@ -87,15 +88,6 @@ abstract class Module {
             add(Setting.bool("border", "Outline", false).when(op).when(() -> bool("bg")));
             styleN = settings.size();
         }
-    }
-
-    /** Row i of the settings page is drawn: a shown setting, a folding header, or a header with a shown setting under it. */
-    boolean row(int i) {
-        Setting s = settings.get(i);
-        if (s.t != Setting.HEADER) return s.shown();
-        if (s.fold != null) return true;
-        for (int j = i + 1; j < settings.size() && settings.get(j).t != Setting.HEADER; j++) if (settings.get(j).shown()) return true;
-        return false;
     }
 
     /** settings at the end of the list that belong to the Style group (HUD modules) */

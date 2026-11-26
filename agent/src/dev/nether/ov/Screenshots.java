@@ -34,9 +34,12 @@ import java.util.concurrent.Executors;
 final class Screenshots extends Module {
     Screenshots() {
         super("screenshots", "Screenshots", "Utility", "Browse, favorite, copy and delete your screenshots without leaving the game. A preview shows after each one.", false, true, 0, 0);
+        add(Setting.header("Keys"));
         add(Setting.key("openKey", "Open screenshots key", 73).hint("Default I. Opens the browser in a world."));
+        add(Setting.header("After a screenshot"));
         add(Setting.bool("preview", "Preview after a screenshot", true).hint("A small card with the picture for a few seconds."));
         add(Setting.bool("autoCopy", "Copy new screenshots", false).hint("Puts each new screenshot on the clipboard, ready to paste into a chat."));
+        add(Setting.header("Library"));
         add(Setting.action("browse", "Your screenshots", "OPEN", Screenshots::show));
     }
 

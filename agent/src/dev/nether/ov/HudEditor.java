@@ -46,6 +46,9 @@ final class HudEditor {
         nudgeX = nudgeY = 0;
     }
 
+    /** Opens with module id selected (a settings page's EDIT LAYOUT). */
+    static void select(String id) { reset(); sel.add(id); }
+
     /** The layout was replaced (profile applied): old undo steps would bring it back piecemeal. */
     static void forget() { undo.clear(); redo.clear(); merge = null; reset(); }
 

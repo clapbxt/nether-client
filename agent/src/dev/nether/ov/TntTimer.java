@@ -23,9 +23,11 @@ final class TntTimer extends Module {
 
     private TntTimer() {
         super("tnttimer", "TNT Timer", "Visual", "The time left on every lit TNT, floating above it.", false, false, 0, 0);
+        add(Setting.header("Display"));
         add(Setting.bool("decimals", "Tenths of a second", true));
         add(Setting.bool("colors", "Colour by time left", true).hint("Green, then yellow, then red as it is about to go off."));
         add(Setting.slider("size", "Size", 0.6, 2, 0.05, 1));
+        add(Setting.header("Range"));
         add(Setting.slider("maxDist", "Distance (blocks)", 8, 96, 4, 48).hint("TNT further away shows no timer."));
         needs(4);
     }

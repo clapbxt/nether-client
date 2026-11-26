@@ -23,6 +23,7 @@ final class Armor extends Module {
 
     Armor() {
         super("armor", "Armor Status", "HUD", "Equipped armor with its remaining durability.", true, false, 0.73, 0.5);
+        add(Setting.header("Layout"));
         add(Setting.choice("layout", "Layout", "List", "List", "Icons", "Compact", "Vanilla").hint("Vanilla: the game's own hotbar slots, durability bars and stack counts (resource packs apply)"));
         add(Setting.choice("value", "Durability as", "Percent", "Percent", "Durability", "Remaining", "Hidden"));
         add(Setting.bool("bar", "Durability bar", true));
@@ -30,9 +31,11 @@ final class Armor extends Module {
         add(Setting.bool("icons", "Item icons", true).when(() -> !str("layout").equals("Vanilla")));
         add(Setting.choice("orient", "Direction", "Horizontal", "Horizontal", "Vertical").when(() -> str("layout").equals("Icons") || str("layout").equals("Vanilla")));
         add(Setting.choice("order", "Order", "Head first", "Head first", "Feet first"));
+        add(Setting.header("Extras"));
         add(Setting.bool("held", "Held item", false).hint("Main hand item with its durability or stack size"));
         add(Setting.bool("offhand", "Off-hand item", false).hint("1.9 and newer (1.8.9 has no off hand)"));
         add(Setting.bool("arrows", "Arrow count with a bow or crossbow", true).hint("Arrows in your whole inventory while a bow or crossbow is in either hand"));
+        add(Setting.header("Behaviour"));
         add(Setting.bool("hideEmpty", "Hide when no armor is worn", true));
         add(Setting.slider("warn", "Low durability warning (%)", 0, 50, 1, 10).hint("Pieces at or below this turn red; 0 = off"));
         needs(4);

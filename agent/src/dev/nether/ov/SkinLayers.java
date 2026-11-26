@@ -37,10 +37,12 @@ final class SkinLayers extends Module {
 
     private SkinLayers() {
         super("skinlayers", "3D Skin Layers", "Visual", "Every player's outer skin layer (hat, jacket, sleeves, trousers) in 3D up close; further away the flat layer stays.", false, false, 0, 0);
+        add(Setting.header("Layers"));
         add(Setting.bool("hat", "Hat", true));
         add(Setting.bool("jacket", "Jacket", true));
         add(Setting.bool("sleeves", "Sleeves", true));
         add(Setting.bool("pants", "Trousers", true));
+        add(Setting.header("Range"));
         add(Setting.slider("dist", "Distance (blocks)", 4, 48, 1, 14).hint("Players further away keep the flat layer (cheaper)."));
         needs(2);
     }
