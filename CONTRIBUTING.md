@@ -29,7 +29,7 @@ Report security problems privately, as described in [SECURITY.md](SECURITY.md).
 3. Follow the [project rules](README.md#project-rules). Changes that patch renderer classes, automate input, send
    packets, or read data the server did not send will not be accepted.
 4. Run `cargo test -p nether-common -p nether-net -p nether-auth -p nether-game -p nether-social -p nether-core` and
-   `cargo clippy --workspace --release`, and rebuild the agent (`agent\gradlew.bat -p agent build`) if you changed it.
+   `cargo clippy --workspace --release`. Client changes go to [nether-agent](https://github.com/clapbxt/nether-agent) with its own checks.
    CI runs the same checks on your pull request.
 5. For UI changes, attach before and after screenshots (the `--snapshot` switch in
    [dev tools](docs/develop/dev-tools.md#developer-switches) makes them).

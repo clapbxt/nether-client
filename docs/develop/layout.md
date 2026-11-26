@@ -1,5 +1,7 @@
 # Repository layout
 
+This repo is the launcher. The in-game client is in [clapbxt/nether-agent](https://github.com/clapbxt/nether-agent), with its own layout in its README.
+
 ```
 crates/
   app/          launcher: src/*.rs (one file per area), ui/*.slint (theme, components, one file per screen)
@@ -13,16 +15,9 @@ crates/
                 their old module names; res/ = content key and resource pack; examples/ = dev harnesses
   media/        nether-media.exe (Windows media session helper)
   installer/    NetherClientSetup.exe (setup wizard, uninstall, update applier)
-agent/          in-game client
-  src/dev/nether/agent   bootstrap and hooks
-  src/dev/nether/ov      the overlay: platform/, game/, framework/, ui/, menu/ (title/), features/<area>/
-  res/                   fonts, icons, name tables, brand art, panoramas
-  tools/                 names.js (name tables), Relocate.java (bundles ASM as dev.nether.shaded.asm)
-  build.gradle.kts       builds nether-agent.jar, nether-agent-boot.jar and schema.json into agent/build
-  gradle/                libs.versions.toml (pinned LWJGL and ASM), the Gradle wrapper
-  build.ps1              calls the Gradle build (kept for existing commands)
 art/            brand art used by the README, launcher and site
 docs/           this documentation
+client.lock     the in-game client release bundled as the offline fallback (crates/core/build.rs)
 .github/        CI (build and test), dependency audit, Dependabot
 ```
 
@@ -35,7 +30,7 @@ Pages workflow but are not in the public repository yet.
 |---|---|
 | `README.md` | What Nether Client is, and where to go next |
 | `CONTRIBUTING.md` | Reporting bugs and sending pull requests |
-| `SAFETY.md`, `agent/SAFETY.md` | Fair play, for players and for anticheat developers |
+| `SAFETY.md` | Fair play, for players and for anticheat developers |
 | `PRIVACY.md` | Every network destination |
-| `TERMS.md`, `LICENSE`, `NOTICE.md`, `agent/NOTICE.md` | Legal and third-party notices |
+| `TERMS.md`, `LICENSE`, `NOTICE.md` | Legal and third-party notices |
 | `SECURITY.md` | Reporting security problems |

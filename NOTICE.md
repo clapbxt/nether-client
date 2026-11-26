@@ -5,11 +5,11 @@ their own licenses.
 
 | Component | Where | License |
 |---|---|---|
-| Velo Client: HUD auto-layout approach | `agent/src/dev/nether/ov/framework/Modules.java` | MIT, see [`agent/NOTICE.md`](agent/NOTICE.md) |
+| Velo Client: HUD auto-layout approach | `src/dev/nether/ov/framework/Modules.java` in [nether-agent](https://github.com/clapbxt/nether-agent) | MIT, see [its NOTICE.md](https://github.com/clapbxt/nether-agent/blob/main/NOTICE.md) |
 | Lumes Texture Combiner (Kzxmi) | `crates/core/src/combine.rs` | MIT, notice below |
-| Barlow, JetBrains Mono, Nether Pixel fonts | `crates/app/ui/fonts`, `site/assets/fonts`, `agent/res/fonts` | SIL Open Font License 1.1, [`crates/app/ui/fonts/OFL.txt`](crates/app/ui/fonts/OFL.txt) |
-| Righteous, Bebas Neue, Poppins, Lilita One, Pacifico, Kaushan Script, Neonderthaw, Monoton fonts (unmodified, from google/fonts) | `agent/res/fonts/lyrics` | SIL Open Font License 1.1, `agent/res/fonts/lyrics/OFL-*.txt` |
-| Permanent Marker font (unmodified, from google/fonts) | `agent/res/fonts/lyrics` | Apache License 2.0, `agent/res/fonts/lyrics/APACHE-2.0.txt` |
+| Barlow, JetBrains Mono, Nether Pixel fonts | `crates/app/ui/fonts`, `site/assets/fonts`, `res/fonts` (nether-agent) | SIL Open Font License 1.1, [`crates/app/ui/fonts/OFL.txt`](crates/app/ui/fonts/OFL.txt) |
+| Righteous, Bebas Neue, Poppins, Lilita One, Pacifico, Kaushan Script, Neonderthaw, Monoton fonts (unmodified, from google/fonts) | `res/fonts/lyrics` (nether-agent) | SIL Open Font License 1.1, `res/fonts/lyrics/OFL-*.txt` (nether-agent) |
+| Permanent Marker font (unmodified, from google/fonts) | `res/fonts/lyrics` (nether-agent) | Apache License 2.0, `res/fonts/lyrics/APACHE-2.0.txt` (nether-agent) |
 | Rust crates | `Cargo.lock` | Each crate's own license (MIT / Apache-2.0 and others); see `cargo about` or crates.io |
 
 ## Lumes Texture Combiner (MIT)

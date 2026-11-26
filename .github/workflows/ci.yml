@@ -1,5 +1,5 @@
-# Builds and tests every push and pull request: the safety net for refactors.
-#   agent    the in-game client, with Gradle and pinned dependencies (no game install needed)
+# Builds and tests every push and pull request: the safety net for refactors. The in-game client has its own CI in
+# github.com/clapbxt/nether-agent.
 #   core     tests of nether-core and the crates under it, on Linux; also catches Windows-only code outside cfg(windows)
 #   windows  the whole workspace type-checks on the platform we ship
 name: ci
@@ -16,28 +16,6 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 jobs:
-  agent:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - uses: gradle/actions/setup-gradle@v4
-      - name: Build the agent
-        working-directory: agent
-        run: ./gradlew build --console=plain
-      - uses: actions/upload-artifact@v4
-        with:
-          name: agent
-          path: |
-            agent/build/nether-agent.jar
-            agent/build/nether-agent-boot.jar
-            agent/build/schema.json
-
   core:
     runs-on: ubuntu-latest
     steps:

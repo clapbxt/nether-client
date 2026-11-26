@@ -1,0 +1,8 @@
+# The in-game client release bundled into launcher builds as the offline fallback (crates/core/build.rs).
+# Players get newer client releases without a launcher update; this only sets what a fresh install starts with.
+# Update it after a client release: version, then the sha256 of each release asset (from its client.json and the
+# release page). Empty version = nothing pinned (a build then uses ../nether_agent/build if it is there).
+version =
+nether-agent.jar =
+nether-agent-boot.jar =
+client.json =

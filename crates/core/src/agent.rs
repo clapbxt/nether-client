@@ -38,7 +38,7 @@ static AGENT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/nether-agent.jar
 static BOOT: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/nether-agent-boot.jar"));
 /// `client.json` of the bundled build (version, protocol, file hashes).
 static BUNDLED_MANIFEST: &str = include_str!(concat!(env!("OUT_DIR"), "/client.json"));
-/// Every module and setting of the bundled agent (JSON, from `agent/build/schema.json`).
+/// Every module and setting of the bundled agent (JSON, the client build's `schema.json`).
 pub static SCHEMA: &str = include_str!(concat!(env!("OUT_DIR"), "/schema.json"));
 /// `nether-media.exe` (crates/media), written next to the jars; the agent finds it beside its `-javaagent` jar.
 static MEDIA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/nether-media.exe"));

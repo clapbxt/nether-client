@@ -20,7 +20,7 @@ NetherClientSetup.exe ──installs──▶ nether-app.exe (launcher, Slint UI
 | Launcher screens | `crates/ui` (compiles `crates/app/ui/*.slint`) | Slint | library |
 | Core library | `crates/core` | Rust | library, used by the launcher and the dev examples |
 | Shared base, network, accounts | `crates/common`, `crates/net`, `crates/auth` | Rust | libraries under `nether-core` |
-| In-game client | `agent/` | Java (bytecode level 8) | `nether-agent.jar` + `schema.json` |
+| In-game client | [nether-agent](https://github.com/clapbxt/nether-agent) repo | Java (bytecode level 8) | `nether-agent.jar` + `client.json` + `schema.json` |
 | Media helper | `crates/media` | Rust | `nether-media.exe` |
 | Installer / updater | `crates/installer` | Rust + Slint | `NetherClientSetup.exe` |
 
@@ -68,7 +68,7 @@ Those have to be untangled before the rest can move.
 - **Backend clients:** signed content, capes and cosmetics, community uploads, friends, auto-update. The backend
   authenticates players with Mojang's `join` / `hasJoined` handshake, so it never receives a Minecraft token.
 
-## In-game client (`agent/`)
+## In-game client ([nether-agent](https://github.com/clapbxt/nether-agent))
 
 A `java.lang.instrument` agent, not a mod, so it runs the same on every loader.
 
@@ -91,13 +91,13 @@ A `java.lang.instrument` agent, not a mod, so it runs the same on every loader.
   the menu reach into features); don't add new ones.
 - It never patches renderer classes, so Sodium, Iris, Embeddium and Distant Horizons are unaffected.
 - Lookups are null-safe: a field missing on a version hides that feature instead of crashing the game. See
-  [`agent/SAFETY.md`](../../agent/SAFETY.md).
+  [the client's SAFETY.md](https://github.com/clapbxt/nether-agent/blob/main/SAFETY.md).
 
 ### Launcher ↔ agent
 
 - **Delivery.** Each instance gets its own copy of the client in `<instance>/.nether/client/` (both jars, `client.json`
   and `nether-media.exe`), installed at launch by `nether_core::agent::ensure`. See [Client updates](#client-updates).
-- **Protocol.** `PROTOCOL` in `crates/core/src/agent.rs` and `clientProtocol` in `agent/gradle.properties` name the
+- **Protocol.** `PROTOCOL` in `crates/core/src/agent.rs` and `clientProtocol` in the client repo's `gradle.properties` name the
   launcher ↔ client contract: the `-Dnether.*` properties, the boot jar beside the agent jar, and the media helper
   beside it. A launcher only installs a client with its own protocol number. Raise both together, and only for a
   breaking change.

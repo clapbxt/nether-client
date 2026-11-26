@@ -4,8 +4,8 @@ What changed in each release, newest first. Add a line under **Unreleased** in t
 what a player or developer notices, not how it was done. The commit messages hold the details. At release, the
 Unreleased lines move under the new version (see [Releasing](docs/develop/releasing.md)).
 
-The launcher and the in-game client are listed separately because they are planned to ship on separate release
-trains (the launcher will fetch newer client builds on its own).
+This is the launcher's changelog. The in-game client has its own, in
+[clapbxt/nether-agent](https://github.com/clapbxt/nether-agent/blob/main/CHANGELOG.md).
 
 ## Unreleased
 
@@ -19,6 +19,9 @@ trains (the launcher will fetch newer client builds on its own).
   class that LWJGL 3.1.6 doesn't have.
 
 ### Development
+- The in-game client moved to its own repo, [clapbxt/nether-agent](https://github.com/clapbxt/nether-agent), with its
+  full history. This repo is the launcher only. Launcher builds bundle the client release pinned in `client.lock`, or
+  a client built next to this repo (`..\nether_agent\build`). See [Building](docs/develop/building.md).
 - The in-game client builds with Gradle (`agent\gradlew.bat -p agent build`), with LWJGL and ASM versions pinned.
   You no longer need to launch the game before the first build. `agent\build.ps1` still works and calls Gradle.
 - The in-game client's code is split into packages: `platform`, `game`, `framework`, `ui`, `menu`, and one
