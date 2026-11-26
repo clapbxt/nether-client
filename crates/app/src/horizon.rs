@@ -17,6 +17,8 @@ pub const KEY: &str = "horizon:game";
 
 pub fn init(ui: &AppWindow, sh: Arc<Shared>) {
     show_state(ui, &sh);
+    // the Play list (and whether it shows the walkthrough) depends on Horizon being listed
+    crate::refilter(ui);
     let b = ui.global::<Backend>();
     let (weak, s2) = (ui.as_weak(), sh.clone());
     b.on_hz_play(move || if let Some(ui) = weak.upgrade() { play(&ui, &s2) });
@@ -34,6 +36,15 @@ pub fn init(ui: &AppWindow, sh: Arc<Shared>) {
         let _ = std::process::Command::new("explorer").arg(&dir).spawn();
     });
     b.on_hz_site(|| { let _ = webbrowser::open(horizon::PROJECT_URL); });
+    // add to / remove from the Play list; its build, worlds and settings stay either way
+    let (weak, s2) = (ui.as_weak(), sh.clone());
+    b.on_hz_add(move |on| if let Some(ui) = weak.upgrade() {
+        let mut st = horizon::state(&s2.paths);
+        st.added = Some(on);
+        if let Err(e) = horizon::save_state(&s2.paths, &st) { applog::line(&format!("saving Horizon state failed: {e:#}")); }
+        ui.global::<Backend>().set_hz_added(on);
+        crate::refilter(&ui);
+    });
     // the card art: Minecraft 26.x's key art, like the Nether 26 card
     art(ui, &sh);
 }
@@ -50,6 +61,7 @@ fn show_state(ui: &AppWindow, sh: &Arc<Shared>) {
     let st = horizon::state(&sh.paths);
     let b = ui.global::<Backend>();
     b.set_hz_build(horizon::installed(&sh.paths).map(|(v, _)| horizon::pretty(&v)).unwrap_or_default().into());
+    b.set_hz_added(st.listed());
     b.set_hz_played(if st.secs >= 60 { format!("{} played", span(st.secs)) } else { String::new() }.into());
 }
 

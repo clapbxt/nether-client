@@ -17,6 +17,13 @@ This is the launcher's changelog. The in-game client has its own, in
   replaces the results of a newer one.
 - The in-game client now updates by itself. When the launcher starts, it installs a newer client release into all
   your instances, so a client fix no longer needs a launcher update. Each instance keeps its own copy of the client.
+- New instance offers four ways to start: Quick, Manual, Modpack (search Modrinth, then Nether on or off) and
+  Horizon (added to your list with nothing to set up).
+- The Performance mods switch in Manual shows a box for each of its mods: the switch ticks them all, unticking any
+  turns it off, and only the ticked ones install.
+- Play is one list: modpacks sit with your other instances and Horizon is a row in it, instead of separate tabs.
+- Removed the Quick Play strip from the top bar and the Profiles / Friends box from Home; the Home banner now fills
+  the page.
 
 ### In-game client
 - The client has its own version number (1.0.0) and a compatibility number, written into `client.json` by its build.

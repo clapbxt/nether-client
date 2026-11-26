@@ -2,7 +2,7 @@ import { Theme } from "theme.slint";
 import { Backend, Row, Inst, Art, Wizard, Combiner, ImportRow, NewInst } from "structs.slint";
 import { Glass, PlayButton, Eyebrow, Heading, Slot, Chip, Btn, ModIcon, Seg, UTabs, Toggle, Dropdown, VerTag, Icon, Ico, Page, IconBtn, Hatch, Ticks, Slash, SectionHead, Stat, LinkBtn, Slider, Field, Scrim, SetRow, Pulse } from "components.slint";
 import { ModDetail } from "moddetail.slint";
-import { HorizonHero, HorizonPanel } from "play.slint";
+import { HorizonPanel } from "play.slint";
 import { CreateFlow } from "newflow.slint";
 
 // Block-texture icon grid; "" means the default (grass block).
@@ -146,10 +146,16 @@ export component InstancesScreen inherits Rectangle {
     property <string> ren-name;
     property <bool> searching: false;
     property <int> pick: Backend.active-inst;
-    // Play tabs: 0 Instances, 1 Modpacks (both list instances), 2 Horizon (its own panel)
-    property <bool> list-tab: Backend.play-tab <= 1;
-    // no instances of your own yet: the Instances tab is the new-instance walkthrough
-    property <bool> welcome: Backend.play-tab == 0 && NewInst.first;
+    // nothing to play yet (no instances, Horizon not added): Play is the new-instance walkthrough
+    property <bool> welcome: NewInst.first;
+    // Horizon in the list (2026-11-26: NEW INSTANCE > HORIZON adds it; it is not a Java instance, so it has its own
+    // row and its own panel); hidden while searching
+    property <bool> hz-row: Backend.hz-added && Backend.inst-query == "";
+    // the Horizon row is picked (its panel shows on the right); also when it is the only thing in the list
+    in-out property <bool> hz-pick: false;
+    property <bool> hz-on: root.hz-row && (root.hz-pick || Backend.visible-insts.length == 0);
+    property <length> hmx;
+    property <length> hmy;
     function new-profile() { Backend.create-open = true; }
     property <Inst> pk: Backend.instances[Math.min(root.pick, Math.max(0, Backend.instances.length - 1))];
     property <[string]> mod-cats: ["Any category", "Optimization", "Utility", "Decoration", "Adventure", "Magic", "Technology", "Storage", "Worldgen", "Mobs", "Equipment", "Food", "Game mechanics", "Library", "Social", "Transportation"];
@@ -165,16 +171,10 @@ export component InstancesScreen inherits Rectangle {
     if root.sel < 0: Page {
         Heading { x: 56px; y: 28px; text: "PLAY"; font-size: 32px; }
         im := Btn { x: ni.x - 10px - self.width; y: 40px; height: 34px; text: "IMPORT"; icon: Ico.download; clicked => { Backend.import-open = true; Backend.import-instance(); } }
-        if Backend.play-tab == 1: Btn { x: im.x - 10px - self.width; y: 40px; height: 34px; text: "BROWSE MODPACKS"; clicked => { root.go-discover(); } }
-        // Instances (yours, Nether on or off) / Modpacks / Horizon
-        tabs := Seg { x: 56px; y: 84px; items: ["INSTANCES", "MODPACKS", "HORIZON"]; current <=> Backend.play-tab;
-            changed(i) => { Backend.refilter(); if Backend.visible-insts.length > 0 { root.pick = Backend.visible-insts[0]; } } }
-        if Backend.play-tab == 2: Text { x: tabs.x + tabs.width + 16px; y: 84px; width: 836px - tabs.x - tabs.width - 16px; height: 34px; vertical-alignment: center; overflow: elide;
-            text: "Minecraft 26.3 rewritten in Rust."; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; }
-        // search (name, version, loader) + sort
-        if root.list-tab && !root.welcome: Field { x: tabs.x + tabs.width + 14px; y: 84px; width: 650px - 10px - tabs.x - tabs.width - 14px; height: 34px; text-size: 13px; search: true;
-            placeholder: Backend.play-tab == 0 ? "Search instances" : "Search modpacks"; text <=> Backend.inst-query; edited => { Backend.refilter(); } }
-        if root.list-tab && !root.welcome: Dropdown { x: 650px; y: 84px; width: 186px; height: 34px; items: ["Last played", "Name", "Play time", "Created"]; current <=> Backend.inst-sort; changed(i) => { Backend.refilter(); } }
+        // search (name, version, loader) + sort; every instance, modpacks included, is in one list
+        if !root.welcome: Field { x: 56px; y: 84px; width: 650px - 10px - 56px; height: 34px; text-size: 13px; search: true;
+            placeholder: "Search instances"; text <=> Backend.inst-query; edited => { Backend.refilter(); } }
+        if !root.welcome: Dropdown { x: 650px; y: 84px; width: 186px; height: 34px; items: ["Last played", "Name", "Play time", "Created"]; current <=> Backend.inst-sort; changed(i) => { Backend.refilter(); } }
         ni := Btn { x: 836px - self.width; y: 40px; height: 34px; text: "NEW INSTANCE"; solid: true; icon: Ico.plus; clicked => { root.new-profile(); } }
 
         // first visit: the walkthrough itself, where the list will be
@@ -183,18 +183,12 @@ export component InstancesScreen inherits Rectangle {
             inline: true;
             go-discover => { root.go-discover(); }
             go-import => { Backend.import-open = true; Backend.import-instance(); }
-            created => { root.pick = Backend.instances.length - 1; }
-        }
-
-        // Horizon: what it is, and its panel
-        if Backend.play-tab == 2: HorizonHero { x: 56px; y: 136px; width: 780px; height: parent.height - 136px - 12px; }
-        if Backend.play-tab == 2: HorizonPanel {
-            x: 868px; y: 0px; width: 572px; height: parent.height;
-            go-nether => { Backend.play-tab = 0; Backend.refilter(); root.new-profile(); }
+            created => { root.pick = Backend.instances.length - 1; root.hz-pick = false; }
+            horizon-made => { root.hz-pick = true; }
         }
 
         // column heads
-        if root.list-tab && !root.welcome: Rectangle {
+        if !root.welcome: Rectangle {
             x: 56px; y: 130px; width: 780px; height: 28px;
             ColHead { x: 66px; height: parent.height; text: "INSTANCE"; }
             ColHead { x: 396px; height: parent.height; text: "VERSION"; }
@@ -202,10 +196,59 @@ export component InstancesScreen inherits Rectangle {
             ColHead { x: 600px; height: parent.height; text: "LAST PLAYED"; }
             Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln2; }
         }
-        if root.list-tab && !root.welcome: Flickable {
+        if !root.welcome: Flickable {
             x: 56px; y: 158px; width: 780px; height: 590px; content-height: rows-col.preferred-height + 8px;
             // L2: group headers (click folds the group) between the instance rows
             rows-col := VerticalLayout { alignment: start;
+            // Horizon, first: no loader or mods, its own panel on the right
+            if root.hz-row: hz := Rectangle {
+                height: 56px; border-radius: Theme.r1;
+                background: hta2.has-hover ? Theme.hov : (root.hz-on ? Theme.s2 : transparent);
+                animate background { duration: Theme.fast; }
+                Rectangle { x: 0px; y: 12px; width: 3px; height: parent.height - 24px; border-radius: 2px; background: Theme.red2; opacity: root.hz-on ? 1 : 0; animate opacity { duration: Theme.fast; } }
+                Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; }
+                hta2 := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.hz-pick = true; }
+                    pointer-event(e) => {
+                        if e.button == PointerEventButton.right && e.kind == PointerEventKind.down {
+                            root.hmx = self.mouse-x; root.hmy = self.mouse-y; root.hz-pick = true; hmenu.show();
+                        }
+                    }
+                }
+                Rectangle { x: 18px; y: 10px; width: 36px; height: 36px; background: Theme.s3; border-radius: Theme.r1; clip: true;
+                    if Backend.hz-has-art: Image { width: parent.width; height: parent.height; source: Backend.hz-art; image-fit: cover; } }
+                Text { x: 66px; width: 320px; text: "HORIZON"; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; overflow: elide; }
+                Text { x: 396px; width: 80px; text: "26.3"; color: Theme.dim; font-family: Theme.mono; font-size: 12px * Theme.ts; vertical-alignment: center; }
+                Rectangle { x: 482px; y: (parent.height - 6px) / 2; width: 6px; height: 6px; border-radius: 3px; background: Theme.ln2; }
+                Text { x: 494px; width: 100px; text: "Rust"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; }
+                if Backend.hz-state == 0: Text { x: 600px; width: 110px; text: Backend.hz-build == "" ? "Never" : "Ready"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
+                if Backend.hz-state != 0: Rectangle { x: 600px; width: 110px;
+                    Pulse { x: 0px; y: 24px; }
+                    Text { x: 16px; text: Backend.hz-state == 2 ? "Running" : (Backend.hz-state == 3 ? "Stopping" : "Starting"); color: Theme.redtx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 500; vertical-alignment: center; } }
+                IconBtn { x: parent.width - 48px; y: 12px; size: 32px; d: Backend.hz-state == 0 ? Ico.play : Ico.check; hot: Backend.hz-state == 0;
+                    tip: Backend.hz-state == 0 ? "Play" : "Running"; opacity: hta2.has-hover || self.hovered || root.hz-on ? 1 : 0.5;
+                    clicked => { root.hz-pick = true; if Backend.hz-state == 0 { Backend.hz-play(); } } }
+                hmenu := PopupWindow {
+                    x: root.hmx; y: root.hmy; width: 212px; height: 3 * 36px + 8px;
+                    close-policy: close-on-click-outside;
+                    Rectangle {
+                        background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
+                        for it[j] in [{t: "Play", d: Ico.play, a: 0}, {t: "Open folder", d: Ico.folder, a: 1}, {t: "Remove from list", d: Ico.trash, a: 2}]: Rectangle {
+                            y: 4px + j * 36px; height: 36px; width: parent.width;
+                            background: hmt.has-hover ? (it.a == 2 ? Theme.red.with-alpha(0.188) : Theme.s3) : transparent;
+                            if it.a == 2: Rectangle { y: 0px; height: 1px; x: 0px; width: parent.width; background: Theme.ln; }
+                            Icon { x: 16px; y: 12px; d: it.d; tint: it.a == 2 ? Theme.redtx : (hmt.has-hover ? Theme.tx : Theme.dim); }
+                            Text { x: 42px; text: it.t; color: it.a == 2 ? Theme.redtx : (hmt.has-hover ? Theme.tx : Theme.dim); font-family: Theme.ui; font-size: 14px * Theme.ts; vertical-alignment: center; }
+                            hmt := TouchArea { mouse-cursor: pointer; clicked => {
+                                if it.a == 0 { if Backend.hz-state == 0 { Backend.hz-play(); } }
+                                else if it.a == 1 { Backend.hz-folder(); }
+                                else { root.hz-pick = false; Backend.hz-add(false); }
+                                hmenu.close(); } }
+                        }
+                    }
+                }
+            }
             for row[k] in Backend.inst-rows: card := Rectangle {
                 property <int> oi: row.idx;
                 property <bool> head: row.head != "";
@@ -232,11 +275,11 @@ export component InstancesScreen inherits Rectangle {
                 // left click opens the instance, right click shows actions; hover drives the preview
                 cta := TouchArea {
                     mouse-cursor: pointer;
-                    clicked => { root.pick = card.oi; }
+                    clicked => { root.pick = card.oi; root.hz-pick = false; }
                     double-clicked => { root.open(card.oi); }
                     pointer-event(e) => {
                         if e.button == PointerEventButton.right && e.kind == PointerEventKind.down {
-                            card.mx = self.mouse-x; card.my = self.mouse-y; root.pick = card.oi; menu.show();
+                            card.mx = self.mouse-x; card.my = self.mouse-y; root.pick = card.oi; root.hz-pick = false; menu.show();
                         }
                     }
                 }
@@ -252,7 +295,7 @@ export component InstancesScreen inherits Rectangle {
                 if card.inst.running || card.inst.starting: Rectangle { x: 600px; width: 110px;
                     Pulse { x: 0px; y: 24px; }
                     Text { x: 16px; text: card.inst.running ? "Running" : "Starting"; color: Theme.redtx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 500; vertical-alignment: center; } }
-                IconBtn { x: parent.width - 48px; y: 12px; size: 32px; d: card.inst.running || card.inst.starting ? Ico.check : Ico.play; hot: !card.inst.running && !card.inst.starting; tip: card.inst.running ? "Running" : (card.inst.starting ? "Starting" : "Play"); opacity: cta.has-hover || self.hovered || card.on ? 1 : 0.5; clicked => { root.pick = card.oi; if !card.inst.running && !card.inst.starting { Backend.play(card.inst.name); } } }
+                IconBtn { x: parent.width - 48px; y: 12px; size: 32px; d: card.inst.running || card.inst.starting ? Ico.check : Ico.play; hot: !card.inst.running && !card.inst.starting; tip: card.inst.running ? "Running" : (card.inst.starting ? "Starting" : "Play"); opacity: cta.has-hover || self.hovered || card.on ? 1 : 0.5; clicked => { root.pick = card.oi; root.hz-pick = false; if !card.inst.running && !card.inst.starting { Backend.play(card.inst.name); } } }
                 }
                 menu := PopupWindow {
                     x: card.mx; y: card.my; width: 212px; height: 8 * 36px + 8px;
@@ -281,42 +324,30 @@ export component InstancesScreen inherits Rectangle {
                     Rectangle { x: 18px; y: 10px; width: 36px; height: 36px; border-radius: Theme.r1; border-width: 1px; border-color: Theme.ln2;
                         Icon { x: 12px; y: 12px; d: Ico.plus; tint: adt.has-hover ? Theme.tx : Theme.dim; } }
                     Text { x: 66px; y: 9px; text: "New instance"; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; }
-                    Text { x: 66px; y: 30px; text: "Quick, or pick the version, loader, Nether client and mods yourself"; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
+                    Text { x: 66px; y: 30px; text: "Quick, manual, a modpack from Modrinth, or Horizon"; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
                     adt := TouchArea { mouse-cursor: pointer; clicked => { root.new-profile(); } }
-                    LinkBtn { x: parent.width - self.width - 18px; y: 14px; text: "BROWSE MODPACKS"; clicked => { root.go-discover(); } }
                 }
             }
             }
-            // empty states
-            if Backend.visible-insts.length == 0: es := Rectangle {
-                property <bool> searched: Backend.inst-query != "";
+            // searched and nothing matched
+            if Backend.visible-insts.length == 0 && Backend.inst-query != "": Rectangle {
                 x: 0px; y: 40px; width: parent.width; height: 240px;
-                Text { x: 18px; y: 0px; text: es.searched ? "NOTHING MATCHES" : "NO MODPACKS YET"; color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 700; }
+                Text { x: 18px; y: 0px; text: "NOTHING MATCHES"; color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 700; }
                 Text { x: 18px; y: 44px; width: 560px; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap;
-                    text: es.searched ? "Nothing here has that in its name, version or loader." : "Modpacks you install from Modrinth or import from another launcher show up here."; }
-                if !es.searched: Rectangle {
-                    eb1 := Btn { x: 18px; y: 110px; text: "BROWSE MODPACKS"; solid: true; icon: Ico.chev; clicked => { root.go-discover(); } }
-                    eb2 := Btn { x: eb1.x + eb1.width + 10px; y: 110px; text: "IMPORT"; icon: Ico.download; clicked => { Backend.import-open = true; Backend.import-instance(); } }
-                }
+                    text: "Nothing here has that in its name, version or loader."; }
             }
         }
         Text { x: 56px; y: parent.height - 34px; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts;
             text: "Click to preview · double-click to edit · right-click for more · drop modpacks on the window to import";
-            visible: root.list-tab && !root.welcome && Backend.visible-insts.length > 0; }
+            visible: !root.welcome && Backend.visible-insts.length > 0; }
 
-        // Modpacks with nothing in them yet: what they are
-        if Backend.play-tab == 1 && Backend.visible-insts.length == 0: Rectangle {
+        // Horizon picked: its own panel (build, first play, PLAY / STOP, folder)
+        if !root.welcome && root.hz-on: HorizonPanel {
             x: 868px; y: 0px; width: 572px; height: parent.height;
-            background: Theme.s1;
-            Rectangle { x: 0px; width: 1px; background: Theme.ln; }
-            Text { x: 32px; y: 186px; height: 20px; text: "MODPACKS"; color: Theme.mut; font-family: Theme.mono; font-size: 12px * Theme.ts; font-weight: 700; letter-spacing: 2px; vertical-alignment: center; }
-            Heading { x: 30px; y: 208px; width: parent.width - 60px; text: "READY-MADE SETUPS"; font-size: 48px; }
-            Text { x: 32px; y: 272px; width: parent.width - 64px; wrap: word-wrap; color: Theme.dim; font-family: Theme.ui; font-size: 15px * Theme.ts;
-                text: "Modpacks from Modrinth install with all their mods and settings in one click. Fabric and Forge packs on 1.14 or newer run with the Nether client."; }
-            Btn { x: 32px; y: 352px; text: "BROWSE MODPACKS"; solid: true; icon: Ico.chev; clicked => { root.go-discover(); } }
+            go-nether => { root.new-profile(); }
         }
         // preview of the picked profile
-        if Backend.instances.length > 0 && Backend.visible-insts.length > 0 && root.list-tab && !root.welcome: Rectangle {
+        if Backend.instances.length > 0 && Backend.visible-insts.length > 0 && !root.welcome && !root.hz-on: Rectangle {
             x: 868px; y: 0px; width: 572px; height: parent.height;
             background: Theme.s1;
             Rectangle { x: 0px; width: 1px; background: Theme.ln; }

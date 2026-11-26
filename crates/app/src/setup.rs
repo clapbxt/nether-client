@@ -113,7 +113,6 @@ fn finish(ui: &AppWindow, sh: &Arc<Shared>, wizard: bool) {
     s.set_open(false);
     if wizard {
         b.set_create_nether(true);
-        b.set_play_tab(0);
         b.set_create_open(true);
     }
 }

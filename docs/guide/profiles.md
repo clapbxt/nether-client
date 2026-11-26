@@ -7,7 +7,7 @@ a survival world side by side without them touching each other.
 ## Make an instance
 
 On **Play**, press **New instance** (or **Ctrl+N**). If you don't have any instances yet, Play opens straight into
-these steps. First choose **Quick** or **Manual**.
+these steps. First choose **Quick**, **Manual**, **Modpack** or **Horizon**.
 
 **Quick** asks for one thing, the Minecraft version. You get Fabric, the Nether client turned on, and Nether's
 performance mods (Sodium, Lithium, FerriteCore, ModernFix and a mod menu). Press **Create** or **Create & play**.
@@ -19,11 +19,18 @@ performance mods (Sodium, Lithium, FerriteCore, ModernFix and a mod menu). Press
    out, and each one says whether the Nether client runs with it.
 3. **Nether client**: on or off. When it can't run on your version and loader, the launcher says why (for example
    "On 1.12.2, the Nether client runs with Vanilla only, not Forge") and offers a loader where it does.
-4. **Mods**: the **Performance mods** switch, on by default, and popular Modrinth mods for your version and loader to
-   pick from or search. Vanilla skips this step.
+4. **Mods**: the **Performance mods** switch, on by default, with a box for each of its mods. Turning the switch on
+   ticks them all; unticking any one turns the switch off, and only the ticked ones are installed. Below it, popular
+   Modrinth mods for your version and loader to pick from or search. Vanilla skips this step.
 5. **Resource packs**: pick any popular packs for that version (optional). The name is filled in for you.
 
 Mods and packs download right after you press **Create**. **Create & play** starts the game once they're done.
+
+**Modpack** takes two steps: search Modrinth for a pack (the most downloaded show first), then turn the Nether
+client on or off. When the pack's version or loader can't run the Nether client, **Nether on** is greyed out and the
+reason is shown. The pack's newest version installs in the background and appears in the list when it's ready.
+
+**Horizon** has nothing to choose: it adds Horizon to your Play list (see [Horizon](#horizon-experimental)).
 
 ### Where the Nether client runs
 
@@ -40,7 +47,7 @@ Sodium, Iris or other performance mods. You can turn it on or off later from the
 **Import** brings in a modpack file (Modrinth `.mrpack`, CurseForge zip) or profiles from another launcher on your
 PC: Prism, MultiMC, the CurseForge app, the Modrinth App, ATLauncher, the official launcher, and Lunar, NoRisk,
 OneClient or River client profiles. It can also copy their keybinds and game settings. The original is only read,
-never changed. **Install Packs** installs a Modrinth modpack as a new instance; modpacks list under **Play > Modpacks**.
+never changed. **Install Packs** installs a Modrinth modpack as a new instance; modpacks list on **Play** with everything else.
 
 ## Inside a profile
 
@@ -73,5 +80,7 @@ translated for old versions (1.8.9, 1.12.2) automatically.
 
 ## Horizon (experimental)
 
-The Play page also lists **Horizon**, a separate open-source project that rewrites Minecraft Java Edition 26.3 in
-Rust. It is experimental and runs without the Nether client. You need to own Minecraft and be signed in to play it.
+Add it from **New instance > Horizon** and the Play list shows **Horizon**, a separate open-source project that
+rewrites Minecraft Java Edition 26.3 in Rust. It is experimental and runs without the Nether client. You need to own
+Minecraft and be signed in to play it. Right-click its row to open its folder or remove it from the list (its files
+stay).
