@@ -21,7 +21,7 @@ component Choice inherits Rectangle {
     border-width: 1px; border-color: root.picked ? Theme.red2 : (ta.has-hover && root.ok ? Theme.ln2 : Theme.ln);
     opacity: root.ok ? 1 : 0.5;
     animate background, border-color { duration: Theme.fast; }
-    Text { x: 24px; y: 20px; text: root.title; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800; }
+    Text { x: 24px; y: 20px; text: root.title; color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 800; }
     if root.tag != "": Chip { x: parent.width - self.width - 20px; y: 26px; text: root.tag; hot: true; }
     if root.picked: Icon { x: parent.width - 34px; y: root.tag != "" ? 60px : 30px; d: Ico.check; tint: Theme.red2; }
     Text { x: 24px; y: 66px; width: parent.width - 48px; text: root.text; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
