@@ -10,7 +10,7 @@ you don't write any launcher UI.
 2. Give every `Setting` a `hint` (one plain sentence) and a sensible default. Implement `icon()` for its card.
 3. Register it in `Modules.java`. Add its id to the `PVP` set in `Menu.java` if it belongs on the PvP tab.
 4. Read game state only through `Data` / `Game`, and draw only through `Gfx`.
-5. Run `agent\build.ps1`. The launcher picks the module up from `schema.json` on its next build.
+5. Run `agent\gradlew.bat -p agent build`. The launcher picks the module up from `schema.json` on its next build.
 6. Document it: a row in [the player module list](../guide/modules.md), [SAFETY.md](../../SAFETY.md) and
    [`agent/SAFETY.md`](../../agent/SAFETY.md).
 

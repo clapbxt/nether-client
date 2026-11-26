@@ -11,21 +11,21 @@ the release key (see [Releases and signing](releasing.md)), and a few online fea
 |---|---|---|
 | Rust (MSVC toolchain) | stable | all crates |
 | Visual Studio Build Tools 2022 | C++ workload + Windows SDK | linking, resources |
-| JDK | 17 or newer | compiling the in-game client (its output targets Java 8) |
+| JDK | 17 or newer | building the in-game client with Gradle (its output targets Java 8) |
 | Node.js | 18 or newer | `agent/tools/names.js`, only when updating name tables |
 
-The in-game client compiles against the LWJGL and ASM jars the launcher downloads. Before the first agent build,
-launch **Fabric 1.21.x**, **1.8.9** and **26.x** once from an installed Nether Client (or the
-[dev harness](dev-tools.md#launch-the-game-without-the-launcher)) so those jars are in
-`%APPDATA%\NetherClient\libraries`.
+The in-game client is built with Gradle (`agent/build.gradle.kts`). The Gradle wrapper downloads Gradle itself, and
+the LWJGL and ASM versions it compiles against are pinned in `agent/gradle/libs.versions.toml` and come from Maven
+Central, so you don't need to launch the game first. Why each version is the one it is is written at the top of that
+file.
 
 ## Build order
 
 Each output embeds the one before it, so the order matters:
 
 ```powershell
-# 1. In-game client -> agent\build\nether-agent.jar + schema.json
-powershell -File agent\build.ps1
+# 1. In-game client -> agent\build\nether-agent.jar, nether-agent-boot.jar, schema.json
+agent\gradlew.bat -p agent build      # or: powershell -File agent\build.ps1 (same thing)
 
 # 2. Launcher (core's build.rs also builds and embeds nether-media.exe and the agent jar)
 cargo build -p nether-app --release
@@ -59,7 +59,11 @@ cargo test -p nether-core
 cargo clippy --workspace --release
 ```
 
-Rebuild the agent (`agent\build.ps1`) whenever you change anything under `agent/`. Content tests need the private
-backend's content next to the repository and are skipped otherwise.
+Rebuild the agent (`agent\gradlew.bat -p agent build`) whenever you change anything under `agent/`. Gradle only
+rewrites the jars when an input changed, so an unchanged agent doesn't make the launcher rebuild. Content tests need
+the private backend's content (`backend/content`) next to the repository; without it they are left out of the build.
+
+The same checks run on every push and pull request in GitHub Actions (`.github/workflows/ci.yml`): the agent build,
+`nether-core`'s tests on Linux, and a type check of the whole workspace on Windows.
 
 Next: [Tweaking and dev tools](dev-tools.md) for screenshots, scripted launches and more.

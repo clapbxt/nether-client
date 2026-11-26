@@ -11,11 +11,13 @@ agent/          in-game client
   src/dev/nether/agent   bootstrap and hooks
   src/dev/nether/ov      overlay, modules, menus, title screen, party, wardrobe
   res/                   fonts, icons, name tables, brand art, panoramas
-  tools/                 names.js (name tables), Relocate.java
-  build.ps1              builds nether-agent.jar and schema.json
+  tools/                 names.js (name tables), Relocate.java (bundles ASM as dev.nether.shaded.asm)
+  build.gradle.kts       builds nether-agent.jar, nether-agent-boot.jar and schema.json into agent/build
+  gradle/                libs.versions.toml (pinned LWJGL and ASM), the Gradle wrapper
+  build.ps1              calls the Gradle build (kept for existing commands)
 art/            brand art used by the README, launcher and site
 docs/           this documentation
-.github/        dependency audit and website workflows, Dependabot
+.github/        CI (build and test), dependency audit, Dependabot
 ```
 
 The website (`site/`) and the icon sources (`design/icon`, `design/module-icons`) are referenced by the build and the
