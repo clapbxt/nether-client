@@ -92,6 +92,9 @@ export global Backend {
     in-out property <string> hz-played;
     in-out property <image> hz-art;
     in-out property <bool> hz-has-art;
+    // Horizon is in the Play list (made from NEW INSTANCE > HORIZON; removing it keeps its files)
+    in-out property <bool> hz-added;
+    callback hz-add(bool);
     callback hz-play();
     callback hz-stop();
     callback hz-folder();
@@ -569,11 +572,32 @@ export global NewInst {
     pure callback free-name(string) -> string;
     // what the performance mods are for this loader, in a few words
     pure callback perf-text(int) -> string;
+    // the performance mods of the mods step, one check box each (id = Modrinth slug); perf-all = every box is
+    // ticked, which is what the Performance mods toggle shows
+    in-out property <[Row]> perf-mods;
+    in-out property <bool> perf-all: true;
+    // how many boxes are ticked
+    in-out property <int> perf-n: 0;
+    // fill perf-mods for this version + loader, all ticked
+    callback load-perf(string, int);
+    // the toggle: tick (true) or untick every box
+    callback perf-set(bool);
+    // one box
+    callback perf-toggle(string);
     callback load-mods(string, int, string);
     callback toggle-mod(string);
+    // MODPACK: Modrinth modpacks for a search ("" = most downloaded). Each row: mc = its newest Minecraft version,
+    // ver = its loader, sub = both and the description, meta = downloads, path = why the Nether client can't run in
+    // it ("" = it can)
+    in-out property <[Row]> packs;
+    in-out property <bool> packs-loading;
+    callback load-packs(string);
+    // project id, title, Nether on, play when ready: installs the pack as a new instance in the background
+    callback create-pack(string, string, bool, bool) -> bool;
     callback reset();
-    // name, version, loader, Nether on, performance mods, play when ready -> made
-    callback create(string, string, int, bool, bool, bool) -> bool;
+    // name, version, loader, Nether on, performance mods (0 none, 1 all of them, 2 the ticked boxes), play when
+    // ready -> made
+    callback create(string, string, int, bool, int, bool) -> bool;
 }
 
 // First-run setup walkthrough (crates/app/src/setup.rs, 2026-11-20). step: 0 welcome, 1 account, 2 Java & memory,

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use nether_core::download::client;
 use nether_core::launch::Loader;
-use nether_core::{instances, modrinth, netherpack, perf};
+use nether_core::{instances, modpack, modrinth, netherpack, perf};
 use slint::{ComponentHandle, Model, ModelRc, VecModel};
 
 use crate::mods::{cached_icon, count, icon_image, icon_px, update_rows};
@@ -16,6 +16,8 @@ use crate::{show_toast, ui_do, AppWindow, Backend, NewInst, Row, Shared, Wizard}
 thread_local! {
     /// the search the mods list on screen belongs to (a late answer for an older one is dropped)
     static SEARCH: RefCell<String> = const { RefCell::new(String::new()) };
+    /// the same for the modpack list
+    static PACK_SEARCH: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
 const NAMES: [&str; 4] = ["Vanilla", "Fabric", "Forge", "NeoForge"];
@@ -101,6 +103,15 @@ pub fn init(ui: &AppWindow, sh: &Arc<Shared>) {
     let s = sh.clone();
     n.on_perf_text(move |l| perf_text(&s, l).into());
     let (weak, s) = (ui.as_weak(), sh.clone());
+    n.on_load_perf(move |ver, l| if let Some(ui) = weak.upgrade() { load_perf(&ui, &s, &ver, l) });
+    let weak = ui.as_weak();
+    n.on_perf_set(move |on| if let Some(ui) = weak.upgrade() { perf_set(&ui, None, on) });
+    let weak = ui.as_weak();
+    n.on_perf_toggle(move |id| if let Some(ui) = weak.upgrade() {
+        let on = ui.global::<NewInst>().get_perf_mods().iter().find(|r| r.id == id).is_some_and(|r| !r.on);
+        perf_set(&ui, Some(&id), on)
+    });
+    let (weak, s) = (ui.as_weak(), sh.clone());
     n.on_load_mods(move |ver, l, q| if let Some(ui) = weak.upgrade() { load_mods(&ui, &s, &ver, l, &q) });
     let weak = ui.as_weak();
     n.on_toggle_mod(move |id| if let Some(ui) = weak.upgrade() { toggle(&ui, &id) });
@@ -109,10 +120,59 @@ pub fn init(ui: &AppWindow, sh: &Arc<Shared>) {
         let n = ui.global::<NewInst>();
         n.set_mods(ModelRc::default());
         n.set_picked(ModelRc::default());
+        n.set_perf_mods(ModelRc::default());
+        n.set_perf_all(true);
+        n.set_packs(ModelRc::default());
         SEARCH.with(|s| s.borrow_mut().clear());
+        PACK_SEARCH.with(|s| s.borrow_mut().clear());
     });
     let (weak, s) = (ui.as_weak(), sh.clone());
+    n.on_load_packs(move |q| if let Some(ui) = weak.upgrade() { load_packs(&ui, &s, &q) });
+    let (weak, s) = (ui.as_weak(), sh.clone());
+    n.on_create_pack(move |id, title, nether, play| weak.upgrade().is_some_and(|ui| create_pack(&ui, &s, &id, &title, nether, play)));
+    let (weak, s) = (ui.as_weak(), sh.clone());
     n.on_create(move |name, ver, l, nether, fast, play| weak.upgrade().is_some_and(|ui| create(&ui, &s, &name, &ver, l, nether, fast, play)));
+}
+
+/// The performance mods offered for a loader, as (Modrinth slug, name). Fabric gets the Nether Essentials pack (the
+/// backend's copy when published) minus Fabric API, which is always installed; the other loaders get perf.rs's set.
+fn perf_list(sh: &Shared, l: Loader) -> Vec<(String, String)> {
+    let name = |slug: &str| -> String {
+        let known = perf::catalog(Loader::Fabric).iter().chain(perf::catalog(Loader::Forge)).find(|b| b.slug == slug).map(|b| b.name.to_string());
+        known.unwrap_or_else(|| match slug { "modmenu" => "Mod Menu".into(), "iris" => "Iris".into(), s => s.to_string() })
+    };
+    if l == Loader::Fabric {
+        if let Some(p) = netherpack::find(&sh.paths, "essentials") {
+            return p.mods.iter().filter(|m| *m != "fabric-api").map(|m| (m.clone(), name(m))).collect();
+        }
+    }
+    perf::catalog(l).iter().map(|b| (b.slug.to_string(), b.name.to_string())).collect()
+}
+
+/// Fill the check boxes under the Performance mods toggle, every one ticked (the toggle starts on).
+fn load_perf(ui: &AppWindow, sh: &Arc<Shared>, ver: &str, loader: i32) {
+    let l = loader_of(&ui.global::<Backend>(), ver, loader);
+    let rows: Vec<Row> = perf_list(sh, l).into_iter().map(|(id, name)| Row { id: id.into(), name: name.into(), on: true, ..Default::default() }).collect();
+    let n = ui.global::<NewInst>();
+    n.set_perf_all(!rows.is_empty());
+    n.set_perf_n(rows.len() as i32);
+    n.set_perf_mods(ModelRc::new(VecModel::from(rows)));
+}
+
+/// Tick or untick one box (`id`) or all of them (None). The toggle is on only while every box is ticked, so
+/// unticking one turns it off and ticking the last one turns it back on.
+fn perf_set(ui: &AppWindow, id: Option<&str>, on: bool) {
+    let n = ui.global::<NewInst>();
+    let m = n.get_perf_mods();
+    for k in 0..m.row_count() {
+        let Some(mut r) = m.row_data(k) else { continue };
+        if id.is_some_and(|id| r.id != id) || r.on == on { continue; }
+        r.on = on;
+        m.set_row_data(k, r);
+    }
+    let ticked = m.iter().filter(|r| r.on).count();
+    n.set_perf_n(ticked as i32);
+    n.set_perf_all(ticked > 0 && ticked == m.row_count());
 }
 
 /// Popular (or searched) mods for this version + loader, icons streamed in. Picks survive a new search.
@@ -157,6 +217,96 @@ fn load_mods(ui: &AppWindow, sh: &Arc<Shared>, ver: &str, loader: i32, query: &s
     });
 }
 
+/// A modpack's loader as the walkthrough names it, from its Modrinth categories ("" = none we know).
+fn pack_loader(loaders: &[String]) -> &'static str {
+    for (key, label) in [("fabric", "Fabric"), ("forge", "Forge"), ("neoforge", "NeoForge"), ("quilt", "Quilt")] {
+        if loaders.iter().any(|l| l == key) { return label; }
+    }
+    ""
+}
+
+/// Why the Nether client can't run in a modpack on this version + loader ("" = it can, or we can't tell yet).
+fn pack_why(mc: &str, loader: &str) -> String {
+    if mc.is_empty() || loader.is_empty() || instances::nether_ok(mc, loader) { return String::new(); }
+    format!("The Nether client doesn't run in {loader} packs on {mc}. It runs in Fabric and Forge packs on 1.14 or newer.")
+}
+
+/// MODPACK step: Modrinth modpacks, most downloaded first (or a search), icons streamed in.
+fn load_packs(ui: &AppWindow, sh: &Arc<Shared>, query: &str) {
+    let key = query.trim().to_string();
+    if PACK_SEARCH.with(|s| *s.borrow() == key) && ui.global::<NewInst>().get_packs().row_count() > 0 { return; }
+    PACK_SEARCH.with(|s| *s.borrow_mut() = key.clone());
+    ui.global::<NewInst>().set_packs_loading(true);
+    let (weak, sh) = (ui.as_weak(), sh.clone());
+    std::thread::spawn(move || {
+        let sort = if key.is_empty() { "downloads" } else { "relevance" };
+        let hits: Vec<_> = modrinth::search(&client(), &key, "modpack", "", None, sort, None).unwrap_or_default().into_iter().take(24).collect();
+        let rows: Vec<(String, String, String, String, String, String, String)> = hits.iter().map(|h| {
+            let l = pack_loader(&h.loaders);
+            // the row's left line: "1.21.11 · Fabric · <description>"; its right corner: downloads
+            let sub = [h.mc.as_str(), l, h.desc.as_str()].iter().filter(|s| !s.is_empty()).copied().collect::<Vec<_>>().join(" · ");
+            (h.id.clone(), h.title.clone(), sub, count(h.downloads), h.mc.clone(), l.to_string(), h.icon_url.clone())
+        }).collect();
+        let k2 = key.clone();
+        ui_do(&weak, move |ui| {
+            if PACK_SEARCH.with(|s| *s.borrow() != k2) { return; }
+            let rows: Vec<Row> = rows.iter().map(|(id, t, sub, dls, mc, l, icon)| {
+                let img = cached_icon(icon);
+                Row { id: id.as_str().into(), name: t.as_str().into(), sub: sub.as_str().into(), meta: dls.as_str().into(), mc: mc.as_str().into(),
+                    ver: l.as_str().into(), path: pack_why(mc, l).into(), has_icon: img.is_some(), icon: img.unwrap_or_default(), ..Default::default() }
+            }).collect();
+            let n = ui.global::<NewInst>();
+            n.set_packs_loading(false);
+            n.set_packs(ModelRc::new(VecModel::from(rows)));
+        });
+        for h in hits.into_iter().filter(|h| !h.icon_url.is_empty()) {
+            let (weak, sh, key) = (weak.clone(), sh.clone(), key.clone());
+            std::thread::spawn(move || {
+                let Some(px) = icon_px(&sh, &h.icon_url) else { return };
+                ui_do(&weak, move |ui| {
+                    if PACK_SEARCH.with(|s| *s.borrow() != key) { return; }
+                    let img = cached_icon(&h.icon_url).unwrap_or_else(|| icon_image(&h.icon_url, &px));
+                    update_rows(&ui.global::<NewInst>().get_packs(), &h.id, &|r| { r.icon = img.clone(); r.has_icon = true; });
+                });
+            });
+        }
+    });
+}
+
+/// Install a Modrinth modpack (its newest version) as a new instance, with the Nether client on or off, then play
+/// it when asked. The download runs in the background with a progress row; the instance appears when it is done.
+fn create_pack(ui: &AppWindow, sh: &Arc<Shared>, id: &str, title: &str, nether: bool, play: bool) -> bool {
+    if id.is_empty() { return false; }
+    let key = format!("pack:{id}");
+    let (weak, sh, id, title) = (ui.as_weak(), sh.clone(), id.to_string(), title.to_string());
+    let (w2, k2) = (weak.clone(), key.clone());
+    let prog: nether_core::Progress = Arc::new(move |m: &str, f: f32| { let (m, k) = (m.to_string(), k2.clone()); ui_do(&w2, move |ui| crate::job(ui, &k, &m, f)); });
+    prog(&format!("Installing {title}"), 0.0);
+    std::thread::spawn(move || {
+        let res = modpack::install_project(&client(), &sh.paths, &id, None, None, &prog);
+        ui_do(&weak, move |ui| {
+            crate::job_end(ui, &key);
+            match res {
+                Ok(mut data) => {
+                    data.nether = Some(nether);
+                    let name = data.name.clone();
+                    let b = ui.global::<Backend>();
+                    if let Some(v) = b.get_instances().as_any().downcast_ref::<VecModel<crate::Inst>>() {
+                        v.push(crate::inst_from(&data));
+                        crate::persist(&sh.paths, v);
+                    }
+                    crate::refilter(ui);
+                    crate::artui::refresh(ui, &sh);
+                    show_toast(ui, &sh, &format!("{title} is ready as {name}"));
+                    if play { b.invoke_play(name.into()); }
+                }
+                Err(e) => show_toast(ui, &sh, &format!("Modpack install failed: {e}")),
+            }
+        });
+    });
+    true
+}
+
 /// Pick or unpick a mod on screen.
 fn toggle(ui: &AppWindow, id: &str) {
     let n = ui.global::<NewInst>();
@@ -172,7 +322,7 @@ fn toggle(ui: &AppWindow, id: &str) {
 
 /// Make the instance, then download its mods and packs in the background (and play when asked).
 #[allow(clippy::too_many_arguments)]
-fn create(ui: &AppWindow, sh: &Arc<Shared>, name: &str, ver: &str, loader: i32, nether: bool, fast: bool, play: bool) -> bool {
+fn create(ui: &AppWindow, sh: &Arc<Shared>, name: &str, ver: &str, loader: i32, nether: bool, perf_mode: i32, play: bool) -> bool {
     let b = ui.global::<Backend>();
     let (name, ver) = (name.trim().to_string(), ver.to_string());
     let l = loader_of(&b, &ver, loader);
@@ -181,8 +331,14 @@ fn create(ui: &AppWindow, sh: &Arc<Shared>, name: &str, ver: &str, loader: i32, 
     crate::client::setup_instance(&sh.paths, &name, None);
     let mods: Vec<(String, String)> = if l == Loader::Vanilla { vec![] } else { ui.global::<NewInst>().get_picked().iter().map(|r| (r.id.to_string(), r.name.to_string())).collect() };
     let rps: Vec<(String, String)> = ui.global::<Wizard>().get_rps().iter().filter(|r| r.on).map(|r| (r.id.to_string(), r.name.to_string())).collect();
+    // the performance mods to add: all of them (quick setup), the ticked boxes (manual), or none
+    let boosts: Vec<String> = match perf_mode {
+        1 => perf_list(sh, l).into_iter().map(|(id, _)| id).collect(),
+        2 => ui.global::<NewInst>().get_perf_mods().iter().filter(|r| r.on).map(|r| r.id.to_string()).collect(),
+        _ => vec![],
+    };
     // Vanilla and Legacy Fabric (1.8.9 / 1.12.2) have no performance mods to add
-    let (wanted, fast) = (fast, fast && !perf::catalog(l).is_empty());
+    let (wanted, fast) = (!boosts.is_empty(), !boosts.is_empty() && !perf::catalog(l).is_empty());
     if !fast && mods.is_empty() && rps.is_empty() {
         if wanted && l != Loader::Vanilla { show_toast(ui, sh, &format!("No performance mods are made for {ver}")); }
         if play { b.invoke_play(name.into()); }
@@ -200,8 +356,10 @@ fn create(ui: &AppWindow, sh: &Arc<Shared>, name: &str, ver: &str, loader: i32, 
         if fast {
             prog("Adding performance mods", 0.0);
             if l == Loader::Fabric {
-                // the Nether Essentials pack (published by the backend, built-in copy as fallback)
-                if let Some(p) = netherpack::find(&sh.paths, "essentials") {
+                // the Nether Essentials pack (published by the backend, built-in copy as fallback), cut down to the
+                // ticked mods; Fabric API comes with it either way
+                if let Some(mut p) = netherpack::find(&sh.paths, "essentials") {
+                    p.mods.retain(|m| m == "fabric-api" || boosts.contains(m));
                     match netherpack::install(&c, &p, &ver, &mods_dir, &prog) {
                         Ok((ok, _)) => perf_none = ok.iter().all(|m| m == "fabric-api"),
                         Err(_) => perf_none = true,
@@ -209,8 +367,8 @@ fn create(ui: &AppWindow, sh: &Arc<Shared>, name: &str, ver: &str, loader: i32, 
                 }
             } else {
                 let mut any = false;
-                for bo in perf::catalog(l) {
-                    if perf::set(&c, &sh.paths, &name, l, &ver, bo.slug, true).is_ok() { any = true; }
+                for slug in &boosts {
+                    if perf::set(&c, &sh.paths, &name, l, &ver, slug, true).is_ok() { any = true; }
                 }
                 perf_none = !any;
             }
