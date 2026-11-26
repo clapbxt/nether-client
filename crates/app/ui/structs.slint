@@ -23,8 +23,6 @@ export struct MdBlock { kind: int, text: styled-text, plain: string, img: image,
 // an account cape (id "" = no cape); img = its outside face
 export struct Cape { id: string, name: string, img: image }
 
-// a Nether cosmetic card (hat, headband, mask, back, wings, aura, pet): picture rendered by the launcher (the player wearing it)
-export struct CosCard { id: string, name: string, kind: string, desc: string, img: image }
 // a saved Microsoft account (account panel); active = the one Play uses
 export struct Acct { uuid: string, name: string, active: bool }
 // Settings > Java: one major version, what the launcher will run for it (custom = picked by the user)
@@ -386,23 +384,17 @@ export global Backend {
     // the preview needs frames again (hover, tab change, new skin)
     callback skin-wake();
     callback equip-cape(int);
-    // Nether capes (backend cape directory): 0 not loaded, 1 loading, 2 ready, 3 service not set up / offline
-    in-out property <[Cape]> ncapes;
-    in-out property <int> ncape-state: 0;
+    // capes and cosmetics are all public items (community.slint lists them): what the account wears now, by id
+    // (cos-worn by slot: 0 hat, 1 headband, 2 mask, 3 back, 4 wings, 5 aura, 6 pet; "" = none)
     in-out property <string> ncape-worn;
-    callback load-ncapes();
-    callback wear-ncape(string);
-    // Nether cosmetics by slot (0 hat, 1 headband, 2 mask, 3 back, 4 wings, 5 aura, 6 pet): cards, worn ids, state as for capes
-    in-out property <[[CosCard]]> cos-items: [[], [], [], [], [], [], []];
     in-out property <[string]> cos-worn: ["", "", "", "", "", "", ""];
-    in-out property <int> cos-state: 0;
-    callback load-cos();
-    callback wear-cos(int, string);
     // a hovered card previews its cosmetic on the player ("" = the worn look)
     callback hover-cos(string);
-    // the look being picked (cards clicked, not applied): Nether cape, account cape index, cosmetics by slot;
-    // look-dirty = it differs from what is worn; APPLY sends it in one go, REFRESH re-reads capes + cosmetics
+    // the look being picked (cards clicked, not applied): public cape, account cape index, cosmetics by slot;
+    // look-dirty = it differs from what is worn; APPLY sends it in one go, REFRESH re-reads what is worn
     in-out property <string> ncape-sel;
+    // names of the picked public cape and cosmetics (0 cape, 1.. slots), for the preview footer
+    in-out property <[string]> look-names: ["", "", "", "", "", "", "", ""];
     in-out property <int> cape-sel: 0;
     in-out property <[string]> cos-sel: ["", "", "", "", "", "", ""];
     in-out property <bool> look-dirty;
@@ -485,7 +477,7 @@ export global Backend {
     // L2: Home news could not be fetched (the section is hidden); Settings section to scroll to (-1 none)
     in-out property <bool> news-failed;
     in-out property <int> settings-goto: -1;
-    // L2: Settings > Privacy: Nether capes in game (cape service lookups)
+    // L2: Settings > Privacy: capes and cosmetics in game (player service lookups)
     in-out property <bool> lp-capes: true;
     // L3: Discord Rich Presence (row hidden until a Discord app id is configured)
     in-out property <bool> lp-discord: false;
