@@ -845,14 +845,14 @@ final class Game {
     // ---------------------------------------------------------------- dev only: scripted input, timed snapshots, quit
 
     private static long joinNs;
-    private static String[] devKeys, devShots;
-    private static int keyIdx, shotIdx;
+    private static String[] devKeys, devShots, devMouse, devPages;
+    private static int keyIdx, shotIdx, mouseIdx, pageIdx;
     private static double devQuit = -1, lastT;
     private static double[] lastPos;
 
     /**
      * Seconds after the player first appeared in a world (with -Dnether.world, else after the first frame): -Dnether.keys=t:glfwKey:action,... (sent as real keyboard
-     * events), -Dnether.shots=t,... (snapshots), -Dnether.quitAt=t (the game's own quit, as the Quit button does).
+     * events), -Dnether.mouse / -Dnether.pages (scripted menu clicks and pages, see below), -Dnether.shots=t,... (snapshots), -Dnether.quitAt=t (the game's own quit, as the Quit button does).
      */
     static void devInput() {
         if (devKeys == null) {
@@ -860,10 +860,35 @@ final class Game {
             devKeys = k == null ? new String[0] : k.split(",");
             devShots = s == null ? new String[0] : s.split(",");
             devQuit = Double.parseDouble(System.getProperty("nether.quitAt", "-1"));
+            String mo = System.getProperty("nether.mouse"), pg = System.getProperty("nether.pages");
+            devMouse = mo == null ? new String[0] : mo.split(",");
+            devPages = pg == null ? new String[0] : pg.split(",");
         }
-        if (devKeys.length == 0 && devShots.length == 0 && devQuit < 0) return;
+        if (devKeys.length == 0 && devShots.length == 0 && devMouse.length == 0 && devPages.length == 0 && devQuit < 0) return;
         if (joinNs == 0) { if (player() == null && System.getProperty("nether.world") != null) return; joinNs = System.nanoTime(); } // no world: from the first frame
         double t = (System.nanoTime() - joinNs) / 1e9;
+        while (mouseIdx < devMouse.length) { // -Dnether.mouse=t:x:y:a (window px; a = m move, c click, r right click, d / u left down / up, w<n> wheel, k<text> typed)
+            String[] p = devMouse[mouseIdx].split(":");
+            if (Double.parseDouble(p[0]) > t) break;
+            mouseIdx++;
+            Input.mx = Double.parseDouble(p[1]);
+            Input.my = Double.parseDouble(p[2]);
+            String a = p[3];
+            if (a.equals("c") || a.equals("d")) Input.onButton(Input.window, 0, 1);
+            if (a.equals("c") || a.equals("u")) Input.onButton(Input.window, 0, 0);
+            if (a.equals("r")) { Input.onButton(Input.window, 1, 1); Input.onButton(Input.window, 1, 0); }
+            if (a.startsWith("w")) Input.scrollY += Double.parseDouble(a.substring(1));
+            if (a.startsWith("k")) Input.chars.append(a.substring(1)); // typed text
+            System.out.println("[nether-agent] dev t=" + p[0] + " mouse " + p[1] + "," + p[2] + " " + a);
+        }
+        while (pageIdx < devPages.length) { // -Dnether.pages=t:<module id, or - for the grid>
+            String[] p = devPages[pageIdx].split(":");
+            if (Double.parseDouble(p[0]) > t) break;
+            pageIdx++;
+            Menu.commitEdit();
+            Menu.page = p[1].equals("-") ? null : p[1];
+            Menu.scroll = Menu.scrollT = 0;
+        }
         while (keyIdx < devKeys.length) {
             String[] p = devKeys[keyIdx].split(":");
             if (Double.parseDouble(p[0]) > t) break;
