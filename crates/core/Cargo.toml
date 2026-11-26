@@ -5,15 +5,17 @@ edition = "2021"
 
 [features]
 # developer switches (offline launch via NETHER_DEV_OFFLINE, NETHER_AGENT jar override); never in shipped builds
-dev = []
+dev = ["nether-auth/dev"]
 
 [dependencies]
+nether-common = { path = "../common" }
+nether-net = { path = "../net" }
+nether-auth = { path = "../auth" }
 anyhow = "1"
 dirs = "5"
 flate2 = "1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
 hex = "0.4"
-keyring = { version = "3", features = ["windows-native"] }
 md5 = "0.7"
 rayon = "1"
 reqwest = { version = "0.12", features = ["blocking", "json", "multipart"] }
@@ -22,7 +24,6 @@ serde_json = "1"
 sha1 = "0.10"
 sha2 = "0.10"
 zip = { version = "9", default-features = false, features = ["deflate"] }
-igd-next = "0.18.0"
 base64 = "0.22"
 url = "2"
 ring = "0.17"

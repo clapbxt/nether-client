@@ -1,3 +1,4 @@
+#![deny(clippy::correctness, clippy::suspicious)]
 //! Microsoft account sign-in: OAuth device code -> Xbox Live -> XSTS -> Minecraft Services.
 //! The user signs in on microsoft.com themselves; we never see their password.
 //!
@@ -11,8 +12,8 @@ use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::paths::Paths;
-use crate::Session;
+use nether_common::paths::Paths;
+use nether_common::Session;
 
 const SCOPE: &str = "XboxLive.signin offline_access";
 const DEVICE_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
@@ -79,11 +80,11 @@ pub fn client_id(paths: &Paths) -> Option<String> {
     if let Ok(v) = std::env::var("NETHER_MS_CLIENT_ID") {
         if !v.trim().is_empty() { return Some(v.trim().to_string()); }
     }
-    let v = crate::store::config(paths);
+    let v = nether_common::store::config(paths);
     if let Some(id) = v.get("ms_client_id").and_then(|s| s.as_str()).map(str::trim).filter(|s| !s.is_empty()) {
         return Some(id.to_string());
     }
-    let _ = crate::store::update_config(paths, |o| { o.entry("ms_client_id").or_insert_with(|| json!(DEFAULT_CLIENT_ID)); });
+    let _ = nether_common::store::update_config(paths, |o| { o.entry("ms_client_id").or_insert_with(|| json!(DEFAULT_CLIENT_ID)); });
     Some(DEFAULT_CLIENT_ID.to_string())
 }
 
@@ -257,20 +258,20 @@ fn now_secs() -> u64 { std::time::SystemTime::now().duration_since(std::time::UN
 
 /// Saved accounts for display (empty when missing or unreadable; never moves or writes anything).
 pub fn accounts(paths: &Paths) -> Accounts {
-    crate::store::peek_json(&paths.root.join(ACCOUNTS_FILE)).unwrap_or_default()
+    nether_common::store::peek_json(&paths.root.join(ACCOUNTS_FILE)).unwrap_or_default()
 }
 
 /// Saved accounts before a change: an unreadable (locked) file is an error so it is never saved over;
 /// a damaged one is moved aside and the list starts empty.
 fn accounts_for_update(paths: &Paths) -> Result<Accounts> {
-    Ok(match crate::store::read_json::<Accounts>(&paths.root.join(ACCOUNTS_FILE))? {
-        crate::store::Load::Ok(a) => a,
+    Ok(match nether_common::store::read_json::<Accounts>(&paths.root.join(ACCOUNTS_FILE))? {
+        nether_common::store::Load::Ok(a) => a,
         _ => Accounts::default(),
     })
 }
 
 fn save_accounts(paths: &Paths, a: &Accounts) -> Result<()> {
-    crate::store::write_json(&paths.root.join(ACCOUNTS_FILE), a)
+    nether_common::store::write_json(&paths.root.join(ACCOUNTS_FILE), a)
 }
 
 fn secret_set(key: &str, v: &str) -> Result<()> {
@@ -440,7 +441,7 @@ pub fn record_ownership(paths: &Paths, profile: &Profile) -> Result<()> {
         uuid: profile.id.clone(),
         verified: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
     };
-    crate::store::write_json(&paths.root.join(ACCOUNT_FILE), &rec)
+    nether_common::store::write_json(&paths.root.join(ACCOUNT_FILE), &rec)
 }
 
 /// The cached ownership record, if any.
