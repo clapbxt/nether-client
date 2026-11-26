@@ -1010,14 +1010,6 @@ fn main() -> Result<(), slint::PlatformError> {
         backend.on_equip_cape(move |i| if let Some(ui) = weak.upgrade() { skin::equip(&ui, &sh, i) });
     }
     {
-        let (weak, sh) = (ui.as_weak(), shared.clone());
-        backend.on_load_ncapes(move || if let Some(ui) = weak.upgrade() { skin::load_ncapes(&ui, &sh) });
-        let (weak, sh) = (ui.as_weak(), shared.clone());
-        backend.on_wear_ncape(move |id| if let Some(ui) = weak.upgrade() { skin::wear_ncape(&ui, &sh, &id) });
-        let (weak, sh) = (ui.as_weak(), shared.clone());
-        backend.on_load_cos(move || if let Some(ui) = weak.upgrade() { skin::load_cosmetics(&ui, &sh) });
-        let (weak, sh) = (ui.as_weak(), shared.clone());
-        backend.on_wear_cos(move |slot, id| if let Some(ui) = weak.upgrade() { skin::wear_cosmetic(&ui, &sh, slot, &id) });
         backend.on_hover_cos(|id| skin::hover_cosmetic(&id));
         let (weak, sh) = (ui.as_weak(), shared.clone());
         backend.on_apply_look(move || if let Some(ui) = weak.upgrade() { skin::apply(&ui, &sh) });

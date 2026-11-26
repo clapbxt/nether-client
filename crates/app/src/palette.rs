@@ -54,7 +54,7 @@ const SECTIONS: [(&str, &str, &str); 7] = [
     ("Launcher", "GPU, start with Windows, tray, reduced motion", "tray startup minimize close gpu hardware acceleration motion"),
     ("Personalization", "Accent colour, text size, your icons and wallpapers", "theme colour color accent text size font icons wallpapers"),
     ("Storage & about", "Folders, download cache, updates, support", "folders cache disk updates version support logs"),
-    ("Privacy", "What the launcher and client connect to; Nether capes", "network telemetry capes endpoints data servers"),
+    ("Privacy", "What the launcher and client connect to; capes and cosmetics in game", "network telemetry capes cosmetics endpoints data servers"),
 ];
 
 fn statics(ui: &AppWindow) -> Vec<Item> {

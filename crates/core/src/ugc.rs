@@ -233,6 +233,31 @@ fn save_known(m: &HashMap<String, Item>) {
     let _ = crate::store::write_atomic(&known_file(), &serde_json::to_vec(&v.into_iter().take(300).collect::<Vec<_>>()).unwrap_or_default());
 }
 
+/// Hand the game agent the checksums of the community capes this player has (`<id> <sha256> <ms per frame>` per line,
+/// `-Dnether.capeSums`), so their own private uploads show in game; public ones the agent looks up itself.
+/// None when there are none.
+pub fn cape_sums_file() -> Option<std::path::PathBuf> {
+    let out: String = known_all().into_iter().filter(|i| i.what() == Some(What::Cape)).map(|it| format!("{} {} {}\n", it.id, it.png, it.frame_ms())).collect();
+    sums_file("cape-sums.txt", &out)
+}
+
+/// The same for cosmetics (`<id> <type> <model sha256> <png sha256> <ms per frame>` per line, `-Dnether.cosSums`).
+pub fn cosmetic_sums_file() -> Option<std::path::PathBuf> {
+    let out: String = known_all().into_iter().filter_map(|it| match (it.what(), it.model.as_deref()) {
+        (Some(What::Item(k)), Some(model)) => Some(format!("{} {} {model} {} {}\n", it.id, k.as_str(), it.png, it.frame_ms())),
+        _ => None,
+    }).collect();
+    sums_file("cosmetic-sums.txt", &out)
+}
+
+fn sums_file(name: &str, body: &str) -> Option<std::path::PathBuf> {
+    if body.is_empty() { return None; }
+    let f = cache_dir().join(name);
+    std::fs::create_dir_all(cache_dir()).ok()?;
+    crate::store::write_atomic(&f, body.as_bytes()).ok()?;
+    Some(f)
+}
+
 /// Keep these items' details (checksums) for the game.
 pub fn remember(items: &[Item]) {
     if items.is_empty() { return; }

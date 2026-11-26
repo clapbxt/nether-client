@@ -29,7 +29,7 @@ pub struct LauncherPrefs {
     pub theme: i32,
     /// reading-text size: 0 default, 1 large, 2 larger
     pub text: i32,
-    /// Nether capes in game (the agent looks up the players it sees at the cape service; off = no lookups)
+    /// Capes and cosmetics in game (the agent looks up the players it sees at the cape service; off = no lookups)
     pub capes: bool,
     /// Discord Rich Presence (local Discord app only; off by default)
     pub discord: bool,
@@ -74,7 +74,7 @@ pub fn save(paths: &Paths, p: &LauncherPrefs) -> anyhow::Result<()> {
     let was_on = load(paths).capes;
     let v: Value = serde_json::to_value(p)?;
     nether_core::store::update_config(paths, |o| { o.insert("launcher".into(), v); })?;
-    // turning Nether capes off deletes your entry at the cape service (now, or at the next sign-in)
+    // turning capes and cosmetics off deletes your entry at the cape service (now, or at the next sign-in)
     if was_on && !p.capes { crate::skin::forget_nether(paths, true); }
     Ok(())
 }
