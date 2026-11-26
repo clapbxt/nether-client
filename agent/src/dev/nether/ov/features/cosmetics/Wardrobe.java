@@ -26,8 +26,7 @@ import dev.nether.ov.ui.Th;
 
 /**
  * WARDROBE tab of the in-game menu: the player (software-rendered with the picked cape and cosmetics, drag to spin), a
- * grid of capes (None, public capes, Minecraft account capes) and of every cosmetic slot (all public items: players'
- * uploads and Nether's own). Clicks only pick (the preview shows the
+ * grid of capes (None, Nether capes, account capes) and of every cosmetic slot. Clicks only pick (the preview shows the
  * picks); APPLY sends the whole look at once, REFRESH asks for new capes / cosmetics, UPLOAD hands files picked here to the
  * launcher, which converts and uploads them as a community item (same as its own UPLOAD). The launcher owns the accounts and
  * the services, so this page only talks to it through files in {@code <client>/wardrobe/}: the launcher writes
@@ -38,20 +37,20 @@ public final class Wardrobe {
     private Wardrobe() {}
 
     private static final class Cape { String id, name, png, key; boolean account; BufferedImage img; }
-    /** a public cosmetic card (the launcher renders the picture; by = its creator) */
-    private static final class Cos { String id, name, type, by, key; BufferedImage img; }
+    /** a Nether cosmetic card (the launcher renders the picture) */
+    private static final class Cos { String id, name, type, key; BufferedImage img; }
     private static final List<Cos> cosmetics = new ArrayList<>();
     /** shown category: 0 capes, 1.. = Cosmetics.SLOTS + 1 */
     private static int cat;
     private static final String[] CATS = {"CAPES", "HATS", "HEADBANDS", "MASKS", "BACK", "WINGS", "AURAS", "PETS"};
     private static final String[] KINDS = {"Hat", "Headband", "Mask", "Back item", "Wings", "Aura", "Pet"};
 
-    private static final List<Cape> pub = new ArrayList<>(), account = new ArrayList<>();
+    private static final List<Cape> nether = new ArrayList<>(), account = new ArrayList<>();
     /** applied (from the launcher) */
-    private static String publicWorn = "", accountWorn = "", uuid = "";
+    private static String netherWorn = "", accountWorn = "", uuid = "";
     private static final String[] worn = {"", "", "", "", "", "", ""};
     /** picked here, not applied yet */
-    private static String pPublic = "", pAccount = "";
+    private static String pNether = "", pAccount = "";
     private static final String[] picked = {"", "", "", "", "", "", ""};
     private static boolean slim, loaded;
     private static BufferedImage skin;
@@ -75,12 +74,12 @@ public final class Wardrobe {
     private static Path dir() { return Data.dir("wardrobe"); }
 
     private static boolean dirty() {
-        if (!pPublic.equals(publicWorn) || !pAccount.equals(accountWorn)) return true;
+        if (!pNether.equals(netherWorn) || !pAccount.equals(accountWorn)) return true;
         for (int i = 0; i < worn.length; i++) if (!picked[i].equals(worn[i])) return true;
         return false;
     }
 
-    private static boolean capeDirty() { return !pPublic.equals(publicWorn) || !pAccount.equals(accountWorn); }
+    private static boolean capeDirty() { return !pNether.equals(netherWorn) || !pAccount.equals(accountWorn); }
 
     /** picks that differ from what is applied (the cape counts once) */
     private static int changes() {
@@ -90,7 +89,7 @@ public final class Wardrobe {
     }
 
     private static void pickApplied() {
-        pPublic = publicWorn;
+        pNether = netherWorn;
         pAccount = accountWorn;
         System.arraycopy(worn, 0, picked, 0, worn.length);
     }
@@ -113,17 +112,17 @@ public final class Wardrobe {
             mtime = now;
             Map<?, ?> st = (Map<?, ?>) o;
             boolean clean = !loaded || !dirty();
-            pub.clear();
+            nether.clear();
             account.clear();
             uuid = str(st.get("uuid"));
             slim = Boolean.TRUE.equals(st.get("slim"));
-            publicWorn = str(st.get("publicWorn"));
+            netherWorn = str(st.get("netherWorn"));
             accountWorn = str(st.get("accountWorn"));
             Map<?, ?> cw = st.get("cosmetics") instanceof Map ? (Map<?, ?>) st.get("cosmetics") : null;
             for (int i = 0; i < worn.length; i++) worn[i] = cw == null ? "" : str(cw.get(Cosmetics.SLOTS[i]));
             loadCosmetics(st.get("items"));
             skin = read(f.resolveSibling(str(st.get("skin"))));
-            fill(st.get("nether"), pub, false); // key from before the catalog merge
+            fill(st.get("nether"), nether, false);
             fill(st.get("account"), account, true);
             loaded = true;
             if (refreshAt != 0 && now >= refreshAt) { refreshAt = 0; say("Up to date", true); }
@@ -144,13 +143,13 @@ public final class Wardrobe {
     private static String str(Object o) { return o instanceof String ? (String) o : ""; }
 
     /**
-     * The public cape the signed-in player wears, from the launcher's state (dashless uuid; null = not this player
+     * The Nether cape the signed-in player wears, from the launcher's state (dashless uuid; null = not this player
      * or no state yet). Capes draws your own cape from this, so it shows the moment it is applied, API or not.
      */
-    public static String ownCape(String uuidNoDash) {
+    public static String ownNetherCape(String uuidNoDash) {
         reload();
         if (!loaded || uuidNoDash == null || !uuidNoDash.equalsIgnoreCase(uuid.replace("-", ""))) return null;
-        return publicWorn;
+        return netherWorn;
     }
 
     /** Your worn cosmetics (dashless uuid) from the launcher's state, null = not this player / no state. */
@@ -198,7 +197,6 @@ public final class Wardrobe {
             c.id = str(m.get("id"));
             c.name = str(m.get("name"));
             c.type = str(m.get("type"));
-            c.by = str(m.get("by"));
             c.key = "wd.cos." + c.id + "." + mtime;
             c.img = read(dir().resolve(png));
             if (c.img != null) cosmetics.add(c);
@@ -223,7 +221,7 @@ public final class Wardrobe {
     /** APPLY: the whole picked look in one request (the launcher sends only what changed). */
     private static void apply() {
         Map<String, Object> look = new LinkedHashMap<>();
-        look.put("nether", pPublic);
+        look.put("nether", pNether);
         look.put("account", pAccount);
         Map<String, Object> c = new LinkedHashMap<>();
         for (int i = 0; i < picked.length; i++) c.put(Cosmetics.SLOTS[i], picked[i]);
@@ -349,8 +347,8 @@ public final class Wardrobe {
         }
         // the picked cape (a hovered tile previews its own)
         Cape pc = null;
-        for (Cape c : pub) if (c.id.equals(pPublic)) pc = c;
-        if (pc == null && pPublic.isEmpty()) for (Cape c : account) if (c.id.equals(pAccount)) pc = c;
+        for (Cape c : nether) if (c.id.equals(pNether)) pc = c;
+        if (pc == null && pNether.isEmpty()) for (Cape c : account) if (c.id.equals(pAccount)) pc = c;
         BufferedImage shownCape = hover != null ? hover : pc == null ? null : pc.img;
         // the picked cosmetics, a hovered card replacing its slot
         Cosmetics.Item[] cos = new Cosmetics.Item[picked.length];
@@ -442,9 +440,9 @@ public final class Wardrobe {
         }
         top += 36;
         if (cat > 0) { cosGrid(gx, gw, top, bottom, wheel); return; }
-        int total = 1 + pub.size() + account.size();
-        // rows: None + public capes first, then a header, then account capes
-        int nRow = (1 + pub.size() + 3) / 4, aRow = (account.size() + 3) / 4;
+        int total = 1 + nether.size() + account.size();
+        // rows: None + nether first, then a header, then account capes
+        int nRow = (1 + nether.size() + 3) / 4, aRow = (account.size() + 3) / 4;
         float contentH = 26 + nRow * (th + gap) + (account.isEmpty() ? 0 : 30 + aRow * (th + gap));
         float viewH = bottom - top;
         float maxS = Math.max(0, contentH - viewH);
@@ -452,21 +450,21 @@ public final class Wardrobe {
         gridScroll = Config.calm() ? gridScrollT : gridScroll + (gridScrollT - gridScroll) * Math.min(1, Gfx.dt * 16);
         Menu.beginClip(gx - 6, top, gw + 12, viewH);
         float y = top - gridScroll;
-        Gfx.text(Gfx.MONO, 9, gx, y + 8, Th.mut, "PUBLIC CAPES", false, 1.6f);
+        Gfx.text(Gfx.MONO, 9, gx, y + 8, Th.mut, "NETHER CAPES", false, 1.6f);
         y += 26;
-        tile(0, null, gx, y, tw, th, pPublic.isEmpty() && pAccount.isEmpty(), publicWorn.isEmpty() && accountWorn.isEmpty());
-        for (int i = 0; i < pub.size(); i++) {
+        tile(0, null, gx, y, tw, th, pNether.isEmpty() && pAccount.isEmpty(), netherWorn.isEmpty() && accountWorn.isEmpty());
+        for (int i = 0; i < nether.size(); i++) {
             int slot = i + 1;
-            Cape c = pub.get(i);
-            tile(slot, c, gx + (slot % 4) * (tw + gap), y + (slot / 4) * (th + gap), tw, th, c.id.equals(pPublic), c.id.equals(publicWorn));
+            Cape c = nether.get(i);
+            tile(slot, c, gx + (slot % 4) * (tw + gap), y + (slot / 4) * (th + gap), tw, th, c.id.equals(pNether), c.id.equals(netherWorn));
         }
         y += nRow * (th + gap);
         if (!account.isEmpty()) {
-            Gfx.text(Gfx.MONO, 9, gx, y + 8, Th.mut, "MINECRAFT CAPES", false, 1.6f);
+            Gfx.text(Gfx.MONO, 9, gx, y + 8, Th.mut, "ACCOUNT CAPES", false, 1.6f);
             y += 30;
             for (int i = 0; i < account.size(); i++) {
                 Cape c = account.get(i);
-                tile(100 + i, c, gx + (i % 4) * (tw + gap), y + (i / 4) * (th + gap), tw, th, pPublic.isEmpty() && c.id.equals(pAccount), c.id.equals(accountWorn));
+                tile(100 + i, c, gx + (i % 4) * (tw + gap), y + (i / 4) * (th + gap), tw, th, pNether.isEmpty() && c.id.equals(pAccount), c.id.equals(accountWorn));
             }
         }
         Menu.endClip();
@@ -474,7 +472,7 @@ public final class Wardrobe {
             float bh = Math.max(30, viewH * viewH / contentH);
             Gfx.rect(px + Menu.PW - 12, top + (viewH - bh) * (gridScroll / maxS), 3, bh, 1.5f, Gfx.a(Th.ov, 0.16f));
         }
-        if (total == 1 && account.isEmpty()) Gfx.text(Gfx.UI, 12, gx, top + 40 + th, Th.dim, "No capes yet. Public capes load in the launcher.");
+        if (total == 1 && account.isEmpty()) Gfx.text(Gfx.UI, 12, gx, top + 40 + th, Th.dim, "No capes yet. Nether capes load in the launcher.");
     }
 
     /** Cards of one cosmetic slot: None first, then every cosmetic of that type (picture rendered by the launcher). */
@@ -511,7 +509,7 @@ public final class Wardrobe {
             }
             String name = c == null ? "NONE" : Menu.fit(c.name, Gfx.SEMI, 11, tw - 16, 0.4f);
             Gfx.text(Gfx.SEMI, 11, x + 9, y + th - 26, eq ? Th.tx : Gfx.mix(Th.dim, Th.tx, t), name, false, 0.4f);
-            String sub = eq ? (on ? "Equipped" : "Selected") : on ? "Equipped now" : c == null ? "Nothing in this slot" : c.by.isEmpty() ? KINDS[si] : "by " + c.by;
+            String sub = eq ? (on ? "Equipped" : "Selected") : on ? "Equipped now" : c == null ? "Nothing in this slot" : KINDS[si];
             Gfx.text(Gfx.UI, 10, x + 9, y + th - 10.5f, eq ? Th.ac2 : Th.mut, sub);
             if (eq) {
                 Gfx.rect(x + tw - 24, y + 8, 16, 16, 8, Th.ac);
@@ -610,8 +608,8 @@ public final class Wardrobe {
     }
 
     private static void choose(Cape c) {
-        if (c == null) { pPublic = ""; pAccount = ""; }                        // NONE: no public cape, account cape hidden
-        else if (c.account) { pPublic = ""; pAccount = c.id; }                // an account cape shows only without a public one
-        else pPublic = c.id.equals(pPublic) ? "" : c.id;                      // a public cape (again = take it off)
+        if (c == null) { pNether = ""; pAccount = ""; }                        // NONE: no Nether cape, account cape hidden
+        else if (c.account) { pNether = ""; pAccount = c.id; }                // an account cape shows only without a Nether one
+        else pNether = c.id.equals(pNether) ? "" : c.id;                      // a Nether cape (again = take it off)
     }
 }

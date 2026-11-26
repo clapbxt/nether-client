@@ -26,22 +26,20 @@ import dev.nether.ov.ui.Gfx;
 import dev.nether.ov.ui.Icons;
 
 /**
- * Capes + nametag icon for Nether players. No rendering code: 1.20.2+ wraps each PlayerInfo's skin supplier so
+ * Nether capes + nametag icon for Nether players. No rendering code: 1.20.2+ wraps each PlayerInfo's skin supplier so
  * vanilla's own cape layer draws our texture (it replaces the vanilla cape); 1.8.9 sets NetworkPlayerInfo's cape location.
  * Player.decorateDisplayNameComponent (1.8.9: getDisplayName) is hooked (Agent) to prefix the icon glyph (U+E000: font
  * nether:icon, 1.8.9: unicode page e0; both from the launcher's built-in pack), and chat lines sent by a Nether player
  * get it in front (Agent hooks the chat HUD's add-message methods). The badge is always shown. Who: -Dnether.capeApi
- * (GET /v1/players?p= hash prefixes -> {sha256: look}, matched here). Every cape is a public community item (Ugc ids;
- * Nether's own are uploads credited to "Nether"): what it is and its file come from the API, your own (private ones
- * too) with their checksums from the launcher (-Dnether.capeSums). Fetched off the render thread. -Dnether.capeDev=(id)
- * puts that cape on every player (testing the drawing). Cape PNGs (same rule as core backend.rs / the Worker's ugc.js):
- * frames of 64:32 (cape + elytra) or 22:17 (cape only: drawn into the 64:32 layout over the game's own elytra
- * texture), any whole scale
+ * (GET /v1/players?p= hash prefixes -> {sha256: cape id or ""}, matched here), textures from
+ * -Dnether.capeContent (/capes/(id).png), fetched off the render thread. -Dnether.capeDev=(id) puts that cape on
+ * every player (testing without the API). Cape PNGs (same rule as core backend.rs / content sign.mjs): frames of 64:32
+ * (cape + elytra) or 22:17 (cape only: drawn into the 64:32 layout over the game's own elytra texture), any whole scale
  * (HD), stacked vertically = animated (ms per frame from the sums file); each frame is its own texture and the skin
  * supplier (1.8.9: the cape location, every frame) picks the current one.
  */
 public final class Capes {
-    static final String API = trim(System.getProperty("nether.capeApi"));
+    static final String API = trim(System.getProperty("nether.capeApi")), CONTENT = trim(System.getProperty("nether.capeContent"));
     private static final String DEV = System.getProperty("nether.capeDev");
     /** re-ask about a player this often: the API answers only for launchers running now (issue #21), so leaving / joining shows within minutes */
     private static final long REQUERY_MS = 2 * 60_000L;
@@ -59,7 +57,7 @@ public final class Capes {
     private static final int MAX_PNG = 4 * 1024 * 1024, MAX_API = 256 * 1024;
     /** ms per animation frame by cape id (from the sums file; default 100) */
     private static final Map<String, Integer> MS = new ConcurrentHashMap<>();
-    /** your own capes' sha256s from the launcher (-Dnether.capeSums: "id sha256 ms" lines) */
+    /** verified cape sha256s from the launcher (-Dnether.capeSums: "id sha256 ms" lines, from the signed content manifest) */
     private static final Map<String, String> SUMS = sums();
     /** every cape texture we registered (identity: 1.8.9 takes ours off by spotting it) */
     private static final java.util.Set<Object> ours = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
@@ -162,7 +160,7 @@ public final class Capes {
 
     /** Render thread, every frame. */
     public static void tick() {
-        if (off || API == null) return;
+        if (off || CONTENT == null || (API == null && DEV == null)) return;
         if (!legacyAnim.isEmpty()) {
             try { for (Map.Entry<Object, Anim> e : legacyAnim.entrySet()) { Object f = e.getValue().now(); if (capeField.get(e.getKey()) != f) capeField.set(e.getKey(), f); } }
             catch (Throwable t) { legacyAnim.clear(); }
@@ -188,7 +186,7 @@ public final class Capes {
                     if (nm == null) nm = Game.call(prof, "name"); // authlib 7: record
                     if (nm instanceof String) names.put(uuid, (String) nm);
                 }
-                String own = DEV != null ? null : Wardrobe.ownCape(uuid);
+                String own = DEV != null ? null : Wardrobe.ownNetherCape(uuid);
                 String id = DEV != null ? DEV : own != null ? own : worn.get(uuid);
                 if (API != null && DEV == null) {
                     Long t = asked.get(uuid);
@@ -303,20 +301,21 @@ public final class Capes {
         if (b == null) {
             Long r = retryAt.get(id);
             String sum = SUMS.get(id);
-            // every cape is a community item: yours come with checksums, the API says what the others are
-            if (!Ugc.is(id)) { retryAt.put(id, Long.MAX_VALUE); return null; }
-            if ((r == null || System.currentTimeMillis() >= r) && fetching.putIfAbsent(id, true) == null)
+            boolean ugc = Ugc.is(id);
+            // not in the signed manifest (nor a community cape: the API says what those are)
+            if (sum == null && DEV == null && !(ugc && API != null)) { retryAt.put(id, System.currentTimeMillis() + 3_600_000L); return null; }
+            if ((r == null || System.currentTimeMillis() >= r) && id.matches("[a-z0-9_-]+") && fetching.putIfAbsent(id, true) == null)
                 worker(() -> {
                     try {
                         String want = sum;
-                        if (want == null) {
+                        if (ugc && want == null) {
                             String[] m = Ugc.meta(id);
                             if (m == null || !"cape".equals(m[0])) { retryAt.put(id, System.currentTimeMillis() + 3_600_000L); return; }
                             want = m[2];
                             MS.put(id, Integer.parseInt(m[3]));
                         }
-                        byte[] d = Ugc.blob(want, MAX_PNG);
-                        if (!want.equals(sha256(d))) throw new IllegalStateException("hash mismatch");
+                        byte[] d = ugc ? Ugc.blob(want, MAX_PNG) : get(CONTENT + "/capes/" + id + ".png", MAX_PNG);
+                        if (want != null && !want.equals(sha256(d))) throw new IllegalStateException("hash mismatch");
                         if (!pngSane(d)) throw new IllegalStateException("bad cape size");
                         if (d.length < 8 || (d[0] & 255) != 0x89 || d[1] != 'P' || d[2] != 'N' || d[3] != 'G') throw new IllegalStateException("not a PNG");
                         png.put(id, frames(d, legacy));
@@ -372,24 +371,26 @@ public final class Capes {
     private static final Map<String, Boolean> previewAsked = new ConcurrentHashMap<>();
 
     /**
-     * A cape's first frame in the 64:32 layout, for lobby / preview models (downloaded on the worker and checked like
-     * worn capes); null while it loads or when it isn't a public (or your own) cape.
+     * A Nether cape's first frame in the 64:32 layout, for lobby / preview models (downloaded on the worker and checked
+     * against the signed manifest like worn capes); null while it loads or when it isn't a catalog cape.
      */
     public static java.awt.image.BufferedImage previewImage(String id) {
-        if (!Ugc.is(id) || API == null) return null;
+        if (id == null || !id.matches("[a-z0-9_-]{1,32}")) return null;
         java.awt.image.BufferedImage b = preview.get(id);
         if (b != null) return b;
         String sum = SUMS.get(id);
-        if (previewAsked.putIfAbsent(id, true) != null) return null;
+        // community capes (a party member's upload) are not in the signed manifest: the player API says what they are
+        boolean ugc = sum == null && Ugc.is(id) && API != null;
+        if ((sum == null || CONTENT == null) && !ugc || previewAsked.putIfAbsent(id, true) != null) return null;
         worker(() -> {
             try {
                 String want = sum;
-                if (want == null) {
+                if (ugc) {
                     String[] m = Ugc.meta(id);
                     if (m == null || !"cape".equals(m[0])) return; // not public (stays asked for the session)
                     want = m[2];
                 }
-                byte[] d = Ugc.blob(want, MAX_PNG);
+                byte[] d = ugc ? Ugc.blob(want, MAX_PNG) : get(CONTENT + "/capes/" + id + ".png", MAX_PNG);
                 if (!want.equals(sha256(d))) return;
                 java.awt.image.BufferedImage img = Icons.decode(new ByteArrayInputStream(d));
                 int[] l = img == null ? null : layout(img.getWidth(), img.getHeight());

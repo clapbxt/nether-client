@@ -35,10 +35,9 @@ import dev.nether.agent.Hook;
  * generated subclass of RenderLayer (Agent.layerClass) that emits our geometry through the game's own buffers
  * (submitCustomGeometry / MultiBufferSource, translucent entity render type), so lighting, shaders (Iris), depth and
  * every pose come from the game; 1.8.9 gets a LayerRenderer proxy drawing with immediate GL inside the entity pass.
- * No game or renderer class is patched. Every cosmetic is a public community item (Ugc ids; Nether's own are uploads
- * credited to "Nether"): what it is and its files come from the player API, your own (private ones too) with their
- * checksums from the launcher (-Dnether.cosSums: "id type modelSha256 pngSha256 msPerFrame" per line), who wears
- * what from the player API (Capes, v2) and your own look from the launcher's wardrobe state. Dev: -Dnether.cosDev=hat:id,aura:id,... puts that look on every player.
+ * No game or renderer class is patched. Models and sprite sheets come from the signed content (-Dnether.cosSums:
+ * "id type modelSha256 pngSha256 msPerFrame" per line), who wears what from the player API (Capes, v2) and your own
+ * look from the launcher's wardrobe state. Dev: -Dnether.cosDev=hat:id,aura:id,... puts that look on every player.
  */
 public final class Cosmetics {
     private Cosmetics() {}
@@ -55,8 +54,7 @@ public final class Cosmetics {
     private static final long T0 = System.nanoTime();
 
     public static final class Entry { String id, type, modelSha, pngSha; public int ms = 100; }
-    /** your own items' checksums (-Dnether.cosSums) */
-    private static final Map<String, Entry> OWN = own();
+    private static final Map<String, Entry> CAT = catalog();
     private static final String[] DEV = dev();
 
     /** A downloaded, verified, parsed cosmetic; its texture is registered on the render thread. */
@@ -82,14 +80,14 @@ public final class Cosmetics {
     /** uuid (no dashes) -> {hat, headband, aura} (null = none), from the player API. */
     private static final Map<String, String[]> looks = new ConcurrentHashMap<>();
 
-    private static Map<String, Entry> own() {
+    private static Map<String, Entry> catalog() {
         Map<String, Entry> m = new HashMap<>();
         String p = System.getProperty("nether.cosSums");
         if (p == null || p.trim().isEmpty()) return m;
         try {
             for (String l : java.nio.file.Files.readAllLines(java.nio.file.Paths.get(p), StandardCharsets.UTF_8)) {
                 String[] t = l.trim().split(" ");
-                if (t.length < 4 || !Ugc.is(t[0]) || !t[1].matches(String.join("|", SLOTS)) || !t[2].matches("[0-9a-f]{64}") || !t[3].matches("[0-9a-f]{64}")) continue;
+                if (t.length < 4 || !t[0].matches("[a-z0-9_-]{1,32}") || !t[1].matches(String.join("|", SLOTS)) || !t[2].matches("[0-9a-f]{64}") || !t[3].matches("[0-9a-f]{64}")) continue;
                 Entry e = new Entry();
                 e.id = t[0]; e.type = t[1]; e.modelSha = t[2]; e.pngSha = t[3];
                 if (t.length > 4 && t[4].matches("\\d{2,4}")) e.ms = Math.max(20, Math.min(2000, Integer.parseInt(t[4])));
@@ -157,22 +155,24 @@ public final class Cosmetics {
         Item it = ready.get(id);
         if (it != null) return type.equals(it.e.type) ? it : null;
         if (dead.contains(id) || parsed.containsKey(id)) return null; // parsed: its texture is made at the next frame end (tick)
-        if (!Ugc.is(id) || Capes.API == null) return null;
-        Entry own = OWN.get(id);
+        Entry cat = CAT.get(id);
+        // community items (Ugc): yours come with hashes from the launcher, others' are looked up at the player API
+        boolean ugc = Ugc.is(id);
+        if (ugc ? Capes.API == null : cat == null || Capes.CONTENT == null) return null;
         Long r = retryAt.get(id);
         if ((r == null || System.currentTimeMillis() >= r) && fetching.putIfAbsent(id, true) == null) {
             Capes.worker(() -> {
                 try {
-                    Entry e = own;
+                    Entry e = cat;
                     if (e == null) {
                         String[] m = Ugc.meta(id);
                         if (m == null || m[1] == null || !type.equals(m[0])) { retryAt.put(id, System.currentTimeMillis() + 3_600_000L); return; }
                         e = new Entry();
                         e.id = id; e.type = m[0]; e.modelSha = m[1]; e.pngSha = m[2]; e.ms = Integer.parseInt(m[3]);
                     }
-                    byte[] js = Ugc.blob(e.modelSha, MAX_MODEL);
+                    byte[] js = ugc ? Ugc.blob(e.modelSha, MAX_MODEL) : Capes.get(Capes.CONTENT + "/cosmetics/" + id + ".json", MAX_MODEL);
                     if (!e.modelSha.equals(sha256(js))) throw new IllegalStateException("model hash mismatch");
-                    byte[] png = Ugc.blob(e.pngSha, MAX_PNG);
+                    byte[] png = ugc ? Ugc.blob(e.pngSha, MAX_PNG) : Capes.get(Capes.CONTENT + "/cosmetics/" + id + ".png", MAX_PNG);
                     if (!e.pngSha.equals(sha256(png))) throw new IllegalStateException("texture hash mismatch");
                     Item x = new Item(e);
                     Object json = Json.parse(new String(js, StandardCharsets.UTF_8));
@@ -250,7 +250,7 @@ public final class Cosmetics {
 
     /** Overlay frame: keep our layer on the player renderers (they are rebuilt on resource reload), map entity ids. */
     public static void tick() {
-        if (off || DEV == null && Capes.API == null && !SkinLayers.M.enabled()) return;
+        if (off || CAT.isEmpty() && DEV == null && Capes.API == null && !SkinLayers.M.enabled()) return;
         long t = System.currentTimeMillis();
         try {
             boolean legacy = Game.legacy();
