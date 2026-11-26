@@ -28,7 +28,8 @@ jobs:
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
       - name: Build the agent
-        run: ./gradlew -p agent build --console=plain
+        working-directory: agent
+        run: ./gradlew build --console=plain
       - uses: actions/upload-artifact@v4
         with:
           name: agent
