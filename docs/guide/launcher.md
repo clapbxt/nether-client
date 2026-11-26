@@ -47,7 +47,7 @@ players. See [Friends, parties and world invites](friends.md).
 | **Launcher** | Hardware acceleration, start with Windows, what the launcher does when a game starts, whether the close button quits or hides to the tray, reduced motion, interface sounds. |
 | **Personalization** | Accent colour, text size, and Dark or Light theme. The theme also applies to the in-game menu. |
 | **Storage & About** | Open your data folders, clear the download cache, check for updates, beta updates, and **Support** (open logs, **Copy system info** for bug reports). |
-| **Privacy** | Turn Nether capes in game and Discord status on or off, and see every online service the launcher uses. |
+| **Privacy** | Turn capes and cosmetics in game and Discord status on or off, and see every online service the launcher uses. |
 
 ## Keyboard shortcuts
 
