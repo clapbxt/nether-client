@@ -25,7 +25,7 @@ final class GlCompat extends GlBackend {
     private static final String VS = "#version 120\n"
         + "attribute vec2 pos; attribute vec2 uv; attribute vec4 col; attribute vec2 loc; attribute vec4 par; uniform vec2 res; uniform mat3 map;\n"
         + "varying vec2 vuv; varying vec4 vcol; varying vec2 vloc; varying vec4 vpar;\n"
-        + "void main(){ vec3 q = map * vec3(pos, 1.0); vec2 p = q.xy / res * 2.0 - 1.0; gl_Position = vec4(p.x * q.z, -p.y * q.z, 0.0, q.z); vuv = uv; vcol = col; vloc = loc; vpar = par; }";
+        + "void main(){ vec3 q = map * vec3(pos, 1.0); vec2 p = q.xy / q.z / res * 2.0 - 1.0; gl_Position = vec4(p.x * q.z, -p.y * q.z, 0.0, q.z); vuv = uv; vcol = col; vloc = loc; vpar = par; }";
     private static final String FS = "#version 120\n"
         + "varying vec2 vuv; varying vec4 vcol; varying vec2 vloc; varying vec4 vpar; uniform sampler2D tex; uniform sampler2D img;\n"
         + "void main(){ float a; vec4 c = vcol;\n"

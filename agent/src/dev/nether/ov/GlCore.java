@@ -20,7 +20,7 @@ final class GlCore extends GlBackend {
     private static final String VS = "#version 150 core\n"
         + "in vec2 pos; in vec2 uv; in vec4 col; in vec2 loc; in vec4 par; uniform vec2 res; uniform mat3 map;\n"
         + "out vec2 vuv; out vec4 vcol; out vec2 vloc; out vec4 vpar;\n"
-        + "void main(){ vec3 q = map * vec3(pos, 1.0); vec2 p = q.xy / res * 2.0 - 1.0; gl_Position = vec4(p.x * q.z, -p.y * q.z, 0.0, q.z); vuv = uv; vcol = col; vloc = loc; vpar = par; }";
+        + "void main(){ vec3 q = map * vec3(pos, 1.0); vec2 p = q.xy / q.z / res * 2.0 - 1.0; gl_Position = vec4(p.x * q.z, -p.y * q.z, 0.0, q.z); vuv = uv; vcol = col; vloc = loc; vpar = par; }";
     private static final String FS = "#version 150 core\n"
         + "in vec2 vuv; in vec4 vcol; in vec2 vloc; in vec4 vpar; uniform sampler2D tex; uniform sampler2D img; out vec4 o;\n"
         + "void main(){ float a; vec4 c = vcol;\n"

@@ -6,7 +6,7 @@ package dev.nether.ov;
  * the next draw through {@link #clicked}. Presses only land while the cursor is free: our menu is open and its panel did
  * not use the click, or a game screen is up (chat, inventory). A press that lands is swallowed, its release too, so the
  * game never sees it. In plain gameplay (cursor grabbed) nothing is routed: a widget can never take an attack or use
- * click. Frames without widgets cost one comparison.
+ * click. Frames without widgets cost one comparison. (The 3D lyric panel keeps its own crosshair-aimed hit list.)
  */
 final class Hits {
     private Hits() {}
@@ -19,18 +19,14 @@ final class Hits {
     private static int pendingBtn;
     private static long pendingAt;
     private static float pendingX, clickX;
-    private static boolean worldPanel, panelPointerValid, buildingWorldPanel, lastWorldPanel;
-    private static float panelX, panelY;
 
     /** Overlay, once per frame before drawing: this frame's boxes become the ones presses are matched against. */
     static void frame() {
-        if (n == 0 && lastN == 0 && pending == null) { lastWorldPanel = buildingWorldPanel; buildingWorldPanel = false; return; }
+        if (n == 0 && lastN == 0 && pending == null) return;
         System.arraycopy(ids, 0, seen, 0, n);
         System.arraycopy(cur, 0, last, 0, n * 4);
         lastN = n;
         n = 0;
-        lastWorldPanel = buildingWorldPanel;
-        buildingWorldPanel = false;
         if (pending != null && Game.frame - pendingAt > 3) pending = null; // nobody drew that widget any more
     }
 
@@ -38,23 +34,12 @@ final class Hits {
     static boolean free() { return Input.menuOpen || Input.worldGuiOpen || Game.screenOpen(); }
 
     /** Cursor position in framebuffer pixels. */
-    private static float mx() { return worldPanel ? (panelPointerValid ? panelX : -10000) : (float) (Input.mx * Gfx.fbW / Input.ww); }
-    private static float my() { return worldPanel ? (panelPointerValid ? panelY : -10000) : (float) (Input.my * Gfx.fbH / Input.wh); }
-
-    /** The world panel owns pointer coordinates while it is being drawn; its hits are local panel pixels. */
-    static void beginWorldPanel(float x, float y, boolean valid) {
-        n = 0; // discard screen-space HUD hit boxes; the world panel is the active modal surface
-        worldPanel = true;
-        buildingWorldPanel = true;
-        panelX = x; panelY = y; panelPointerValid = valid;
-    }
-
-    static void endWorldPanel() { worldPanel = false; }
+    private static float mx() { return (float) (Input.mx * Gfx.fbW / Input.ww); }
+    private static float my() { return (float) (Input.my * Gfx.fbH / Input.wh); }
 
     static void clear() {
         n = lastN = 0;
         pending = null;
-        worldPanel = panelPointerValid = buildingWorldPanel = lastWorldPanel = false;
     }
 
     /**
@@ -68,29 +53,20 @@ final class Hits {
             int i = n++ * 4;
             cur[i] = px; cur[i + 1] = py; cur[i + 2] = pw; cur[i + 3] = ph;
         }
-        if (!free() && !(worldPanel && LyricsWorldPanel.visible())) return false;
+        if (!free()) return false;
         float cx = mx(), cy = my();
         return cx >= px && cy >= py && cx < px + pw && cy < py + ph;
     }
 
     /** Mouse press b (0 left, 1 right, 2 middle) at the cursor; true = it hit a widget and is swallowed. */
     static boolean press(int b) {
-        if (lastN == 0 || lastWorldPanel || !free()) return false;
+        if (lastN == 0 || !free()) return false;
         return pressAt(b, mx(), my());
     }
 
-    /** Matches a screen event against the last frame's panel-local hit boxes. */
+    /** Matches a screen event against the last frame's hit boxes. */
     static boolean pressAt(int b, float x, float y) {
-        return pressAt(b, x, y, false);
-    }
-
-    /** World-panel controls are aimed with the crosshair while gameplay keeps its normal cursor mode. */
-    static boolean pressWorldPanelAt(int b, float x, float y) {
-        return lastWorldPanel && pressAt(b, x, y, LyricsWorldPanel.visible());
-    }
-
-    private static boolean pressAt(int b, float x, float y, boolean worldPanelInput) {
-        if (lastN == 0 || (!free() && !worldPanelInput)) return false;
+        if (lastN == 0 || !free()) return false;
         for (int k = lastN - 1; k >= 0; k--) { // topmost (drawn last) first
             int i = k * 4;
             if (x >= last[i] && y >= last[i + 1] && x < last[i] + last[i + 2] && y < last[i + 1] + last[i + 3]) {

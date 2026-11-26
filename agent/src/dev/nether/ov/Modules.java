@@ -334,7 +334,7 @@ final class Modules {
         boolean world = Input.inWorld() && !Game.hudHidden();
         if (WAYPOINTS.enabled() && world) WAYPOINTS.drawMarkers(fbW, fbH);
         if (TntTimer.M.enabled() && world) TntTimer.M.drawWorld(fbW, fbH);
-        if (LYRICS.enabled() && world) LYRICS.drawWorld(fbW, fbH);
+        if (LYRICS.enabled() && world || Menu.live == LYRICS && Game.playing()) LYRICS.drawWorld(fbW, fbH); // the menu's world preview too
         if (LYRICS.enabled() && Input.inWorld() && (world || LyricsWorldPanel.visible() || Input.worldGuiOpen)) LyricsWorldPanel.draw(fbW, fbH);
         SELFTAG.drawWorld(fbW, fbH, SELFTAG.enabled() && world);
         if (world) { Toast.draw(fbW); SHOTS.drawCard(fbW); menuHint(fbW); }

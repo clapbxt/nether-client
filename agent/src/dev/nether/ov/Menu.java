@@ -66,7 +66,7 @@ final class Menu {
     static int tDir; // screen swipe: -1 from the left (Settings), 1 from the right (Wardrobe), 0 rises (Mods / hub)
 
     /** Eased 0..1 for an animation of dur seconds starting delay seconds into timer t. */
-    private static float k(float t, float delay, float dur) {
+    static float k(float t, float delay, float dur) {
         float x = Math.max(0, Math.min(1, (t - delay) / dur));
         return 1 - (1 - x) * (1 - x) * (1 - x);
     }
@@ -248,6 +248,15 @@ final class Menu {
         scroll = scrollT = 0;
         fCur = -1;
         capture = null;
+    }
+
+    /** Opens the menu straight on a module's settings page (the 3D lyric panel's MENU button). */
+    static void openModule(String id) {
+        Input.setMenu(true);
+        if (!Input.menuOpen) return;
+        hub = false;
+        if (tab >= T_WARDROBE) setTab(1);
+        openPage(id);
     }
 
     private static void openPage(String id) {
@@ -494,7 +503,7 @@ final class Menu {
         Gfx.rect(x + 3 + 16 * t, y + 3, 14, 14, 7, Gfx.mix(Th.dim, 0xFFFFFFFF, t));
     }
 
-    private static double slider(String id, float x, float y, float w, double v, double min, double max, double step) {
+    static double slider(String id, float x, float y, float w, double v, double min, double max, double step) {
         boolean hv = in(x - 6, y - 10, w + 12, 20) || id.equals(drag);
         float t = an(id, hv);
         if (click && in(x - 6, y - 10, w + 12, 20)) { drag = id; click = false; }
@@ -658,7 +667,8 @@ final class Menu {
                 }
                 if (live != null && !liveOk(live)) live = null;
                 dev.nether.agent.Hook.fireForce = live instanceof Views.Fire;
-                if (live != null) liveEdit(e, wheel);
+                if (live instanceof Lyrics) LyricsStudio.live((Lyrics) live, e, wheel);
+                else if (live != null) liveEdit(e, wheel);
                 else if (Screenshots.open) Screenshots.drawBrowser(e, wheel);
                 else if (PackBrowser.open) PackBrowser.draw(e, wheel);
                 else if (PackMixer.open) PackMixer.draw(e, wheel);
@@ -1027,14 +1037,14 @@ final class Menu {
     private static final float CARD_H = 132, GAP = 10, CARD_MIN = 172;
 
     /** Scrolls the view to the wheel within [0, contentH - viewH]; returns the max scroll. */
-    private static float scrollTo(float contentH, float viewH, float wheel) {
+    static float scrollTo(float contentH, float viewH, float wheel) {
         float maxS = Math.max(0, contentH - viewH);
         scrollT = Math.max(0, Math.min(maxS, scrollT - wheel * 46));
         scroll = Config.calm() ? scrollT : scroll + (scrollT - scroll) * Math.min(1, Gfx.dt * 16);
         return maxS;
     }
 
-    private static void scrollBar(float lx, float top, float lw, float viewH, float contentH, float maxS) {
+    static void scrollBar(float lx, float top, float lw, float viewH, float contentH, float maxS) {
         if (maxS <= 0) return;
         float th = Math.max(30, viewH * viewH / contentH);
         Gfx.rect(lx + lw - 8, top + (viewH - th) * (scroll / maxS), 3, th, 1.5f, Gfx.a(Th.ov, 0.16f));
@@ -1049,6 +1059,7 @@ final class Menu {
         if (page != null) {
             Module pm = null;
             for (Module m : Modules.all) if (m.id.equals(page)) pm = m;
+            if (pm instanceof Lyrics) { navCols = 1; LyricsStudio.page((Lyrics) pm, lx, top, lw, viewH, wheel); return; }
             if (pm != null) {
                 navCols = 1;
                 float contentH = 16 + ROW + expH(pm);
@@ -1163,7 +1174,7 @@ final class Menu {
     }
 
     /** One list row: icon box, name + description, star, key chip, toggle. Click the name = settings, the pill = on / off. */
-    private static void row(Module m, float x, float y, float w, boolean f, boolean open) {
+    static void row(Module m, float x, float y, float w, boolean f, boolean open) {
         boolean on = m.enabled(), lock = m.locked();
         float hv0 = in(x, y, w, ROW) ? 1 : 0;
         float t = an("r" + m.id, hv0 > 0), o = an("ro" + m.id, open), on1 = an("on" + m.id, on);
@@ -1220,7 +1231,8 @@ final class Menu {
     /** A view module that can be edited over the running game (in a world, its hook in place). */
     static boolean liveOk(Module m) {
         return (m instanceof Views.Fire || m instanceof Views.Shield || m instanceof Views.Hand || m instanceof Views.Ride)
-            && Game.player0() != null && !MainMenu.title && m.available();
+            && Game.player0() != null && !MainMenu.title && m.available()
+            || m instanceof Lyrics && Game.player0() != null && !MainMenu.title && m.available();
     }
 
     private static boolean liveDrag;
@@ -1334,10 +1346,14 @@ final class Menu {
 
     /** The setting rows of module m from y; returns the y after them. */
     private static float settingRows(Module m, float lx, float y, float lw) {
+        for (int si = 0; si < m.settings.size(); si++) if (m.row(si)) y = settingRow(m, m.settings.get(si), lx, y, lw);
+        return y;
+    }
+
+    /** One setting row of module m at y (header, toggle, slider, colour, choice, key, text, action); returns the y after it. */
+    static float settingRow(Module m, Setting s, float lx, float y, float lw) {
         float rowH = SROW;
-        for (int si = 0; si < m.settings.size(); si++) {
-            Setting s = m.settings.get(si);
-            if (!m.row(si)) continue;
+        {
             float xr = lx + lw, rh = rowH;
             if (s.t == Setting.HEADER) {
                 if (s.fold != null) { // folding group: the whole row opens / closes it
@@ -1347,8 +1363,7 @@ final class Menu {
                     if (hit(lx - 4, y + 3, lw + 8, rowH - 6) || used(f) != 0) { if (op) Setting.open.remove(s.fold); else Setting.open.add(s.fold); }
                 } else Gfx.text(Gfx.UI, 10, lx, y + rowH - 14, Th.mut, s.label.toUpperCase(Locale.ROOT), false, 1.2f);
                 Gfx.rect(lx, y + rowH - 1, lw, 1, 0, Th.ln2);
-                y += rowH;
-                continue;
+                return y + rowH;
             }
             boolean f = focus(lx - 4, y + 3, lw + 8, rowH - 6);
             Gfx.text(Gfx.UI, 12, lx, y + rowH / 2 - (s.hint != null ? 7 : 0), Th.tx, s.label);

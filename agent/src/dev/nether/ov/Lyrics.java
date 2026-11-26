@@ -187,6 +187,22 @@ final class Lyrics extends Module {
     /** Lyric fonts: Nether's two weights, then Gfx's lyric display faces in order. */
     private static final String[] FONT_NAMES = {"Semibold", "Regular", "Righteous", "Bebas Neue", "Poppins", "Lilita One", "Pacifico", "Kaushan Script", "Marker", "Neon script", "Monoton"};
 
+    /** Settings shown instead of the saved ones while a preview card draws (font, theme, style...); null = none. */
+    private Map<String, Object> peek;
+
+    @Override boolean bool(String k) { Object v = peek == null ? null : peek.get(k); return v instanceof Boolean ? (Boolean) v : super.bool(k); }
+    @Override double num(String k) { Object v = peek == null ? null : peek.get(k); return v instanceof Number ? ((Number) v).doubleValue() : super.num(k); }
+    @Override String str(String k) { Object v = peek == null ? null : peek.get(k); return v instanceof String ? (String) v : super.str(k); }
+
+    static String[] themeNames() { return THEME_NAMES; }
+    static String[] fontNames() { return FONT_NAMES; }
+    /** Text, first and second glow colour of theme name (Album / HUD / Custom resolve like the lyrics do). */
+    int[] themeColors(String name) {
+        Map<String, Object> was = peek;
+        peek = java.util.Collections.singletonMap("preset", name);
+        try { return new int[] {color(), glowColor(), glowColor2()}; } finally { peek = was; }
+    }
+
     @Override int color() {
         String p = str("preset");
         if (p.equals("Album")) return albumColor();
@@ -332,6 +348,27 @@ final class Lyrics extends Module {
     private Map<String, Object> profiles() {
         Object p = Config.raw(id, "profiles");
         return p instanceof Map ? new LinkedHashMap<>((Map<String, Object>) p) : new LinkedHashMap<>();
+    }
+
+    /** The look saved in profile slot (setting -> value), null when the slot is empty. */
+    @SuppressWarnings("unchecked")
+    Map<String, Object> savedLook(String slot) { Object o = profiles().get(slot); return o instanceof Map ? new LinkedHashMap<>((Map<String, Object>) o) : null; }
+
+    /** Runs action setting key (Search again, Save look...). */
+    void run(String key) { Setting s = setting(key); if (s != null && s.run != null) s.run.run(); }
+
+    /** One line on where the lyrics stand, for the settings page. */
+    String statusText() {
+        if (Media.cur == null) return "No music playing";
+        switch (state) {
+            case LOADING: return "Searching lyrics...";
+            case SYNCED: return quality >= Q_WORD_STARTS && quality <= Q_WORDS ? "Synced word by word" : "Synced line by line";
+            case PLAIN: return "Unsynced lyrics";
+            case INSTRUMENTAL: return "Instrumental";
+            case NOT_FOUND: return "No lyrics found";
+            case OFFLINE: return "Lyrics unavailable";
+            default: return "Waiting for the player";
+        }
     }
 
     private void saveProfile() {
@@ -1063,7 +1100,10 @@ final class Lyrics extends Module {
     }
 
     /** Lyrics clock in seconds (smoothed player position plus the lead, minus the offsets). */
-    private double now() { return clock() + LEAD - (num("offset") + trackOffset()) / 1000.0; }
+    private double now() {
+        if (demoOn) return (System.nanoTime() - demoNs) / 1e9 % DEMO_LEN;
+        return clock() + LEAD - (num("offset") + trackOffset()) / 1000.0;
+    }
 
     /** Index of the line being sung at time t (-1 before the first). Plain lyrics: spread evenly over the track. */
     private int index(double t) {
@@ -1562,8 +1602,18 @@ final class Lyrics extends Module {
         return Math.min(n, 5);
     }
 
-    /** HUD loop, in play: the words floating in the world. */
+    /** HUD loop, in play: the words floating in the world (a demo song while the menu's world preview has no music). */
     void drawWorld(int fbW, int fbH) {
+        boolean demoNow = Menu.live == this && !(Media.cur != null && Media.cur.playing && (state == SYNCED || state == PLAIN));
+        if (demoNow != demoOn) { clearWorld(); demoNs = System.nanoTime(); demoT = -1; }
+        if (!demoNow) { demoOn = false; drawWorld0(fbW, fbH); return; }
+        if (demo == null) demo = demoSong();
+        swap();
+        demoOn = true;
+        try { drawWorld0(fbW, fbH); } finally { swap(); }
+    }
+
+    private void drawWorld0(int fbW, int fbH) {
         if (mode() == 0) { noWorld = false; clearWorld(); return; }
         float prev = Gfx.s;
         Gfx.s = Gfx.base;
@@ -1575,7 +1625,13 @@ final class Lyrics extends Module {
         camX = c[0]; camY = c[1]; camZ = c[2]; camYaw = c[3]; camPitch = c[4];
         long nowMs = System.currentTimeMillis();
         Media.State s = Media.cur;
-        boolean playing = s != null && s.playing;
+        boolean playing = demoOn || s != null && s.playing;
+        if (demoOn) { // the demo loops; each lap opens with the track intro, as a new song would
+            double dt = now();
+            if (dt < demoT) clearWorld();
+            if (dt < demoT || demoT < 0) { trackIntroAt = nowMs; introTitle = "Lights Over the City"; introArtist = "Nether preview"; }
+            demoT = dt;
+        }
         boolean lyricData = state == SYNCED || state == PLAIN;
         int idx = lyricData ? index(now()) : -1;
         boolean brk = lyricData && idx >= 0 && idx < texts.length && texts[idx].isEmpty(); // a break between lines
@@ -1847,63 +1903,286 @@ final class Lyrics extends Module {
 
     /** Every piece, furthest first: it springs up into place when sung, sung words light up, and it shrinks as it fades. */
     private void draw(long now, double[] c, int fbW, int fbH, float W, float H) {
-        boolean follow = bool("follow"), calm = Config.calm();
-        float glow = (float) num("glow") / 100, outline = (float) num("outline") / 100;
-        float blurS = calm ? 0 : (float) num("blur") / 100, bounce = calm ? 0 : (float) num("motion") / 100;
-        boolean pvpAir = wStyle().equals("Air") && str("airMode").equals("PvP");
-        boolean beat = bool("beatGlow") && !pvpAir;
-        if (pvpAir) { glow = 0; outline = 0; blurS = 0; bounce = 0; }
-        plainWords = pvpAir;
-        float speed = Math.max(0.25f, (float) num("animSpeed"));
-        float opacity = (float) num("opacity") / 100;
-        boolean riseOnEnter = str("appear").equals("Rise"), popOnEnter = str("appear").equals("Pop"), neonOnEnter = str("appear").equals("Neon");
-        String exit = str("disappear");
-        int col = color();
+        boolean follow = bool("follow");
+        Fx f = fx();
         double tanY = Math.tan(Math.toRadians(c[5]) / 2), u = unit();
         ArrayList<Piece> order = new ArrayList<>(pieces);
         order.sort((a, b) -> { double[] p = pos(a, follow), q = pos(b, follow); return Double.compare(d2(q[0], q[1], q[2], c[0], c[1], c[2]), d2(p[0], p[1], p[2], c[0], c[1], c[2])); });
-        {
-            for (Piece p : order) {
-                if (now < p.at[0]) continue;
-                float appear = calm ? 1 : Math.max(0, Math.min(1, (now - p.at[0]) * speed / (float) APPEAR));
-                float fade = now < p.fadeAt ? 0 : Math.max(0, Math.min(1, (now - p.fadeAt) * speed / (float) FADE));
-                float alpha = easeOutCubic(appear) * (1 - fade) * opacity;
-                float pop = popOnEnter ? (1 - 0.6f * bounce * (1 - easeOutBack(appear, 2))) * (1 - 0.15f * fade) : 1;
-                if (neonOnEnter && !calm) { // a sign lighting up: quick on, two flickers, settling from a little larger
-                    float ms = (now - p.at[0]) * speed;
-                    float flick = ms < 230 && ((int) (ms / 38 + p.seed)) % 3 == 1 ? 0.3f : 1;
-                    alpha = Math.min(1, ms / 90f) * flick * (1 - fade) * opacity;
-                    pop = (1 + 0.22f * bounce * (1 - easeOutCubic(Math.min(1, ms / 240f)))) * (1 - 0.15f * fade);
-                }
-                if (alpha < 0.02f) continue;
-                float blur = blurS * Math.max(1 - appear, fade);
-                double rise = riseOnEnter ? -0.4 * bounce * (1 - easeOutCubic(appear)) : 0;
-                double drift = exit.equals("Drift") ? Math.sin(now / 700.0 + p.seed) * 0.05 * bounce * fade : 0;
-                double floatUp = exit.equals("Float up") ? 0.32 * fade : 0;
-                double[] q = pos(p, follow);
-                if (!Project.to(q[0], q[1] + rise + drift + floatUp, q[2]) || Project.depth < 1 || Math.abs(Project.nx) > 1.3 || Math.abs(Project.ny) > 1.3) continue;
-                alpha *= Math.min(1, (float) (Project.depth - 1) / 1.5f); // walked into: fades instead of filling the screen
-                if (alpha < 0.02f) continue;
-                float ax = Project.sx(W) * Gfx.base, ay = Project.sy(H) * Gfx.base; // framebuffer px
-                double fpx = u * p.fit * pop * fbH / (2 * Project.depth * tanY); // framebuffer px per font px
-                if (fpx < 0.25) continue;
-                boolean karaoke = p.w.length > 1;
-                int cur = -1;
-                if (karaoke) for (int i = 0; i < p.w.length; i++) if (now >= p.at[i]) cur = i;
-                float x = -fontW(p.w) / 2, sp = fw(" ");
-                for (int i = 0; i < p.w.length; i++) {
-                    float ww = fw(p.w[i]), a = alpha, pulse = 1;
-                    boolean lit = now >= p.at[i] && (now < p.until[i] || i == cur);
-                    if (karaoke && !lit) a *= now < p.at[i] ? 0.45f : 0.7f;
-                    else if (karaoke && beat) { float t = Math.max(0, Math.min(1, (now - p.at[i]) / 250f)); if (t < 1) pulse += 0.12f * bounce * (float) Math.sin(t * Math.PI); }
-                    float hold = beat ? held(p, i, now) : 0;
-                    pulse *= 1 + 0.1f * bounce * hold;
-                    word(p.w[i], ax + (float) ((x + ww / 2) * fpx), ay, (float) (REF / 2 * fpx * pulse * wordScale(p.w[i])), a, blur, col, glow, outline, 1 + 0.8f * hold);
-                    x += ww + sp;
-                }
-                if (bool("stars") || bool("motes") || bool("streaks")) ambient(ax, ay, p.seed, now, alpha, skyMode());
-            }
+        for (Piece p : order) {
+            float[] a = anim(p, now, f);
+            if (a == null) continue;
+            double[] q = pos(p, follow);
+            if (!Project.to(q[0], q[1] + a[3], q[2]) || Project.depth < 1 || Math.abs(Project.nx) > 1.3 || Math.abs(Project.ny) > 1.3) continue;
+            float alpha = a[0] * Math.min(1, (float) (Project.depth - 1) / 1.5f); // walked into: fades instead of filling the screen
+            if (alpha < 0.02f) continue;
+            float ax = Project.sx(W) * Gfx.base, ay = Project.sy(H) * Gfx.base; // framebuffer px
+            double fpx = u * p.fit * a[1] * fbH / (2 * Project.depth * tanY); // framebuffer px per font px
+            if (fpx < 0.25) continue;
+            drawPiece(p, now, f, ax, ay, fpx, alpha, a[2]);
         }
+    }
+
+    /** Effect settings of one frame, shared by the world renderer and its previews. */
+    private static final class Fx {
+        boolean calm, beat, rise, pop, neonIn;
+        float glow, outline, blurS, bounce, speed, opacity;
+        String exit;
+        int col;
+    }
+
+    private Fx fx() {
+        Fx f = new Fx();
+        f.calm = Config.calm();
+        f.glow = (float) num("glow") / 100; f.outline = (float) num("outline") / 100;
+        f.blurS = f.calm ? 0 : (float) num("blur") / 100; f.bounce = f.calm ? 0 : (float) num("motion") / 100;
+        boolean pvpAir = wStyle().equals("Air") && str("airMode").equals("PvP");
+        f.beat = bool("beatGlow") && !pvpAir;
+        if (pvpAir) { f.glow = 0; f.outline = 0; f.blurS = 0; f.bounce = 0; }
+        plainWords = pvpAir;
+        f.speed = Math.max(0.25f, (float) num("animSpeed"));
+        f.opacity = (float) num("opacity") / 100;
+        f.rise = str("appear").equals("Rise"); f.pop = str("appear").equals("Pop"); f.neonIn = str("appear").equals("Neon");
+        f.exit = str("disappear");
+        f.col = color();
+        return f;
+    }
+
+    /** {alpha, size, blur, lift in blocks} of piece p at now (entrance, exit), null while it is not shown. */
+    private float[] anim(Piece p, long now, Fx f) {
+        if (now < p.at[0]) return null;
+        float appear = f.calm ? 1 : Math.max(0, Math.min(1, (now - p.at[0]) * f.speed / (float) APPEAR));
+        float fade = now < p.fadeAt ? 0 : Math.max(0, Math.min(1, (now - p.fadeAt) * f.speed / (float) FADE));
+        float alpha = easeOutCubic(appear) * (1 - fade) * f.opacity;
+        float pop = f.pop ? (1 - 0.6f * f.bounce * (1 - easeOutBack(appear, 2))) * (1 - 0.15f * fade) : 1;
+        if (f.neonIn && !f.calm) { // a sign lighting up: quick on, two flickers, settling from a little larger
+            float ms = (now - p.at[0]) * f.speed;
+            float flick = ms < 230 && ((int) (ms / 38 + p.seed)) % 3 == 1 ? 0.3f : 1;
+            alpha = Math.min(1, ms / 90f) * flick * (1 - fade) * f.opacity;
+            pop = (1 + 0.22f * f.bounce * (1 - easeOutCubic(Math.min(1, ms / 240f)))) * (1 - 0.15f * fade);
+        }
+        if (alpha < 0.02f) return null;
+        float blur = f.blurS * Math.max(1 - appear, fade);
+        double rise = f.rise ? -0.4 * f.bounce * (1 - easeOutCubic(appear)) : 0;
+        double drift = f.exit.equals("Drift") ? Math.sin(now / 700.0 + p.seed) * 0.05 * f.bounce * fade : 0;
+        double floatUp = f.exit.equals("Float up") ? 0.32 * fade : 0;
+        return new float[] {alpha, pop, blur, (float) (rise + drift + floatUp)};
+    }
+
+    /** Piece p with its centre at (ax, ay) framebuffer px, fpx px per font px: sung words lit, pulsing, held notes glowing. */
+    private void drawPiece(Piece p, long now, Fx f, float ax, float ay, double fpx, float alpha, float blur) {
+        boolean karaoke = p.w.length > 1;
+        int cur = -1;
+        if (karaoke) for (int i = 0; i < p.w.length; i++) if (now >= p.at[i]) cur = i;
+        float x = -fontW(p.w) / 2, sp = fw(" ");
+        for (int i = 0; i < p.w.length; i++) {
+            float ww = fw(p.w[i]), a = alpha, pulse = 1;
+            boolean lit = now >= p.at[i] && (now < p.until[i] || i == cur);
+            if (karaoke && !lit) a *= now < p.at[i] ? 0.45f : 0.7f;
+            else if (karaoke && f.beat) { float t = Math.max(0, Math.min(1, (now - p.at[i]) / 250f)); if (t < 1) pulse += 0.12f * f.bounce * (float) Math.sin(t * Math.PI); }
+            float hold = f.beat ? held(p, i, now) : 0;
+            pulse *= 1 + 0.1f * f.bounce * hold;
+            word(p.w[i], ax + (float) ((x + ww / 2) * fpx), ay, (float) (REF / 2 * fpx * pulse * wordScale(p.w[i])), a, blur, f.col, f.glow, f.outline, 1 + 0.8f * hold);
+            x += ww + sp;
+        }
+        if (bool("stars") || bool("motes") || bool("streaks")) ambient(ax, ay, p.seed, now, alpha, skyMode());
+    }
+
+    // ---------------------------------------------------------------- previews: the world renderer itself, in cards
+
+    /** How the demo line sits in a preview card. */
+    static final int PV_WORD = 0, PV_AIR = 1, PV_SKY = 2, PV_WALLS = 3, PV_ROW = 4, PV_LINES = 5, PV_STILL = 6;
+    static final String PV_TEXT = "Lights come up over the city tonight";
+    private static final long PV_STEP = 330, PV_HOLD = 1100, PV_GAP = 650;
+    /** Air preview spots (fractions of the card from its centre), in the order words take them. */
+    private static final float[][] AIR_SPOTS = {{-0.3f, -0.2f}, {-0.08f, 0.17f}, {0.14f, -0.24f}, {0.33f, 0.12f}, {-0.32f, 0.24f}, {0.06f, -0.02f}, {0.3f, -0.3f}, {-0.14f, -0.32f}};
+
+    /** Layout of the World layout setting value (Air, Sky, Walls, Row, Lines). */
+    static int pvLayout(String wStyle) {
+        switch (wStyle) { case "Sky": return PV_SKY; case "Walls": return PV_WALLS; case "Row": return PV_ROW; case "Lines": return PV_LINES; default: return PV_AIR; }
+    }
+
+    /**
+     * Text drawn by the world lyric renderer (entrance, glow, Neon split, outline, pulse, exit: the same code as in the
+     * world) inside a card centred on (cx, cy), w x h, words size px tall; all in framebuffer px (or a 3D panel's px).
+     * Layouts other than PV_STILL loop every few seconds. over: settings shown instead of the saved ones (may be null).
+     */
+    void preview(int layout, String text, float cx, float cy, float w, float h, float size, Map<String, Object> over) {
+        Map<String, Object> was = peek;
+        if (over != null) peek = over;
+        boolean pw = plainWords;
+        try { preview0(layout, text, cx, cy, w, h, size); } finally { peek = was; plainWords = pw; }
+    }
+
+    private void preview0(int layout, String text, float cx, float cy, float w, float h, float size) {
+        Fx f = fx();
+        long now = System.currentTimeMillis();
+        String[] ws = disp(text).trim().split("\\s+");
+        if (layout == PV_AIR && bool("pairWords")) ws = paired(ws);
+        int n = ws.length;
+        if (n == 0 || ws[0].isEmpty()) return;
+        double fpx = 2 * size / REF;
+        if (layout == PV_STILL) {
+            long[] at = new long[n], until = new long[n];
+            java.util.Arrays.fill(at, now - 60_000);
+            java.util.Arrays.fill(until, now + 60_000);
+            Piece p = piece(ws, at, until, 7);
+            p.stamped = false;
+            fpx = Math.min(fpx, w * 0.92 / Math.max(1, fontW(ws)));
+            drawPiece(p, now, f, cx, cy, fpx, f.opacity, 0);
+            return;
+        }
+        long step = (long) (PV_STEP / Math.max(0.5f, Math.min(1.6f, f.speed))), sung = step * n;
+        long period = 250 + sung + PV_HOLD + (long) (FADE / f.speed) + PV_GAP;
+        long base = now - (now % period) + 250, fadeAt = base + sung + PV_HOLD;
+        long[] at = new long[n], until = new long[n];
+        for (int i = 0; i < n; i++) { at[i] = base + i * step; until[i] = at[i] + step; }
+        float total = fontW(ws), sp = fw(" ");
+        if (layout == PV_LINES || layout == PV_WORD) { // one piece: a karaoke line (dim until sung) or a single word
+            fpx = Math.min(fpx, w * 0.9 / Math.max(1, total));
+            Piece p = piece(ws, at, until, 3);
+            p.fadeAt = fadeAt;
+            drawAnimated(p, now, f, cx, cy, fpx);
+            return;
+        }
+        if (layout == PV_AIR) { // scattered like Air: across the view, alternately above and below the middle, never on top of each other
+            double fit = Math.min(fpx, w * 0.3 / Math.max(1, maxW(ws)));
+            for (int i = 0; i < n; i++) {
+                Piece p = piece(new String[] {ws[i]}, new long[] {at[i]}, new long[] {until[i]}, 11 + i);
+                p.fadeAt = Math.min(fadeAt, at[i] + Math.max(MIN_LIFE, step * 3));
+                float[] spot = AIR_SPOTS[i % AIR_SPOTS.length];
+                double k = fit * (0.85 + 0.25 * ((i * 37) % 10) / 10.0);
+                drawAnimated(p, now, f, cx + spot[0] * w, cy + spot[1] * h, k);
+            }
+            return;
+        }
+        // Row, Walls, Sky: one piece per word along a line, each appearing as it is sung
+        boolean sky = layout == PV_SKY, curve = layout == PV_WALLS || bool("curve") && sky;
+        if (sky) fpx *= 0.8;
+        fpx = Math.min(fpx, w * 0.9 / Math.max(1, total));
+        float lineY = sky ? cy - h * 0.18f : cy, x = -total / 2;
+        for (int i = 0; i < n; i++) {
+            float ww = fw(ws[i]);
+            double o = (x + ww / 2) * fpx;
+            float bend = curve ? (float) (Math.pow(o / Math.max(1, total * fpx / 2), 2) * size * (layout == PV_WALLS ? 0.9 : 0.5)) : 0;
+            Piece p = piece(new String[] {ws[i]}, new long[] {at[i]}, new long[] {until[i]}, 21 + i);
+            p.fadeAt = fadeAt;
+            drawAnimated(p, now, f, cx + (float) o, lineY + bend, fpx);
+            x += ww + sp;
+        }
+    }
+
+    private void drawAnimated(Piece p, long now, Fx f, float x, float y, double fpx) {
+        float[] a = anim(p, now, f);
+        if (a == null) return;
+        double pxPerBlock = fpx / unit();
+        drawPiece(p, now, f, x, y - (float) (a[3] * pxPerBlock), fpx * a[1], a[0], a[2]);
+    }
+
+    private Piece piece(String[] ws, long[] at, long[] until, float seed) {
+        Piece p = new Piece();
+        p.w = ws; p.at = at; p.until = until; p.seed = seed; p.fit = 1; p.stamped = true;
+        return p;
+    }
+
+    private float maxW(String[] ws) { float m = 0; for (String w : ws) m = Math.max(m, fw(w)); return m; }
+
+    /** Air's pairing: short words ride with the next one, stray punctuation trimmed (as setLine does). */
+    private static String[] paired(String[] ws) {
+        ArrayList<String> out = new ArrayList<>();
+        for (int k = 0; k < ws.length; k++) {
+            String w = trimWord(ws[k]);
+            if (w.isEmpty()) continue;
+            if (w.replaceAll("[^\\p{L}\\p{N}]", "").length() <= 3 && k + 1 < ws.length) {
+                String nx = trimWord(ws[k + 1]);
+                if (!nx.isEmpty()) { w = w + " " + nx; k++; }
+            }
+            out.add(w);
+        }
+        return out.toArray(new String[0]);
+    }
+
+    /**
+     * The line being sung, drawn by the world renderer with its real word timing (a karaoke line), or the demo line
+     * looping while nothing is sung; for the 3D panel's lyric strip and the menu's preview stage.
+     */
+    void previewNow(float cx, float cy, float w, float h, float size, Map<String, Object> over) {
+        Map<String, Object> was = peek;
+        if (over != null) peek = over;
+        boolean pw = plainWords;
+        try {
+            Media.State s = Media.cur;
+            int i = s != null && s.playing && state == SYNCED && texts.length > 0 ? index(now()) : -1;
+            if (i < 0 || i >= texts.length || words[i].length == 0) { preview0(PV_LINES, PV_TEXT, cx, cy, w, h, size); return; }
+            timing(i);
+            Fx f = fx();
+            long nowMs = System.currentTimeMillis(), songStart = nowMs - Math.round(now() * 1000);
+            int n = words[i].length;
+            String[] ws = new String[n];
+            long[] at = new long[n], until = new long[n];
+            for (int k = 0; k < n; k++) { ws[k] = disp(words[i][k]); at[k] = songStart + Math.round(wS[i][k] * 1000); until[k] = songStart + Math.round(wE[i][k] * 1000); }
+            Piece p = piece(ws, at, until, i);
+            p.stamped = wTimed[i];
+            double fpx = Math.min(2 * size / REF, w * 0.92 / Math.max(1, fontW(ws)));
+            drawAnimated(p, nowMs, f, cx, cy, fpx);
+        } finally { peek = was; plainWords = pw; }
+    }
+
+    /** Song / artist for previews: the track playing, else the demo's. */
+    String[] nowTitle() {
+        Media.State s = Media.cur != null ? Media.cur : track;
+        return s == null ? new String[] {"Lights Over the City", "Nether preview"} : new String[] {s.title, s.artist.isEmpty() ? s.app : s.artist};
+    }
+
+    /** The on-screen karaoke panel itself at (x, y) scaled by k (menu units), with settings over; returns its {w, h}. */
+    float[] previewPanel(float x, float y, float k, Map<String, Object> over, boolean draw) {
+        Map<String, Object> was = peek;
+        if (over != null) peek = over;
+        float s0 = Gfx.s, w0 = w, h0 = h;
+        try {
+            measure();
+            float[] size = {w * k, h * k};
+            if (draw) { Gfx.s = s0 * k; draw(x / k, y / k); }
+            return size;
+        } finally { Gfx.s = s0; w = w0; h = h0; peek = was; }
+    }
+
+    // ---------------------------------------------------------------- demo song for the world preview
+
+    private static final double DEMO_LEN = 21;
+    private static final double[] DEMO_AT = {0.8, 4.7, 8.8, 11.2, 15.3};
+    private static final String[] DEMO_LINES = {PV_TEXT, "Every word you sing lands where you look", "", "Turn around and watch the chorus glow", "Nether keeps the rhythm right on time"};
+
+    /** A song's lyric data, swapped in for the demo while the world preview draws. */
+    private static final class Song {
+        double[] times; String[] texts; String[][] words; double[][] wordAt, wS, wE; double[] endAt; boolean[] wTimed; int state; double rate;
+    }
+    private Song demo;
+    private boolean demoOn;
+    private long demoNs;
+    private double demoT = -1;
+
+    private Song demoSong() {
+        Song d = new Song();
+        d.times = DEMO_AT.clone(); d.texts = DEMO_LINES.clone(); d.state = SYNCED; d.rate = 3.4;
+        d.words = new String[0][]; d.wordAt = new double[0][]; d.wS = new double[0][]; d.wE = new double[0][]; d.endAt = new double[0]; d.wTimed = new boolean[0];
+        demo = d;
+        swap(); // the demo fields are live: split its words with the song's own code
+        try { splitWords(null); } finally { swap(); }
+        return d;
+    }
+
+    private void swap() {
+        Song d = demo;
+        double[] t = times; times = d.times; d.times = t;
+        String[] x = texts; texts = d.texts; d.texts = x;
+        String[][] w = words; words = d.words; d.words = w;
+        double[][] a = wordAt; wordAt = d.wordAt; d.wordAt = a;
+        a = wS; wS = d.wS; d.wS = a;
+        a = wE; wE = d.wE; d.wE = a;
+        double[] e = endAt; endAt = d.endAt; d.endAt = e;
+        boolean[] b = wTimed; wTimed = d.wTimed; d.wTimed = b;
+        int st = state; state = d.state; d.state = st;
+        double r = songRate; songRate = d.rate; d.rate = r;
     }
 
     private boolean skyMode() { return str("wStyle").equals("Sky"); }

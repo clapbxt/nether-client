@@ -23,7 +23,7 @@ final class Project {
         cx = c[0]; cy = c[1]; cz = c[2];
         // 1.21.2+: the frame's own view rotation and projection (bobbing, hurt tilt, FOV effects), so projected things
         // stay on the world while walking; the camera model below is the fallback (and the legacy path)
-        real = System.nanoTime() - dev.nether.agent.Hook.levelNs < 250_000_000L && matrices(VIEW, PROJ);
+        real = !MODEL && System.nanoTime() - dev.nether.agent.Hook.levelNs < 250_000_000L && matrices(VIEW, PROJ);
         if (real) {
             mul(PROJ, VIEW, MVP);
             real = invert(MVP, INV);
@@ -96,6 +96,7 @@ final class Project {
     // ---------------------------------------------------------------- the game's matrices (Hook.levelMats)
 
     private static boolean real;
+    private static final boolean MODEL = Boolean.getBoolean("nether.projModel"); // dev: the camera model only (compare with the real matrices)
     private static final float[] VIEW = new float[16], PROJ = new float[16], MVP = new float[16], INV = new float[16];
     private static java.lang.reflect.Method matGet;
     private static java.lang.reflect.Field camProj, camView;
