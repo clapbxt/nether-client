@@ -305,7 +305,7 @@ public final class Party {
         if ("server".equals(at)) { addr = srv.trim().toLowerCase(Locale.ROOT); if (addr.indexOf(':') < 0) addr += ":25565"; }
         String ver = Game.version() == null ? "" : Game.version();
         String loader = MainMenu.loader();
-        String cape = me.isEmpty() ? null : Wardrobe.ownNetherCape(me);
+        String cape = me.isEmpty() ? null : Wardrobe.ownCape(me);
         String[] cos = me.isEmpty() ? null : Wardrobe.ownLook(me);
         List<Object> cl = new ArrayList<>();
         if (cos != null) for (String c : cos) cl.add(c == null ? "" : c);

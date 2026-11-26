@@ -7,10 +7,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import dev.nether.ov.framework.Json;
 
 /**
- * Community capes and cosmetics (ids "u-" + 12 [a-z0-9], uploaded by players, screened by the service): what an id is
- * comes from the player API (GET /v1/ugc/(id): type + file sha256s, public items only), the files from
- * /v1/ugc/blob/(sha256) and are checked against it. Your own items (also private ones) come in the launcher's sums
- * files with their hashes, like the signed catalog. Worker threads only.
+ * Capes and cosmetics, all public community items (ids "u-" + 12 [a-z0-9]): players' uploads, screened by the service,
+ * and Nether's own, credited to "Nether". What an id is comes from the player API (GET /v1/ugc/(id): type + file
+ * sha256s, public items only), the files from /v1/ugc/blob/(sha256) and are checked against it. Your own items (also
+ * private ones) come in the launcher's sums files with their hashes. Worker threads only.
  */
 final class Ugc {
     private Ugc() {}
