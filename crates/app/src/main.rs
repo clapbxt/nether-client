@@ -1429,6 +1429,8 @@ fn main() -> Result<(), slint::PlatformError> {
         let (weak, sh) = (ui.as_weak(), shared.clone());
         backend.on_import_go(move || if let Some(ui) = weak.upgrade() { instpage::import_go(&ui, &sh) });
         let (weak, sh) = (ui.as_weak(), shared.clone());
+        backend.on_peek_confirm(move || if let Some(ui) = weak.upgrade() { instpage::peek_confirm(&ui, &sh) });
+        let (weak, sh) = (ui.as_weak(), shared.clone());
         backend.on_stop(move |n| if let Some(ui) = weak.upgrade() { instpage::stop(&ui, &sh, &n) });
         let (weak, sh) = (ui.as_weak(), shared.clone());
         backend.on_measure_inst(move || if let Some(ui) = weak.upgrade() { instpage::measure_inst(&ui, &sh) });

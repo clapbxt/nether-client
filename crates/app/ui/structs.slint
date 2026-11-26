@@ -363,6 +363,17 @@ export global Backend {
     callback import-file();
     callback import-dir();
     callback import-go();
+    // confirm step for a modpack file / instance folder (picked or dropped): what was read, before anything is written
+    in-out property <bool> peek-open: false;
+    in-out property <string> peek-file;
+    in-out property <string> peek-format;
+    in-out property <string> peek-name;
+    in-out property <string> peek-mc;
+    in-out property <string> peek-loader;
+    in-out property <string> peek-files;
+    // CurseForge files that won't download (no API key)
+    in-out property <int> peek-missing;
+    callback peek-confirm();
     callback stop(string);
     // content kind for the opened instance lists: 0 mods, 1 resource packs, 2 shaders
     in-out property <int> pack-kind: 0;

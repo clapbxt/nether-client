@@ -42,9 +42,12 @@ pub fn dropped(ui: &AppWindow, sh: &Arc<Shared>, files: Vec<PathBuf>) {
     if files.is_empty() { return; }
     let open = (ui.get_tab() == 1 && ui.get_open_idx() >= 0).then(|| ui.get_open_idx());
     let (mut content, mut unknown): ([Vec<PathBuf>; 3], usize) = (Default::default(), 0);
+    let imports = files.iter().filter(|f| matches!(kind_of(f), Kind::Import)).count();
     for f in files {
         match kind_of(&f) {
-            Kind::Import => crate::instpage::import_path(ui, sh, f),
+            // one modpack: the confirm step; several: import each under its own name
+            Kind::Import if imports == 1 => crate::instpage::import_path(ui, sh, f),
+            Kind::Import => crate::instpage::import_named(ui, sh, f, None),
             Kind::Mod => content[0].push(f),
             Kind::ResourcePack => content[1].push(f),
             Kind::Shader => content[2].push(f),

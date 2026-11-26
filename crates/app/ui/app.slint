@@ -11,7 +11,7 @@ import { Theme } from "theme.slint";
 export { Theme }
 import { Backend, Setup, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat, Sound, NewInst, HostState, HostPlayer, HostBackup, ConLine } from "structs.slint";
 export { Backend, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat, Setup, Sound, NewInst, HostState, HostPlayer, HostBackup, ConLine }
-import { Btn, Eyebrow, Page, Slash, Hatch, PlayButton, Icon, Ico, Pulse, LinkBtn, Heading, Scrim, WinButtons, Field, FocusTrap, Toggle, Dropdown } from "components.slint";
+import { Btn, Eyebrow, Page, Slash, Hatch, PlayButton, Icon, Ico, Pulse, LinkBtn, Heading, Scrim, WinButtons, Field, FocusTrap, Toggle, Dropdown, Stat } from "components.slint";
 import { HomeScreen } from "home.slint";
 import { SetupFlow } from "setup.slint";
 import { InstancesScreen } from "instances.slint";
@@ -158,6 +158,7 @@ export component AppWindow inherits Window {
                 if Backend.acct-open { Backend.acct-open = false; return accept; }
                 if Friends.open { Friends.open = false; return accept; }
                 if Backend.crash-open { Backend.crash-open = false; return accept; }
+                if Backend.peek-open { Backend.peek-open = false; return accept; }
                 return reject;
             }
             if !e.modifiers.control || Backend.gate-open || Setup.open { return reject; }
@@ -585,6 +586,44 @@ export component AppWindow inherits Window {
                 if pd.n > 0: Text { x: 214px; y: parent.height - 66px; width: 340px; height: 40px; text: "These won't be flagged again for this instance."; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; wrap: word-wrap; vertical-alignment: center; }
                 if pd.n == 0: PlayButton { x: 32px; y: parent.height - 72px; width: 200px; height: 48px; label: "PLAY"; text-size: 24px; clicked => { Backend.pre-launch(); } }
                 LinkBtn { x: parent.width - 32px - self.width; y: parent.height - 60px; text: "CANCEL"; clicked => { Backend.pre-open = false; } }
+            }
+        }
+
+        // ---------- import confirm: what a modpack file / instance folder holds, before anything is written ----------
+        if Backend.peek-open: Scrim {
+            x: 0px; y: 0px; width: root.W; height: root.H;
+            dismiss => { Backend.peek-open = false; }
+            ipk := Rectangle {
+                property <bool> cf: Backend.peek-missing > 0;
+                x: (root.W - 600px) / 2; y: (root.H - self.height) / 2 - 24px; width: 600px; height: ipk.cf ? 448px : 368px;
+                background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2; clip: true;
+                TouchArea { }
+                Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: ipk.cf ? Theme.red : Theme.ice; }
+                Eyebrow { x: 32px; y: 30px; text: "IMPORT  ·  " + Backend.peek-format; }
+                Text { x: 32px; y: 50px; width: parent.width - 64px; text: Backend.peek-file; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; overflow: elide; }
+                Eyebrow { x: 32px; y: 84px; text: "NEW INSTANCE NAME"; }
+                nm := Field { x: 32px; y: 106px; width: parent.width - 64px; height: 44px; text-size: 16px; text <=> Backend.peek-name; placeholder: "Instance name";
+                    accepted => { if Backend.peek-name != "" { Backend.peek-confirm(); } } }
+                Rectangle {
+                    x: 32px; y: 172px; width: parent.width - 64px; height: 48px;
+                    Stat { x: 0px; width: 150px; rule: false; k: "MINECRAFT"; v: Backend.peek-mc; }
+                    Stat { x: 150px; width: 220px; k: "LOADER"; v: Backend.peek-loader; }
+                    Stat { x: 370px; width: parent.width - 370px; k: ipk.cf ? "MODS" : "FILES"; v: Backend.peek-files; }
+                }
+                Rectangle { x: 32px; y: 240px; width: parent.width - 64px; height: 1px; background: Theme.ln; }
+                if !ipk.cf: Text { x: 32px; y: 256px; width: parent.width - 64px; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap;
+                    text: Backend.peek-format == "PRISM / MULTIMC INSTANCE" ? "Worlds, mods, configs and settings are copied into a new instance. The source stays as it is." : "Mods are downloaded from Modrinth and checked; configs and worlds from the pack are copied in. The file stays as it is."; }
+                if ipk.cf: Rectangle {
+                    x: 32px; y: 256px; width: parent.width - 64px; height: 108px; background: Theme.red.with-alpha(0.08); border-radius: Theme.r1;
+                    Rectangle { x: 0px; width: 3px; background: Theme.red2; }
+                    Text { x: 18px; y: 12px; text: Backend.peek-missing == 1 ? "1 MOD FILE WON'T DOWNLOAD" : "\{Backend.peek-missing} MOD FILES WON'T DOWNLOAD"; color: Theme.redtx; font-family: Theme.disp; font-size: 16px * Theme.ts; font-weight: 700; letter-spacing: 0.8px; }
+                    Text { x: 18px; y: 36px; width: parent.width - 36px; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap;
+                        text: "CurseForge only hands out mod files through its API, which needs a key this build doesn't have. The Minecraft version, loader, configs and worlds are imported; add the mods afterwards."; }
+                }
+                LinkBtn { x: parent.width - 32px - ib.width - 20px - self.width; y: parent.height - 60px; height: 40px; text: "CANCEL"; clicked => { Backend.peek-open = false; } }
+                ib := Btn { x: parent.width - 32px - self.width; y: parent.height - 60px; height: 40px; width: 170px; text: "IMPORT"; solid: true; icon: Ico.download;
+                    enabled: Backend.peek-name != ""; clicked => { Backend.peek-confirm(); } }
+                init => { nm.focus-input(); }
             }
         }
 

@@ -702,8 +702,50 @@ fn known_downloads() -> Option<std::path::PathBuf> {
 #[cfg(not(windows))]
 fn known_downloads() -> Option<std::path::PathBuf> { None }
 
-/// Import a modpack file or instance folder as a new instance (worker thread, progress in the deck).
+thread_local! {
+    /// the file / folder the confirm step is showing
+    static PEEK: std::cell::RefCell<Option<std::path::PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
+/// A modpack file or instance folder: read what it is (worker thread), then show the confirm step (name, version,
+/// loader, files; CurseForge mods that won't download) before anything is written.
 pub fn import_path(ui: &AppWindow, sh: &Arc<Shared>, path: std::path::PathBuf) {
+    let label = path.file_name().and_then(|n| n.to_str()).unwrap_or("modpack").to_string();
+    let (weak, sh) = (ui.as_weak(), sh.clone());
+    std::thread::spawn(move || {
+        let res = import::preview(&path);
+        ui_do(&weak, move |ui| match res {
+            Ok(p) => {
+                let b = ui.global::<Backend>();
+                b.set_peek_file(path.display().to_string().into());
+                b.set_peek_format(match p.format { import::Format::Mrpack => "MODRINTH MODPACK", import::Format::Prism => "PRISM / MULTIMC INSTANCE", import::Format::CurseForge => "CURSEFORGE MODPACK" }.into());
+                b.set_peek_name(p.name.into());
+                b.set_peek_mc(p.minecraft.into());
+                b.set_peek_loader(if p.loader_version.is_empty() { p.loader.label().to_string() } else { format!("{} {}", p.loader.label(), p.loader_version) }.into());
+                let cf = p.format == import::Format::CurseForge;
+                b.set_peek_missing(if cf { p.files as i32 } else { 0 });
+                b.set_peek_files(match (p.format, p.files) { (import::Format::Prism, _) => "Copied".into(), (_, 1) => "1 file".into(), (_, n) => format!("{n} files").into() });
+                PEEK.with(|x| *x.borrow_mut() = Some(path));
+                b.set_peek_open(true);
+            }
+            Err(e) => show_toast(ui, &sh, &format!("Couldn't import {label}: {e}")),
+        });
+    });
+}
+
+/// IMPORT on the confirm step: import what it shows under the (edited) name.
+pub fn peek_confirm(ui: &AppWindow, sh: &Arc<Shared>) {
+    let b = ui.global::<Backend>();
+    let name = b.get_peek_name().trim().to_string();
+    if name.is_empty() { return; }
+    let Some(path) = PEEK.with(|x| x.borrow_mut().take()) else { return };
+    b.set_peek_open(false);
+    import_named(ui, sh, path, Some(name));
+}
+
+/// Import a modpack file or instance folder as a new instance (worker thread, progress in the deck).
+/// `name` None = the pack's own name.
+pub fn import_named(ui: &AppWindow, sh: &Arc<Shared>, path: std::path::PathBuf, name: Option<String>) {
     let key = format!("import:{}", path.display());
     let label = path.file_name().and_then(|n| n.to_str()).unwrap_or("modpack").to_string();
     crate::job(ui, &key, &format!("Importing {label}…"), 0.0);
@@ -711,7 +753,7 @@ pub fn import_path(ui: &AppWindow, sh: &Arc<Shared>, path: std::path::PathBuf) {
     std::thread::spawn(move || {
         let (w2, k2) = (weak.clone(), key.clone());
         let progress: Progress = Arc::new(move |m, f| { let (t, k) = (format!("Importing · {m}"), k2.clone()); ui_do(&w2, move |ui| crate::job(ui, &k, &t, f)); });
-        let res = import::import(&nether_core::download::client(), &sh.paths, &path, None, &progress);
+        let res = import::import(&nether_core::download::client(), &sh.paths, &path, name.as_deref(), &progress);
         let sh2 = sh.clone();
         ui_do(&weak, move |ui| { crate::job_end(ui, &key); match res {
             Ok(r) => {
