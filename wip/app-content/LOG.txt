@@ -1,0 +1,18 @@
+03a917b Merge app-host: real Host page and Wardrobe skin library
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+d5d8830 Design: Host and Wardrobe captures, screen notes
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+
+08e69d7 App: real Host page and Wardrobe skin library
+Host: instance picker, set-up/start/stop slab, EULA dialog (only the user's
+click accepts), live status/console/players via a timer that runs only while a
+server exists, settings, whitelist/ops, world copy-in and backups, LAN/UPnP
+addresses and invite code. Servers stop cleanly on quit.
+Wardrobe: skins::list library with cached rendered tiles, import by file,
+username or URL, rename, arm style, export, delete, preview and Wear.
+Sign-in records ownership for the launch gate. Dev captures: NC_SNAP_STATE,
+NC_SNAP_TAB, NC_SNAP_IMPORT, NC_SNAP_DELAY with --snapshot.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+

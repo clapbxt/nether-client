@@ -1,0 +1,136 @@
+import { Theme } from "theme.slint";
+import { Backend, ImportState } from "structs.slint";
+import { Eyebrow, Heading, Btn, Icon, Ico, Field, Stat, Scrim, Ticks, Hatch, Pulse } from "components.slint";
+
+// One choice row in the source picker.
+component Choice inherits Rectangle {
+    in property <string> title;
+    in property <string> sub;
+    in property <string> d;
+    callback clicked();
+    height: 64px;
+    background: ta.pressed ? Theme.s3 : (ta.has-hover ? Theme.s2 : transparent);
+    animate background { duration: Theme.fast; }
+    Rectangle { x: 0px; width: 3px; background: Theme.red2; opacity: ta.has-hover ? 1 : 0; animate opacity { duration: Theme.fast; } }
+    Rectangle { y: 0px; height: 1px; background: Theme.ln; }
+    Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; }
+    Icon { x: 20px; y: 26px; d: root.d; tint: ta.has-hover ? Theme.tx : Theme.dim; }
+    Text { x: 50px; y: 13px; text: root.title; color: Theme.tx; font-family: Theme.ui; font-size: 15px; font-weight: 600; }
+    Text { x: 50px; y: 35px; width: parent.width - 90px; text: root.sub; color: Theme.mut; font-family: Theme.ui; font-size: 12px; overflow: elide; }
+    Icon { x: parent.width - 30px + (ta.has-hover ? 3px : 0px); y: 26px; d: Ico.chev; tint: ta.has-hover ? Theme.tx : Theme.mut; animate x { duration: Theme.fast; } }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+}
+
+// Import from another launcher: pick a source, confirm what was detected, progress, and the CurseForge caveat.
+export component ImportDialog inherits Rectangle {
+    callback open-instance();
+    property <int> st: ImportState.stage;
+    property <length> h: root.st == 1 ? 340px : (root.st == 2 ? 200px : (root.st == 3 ? (ImportState.missing > 0 ? 468px : 388px) : (root.st == 4 ? 250px : (root.st == 5 ? 372px : 300px))));
+
+    Scrim {
+        // reading / importing can't be dismissed (the work is already running)
+        dismiss => { if root.st != 2 && root.st != 4 { ImportState.close(); } }
+        dlg := Rectangle {
+            x: (parent.width - 600px) / 2; y: 150px; width: 600px; height: root.h;
+            background: #121217; border-width: 1px; border-color: Theme.ln2;
+            animate height { duration: Theme.mid; easing: ease-out-quint; }
+            clip: true;
+            TouchArea { }
+            Rectangle { x: 0px; y: 0px; width: parent.width; height: 4px; background: root.st == 6 || root.st == 5 ? Theme.red : Theme.ice; }
+
+            // 1: where from
+            if root.st == 1: Rectangle {
+                Eyebrow { x: 28px; y: 28px; text: "IMPORT"; }
+                Text { x: 28px; y: 46px; text: "FROM ANOTHER LAUNCHER"; color: Theme.tx; font-family: Theme.disp; font-size: 34px; font-weight: 800; font-italic: true; }
+                Text { x: 28px; y: 94px; width: parent.width - 56px; text: "Brings a modpack or instance in as a new instance. The original files aren't changed."; color: Theme.dim; font-family: Theme.ui; font-size: 14px; wrap: word-wrap; }
+                Choice { x: 0px; y: 132px; width: parent.width; title: "A file"; sub: "Modrinth .mrpack, Prism or MultiMC export (.zip), CurseForge modpack (.zip)"; d: Ico.download; clicked => { ImportState.pick-file(); } }
+                Choice { x: 0px; y: 196px; width: parent.width; title: "A Prism or MultiMC instance folder"; sub: "The folder that holds instance.cfg"; d: Ico.folder; clicked => { ImportState.pick-folder(); } }
+                Text { x: 28px; y: parent.height - 56px; height: 36px; text: "You can also drop a file onto the window."; color: Theme.mut; font-family: Theme.ui; font-size: 12px; vertical-alignment: center; }
+                Btn { x: parent.width - 28px - self.width; y: parent.height - 56px; text: "CANCEL"; clicked => { ImportState.close(); } }
+            }
+
+            // 2: reading the file
+            if root.st == 2: Rectangle {
+                Eyebrow { x: 28px; y: 28px; text: "IMPORT"; }
+                Text { x: 28px; y: 46px; text: "READING"; color: Theme.tx; font-family: Theme.disp; font-size: 34px; font-weight: 800; font-italic: true; }
+                Text { x: 28px; y: 96px; width: parent.width - 56px; text: ImportState.file; color: Theme.mut; font-family: Theme.mono; font-size: 12px; overflow: elide; }
+                Pulse { x: 28px; y: 140px; }
+                Text { x: 46px; y: 131px; height: 26px; text: "Working out what this is…"; color: Theme.dim; font-family: Theme.ui; font-size: 13px; vertical-alignment: center; }
+            }
+
+            // 3: confirm what was found
+            if root.st == 3: Rectangle {
+                Eyebrow { x: 28px; y: 28px; text: ImportState.format; color: Theme.dim; }
+                Text { x: 28px; y: 48px; width: parent.width - 56px; text: ImportState.file; color: Theme.mut; font-family: Theme.mono; font-size: 11px; overflow: elide; }
+                Eyebrow { x: 28px; y: 84px; text: "NEW INSTANCE NAME"; }
+                nm := Field { x: 28px; y: 106px; width: parent.width - 56px; height: 44px; text-size: 16px; text <=> ImportState.name; placeholder: "Instance name"; accepted => { if ImportState.name != "" { ImportState.confirm(); } } }
+                Rectangle {
+                    x: 28px; y: 172px; width: parent.width - 56px; height: 48px;
+                    Stat { x: 0px; width: 150px; rule: false; k: "MINECRAFT"; v: ImportState.mc; }
+                    Stat { x: 150px; width: 220px; k: "LOADER"; v: ImportState.loader; }
+                    Stat { x: 370px; width: parent.width - 370px; k: ImportState.missing > 0 ? "MODS" : "FILES"; v: ImportState.note; }
+                }
+                Rectangle { x: 28px; y: 240px; width: parent.width - 56px; height: 1px; background: Theme.ln; }
+                if ImportState.missing == 0: Text { x: 28px; y: 256px; width: parent.width - 56px; text: ImportState.format == "PRISM / MULTIMC INSTANCE" ? "Worlds, mods, configs and settings are copied into a new instance. The source stays as it is." : "Mods are downloaded from Modrinth and checked; configs and worlds from the pack are copied in."; color: Theme.dim; font-family: Theme.ui; font-size: 13px; wrap: word-wrap; }
+                if ImportState.missing > 0: Rectangle {
+                    x: 28px; y: 256px; width: parent.width - 56px; height: 116px; background: #E106000f;
+                    Rectangle { x: 0px; width: 3px; background: Theme.red2; }
+                    Text { x: 18px; y: 12px; text: "\{ImportState.missing} MOD FILES WON'T DOWNLOAD"; color: Theme.redtx; font-family: Theme.disp; font-size: 16px; font-weight: 700; letter-spacing: 0.8px; }
+                    Text { x: 18px; y: 36px; width: parent.width - 36px; text: "CurseForge only hands out mod files through its API, which needs a key this build doesn't have. The Minecraft version, loader, configs and worlds are imported; the mods have to be added afterwards."; color: Theme.dim; font-family: Theme.ui; font-size: 13px; wrap: word-wrap; }
+                }
+                Btn { x: parent.width - 28px - ib.width - 10px - self.width; y: parent.height - 60px; height: 40px; text: "CANCEL"; clicked => { ImportState.close(); } }
+                ib := Btn { x: parent.width - 28px - self.width; y: parent.height - 60px; height: 40px; width: 180px; text: "IMPORT"; solid: true; icon: Ico.download; enabled: ImportState.name != ""; clicked => { ImportState.confirm(); } }
+                init => { nm.focus-input(); }
+            }
+
+            // 4: importing
+            if root.st == 4: Rectangle {
+                Eyebrow { x: 28px; y: 28px; text: "IMPORTING"; }
+                Text { x: 28px; y: 46px; width: parent.width - 56px; text: ImportState.name.to-uppercase(); color: Theme.tx; font-family: Theme.disp; font-size: 34px; font-weight: 800; font-italic: true; overflow: elide; }
+                Text { x: 28px; y: 108px; width: parent.width - 120px; text: ImportState.step; color: Theme.dim; font-family: Theme.ui; font-size: 13px; overflow: elide; }
+                Text { x: parent.width - 28px - 80px; y: 108px; width: 80px; text: "\{Math.floor(Math.clamp(ImportState.prog, 0, 1) * 100)}%"; color: Theme.tx; font-family: Theme.mono; font-size: 12px; horizontal-alignment: right; }
+                Rectangle { x: 28px; y: 136px; width: parent.width - 56px; height: 4px; background: Theme.s3;
+                    Rectangle { x: 0px; width: parent.width * Math.clamp(ImportState.prog, 0, 1); background: Theme.red2; animate width { duration: 160ms; } } }
+                Text { x: 28px; y: 168px; width: parent.width - 56px; text: "If anything fails, the half-made instance is removed again."; color: Theme.mut; font-family: Theme.ui; font-size: 12px; }
+            }
+
+            // 5: imported, but CurseForge mods are missing
+            if root.st == 5: Rectangle {
+                Eyebrow { x: 28px; y: 28px; text: "IMPORTED"; }
+                Text { x: 28px; y: 46px; width: parent.width - 56px; text: ImportState.result.to-uppercase(); color: Theme.tx; font-family: Theme.disp; font-size: 34px; font-weight: 800; font-italic: true; overflow: elide; }
+                Rectangle {
+                    x: 28px; y: 104px; width: parent.width - 56px; height: 176px; background: #E106000f;
+                    Rectangle { x: 0px; width: 3px; background: Theme.red2; }
+                    Text { x: 18px; y: 12px; text: ImportState.missing == 1 ? "1 MOD COULDN'T BE DOWNLOADED" : "\{ImportState.missing} MODS COULDN'T BE DOWNLOADED"; color: Theme.redtx; font-family: Theme.disp; font-size: 18px; font-weight: 700; letter-spacing: 0.8px; }
+                    Text { x: 18px; y: 38px; width: parent.width - 36px; text: (ImportState.missing-req == ImportState.missing ? "All of them are required by the pack, " : "\{ImportState.missing-req} of them are required by the pack, ") + "so it won't start the way its author intended until they're added."; color: Theme.tx; font-family: Theme.ui; font-size: 13px; wrap: word-wrap; }
+                    Text { x: 18px; y: 82px; width: parent.width - 36px; text: "Why: CurseForge only hands out mod files through its API, which needs a key this build doesn't have. The version, loader, configs and worlds are in place. Add the mods from the instance's Mods tab, or download them from CurseForge into its mods folder."; color: Theme.dim; font-family: Theme.ui; font-size: 13px; wrap: word-wrap; }
+                }
+                Btn { x: parent.width - 28px - ob.width - 10px - self.width; y: parent.height - 60px; height: 40px; text: "OPEN FOLDER"; icon: Ico.folder; clicked => { Backend.inst-action(Backend.active-inst, 0); } }
+                ob := Btn { x: parent.width - 28px - self.width; y: parent.height - 60px; height: 40px; text: "OPEN INSTANCE"; solid: true; icon: Ico.chev; clicked => { ImportState.close(); root.open-instance(); } }
+            }
+
+            // 6: not importable
+            if root.st == 6: Rectangle {
+                Eyebrow { x: 28px; y: 28px; text: "IMPORT"; color: Theme.redtx; }
+                Text { x: 28px; y: 46px; text: "CAN'T IMPORT THIS"; color: Theme.tx; font-family: Theme.disp; font-size: 34px; font-weight: 800; font-italic: true; }
+                Text { x: 28px; y: 96px; width: parent.width - 56px; text: ImportState.file; color: Theme.mut; font-family: Theme.mono; font-size: 11px; overflow: elide; }
+                Text { x: 28px; y: 120px; width: parent.width - 56px; height: 56px; text: ImportState.error; color: Theme.redtx; font-family: Theme.ui; font-size: 13px; wrap: word-wrap; overflow: elide; }
+                Text { x: 28px; y: 180px; width: parent.width - 56px; text: "Supported: Modrinth .mrpack, Prism or MultiMC export zips and instance folders, CurseForge modpack zips."; color: Theme.dim; font-family: Theme.ui; font-size: 13px; wrap: word-wrap; }
+                Btn { x: parent.width - 28px - tb.width - 10px - self.width; y: parent.height - 60px; height: 40px; text: "CLOSE"; clicked => { ImportState.close(); } }
+                tb := Btn { x: parent.width - 28px - self.width; y: parent.height - 60px; height: 40px; text: "TRY ANOTHER"; solid: true; clicked => { ImportState.stage = 1; } }
+            }
+        }
+    }
+}
+
+// Shown while a file is dragged over the window.
+export component DropHint inherits Rectangle {
+    background: #060608e8;
+    Rectangle {
+        x: 40px; y: 40px; width: parent.width - 80px; height: parent.height - 80px; background: Theme.s1; clip: true;
+        Hatch { width: parent.width; height: parent.height; }
+        Ticks { width: parent.width; height: parent.height; len: 24px; tint: Theme.red2; }
+        Heading { x: 0px; y: parent.height / 2 - 90px; width: parent.width; text: "DROP TO IMPORT"; font-size: 96px; horizontal-alignment: center; }
+        Text { x: 0px; y: parent.height / 2 + 30px; width: parent.width; text: "Modrinth .mrpack · Prism or MultiMC zip or folder · CurseForge modpack zip"; color: Theme.dim; font-family: Theme.ui; font-size: 16px; horizontal-alignment: center; }
+    }
+}
