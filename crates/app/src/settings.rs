@@ -125,6 +125,23 @@ fn install_now(ui: &AppWindow, sh: &Arc<Shared>) {
     show_toast(ui, sh, "Couldn't start the update. Try again");
 }
 
+/// The in-game client updates itself, always: a newer compatible release of the client repo is downloaded, verified
+/// and installed into every instance (nether_core::agent::update). One check at a time; failures only go to the log,
+/// and the instances keep the client they have.
+fn update_client(sh: &Arc<Shared>) {
+    static BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if BUSY.swap(true, std::sync::atomic::Ordering::AcqRel) { return; }
+    let sh = sh.clone();
+    std::thread::spawn(move || {
+        match nether_core::agent::update(&sh.paths, &nether_core::download::client()) {
+            Ok(Some(v)) => crate::applog::line(&format!("client updated to {v}")),
+            Ok(None) => {}
+            Err(e) => crate::applog::line(&format!("client update: {e:#}")),
+        }
+        BUSY.store(false, std::sync::atomic::Ordering::Release);
+    });
+}
+
 /// Check GitHub for a newer release. An installed copy on an old version is gated (update now or exit) while the
 /// signed setup downloads and verifies in the background. `manual` = from CHECK NOW / TRY AGAIN (toasts every result).
 /// update-state: 0 checking, 1 up to date, 2 newer (manual download), 3 couldn't check, 4 ready to install, 5 downloading
@@ -133,6 +150,7 @@ pub fn check_updates(ui: &AppWindow, sh: &Arc<Shared>, manual: bool) {
     if matches!(b.get_update_state(), 4 | 5) && !manual { return; }
     if b.get_update_state() == 4 { return; }
     b.set_update_state(0);
+    update_client(sh);
     let installed = installed_copy();
     let (weak, sh) = (ui.as_weak(), sh.clone());
     std::thread::spawn(move || {

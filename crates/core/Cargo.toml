@@ -5,15 +5,19 @@ edition = "2021"
 
 [features]
 # developer switches (offline launch via NETHER_DEV_OFFLINE, NETHER_AGENT jar override); never in shipped builds
-dev = []
+dev = ["nether-auth/dev", "nether-social/dev"]
 
 [dependencies]
+nether-common = { path = "../common" }
+nether-net = { path = "../net" }
+nether-auth = { path = "../auth" }
+nether-game = { path = "../game" }
+nether-social = { path = "../social" }
 anyhow = "1"
 dirs = "5"
 flate2 = "1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }
 hex = "0.4"
-keyring = { version = "3", features = ["windows-native"] }
 md5 = "0.7"
 rayon = "1"
 reqwest = { version = "0.12", features = ["blocking", "json", "multipart"] }
@@ -22,7 +26,6 @@ serde_json = "1"
 sha1 = "0.10"
 sha2 = "0.10"
 zip = { version = "9", default-features = false, features = ["deflate"] }
-igd-next = "0.18.0"
 base64 = "0.22"
 url = "2"
 ring = "0.17"
@@ -33,7 +36,9 @@ bytes = "1"
 rusqlite = { version = "0.43.0", features = ["bundled"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_System_SystemInformation", "Win32_UI_Shell", "Win32_Foundation", "Win32_System_Registry", "Win32_System_Threading"] }
 # AVIF textures in cosmetic uploads (Lunar uses some): Windows' own decoder (AV1 Video Extension)
 windows = { version = "0.62", features = ["Foundation", "Graphics_Imaging", "Storage_Streams"] }
 
+
+[build-dependencies]
+sha2 = "0.10"

@@ -1,6 +1,6 @@
-//! Wardrobe COMMUNITY (ui/community.slint): browse, report, delete and upload community capes and cosmetics
-//! (nether_core::ugc, files converted by nether_core::cosimport), plus the loaded items the preview (skin.rs) and the
-//! in-game wardrobe (skin::export) use. Lists and pictures load off the UI thread; results from an older list are
+//! Wardrobe capes and cosmetics (ui/community.slint): every item is public (players' uploads and Nether's own, credited
+//! to "Nether"). Browse, report, delete and upload them (nether_core::ugc, files converted by nether_core::cosimport),
+//! plus the loaded items the preview (skin.rs) and the in-game wardrobe (skin::export) use. Lists and pictures load off the UI thread; results from an older list are
 //! dropped (GEN).
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -30,6 +30,11 @@ thread_local! {
     static ITEMS: RefCell<Vec<Item>> = const { RefCell::new(Vec::new()) };
     // single items being (or already) looked up for the preview / in-game wardrobe
     static ASKED: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
+    // every item whose details came in (lists, single lookups): names for the preview footer
+    static SEEN: RefCell<HashMap<String, Item>> = RefCell::new(HashMap::new());
+    // the most worn public items of every type (first ones of each list), for the in-game wardrobe
+    static FEATURED: RefCell<Vec<Item>> = const { RefCell::new(Vec::new()) };
+    static FEATURED_BUSY: Cell<bool> = const { Cell::new(false) };
     static GEN: Cell<u32> = const { Cell::new(0) };
     static PAGE_NO: Cell<u32> = const { Cell::new(0) };
     static UI: RefCell<Option<slint::Weak<AppWindow>>> = const { RefCell::new(None) };
@@ -121,6 +126,14 @@ fn prepare(it: &Item, skin: &RgbaImage, slim: bool) -> anyhow::Result<Ready> {
     }
 }
 
+fn seen(items: &[Item]) { SEEN.with(|m| { let mut m = m.borrow_mut(); for it in items { m.insert(it.id.clone(), it.clone()); } }); }
+
+/// An item's name once its details are known (picked, listed or looked up), else "".
+pub fn name(id: &str) -> String {
+    if id.is_empty() { return String::new(); }
+    SEEN.with(|m| m.borrow().get(id).map(|i| i.name.clone())).or_else(|| ugc::known(id).map(|i| i.name)).unwrap_or_default()
+}
+
 fn store(id: &str, r: Ready) {
     match r {
         Ready::Cos(l, card) => {
@@ -190,6 +203,7 @@ fn fetch(id: &str) {
         let Some(it) = it else { return };
         let r = prepare(&it, &skin, slim);
         ui_do(&weak, move |ui| {
+            seen(std::slice::from_ref(&it));
             let Ok(r) = r else { return };
             store(&it.id, r);
             crate::skin::community_ready();
@@ -199,16 +213,55 @@ fn fetch(id: &str) {
     });
 }
 
-/// In-game wardrobe (skin::export): your uploads, likes and picks go into state.json next to the Nether items.
+/// How many of the most worn public items of each type the in-game wardrobe lists (it has no search: the launcher's
+/// Wardrobe has the whole list).
+const FEATURED_PER_TYPE: usize = 8;
+
+/// Read the most worn public items of every type for the in-game wardrobe and load their pictures; it is published
+/// again (skin::export) as they arrive. Once at sign-in and on REFRESH.
+pub fn load_featured(ui: &AppWindow) {
+    if FEATURED_BUSY.with(|b| b.replace(true)) { return; }
+    let Some(sh) = SHARED.get().cloned() else { FEATURED_BUSY.with(|b| b.set(false)); return };
+    let sess = session(&sh);
+    let (skin, slim) = crate::skin::account_skin();
+    let weak = ui.as_weak();
+    std::thread::spawn(move || {
+        let c = client();
+        let mut all = vec![];
+        for w in What::ALL {
+            if let Ok(p) = ugc::browse(&c, sess.as_ref(), w, Filter::All, Sort::Top, "", 0) { all.extend(p.items.into_iter().filter(Item::public).take(FEATURED_PER_TYPE)); }
+        }
+        ui_do(&weak, move |ui| {
+            FEATURED_BUSY.with(|b| b.set(false));
+            seen(&all);
+            // pictures for the ones not loaded yet; the game's list is published again as they arrive
+            let need: Vec<Item> = all.iter().filter(|i| CARDS.with(|m| !m.borrow().contains_key(&i.id))).cloned().collect();
+            FEATURED.with(|f| *f.borrow_mut() = all);
+            crate::skin::export(ui, &sh);
+            let weak = ui.as_weak();
+            std::thread::spawn(move || for it in need {
+                let Ok(r) = prepare(&it, &skin, slim) else { continue };
+                let sh = sh.clone();
+                ui_do(&weak, move |ui| { store(&it.id, r); crate::skin::export(ui, &sh); });
+            });
+        });
+    });
+}
+
+/// In-game wardrobe (skin::export): the most worn public items of each type, then your uploads and picks, go into
+/// state.json ("nether": capes, "items": cosmetics; each with its creator in "by").
 pub fn export(dir: &std::path::Path, st: &mut Value, wanted: &mut Vec<String>) {
-    for it in ugc::known_all() {
-        if !ugc::is_ugc(&it.id) { continue; }
+    let mut done = HashSet::new();
+    let list: Vec<Item> = FEATURED.with(|f| f.borrow().clone()).into_iter().chain(ugc::known_all()).collect();
+    for it in list {
+        if !ugc::is_ugc(&it.id) || !done.insert(it.id.clone()) { continue; }
+        let by = if it.mine { "you".to_string() } else { it.by.clone() };
         match it.what() {
             Some(What::Cape) => {
                 let Some((frames, _)) = cape(&it.id) else { continue };
                 let f = format!("n_{}.png", it.id);
                 if frames[0].save(dir.join(&f)).is_ok() {
-                    if let Some(a) = st["nether"].as_array_mut() { a.push(serde_json::json!({ "id": it.id, "name": it.name, "png": f })); }
+                    if let Some(a) = st["nether"].as_array_mut() { a.push(serde_json::json!({ "id": it.id, "name": it.name, "by": by, "png": f })); }
                     wanted.push(f);
                 }
             }
@@ -217,7 +270,7 @@ pub fn export(dir: &std::path::Path, st: &mut Value, wanted: &mut Vec<String>) {
                 let Some(card) = CARDS.with(|m| m.borrow().get(&it.id).cloned()) else { continue };
                 let f = format!("c_{}.png", it.id);
                 if card.save(dir.join(&f)).is_ok() {
-                    if let Some(a) = st["items"].as_array_mut() { a.push(serde_json::json!({ "id": it.id, "name": it.name, "type": k.as_str(), "png": f })); }
+                    if let Some(a) = st["items"].as_array_mut() { a.push(serde_json::json!({ "id": it.id, "name": it.name, "type": k.as_str(), "by": by, "png": f })); }
                     wanted.push(f);
                 }
             }
@@ -264,6 +317,7 @@ fn load(ui: &AppWindow, sh: &Arc<Shared>, page: i32, more: bool) {
             match r {
                 Ok(p) => {
                     PAGE_NO.set(pageno);
+                    seen(&p.items);
                     let need: Vec<Item> = p.items.iter().filter(|i| i.status != "removed" && CARDS.with(|m| !m.borrow().contains_key(&i.id))).cloned().collect();
                     ITEMS.with(|v| { let mut v = v.borrow_mut(); for it in p.items { if !v.iter().any(|x| x.id == it.id) { v.push(it); } } });
                     set_rows(ui);
@@ -280,7 +334,7 @@ fn load(ui: &AppWindow, sh: &Arc<Shared>, page: i32, more: bool) {
 
 fn find(id: &str) -> Option<Item> { ITEMS.with(|v| v.borrow().iter().find(|i| i.id == id).cloned()) }
 
-/// Card clicked: select it like a Nether item (APPLY sends it).
+/// Card clicked: select it ("" = the None card: empty the slot); APPLY sends it.
 fn pick(ui: &AppWindow, sh: &Arc<Shared>, id: &str) {
     let page = ui.global::<Community>().get_page();
     if let Some(it) = find(id) { ugc::remember(std::slice::from_ref(&it)); }
@@ -475,7 +529,7 @@ pub fn upload_from_game(ui: &AppWindow, sh: &Arc<Shared>, seq: u64, req: &Value)
                 let msg = upload_msg(&it, dup);
                 show_toast(ui, &sh, &msg);
                 let c = ui.global::<Community>();
-                if c.get_source() == 1 && c.get_page() == page_of(out.what) { load(ui, &sh, c.get_page(), false); }
+                if c.get_page() == page_of(out.what) { load(ui, &sh, c.get_page(), false); }
                 crate::skin::answer_game(ui, &sh, seq, true, &msg);
             }
             Err(e) => crate::skin::answer_game(ui, &sh, seq, false, &format!("Couldn't upload: {e:#}")),
@@ -509,10 +563,9 @@ fn upload_send(ui: &AppWindow, sh: &Arc<Shared>) {
                     keep_upload(&it, &out);
                     let msg = upload_msg(&it, dup);
                     show_toast(ui, &sh, &msg);
-                    // show it: its page, COMMUNITY, MINE (ALL when it's someone else's), picked
+                    // show it: its page, MINE (ALL when it's someone else's), picked
                     let page = page_of(out.what);
                     ui.set_ward_page(page);
-                    c.set_source(1);
                     c.set_filter(if dup && !it.mine { 0 } else { 1 });
                     c.set_query("".into());
                     load(ui, &sh, page, false);
@@ -560,7 +613,6 @@ pub fn snap(ui: &AppWindow, state: &str) {
         let c = ui.global::<Community>();
         GEN.set(GEN.get() + 1);
         c.set_page(page);
-        c.set_source(1);
         c.set_filter(if state == "comm-mine" { 1 } else { 0 });
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let content = root.join("backend/content");

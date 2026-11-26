@@ -13,6 +13,7 @@ use crate::java;
 use crate::mojang::{self, rules_allow, Arg, AssetIndex, VersionJson};
 use crate::paths::Paths;
 use crate::{Progress, Session};
+use nether_common::platform;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Loader {
@@ -66,10 +67,8 @@ impl Loader {
 /// File in an instance folder that pins the Fabric/Quilt loader version (written by modpack import; absent = newest).
 pub const LOADER_PIN: &str = "nether-loader.txt";
 
-/// A loader version as loader metas write them ("0.16.9", "0.26.4-beta.5"); it ends up in meta URLs, so nothing else.
-pub fn valid_loader_version(v: &str) -> bool {
-    (1..=48).contains(&v.len()) && v.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'+' | b'_')) && !v.contains("..")
-}
+// lives in mojang.rs so forge.rs can use it without depending on launch.rs; kept here under its old path
+pub use crate::mojang::valid_loader_version;
 
 pub struct LaunchOpts {
     pub loader: Loader,
@@ -125,37 +124,6 @@ pub fn quick_play_args(q: &QuickPlay, modern: bool) -> Vec<String> {
             vec!["--server".into(), host.into(), "--port".into(), port.into()]
         }
     }
-}
-
-/// Windows "Graphics performance preference" = High performance for this Java, unless the user already chose one for
-/// it (Settings > System > Display > Graphics). On a laptop with integrated + dedicated graphics the game otherwise
-/// often lands on the integrated GPU. Per user and per program, the same value Windows' own settings page writes.
-#[cfg(windows)]
-fn prefer_fast_gpu(exe: &std::path::Path) {
-    use windows_sys::Win32::System::Registry::{RegCloseKey, RegCreateKeyExW, RegQueryValueExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER, KEY_READ, KEY_WRITE, REG_SZ};
-    fn w(s: &str) -> Vec<u16> { s.encode_utf16().chain(Some(0)).collect() }
-    let name = w(&exe.to_string_lossy());
-    let mut key: HKEY = std::ptr::null_mut();
-    unsafe {
-        if RegCreateKeyExW(HKEY_CURRENT_USER, w(r"Software\Microsoft\DirectX\UserGpuPreferences").as_ptr(), 0, std::ptr::null(), 0, KEY_READ | KEY_WRITE, std::ptr::null(), &mut key, std::ptr::null_mut()) != 0 { return; }
-        let exists = RegQueryValueExW(key, name.as_ptr(), std::ptr::null(), std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut()) == 0;
-        if !exists {
-            let v = w("GpuPreference=2;");
-            RegSetValueExW(key, name.as_ptr(), 0, REG_SZ, v.as_ptr() as *const u8, (v.len() * 2) as u32);
-        }
-        RegCloseKey(key);
-    }
-}
-
-/// Opts the game out of Windows power throttling (EcoQoS: efficiency cores, lower clocks), which Windows 11 applies to
-/// processes it thinks are in the background. Microsoft: StateMask 0 with the execution-speed bit in ControlMask = always
-/// high QoS ("SetProcessInformation", ProcessPowerThrottling). Ignored where unsupported.
-#[cfg(windows)]
-fn full_speed(child: &Child) {
-    use std::os::windows::io::AsRawHandle;
-    use windows_sys::Win32::System::Threading::{ProcessPowerThrottling, SetProcessInformation, PROCESS_POWER_THROTTLING_CURRENT_VERSION, PROCESS_POWER_THROTTLING_EXECUTION_SPEED, PROCESS_POWER_THROTTLING_STATE};
-    let st = PROCESS_POWER_THROTTLING_STATE { Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION, ControlMask: PROCESS_POWER_THROTTLING_EXECUTION_SPEED, StateMask: 0 };
-    unsafe { SetProcessInformation(child.as_raw_handle() as _, ProcessPowerThrottling, &st as *const _ as *const _, std::mem::size_of::<PROCESS_POWER_THROTTLING_STATE>() as u32); }
 }
 
 /// The vanilla launcher's G1 tuning, unless the user picked a collector themselves.
@@ -493,7 +461,7 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
     let agent = match dev_agent {
         Some(a) if std::path::Path::new(&a).exists() => Some(PathBuf::from(a)),
         _ if !opts.client => None,
-        _ => crate::agent::ensure(paths),
+        _ => crate::agent::ensure(paths, &opts.game_dir),
     };
     // packs the launcher turned on / off, downloaded or combined -> options.txt's list (issue #22)
     crate::rpacks::sync(&opts.game_dir, v.legacy_args.is_some());
@@ -501,16 +469,17 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
         if let Some(g) = &opts.groups { jvm.insert(0, format!("-Dnether.groups={g}")); }
         jvm.insert(0, format!("-Dnether.config={}", crate::agent::global_config(paths).display()));
         crate::agent::ensure_pack(&opts.game_dir, if v.legacy_args.is_some() { cp.last().map(|p| p.as_path()) } else { None });
-        // Nether capes (backend content + cape API); unset = the agent skips capes. The agent looks up the players
-        // it sees (UUIDs only) at the API, so Settings > Privacy can turn capes off (config.json launcher.capes).
+        // capes and cosmetics (player API); unset = the agent shows none. The agent looks up the players it sees
+        // (hash prefixes only) at the API, so Settings > Privacy can turn them off (config.json launcher.capes).
         let capes = crate::store::config(paths)["launcher"]["capes"].as_bool().unwrap_or(true);
-        let (content, api) = if capes { (crate::backend::content_url(), crate::backend::api_url()) } else { (String::new(), String::new()) };
-        if !content.is_empty() { jvm.insert(0, format!("-Dnether.capeContent={content}")); }
-        if !api.is_empty() { jvm.insert(0, format!("-Dnether.capeApi={api}")); }
-        // the agent only accepts cape PNGs whose sha256 is in the signed manifest (none verified = no capes)
-        if !content.is_empty() {
-            if let Some(f) = crate::backend::cape_sums_file(&c) { jvm.insert(0, format!("-Dnether.capeSums={}", f.display())); }
-            if let Some(f) = crate::backend::cosmetic_sums_file(&c) { jvm.insert(0, format!("-Dnether.cosSums={}", f.display())); }
+        let api = if capes { crate::backend::api_url() } else { String::new() };
+        if !api.is_empty() {
+            jvm.insert(0, format!("-Dnether.capeApi={api}"));
+            // agents before the catalog merge only draw capes when this is set; current ones ignore it
+            jvm.insert(0, format!("-Dnether.capeContent={}", crate::backend::content_url()));
+            // checksums of this player's own items (private uploads too); public ones the agent checks with the API
+            if let Some(f) = crate::ugc::cape_sums_file() { jvm.insert(0, format!("-Dnether.capeSums={}", f.display())); }
+            if let Some(f) = crate::ugc::cosmetic_sums_file() { jvm.insert(0, format!("-Dnether.cosSums={}", f.display())); }
         }
         // check in as a Nether player so others see the nametag icon (background, best effort; the API never gets the
         // Minecraft token, see backend::hello)
@@ -527,15 +496,10 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
     let log_dir = opts.game_dir.join("logs");
     fs::create_dir_all(&log_dir)?;
     let log = fs::File::create(log_dir.join("launcher.log")).context("creating launcher.log")?;
-    #[cfg(windows)]
-    use std::os::windows::process::CommandExt;
     let mut cmd = Command::new(&java);
-    #[cfg(windows)]
-    {
-        // no console window; above-normal priority so background programs don't take the game's CPU time
-        cmd.creation_flags(if stock { 0x0800_0000 } else { 0x0800_0000 | 0x0000_8000 });
-        if !stock { prefer_fast_gpu(&java); }
-    }
+    // no console window; above-normal priority so background programs don't take the game's CPU time
+    platform::game_process(&mut cmd, !stock);
+    if !stock { platform::prefer_fast_gpu(&java); }
     let child = cmd
         .args(&jvm)
         .arg(&v.main_class)
@@ -545,8 +509,7 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
         .stderr(Stdio::from(log))
         .spawn()
         .with_context(|| format!("starting {}", java.display()))?;
-    #[cfg(windows)]
-    if !stock { full_speed(&child); }
+    if !stock { platform::full_speed(&child); }
     progress("Minecraft started", 1.0);
     Ok(child)
 }

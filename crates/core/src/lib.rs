@@ -1,72 +1,40 @@
 #![deny(clippy::correctness, clippy::suspicious)]
-//! Nether Client core: Mojang install/launch engine and Microsoft account auth.
+//! Nether Client core: installing and launching the game, instances, content, social and the backend clients.
+//!
+//! Being split into focused crates (docs/develop/architecture.md). Modules that have moved are re-exported here
+//! under their old names, so `nether_core::paths`, `nether_core::download` and so on keep working for the launcher:
+//! - `nether-common`: paths, store, trash, Progress, Session
+//! - `nether-net`: download, net, update
+//! - `nether-auth`: auth
+//! - `nether-game`: mojang, versions, java, fabric, forge, optifine, gamesettings, rpacks
+//! - `nether-social`: p2p, party, party_net, cosmetics, preview, skins
 pub mod agent;
 pub mod art;
-pub mod auth;
 pub mod backend;
 pub mod combine;
 pub mod cosimport;
-pub mod cosmetics;
-pub mod gamesettings;
 pub mod horizon;
-pub mod download;
-pub mod fabric;
-pub mod forge;
 pub mod friends;
 pub mod instances;
 pub mod modrinth;
-pub mod net;
 pub mod modpack;
 pub mod mclogs;
 pub mod netherpack;
-pub mod optifine;
 pub mod news;
 pub mod import;
 pub mod launchers;
 pub mod worlds;
 pub mod crash;
-pub mod java;
 pub mod launch;
-pub mod mojang;
-pub mod paths;
 pub mod perf;
 pub mod preflight;
-pub mod preview;
 pub mod restore;
-pub mod rpacks;
-pub mod p2p;
-pub mod party;
-pub mod party_net;
 pub mod share;
-pub mod skins;
 pub mod snapshot;
-pub mod store;
-pub mod trash;
 pub mod ugc;
-pub mod update;
-pub mod versions;
 
-use std::sync::Arc;
-
-/// Progress callback: (message, fraction 0..=1).
-pub type Progress = Arc<dyn Fn(&str, f32) + Send + Sync>;
-
-/// The account a game is launched with.
-#[derive(Clone, Debug)]
-pub struct Session {
-    pub name: String,
-    pub uuid: String,
-    pub access_token: String,
-    /// "msa" for Microsoft accounts, "legacy" for offline.
-    pub user_type: String,
-}
-
-impl Session {
-    /// Offline session (single-player and offline-mode servers only).
-    pub fn offline(name: &str) -> Self {
-        let mut d = md5::compute(format!("OfflinePlayer:{name}")).0;
-        d[6] = (d[6] & 0x0f) | 0x30;
-        d[8] = (d[8] & 0x3f) | 0x80;
-        Session { name: name.into(), uuid: hex::encode(d), access_token: "0".into(), user_type: "legacy".into() }
-    }
-}
+pub use nether_auth as auth;
+pub use nether_common::{paths, store, trash, Progress, Session};
+pub use nether_net::{download, net, update};
+pub use nether_game::{fabric, forge, gamesettings, java, mojang, optifine, rpacks, versions};
+pub use nether_social::{cosmetics, p2p, party, party_net, preview, skins};

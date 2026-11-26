@@ -1,5 +1,6 @@
-//! Nether's own backend (see `backend/README.md`): signed static content (news, cape directory, Nether packs) and the
-//! cape API, both served by one Cloudflare Worker. URLs: env `NETHER_CONTENT_URL` / `NETHER_API_URL`,
+//! Nether's own backend (see `backend/README.md`): signed static content (news, Nether packs) and the player API
+//! (who plays Nether, what they wear), both served by one Cloudflare Worker. Capes and cosmetics are all public
+//! community items (`ugc.rs`): Nether's own are uploads credited to "Nether". URLs: env `NETHER_CONTENT_URL` / `NETHER_API_URL`,
 //! then `config.json` `content_url` / `api_url`, then the defaults below. Empty = not set up yet: every call is a no-op.
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -145,24 +146,11 @@ pub struct NewsItem {
 }
 fn nether_tag() -> String { "NETHER".into() }
 
-#[derive(Clone, Debug, Deserialize)]
-pub struct Cape {
-    pub id: String,
-    pub name: String,
-    #[serde(default)]
-    pub desc: String,
-    /// Animated capes: milliseconds per frame (20..=2000, default 100).
-    #[serde(default)]
-    pub frametime: Option<u32>,
-}
-
-/// Cape ids are path and URL components: lowercase letters, digits, `_`, `-`, 1 to 32 characters.
+/// Look ids (capes and cosmetics, `u-` + 12 characters since every item is public) are path and URL components:
+/// lowercase letters, digits, `_`, `-`, 1 to 32 characters.
 pub fn valid_cape_id(id: &str) -> bool { (1..=32).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-') }
 
-/// Largest cape PNG accepted (bytes).
-pub const MAX_CAPE_PNG: usize = 4 * 1024 * 1024;
-
-/// Layout of a cape image (same rule in content/sign.mjs and the agent's Capes.java).
+/// Layout of a cape image (same rule in the Worker's ugc.js and the agent's Capes.java).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CapeLayout {
     /// Scale over the 64x32 (or 22x17) base size.
@@ -187,23 +175,6 @@ impl CapeLayout {
     }
 }
 
-/// A cape texture: PNG signature and a valid cape layout before anything decodes it.
-fn valid_cape_png(b: &[u8]) -> bool {
-    if b.len() < 33 || b.len() > MAX_CAPE_PNG || b[..8] != [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a] || &b[12..16] != b"IHDR" { return false; }
-    let (w, h) = (u32::from_be_bytes([b[16], b[17], b[18], b[19]]), u32::from_be_bytes([b[20], b[21], b[22], b[23]]));
-    CapeLayout::of(w, h).is_some()
-}
-
-impl Cape {
-    /// The verified, layout-checked PNG bytes of this cape, or None.
-    pub fn png(&self, c: &Client) -> Option<Vec<u8>> {
-        if !valid_cape_id(&self.id) { return None; }
-        content_file(Some(c), &format!("capes/{}.png", self.id)).filter(|b| valid_cape_png(b))
-    }
-    /// Milliseconds per animation frame.
-    pub fn frame_ms(&self) -> u32 { self.frametime.unwrap_or(100).clamp(20, 2000) }
-}
-
 /// Launcher news, newest first.
 pub fn news(c: &Client) -> Vec<NewsItem> { content(c, "news.json") }
 /// Nether packs published in the content repo (network; call off the UI thread).
@@ -212,93 +183,8 @@ pub fn packs(c: &Client) -> Vec<NetherPack> { content(c, "packs.json") }
 pub fn packs_cached() -> Vec<NetherPack> {
     content_file(None, "packs.json").and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
 }
-/// The Nether cape directory (invalid ids dropped).
-pub fn capes(c: &Client) -> Vec<Cape> { content::<Cape>(c, "capes/index.json").into_iter().filter(|x| valid_cape_id(&x.id)).collect() }
 
-/// Hand the game agent the verified cape hashes (`<id> <sha256> <ms per frame>` per line); it only accepts a cape PNG that matches.
-/// Returns the file path, None when there is no verified manifest (the agent then shows no capes).
-/// Community capes this player has (own uploads, hearts) are added from `ugc::known_all`.
-pub fn cape_sums_file(c: &Client) -> Option<std::path::PathBuf> {
-    let m = manifest(Some(c));
-    let mut out = String::new();
-    if let Some(m) = &m {
-        let dir = capes(c);
-        for (path, e) in &m.files {
-            if let Some(id) = path.strip_prefix("capes/").and_then(|p| p.strip_suffix(".png")) {
-                let ms = dir.iter().find(|x| x.id == id).map_or(100, Cape::frame_ms);
-                if valid_cape_id(id) { out.push_str(&format!("{id} {} {ms}\n", e.sha256)); }
-            }
-        }
-    }
-    for it in crate::ugc::known_all().into_iter().filter(|i| i.what() == Some(crate::cosimport::What::Cape)) { out.push_str(&format!("{} {} {}\n", it.id, it.png, it.frame_ms())); }
-    if m.is_none() && out.is_empty() { return None; }
-    let f = cache_dir().join("cape-sums.txt");
-    std::fs::create_dir_all(cache_dir()).ok()?;
-    crate::store::write_atomic(&f, out.as_bytes()).ok()?;
-    Some(f)
-}
-
-// ---------------- cosmetics ----------------
-
-/// A Nether cosmetic from `cosmetics/index.json`: a hat, headband, mask, back item, wings, aura or pet (model + texture, see `cosmetics.rs`).
-#[derive(Clone, Debug, Deserialize)]
-pub struct Cosmetic {
-    pub id: String,
-    pub name: String,
-    #[serde(rename = "type")]
-    pub kind: String,
-    #[serde(default)]
-    pub desc: String,
-    /// Animated textures: milliseconds per frame (20..=2000, default 100).
-    #[serde(default)]
-    pub frametime: Option<u32>,
-}
-
-/// Largest cosmetic model JSON accepted (bytes).
-pub const MAX_COSMETIC_MODEL: usize = 512 * 1024;
-
-impl Cosmetic {
-    pub fn kind(&self) -> Option<crate::cosmetics::Kind> { crate::cosmetics::Kind::parse(&self.kind) }
-    pub fn frame_ms(&self) -> u32 { self.frametime.unwrap_or(100).clamp(20, 2000) }
-    /// The verified model JSON and PNG (signed manifest, size-checked), or None.
-    pub fn files(&self, c: &Client) -> Option<(Vec<u8>, Vec<u8>)> {
-        if !valid_cape_id(&self.id) { return None; }
-        let js = content_file(Some(c), &format!("cosmetics/{}.json", self.id)).filter(|b| b.len() <= MAX_COSMETIC_MODEL)?;
-        let png = content_file(Some(c), &format!("cosmetics/{}.png", self.id)).filter(|b| b.len() <= MAX_CAPE_PNG && b.starts_with(&[0x89, b'P', b'N', b'G']))?;
-        Some((js, png))
-    }
-    /// Downloaded, verified and parsed, ready to draw.
-    pub fn load(&self, c: &Client) -> Option<crate::cosmetics::Loaded> {
-        let (js, png) = self.files(c)?;
-        crate::cosmetics::Loaded::from_bytes(&self.id, self.kind()?, &js, &png, self.frame_ms()).ok()
-    }
-}
-
-/// The cosmetics directory (invalid ids and unknown types dropped).
-pub fn cosmetics(c: &Client) -> Vec<Cosmetic> {
-    content::<Cosmetic>(c, "cosmetics/index.json").into_iter().filter(|x| valid_cape_id(&x.id) && x.kind().is_some()).collect()
-}
-
-/// Hand the agent the verified cosmetics (`<id> <type> <model sha256> <png sha256> <ms per frame>` per line); it only
-/// accepts files that match. None when there is no verified manifest (the agent then draws no cosmetics).
-/// Community cosmetics this player has (own uploads, hearts) are added from `ugc::known_all`.
-pub fn cosmetic_sums_file(c: &Client) -> Option<std::path::PathBuf> {
-    let mut out = String::new();
-    if let Some(m) = manifest(Some(c)) {
-        for x in cosmetics(c) {
-            let (Some(js), Some(png)) = (m.files.get(&format!("cosmetics/{}.json", x.id)), m.files.get(&format!("cosmetics/{}.png", x.id))) else { continue };
-            out.push_str(&format!("{} {} {} {} {}\n", x.id, x.kind, js.sha256, png.sha256, x.frame_ms()));
-        }
-    }
-    for it in crate::ugc::known_all() {
-        if let (Some(crate::cosimport::What::Item(k)), Some(model)) = (it.what(), it.model.as_deref()) { out.push_str(&format!("{} {} {model} {} {}\n", it.id, k.as_str(), it.png, it.frame_ms())); }
-    }
-    if out.is_empty() { return None; }
-    let f = cache_dir().join("cosmetic-sums.txt");
-    std::fs::create_dir_all(cache_dir()).ok()?;
-    crate::store::write_atomic(&f, out.as_bytes()).ok()?;
-    Some(f)
-}
+// ---------------- what players wear ----------------
 
 /// What a Nether player wears: cape and cosmetics by slot (`cosmetics::Kind::ALL` order); "" = none.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -492,13 +378,12 @@ mod tests {
     use super::*;
     use ring::signature::{Ed25519KeyPair, KeyPair};
 
+    // needs the private backend's content next to the repository (build.rs sets backend_content)
+    #[cfg(backend_content)]
     #[test]
     fn content_files_parse() {
         let news: Vec<NewsItem> = serde_json::from_str(include_str!("../../../backend/content/news.json")).unwrap();
         assert_eq!(news[0].tag, "NETHER");
-        let capes: Vec<Cape> = serde_json::from_str(include_str!("../../../backend/content/capes/index.json")).unwrap();
-        // the shipped list may be empty (the snowman test cape was taken out 2026-11-15); every entry must have a valid id
-        assert!(capes.iter().all(|c| valid_cape_id(&c.id)));
         let _: Vec<NetherPack> = serde_json::from_str(include_str!("../../../backend/content/packs.json")).unwrap();
     }
 
@@ -525,13 +410,14 @@ mod tests {
         assert!(verify_manifest(&k2, bad.as_bytes(), &s2, 1000, 0).is_err(), "bad hash entry");
     }
 
+    #[cfg(backend_content)]
     #[test]
     fn shipped_manifest_matches_embedded_key() {
         let body = include_bytes!("../../../backend/content/manifest.json");
         let sig = include_str!("../../../backend/content/manifest.sig");
         let key = hex::decode(CONTENT_KEY_HEX.trim()).unwrap();
         let m = verify_manifest(&key, body, sig, 0, 0).unwrap();
-        assert!(m.files.contains_key("news.json") && m.files.contains_key("capes/index.json"));
+        assert!(m.files.contains_key("news.json"));
         for (p, e) in &m.files {
             let b = std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../backend/content").join(p)).unwrap();
             assert_eq!(hex::encode(Sha256::digest(&b)), e.sha256, "{p}");
@@ -546,21 +432,9 @@ mod tests {
     }
 
     #[test]
-    fn cape_ids_and_pngs() {
-        assert!(valid_cape_id("snowman") && valid_cape_id("a_b-9"));
+    fn look_ids_and_cape_layouts() {
+        assert!(valid_cape_id("u-abcdefghij12") && valid_cape_id("a_b-9"));
         for bad in ["", "A", "x/../y", "..", "a.b", "a b", "x\\y", &"a".repeat(33)] { assert!(!valid_cape_id(bad), "{bad}"); }
-        // a 64x32 PNG header (signature + IHDR), all the check reads; no shipped cape file is needed
-        let mut png = vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13];
-        png.extend_from_slice(b"IHDR");
-        png.extend_from_slice(&64u32.to_be_bytes());
-        png.extend_from_slice(&32u32.to_be_bytes());
-        png.extend_from_slice(&[8, 6, 0, 0, 0, 0, 0, 0, 0]);
-        assert!(valid_cape_png(&png));
-        let mut huge = png.clone();
-        huge[16..20].copy_from_slice(&20000u32.to_be_bytes());
-        assert!(!valid_cape_png(&huge));
-        assert!(!valid_cape_png(b"not a png at all, definitely not a png file"));
-        assert!(!valid_cape_png(&vec![0u8; 70_000]));
         let l = |w, h| CapeLayout::of(w, h).map(|l| (l.scale, l.frames, l.full));
         assert_eq!(l(64, 32), Some((1, 1, true)));
         assert_eq!(l(2048, 1024), Some((32, 1, true)));

@@ -1,5 +1,5 @@
 //! Interface sounds: a small earcon set, synthesized (no sound files) and played on a background thread.
-//! The same tones are made by the agent (`agent/…/ov/Sfx.java`) so the launcher and the in-game menus sound alike.
+//! The same tones are made by the agent (`ov/Sfx.java` in the nether-agent repo) so the launcher and the in-game menus sound alike.
 //! Research: vault `research/GUI sounds research.md`. Setting: `prefs.sounds` (0 off, 1 quiet, 2 normal).
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};

@@ -1,0 +1,37 @@
+# Builds and tests every push and pull request: the safety net for refactors. The in-game client has its own CI in
+# github.com/clapbxt/nether-agent.
+#   core     tests of nether-core and the crates under it, on Linux; also catches Windows-only code outside cfg(windows)
+#   windows  the whole workspace type-checks on the platform we ship
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@v2
+      - name: Test the launcher libraries
+        run: cargo test -p nether-common -p nether-net -p nether-auth -p nether-game -p nether-social -p nether-core
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@v2
+      - name: Check the workspace
+        run: cargo check --workspace --all-targets
