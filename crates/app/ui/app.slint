@@ -9,14 +9,15 @@ import "fonts/JetBrainsMono-Bold.ttf";
 
 import { Theme } from "theme.slint";
 export { Theme }
-import { Backend, Setup, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat, Sound, NewInst } from "structs.slint";
-export { Backend, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat, Setup, Sound, NewInst }
+import { Backend, Setup, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat, Sound, NewInst, HostState, HostPlayer, HostBackup, ConLine } from "structs.slint";
+export { Backend, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat, Setup, Sound, NewInst, HostState, HostPlayer, HostBackup, ConLine }
 import { Btn, Eyebrow, Page, Slash, Hatch, PlayButton, Icon, Ico, Pulse, LinkBtn, Heading, Scrim, WinButtons, Field, FocusTrap, Toggle, Dropdown } from "components.slint";
 import { HomeScreen } from "home.slint";
 import { SetupFlow } from "setup.slint";
 import { InstancesScreen } from "instances.slint";
 import { DiscoverScreen } from "discover.slint";
 import { WardrobeScreen } from "wardrobe.slint";
+import { HostScreen } from "host.slint";
 import { Community, CommItem } from "community.slint";
 export { Community, CommItem }
 import { SettingsScreen } from "settings.slint";
@@ -97,13 +98,14 @@ export component AppWindow inherits Window {
     property <float> s: Math.min(root.width / 1516px, root.height / 900px);
     property <length> W: root.width / root.s;
     property <length> H: root.height / root.s;
-    property <[string]> labels: ["Home", "Play", "Discover", "Wardrobe"];
-    property <[int]> ids: [0, 1, 2, 5];
-    // rail icons (design/module-icons, 20 grid): home, play (game pad), discover, wardrobe
+    property <[string]> labels: ["Home", "Play", "Discover", "Host", "Wardrobe"];
+    property <[int]> ids: [0, 1, 2, 4, 5];
+    // rail icons (design/module-icons, 20 grid): home, play (game pad), discover, host (server rack), wardrobe
     property <[string]> icons: [
         "M3 9l7-6 7 6v8H3z M8 17v-5h4v5",
         "M6 6h8a4 4 0 0 1 4 4v1.5a2.5 2.5 0 0 1-4.4 1.6L12.5 12h-5l-1.1 1.1A2.5 2.5 0 0 1 2 11.5V10a4 4 0 0 1 4-4z M6.5 8.2v3 M5 9.7h3 M13.2 9h.1 M14.8 10.6h.1",
         "M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0 M13 7l-2 4-4 2 2-4z",
+        "M3 3.5h14v5H3z M3 11.5h14v5H3z M6 6h.1 M6 14h.1 M9.5 6h4.5 M9.5 14h4.5",
         "M7 3l3 2 3-2 4 3-2 3h-2v8H7V9H5L3 6z"];
     // left icon rail (Lunar-style); every page sits right of it
     property <length> rail: 76px;
@@ -215,6 +217,8 @@ export component AppWindow inherits Window {
             }
         }
         if root.tab == 2: Page { x: root.rail; y: root.top; width: root.W - root.rail; height: root.body; DiscoverScreen { width: root.W - root.rail; height: root.body; } }
+        if root.tab == 4: Page { x: root.rail; y: root.top; width: root.W - root.rail; height: root.body;
+            HostScreen { width: root.W - root.rail; height: root.body; go-instances => { root.open-idx = -1; Backend.play-tab = 0; Backend.refilter(); root.tab = 1; } } }
         if root.tab == 5: Page { x: root.rail; y: root.top; width: root.W - root.rail; height: root.body; WardrobeScreen { width: root.W - root.rail; height: root.body; page <=> root.ward-page; } }
         if root.tab == 6: Page { x: root.rail; y: root.top; width: root.W - root.rail; height: root.body; SettingsScreen { width: root.W - root.rail; height: root.body; } }
 
@@ -381,12 +385,13 @@ export component AppWindow inherits Window {
                     }
                     if Backend.job-prog >= 0: Text { x: parent.width - 60px; width: 60px; text: "\{Math.floor(Math.clamp(Backend.job-prog, 0, 1) * 100)}%"; color: Theme.tx; font-family: Theme.mono; font-size: 12px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; }
                 }
-                if !Backend.job-on && Backend.running-count > 0: Rectangle {
+                if !Backend.job-on && (Backend.running-count > 0 || HostState.live): Rectangle {
                     Pulse { x: 0px; y: 24px; }
                     Text { x: 20px; width: parent.width - 140px; overflow: elide; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 500; vertical-alignment: center;
-                        text: Backend.running-label != "" ? Backend.running-label : Backend.running-count == 1 ? "1 game running" : "\{Backend.running-count} games running"; }
+                        text: (Backend.running-count == 0 ? "" : Backend.running-label != "" ? Backend.running-label : Backend.running-count == 1 ? "1 game running" : "\{Backend.running-count} games running")
+                            + (Backend.running-count > 0 && HostState.live ? "  ·  " : "") + (HostState.live ? HostState.deck-text : ""); }
                 }
-                if !Backend.job-on && Backend.running-count == 0: Text {
+                if !Backend.job-on && Backend.running-count == 0 && !HostState.live: Text {
                     x: 0px; text: "Nothing running"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center;
                 }
                 Text { x: 0px; width: parent.width; visible: !Backend.job-on; text: "\{Backend.instances.length} " + (Backend.instances.length == 1 ? "profile" : "profiles"); color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; }
