@@ -17,6 +17,7 @@ NetherClientSetup.exe ──installs──▶ nether-app.exe (launcher, Slint UI
 | Launcher | `crates/app` | Rust + Slint | `nether-app.exe` |
 | Launcher screens | `crates/ui` (compiles `crates/app/ui/*.slint`) | Slint | library |
 | Core library | `crates/core` | Rust | library, used by the launcher and the dev examples |
+| Shared base, network, accounts | `crates/common`, `crates/net`, `crates/auth` | Rust | libraries under `nether-core` |
 | In-game client | `agent/` | Java (bytecode level 8) | `nether-agent.jar` + `schema.json` |
 | Media helper | `crates/media` | Rust | `nether-media.exe` |
 | Installer / updater | `crates/installer` | Rust + Slint | `NetherClientSetup.exe` |
@@ -27,9 +28,21 @@ One Rust module per screen or area in `src/` and one `.slint` file per screen in
 design tokens and `ui/components.slint` the shared widgets. Rust owns all state and pushes it into Slint globals;
 long-running work runs on background threads and reports through a jobs list, so the UI thread never blocks.
 
-## Core (`crates/core`)
+## Core (`crates/core` and the crates under it)
 
-Everything that isn't UI:
+Everything that isn't UI. `nether-core` is being split into crates that each have one job, lowest layer first:
+
+| Crate | Folder | Job | Depends on |
+|---|---|---|---|
+| `nether-common` | `crates/common` | `paths`, `store` (safe JSON files), `trash`, `Progress`, `Session` | nothing of ours |
+| `nether-net` | `crates/net` | `download` (shared client, hash-checked fetches), `net` (UPnP, IPs), `update` (signed auto-update) | common |
+| `nether-auth` | `crates/auth` | Microsoft sign-in, accounts file, launch ownership gate | common |
+| `nether-core` | `crates/core` | installs, launching, instances, content, social, backend clients, Horizon | all of the above |
+
+`nether-core` re-exports the moved modules under their old names (`nether_core::paths`, `nether_core::download`,
+`nether_core::auth`...), so code that uses them doesn't change. A crate may only depend on crates above it in the
+table. What is still in core is tangled in cycles (for example `launch` needs `backend` for cape settings, and
+`forge` and `launch` call each other), which have to be untangled before the rest can move.
 
 - **Accounts:** Microsoft device-code OAuth → Xbox Live → Minecraft services. Tokens are stored in Windows Credential
   Manager, never in plain files.

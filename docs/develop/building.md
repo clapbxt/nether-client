@@ -55,7 +55,7 @@ profiles and accounts.
 ## Check your change
 
 ```powershell
-cargo test -p nether-core
+cargo test -p nether-common -p nether-net -p nether-auth -p nether-core
 cargo clippy --workspace --release
 ```
 
@@ -64,6 +64,6 @@ rewrites the jars when an input changed, so an unchanged agent doesn't make the 
 the private backend's content (`backend/content`) next to the repository; without it they are left out of the build.
 
 The same checks run on every push and pull request in GitHub Actions (`.github/workflows/ci.yml`): the agent build,
-`nether-core`'s tests on Linux, and a type check of the whole workspace on Windows.
+the launcher libraries' tests on Linux, and a type check of the whole workspace on Windows.
 
 Next: [Tweaking and dev tools](dev-tools.md) for screenshots, scripted launches and more.

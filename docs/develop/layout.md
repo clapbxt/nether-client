@@ -4,7 +4,11 @@
 crates/
   app/          launcher: src/*.rs (one file per area), ui/*.slint (theme, components, one file per screen)
   ui/           compiles crates/app/ui into its own crate, so app changes don't rebuild the generated UI
-  core/         launcher logic, no UI; res/ = embedded public keys and resource pack; examples/ = dev harnesses
+  common/       nether-common: data folder paths, safe JSON files, Recycle Bin, Progress, Session (no other crate deps)
+  net/          nether-net: HTTP downloads with hash checks, UPnP / public IP, launcher auto-update; res/ = release key
+  auth/         nether-auth: Microsoft account sign-in and the launch ownership gate
+  core/         nether-core: the rest of the launcher logic, no UI, and a facade re-exporting the crates above under
+                their old module names; res/ = content key and resource pack; examples/ = dev harnesses
   media/        nether-media.exe (Windows media session helper)
   installer/    NetherClientSetup.exe (setup wizard, uninstall, update applier)
 agent/          in-game client
