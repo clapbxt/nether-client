@@ -27,6 +27,7 @@ final class MediaPlayer extends Module {
 
     MediaPlayer() {
         super("media", "Media Player", "HUD", "Now playing from Spotify, your browser or any app in the Windows media controls, with album art and playback controls. Reads local playback info only; nothing leaves your PC.", true, false, 0.7, 0.2);
+        add(Setting.header("Layout"));
         add(Setting.choice("layout", "Layout", "Card", "Card", "Compact", "Art only"));
         java.util.function.BooleanSupplier box = () -> !str("layout").equals("Art only");
         add(Setting.slider("width", "Width", 150, 320, 2, 220).when(box));
@@ -36,9 +37,11 @@ final class MediaPlayer extends Module {
         add(Setting.bool("marquee", "Scroll long titles", true).when(box));
         add(Setting.choice("time", "Time", "Elapsed / total", "Elapsed / total", "Remaining", "Hidden").when(() -> str("layout").equals("Card")));
         add(Setting.choice("bar", "Progress bar", "Thin", "Thin", "Thick", "Hidden"));
+        add(Setting.header("Behaviour"));
         add(Setting.choice("controls", "Controls", "When the cursor is free", "When the cursor is free", "Always", "Never").hint("Clickable while chat, the inventory or this menu is open"));
         add(Setting.choice("paused", "When paused", "Show", "Show", "Fade after 10 s", "Hide"));
         add(Setting.choice("source", "Source", "Auto", "Auto", "Prefer Spotify", "Prefer browser").hint("Auto follows the player Windows shows in its volume flyout"));
+        add(Setting.header("Keys"));
         add(Setting.key("playKey", "Play / pause key", -1).hint("Delete clears a key"));
         add(Setting.key("nextKey", "Next track key", -1));
         add(Setting.key("prevKey", "Previous track key", -1));

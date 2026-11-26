@@ -17,6 +17,7 @@ final class BackgroundFps extends Module {
 
     private BackgroundFps() {
         super("bgfps", "Background FPS", "Utility", "Lowers the frame rate while the game is in the background, so your PC runs cooler and quieter.", false, true, 0, 0);
+        add(Setting.header("Frame limits"));
         add(Setting.slider("behind", "Another window in front", 5, 60, 5, 30).hint("FPS while you use another window. The game stays watchable."));
         add(Setting.slider("min", "Minimized", 1, 30, 1, 5).hint("FPS while the game is minimized. 5 and up keep the game running at full speed."));
     }

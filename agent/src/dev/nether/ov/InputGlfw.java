@@ -203,7 +203,7 @@ final class InputGlfw extends Plat {
     static final class Poller implements Hook.Poll {
         @Override public int key(int r, long w, int key) {
             if (Input.dead) return r;
-            if (Input.menuOpen || Input.worldGuiOpen) return 0;
+            if (Input.menuOpen || Input.worldGuiOpen && !LyricsWorldPanel.dragging()) return 0;
             return Input.devOnly ? 0 : r;
         }
 

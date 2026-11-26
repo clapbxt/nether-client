@@ -345,7 +345,7 @@ final class Friends {
             float tw = Gfx.width(Gfx.SEMI, 11, tabs[i], 1.2f) + 26;
             boolean sel = tab == i, hv = Menu.in(tx, y, tw, 28);
             float t = Menu.an("ftab" + i, hv || sel);
-            Gfx.rect(tx, y, tw, 28, 14, sel ? Gfx.a(Th.ac, 0.9f) : Gfx.a(Th.ov, 0.04f + 0.05f * t));
+            Gfx.rect(tx, y, tw, 28, 6, sel ? Th.ac : Gfx.a(Th.ov, 0.05f + 0.05f * t));
             Gfx.textC(Gfx.SEMI, 11, tx + tw / 2, y + 14, sel ? 0xFFFFFFFF : Gfx.mix(Th.dim, Th.tx, t), tabs[i], 1.2f);
             if (Menu.hit(tx, y, tw, 28)) { tab = i; scroll = scrollT = 0; more = null; }
             tx += tw + 6;

@@ -172,7 +172,7 @@ final class PlatSdl extends Plat implements Hook.Sdl {
     @Override public Object keys(Object state) {
         if (!(state instanceof ByteBuffer)) return state;
         if (Input.dead) return state;
-        boolean hide = Input.menuOpen || Input.worldGuiOpen || Input.devOnly;
+        boolean hide = Input.menuOpen || Input.worldGuiOpen && !LyricsWorldPanel.dragging() || Input.devOnly;
         if (!hide) return state;
         ByteBuffer s = (ByteBuffer) state;
         int n = s.capacity();

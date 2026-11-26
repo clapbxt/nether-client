@@ -67,7 +67,7 @@ export component DiscoverScreen inherits Rectangle {
         if Backend.pack-rows.length == 0 && !Backend.pack-loading: Rectangle {
             x: 0px; y: 29px; width: parent.width; height: 230px;
             Hatch { width: parent.width; height: parent.height; }
-            Text { x: 32px; y: 52px; text: "NO RESULTS"; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 700; }
+            Text { x: 32px; y: 52px; text: "NO RESULTS"; color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 700; }
             Text {
                 x: 32px; y: 94px; width: 760px; wrap: word-wrap; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts;
                 text: root.src == 2 ? "No Nether packs are available right now. Check your connection and open this page again." : "Nothing on Modrinth matches this search. Try fewer words.";

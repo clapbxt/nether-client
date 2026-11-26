@@ -34,9 +34,12 @@ import java.util.concurrent.Executors;
 final class Screenshots extends Module {
     Screenshots() {
         super("screenshots", "Screenshots", "Utility", "Browse, favorite, copy and delete your screenshots without leaving the game. A preview shows after each one.", false, true, 0, 0);
+        add(Setting.header("Keys"));
         add(Setting.key("openKey", "Open screenshots key", 73).hint("Default I. Opens the browser in a world."));
+        add(Setting.header("After a screenshot"));
         add(Setting.bool("preview", "Preview after a screenshot", true).hint("A small card with the picture for a few seconds."));
         add(Setting.bool("autoCopy", "Copy new screenshots", false).hint("Puts each new screenshot on the clipboard, ready to paste into a chat."));
+        add(Setting.header("Library"));
         add(Setting.action("browse", "Your screenshots", "OPEN", Screenshots::show));
     }
 
@@ -450,8 +453,7 @@ final class Screenshots extends Module {
         if (view >= l.size()) view = l.isEmpty() ? -1 : l.size() - 1;
 
         // header
-        Gfx.rect(x + 24, y + 26, 3, 16, 1.5f, Th.ac);
-        Gfx.text(Gfx.SEMI, 15, x + 34, y + 34, Th.tx, "SCREENSHOTS", false, 1.4f);
+        Gfx.text(Gfx.HEAD, 16, x + 24, y + 34, Th.tx, "SCREENSHOTS", false, 1.4f);
         String sub = shots.size() == 1 ? "1 PICTURE" : shots.size() + " PICTURES";
         Gfx.text(Gfx.MONO, 9, x + 34 + Gfx.width(Gfx.SEMI, 15, "SCREENSHOTS", 1.4f) + 14, y + 35, Th.mut, sub, false, 1.4f);
         if (!pg) { // on the title screen the bar is the way back
@@ -484,9 +486,8 @@ final class Screenshots extends Module {
             float bw = Gfx.width(Gfx.SEMI, 10, lab, 1.2f) + 22;
             boolean on = filter == i, hv = Menu.in(fx, fy, bw, 24);
             float a = Menu.an("ssf" + i, on), hh = Menu.an("ssfh" + i, hv);
-            Gfx.rect(fx, fy, bw, 24, 12, on ? Gfx.a(Th.ac, 0.2f + 0.05f * hh) : Gfx.a(Th.ov, 0.03f + 0.05f * hh));
-            if (on) Gfx.ring(fx, fy, bw, 24, 12, 1, Gfx.a(Th.ac2, 0.6f));
-            Gfx.textC(Gfx.SEMI, 10, fx + bw / 2, fy + 12, Gfx.mix(Gfx.mix(Th.mut, Th.tx, hh), Th.ac2, a), lab, 1.2f);
+            Gfx.rect(fx, fy, bw, 24, 6, Gfx.mix(Gfx.a(Th.ov, 0.05f + 0.05f * hh), Th.ac, a));
+            Gfx.textC(Gfx.SEMI, 10, fx + bw / 2, fy + 12, Gfx.mix(Gfx.mix(Th.mut, Th.tx, hh), 0xFFFFFFFF, a), lab, 1.2f);
             if (Menu.hit(fx, fy, bw, 24)) { filter = i; scrollT = 0; }
             fx += bw + 6;
         }
@@ -540,7 +541,7 @@ final class Screenshots extends Module {
         String key = thumb(s.name);
         Gfx.rect(x, y, w, h, 6, Th.s2);
         if (key != null) Gfx.image(key, x, y, w, h, 0xFFFFFFFF, 6);
-        Gfx.ring(x, y, w, h, 6, 1, Gfx.mix(Th.ln, Th.ac2, a));
+        Gfx.ring(x, y, w, h, 6, 1, Gfx.mix(Th.ln, Th.dim, a));
         boolean f = fav(s.name);
         float sx = x + w - 22, sy = y + 6;
         boolean sh = Menu.in(sx, sy, 18, 18);
@@ -777,9 +778,8 @@ final class Screenshots extends Module {
             float bw = 70;
             boolean on = tool == i, hv = Menu.in(bx, ty, bw, 28);
             float hh = Menu.an("sstool" + i, hv);
-            Gfx.rect(bx, ty, bw, 28, 6, on ? Gfx.a(Th.ac, 0.22f) : Gfx.a(Th.ov, 0.035f + 0.05f * hh));
-            Gfx.ring(bx, ty, bw, 28, 6, 1, on ? Gfx.a(Th.ac2, 0.7f) : Th.ln);
-            Gfx.textC(Gfx.SEMI, 11, bx + bw / 2, ty + 14, on ? Th.tx : Gfx.mix(Th.dim, Th.tx, hh), tools[i], 1.2f);
+            Gfx.rect(bx, ty, bw, 28, 6, on ? Th.ac : Gfx.a(Th.ov, 0.035f + 0.05f * hh));
+            Gfx.textC(Gfx.SEMI, 11, bx + bw / 2, ty + 14, on ? 0xFFFFFFFF : Gfx.mix(Th.dim, Th.tx, hh), tools[i], 1.2f);
             if (Menu.hit(bx, ty, bw, 28)) tool = i;
             bx += bw + 6;
         }

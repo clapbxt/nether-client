@@ -372,11 +372,19 @@ final class Capes {
         java.awt.image.BufferedImage b = preview.get(id);
         if (b != null) return b;
         String sum = SUMS.get(id);
-        if (sum == null || CONTENT == null || previewAsked.putIfAbsent(id, true) != null) return null;
+        // community capes (a party member's upload) are not in the signed manifest: the player API says what they are
+        boolean ugc = sum == null && Ugc.is(id) && API != null;
+        if ((sum == null || CONTENT == null) && !ugc || previewAsked.putIfAbsent(id, true) != null) return null;
         worker(() -> {
             try {
-                byte[] d = get(CONTENT + "/capes/" + id + ".png", MAX_PNG);
-                if (!sum.equals(sha256(d))) return;
+                String want = sum;
+                if (ugc) {
+                    String[] m = Ugc.meta(id);
+                    if (m == null || !"cape".equals(m[0])) return; // not public (stays asked for the session)
+                    want = m[2];
+                }
+                byte[] d = ugc ? Ugc.blob(want, MAX_PNG) : get(CONTENT + "/capes/" + id + ".png", MAX_PNG);
+                if (!want.equals(sha256(d))) return;
                 java.awt.image.BufferedImage img = Icons.decode(new ByteArrayInputStream(d));
                 int[] l = img == null ? null : layout(img.getWidth(), img.getHeight());
                 if (l == null) return;

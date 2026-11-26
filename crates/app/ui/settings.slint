@@ -131,11 +131,9 @@ export component SettingsScreen inherits Rectangle {
     property <[length]> tops: [0px, root.y2, root.y3, root.y4, root.y5, root.y6, root.y7];
     property <int> at: root.pos >= Math.min(root.y7 - 120px, root.end) ? 6 : (root.pos >= root.y6 - 120px ? 5 : (root.pos >= root.y5 - 120px ? 4 : (root.pos >= root.y4 - 120px ? 3 : (root.pos >= root.y3 - 120px ? 2 : (root.pos >= root.y2 - 120px ? 1 : 0)))));
     property <[ThemeSpec]> themes: [
-        { name: "NetherGlass", sub: "Dark", bg: #0D1015, panel: #1C222B, line: #ffffff1f, text: #E9EDF3, r: 10px },
-        { name: "NetherGlass", sub: "Light", bg: #E8ECF2, panel: #FFFFFF, line: #141E3224, text: #151922, r: 10px },
-        { name: "NetherMinecraft", sub: "Dark", bg: #161616, panel: #2C2C2C, line: #ffffff33, text: #FFFFFF, r: 0px },
-        { name: "NetherMinecraft", sub: "Light", bg: #B4B4B4, panel: #D0D0D0, line: #00000059, text: #1E1E1E, r: 0px }];
-    property <[string]> accent-names: ["Racing red", "Ember", "Acid", "Cobalt", "Violet"];
+        { name: "Nether", sub: "Dark", bg: #0F0F11, panel: #202024, line: #ffffff21, text: #F4F4F5, r: 8px },
+        { name: "Nether", sub: "Light", bg: #EEEEF1, panel: #FFFFFF, line: #00000024, text: #18181B, r: 8px }];
+    property <[string]> accent-names: ["Fire", "Racing red", "Acid", "Cobalt", "Violet"];
     property <[color]> accents: [#F76A05, #E5372D, #22A845, #1F6FEB, #8B3DFF];
     // L2: what connects where (Rule 6); k = what for, url = hosts and when
     property <[Link]> hosts: [
@@ -221,7 +219,7 @@ export component SettingsScreen inherits Rectangle {
 
         // ---------- 05 personalization ----------
         SectionHead { x: 0px; y: root.y5; width: root.cw; idx: "05"; title: "PERSONALIZATION"; }
-        SetRow { x: 0px; y: root.y5 + 24px; width: root.cw; reserve: 230px; title: "Accent colour"; sub: root.accent-names[Backend.lp-accent] + " · PLAY, selection marks and live states";
+        SetRow { x: 0px; y: root.y5 + 24px; width: root.cw; reserve: 230px; title: "Accent colour"; sub: root.accent-names[Backend.lp-accent] + " · PLAY, buttons, selection marks and live states";
             for c[i] in root.accents: Rectangle {
                 x: parent.width - 5 * 36px + 6px + i * 36px; y: 18px; width: 28px; height: 28px; background: c;
                 border-width: Backend.lp-accent == i ? 2px : 0px; border-color: Theme.ice; border-radius: Theme.r2;
@@ -232,8 +230,8 @@ export component SettingsScreen inherits Rectangle {
                 if sf.has-focus || (sw.has-hover && Backend.lp-accent != i): Rectangle { x: -4px; y: -4px; width: parent.width + 8px; height: parent.height + 8px; border-radius: Theme.r3; border-width: 1px; border-color: sf.has-focus ? Theme.ice : Theme.ln2; }
             }
         }
-        SetRow { x: 0px; y: root.y5 + 152px; width: root.cw; height: 104px; reserve: 540px; title: "Theme"; sub: "Also the in-game menu and HUD. Glass is rounded and smooth; Minecraft is square with pixel type.";
-            for t[i] in root.themes: ThemeTile { x: parent.width - 4 * 128px + 8px + i * 128px; y: 12px; spec: t; on: Backend.lp-theme == i;
+        SetRow { x: 0px; y: root.y5 + 152px; width: root.cw; height: 104px; reserve: 300px; title: "Theme"; sub: "Dark or Light, also in the in-game menu. Your accent colour is the only colour that changes.";
+            for t[i] in root.themes: ThemeTile { x: parent.width - 2 * 128px + 8px + i * 128px; y: 12px; spec: t; on: Backend.lp-theme == i;
                 pick => { Backend.lp-theme = i; Backend.save-launcher(); } }
         }
         SetRow { x: 0px; y: root.y5 + 88px; width: root.cw; reserve: 340px; title: "Text size"; sub: "Bigger reading text. Titles keep their size.";

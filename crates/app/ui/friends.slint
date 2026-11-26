@@ -145,7 +145,7 @@ export component FriendsPanel inherits Rectangle {
     TouchArea { }
 
     // header: title + online count, status picker, settings
-    Text { x: 22px; y: 16px; text: "FRIENDS"; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; }
+    Text { x: 22px; y: 16px; text: "FRIENDS"; color: Theme.tx; font-family: Theme.pix; font-size: 24px; font-weight: 700; }
     Text { x: 22px; y: 46px; text: !Friends.ready ? "Sign in to use Friends" : (Friends.total == 0 ? "No friends yet" : "\{Friends.online} of \{Friends.total} online");
         color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
     gear := IconBtn { x: parent.width - 22px - 32px; y: 20px; d: FIco.gear; tip: "Friends settings"; solid: false; clicked => { Friends.settings = !Friends.settings; } }

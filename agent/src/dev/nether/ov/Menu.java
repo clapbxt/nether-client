@@ -25,6 +25,8 @@ final class Menu {
     private static int sub;
 
     static boolean hudEdit;
+    /** Live view editor: the menu steps aside so the real game shows the module (fire, shield, hand, mount); null = off. */
+    static Module live;
     /** The menu key opens on the hub (logo + settings / MODS / wardrobe); a hub button opens the panel on that tab. */
     static boolean hub = true;
     static String page;
@@ -64,7 +66,7 @@ final class Menu {
     static int tDir; // screen swipe: -1 from the left (Settings), 1 from the right (Wardrobe), 0 rises (Mods / hub)
 
     /** Eased 0..1 for an animation of dur seconds starting delay seconds into timer t. */
-    private static float k(float t, float delay, float dur) {
+    static float k(float t, float delay, float dur) {
         float x = Math.max(0, Math.min(1, (t - delay) / dur));
         return 1 - (1 - x) * (1 - x) * (1 - x);
     }
@@ -86,6 +88,8 @@ final class Menu {
         drag = capture = null;
         searchFocus = false;
         hudEdit = false;
+        live = null;
+        dev.nether.agent.Hook.fireForce = false;
         WpDialog.open = false;
         Splashes.open = false;
         WorldShare.open = false;
@@ -246,6 +250,15 @@ final class Menu {
         capture = null;
     }
 
+    /** Opens the menu straight on a module's settings page (the 3D lyric panel's MENU button). */
+    static void openModule(String id) {
+        Input.setMenu(true);
+        if (!Input.menuOpen) return;
+        hub = false;
+        if (tab >= T_WARDROBE) setTab(1);
+        openPage(id);
+    }
+
     private static void openPage(String id) {
         commitEdit();
         gridScroll = scrollT;
@@ -267,17 +280,18 @@ final class Menu {
         }
         if (!press && k != 259 && k != 258 && (k < 262 || k > 267)) return; // held keys repeat only Backspace, Tab, arrows, paging
         if (ctrl) {
+            if (k == 70 && page != null && !hub && tab < T_WARDROBE && SettingsPage.takesTyping(page)) { SettingsPage.search(null); return; } // Ctrl+F on a page: its settings
             if (k == 70) { commitEdit(); ColorPicker.close(); hub = false; page = null; if (tab >= T_WARDROBE) setTab(1); searchFocus = true; return; } // Ctrl+F
             if (k == 69) { commitEdit(); ColorPicker.close(); page = null; hudEdit = true; return; }                                   // Ctrl+E
             if (k == 86) { typedSearch(Plat.cur.clipboard()); return; }                                                                // Ctrl+V
             return;
         }
-        if (hub) { // Left / Right / Tab move between the three buttons, Enter / Space press one (MODS when none is focused)
-            if (k == 262 || k == 263 || k == 258) {
-                int d = k == 263 || (k == 258 && shift) ? -1 : 1;
+        if (hub) { // arrows move in the 2x2 grid (0 MODS, 1 WARDROBE, 2 FRIENDS, 3 SETTINGS), Tab cycles, Enter / Space press one (MODS when none is focused)
+            if (k == 262 || k == 263 || k == 258 || k == 264 || k == 265) {
+                int d = k == 264 || k == 265 ? (k == 264 ? 2 : -2) : k == 263 || (k == 258 && shift) ? -1 : 1;
                 fCur = fCur < 0 ? (d > 0 ? 0 : 3) : Math.floorMod(fCur + d, 4);
                 kbNav = true;
-            } else if (press && (k == 257 || k == 335 || k == 32)) { if (fCur < 0) fCur = 1; act = 257; kbNav = true; }
+            } else if (press && (k == 257 || k == 335 || k == 32)) { if (fCur < 0) fCur = 0; act = 257; kbNav = true; }
             return;
         }
         if (k == 259) {
@@ -318,10 +332,13 @@ final class Menu {
     /** Esc steps back one level: typing -> layout editor selection -> layout editor -> colour picker -> search -> page -> hub -> close. */
     private static void esc() {
         if (Wardrobe.ask) { Wardrobe.ask = false; return; }
+        if (editSet != null && editKind == QUERY) { SettingsPage.clearSearch(); return; }
         if (fieldFocus()) { editWp = -1; editSet = null; return; }
         if (hudEdit) { if (!HudEditor.esc()) { hudEdit = false; HudEditor.reset(); } return; }
+        if (live != null) { live = null; return; }
         if (ColorPicker.id != null) { ColorPicker.close(); return; }
         if (page == null && (searchFocus || !search.isEmpty())) { search = ""; searchFocus = false; scroll = scrollT = 0; fCur = -1; return; }
+        if (page != null && SettingsPage.clearSearch()) return;
         if (page != null) { commitEdit(); page = null; gridT = 0; scroll = scrollT = gridScroll; fCur = kbNav ? gridFocus : -1; return; }
         if (!hub) { toHub(); return; }
         Input.setMenu(false);
@@ -329,6 +346,7 @@ final class Menu {
 
     private static void typedSearch(String t) {
         if (hudEdit || capture != null || t.isEmpty() || (!hub && tab >= T_WARDROBE)) return;
+        if (!hub && page != null && SettingsPage.takesTyping(page)) { if (!t.trim().isEmpty()) SettingsPage.search(t); return; } // a module page searches its settings
         String q = (search + t.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ')).replaceFirst("^\\s+", "");
         q = q.substring(0, Math.min(24, q.length()));
         if (q.equals(search)) return; // a lone space: nothing to search for (Space toggles the focused card)
@@ -344,7 +362,8 @@ final class Menu {
 
     // ---------------------------------------------------------------- text fields
 
-    static final int TXT = 0, NUM = 1, HEX = 2, NAME = 3;
+    /** QUERY: a module page's settings search ({@link SettingsPage}), filtered live while typed. */
+    static final int TXT = 0, NUM = 1, HEX = 2, NAME = 3, QUERY = 4;
     static int editWp = -1, editMax = 64, editKind;
     static String editBuf = "";
     /** Field being typed into: "<module id>:<key>" (Enter or a click elsewhere saves, Esc cancels). */
@@ -384,6 +403,7 @@ final class Menu {
                 }
                 case HEX: ColorPicker.hex(id, key, v); break;
                 case NAME: Profiles.nameBuf = v; break;
+                case QUERY: SettingsPage.query = v; break;
                 default: Config.set(id, key, v);
             }
         }
@@ -401,7 +421,7 @@ final class Menu {
         String v = ed ? editBuf : value;
         float t = an("fld" + key, ed || in(x, y, w, h));
         Gfx.rect(x, y, w, h, 6, Gfx.a(Th.ov, 0.035f + 0.03f * t));
-        Gfx.ring(x, y, w, h, 6, 1, ed ? Th.ac : Gfx.mix(Th.ln, Th.ln2, t));
+        Gfx.ring(x, y, w, h, 6, 1, ed ? Th.dim : Gfx.mix(Th.ln, Th.ln2, t));
         int font = kind == HEX || kind == NUM ? Gfx.MONO : Gfx.UI;
         float tx = x + 10, cy = y + h / 2;
         if (kind == HEX) tx += Gfx.text(Gfx.MONO, 12, tx, cy, Th.mut, "#") + 1;
@@ -489,7 +509,7 @@ final class Menu {
         Gfx.rect(x + 3 + 16 * t, y + 3, 14, 14, 7, Gfx.mix(Th.dim, 0xFFFFFFFF, t));
     }
 
-    private static double slider(String id, float x, float y, float w, double v, double min, double max, double step) {
+    static double slider(String id, float x, float y, float w, double v, double min, double max, double step) {
         boolean hv = in(x - 6, y - 10, w + 12, 20) || id.equals(drag);
         float t = an(id, hv);
         if (click && in(x - 6, y - 10, w + 12, 20)) { drag = id; click = false; }
@@ -516,7 +536,7 @@ final class Menu {
         boolean hv = in(x, y, w, 28);
         float t = an("k" + cid, hv || cap);
         Gfx.rect(x, y, w, 28, 6, Gfx.a(Th.ov, 0.035f + 0.04f * t));
-        Gfx.ring(x, y, w, 28, 6, 1, cap || clash ? Th.ac : Gfx.mix(Th.ln, Th.ln2, t));
+        Gfx.ring(x, y, w, 28, 6, 1, cap ? Th.dim : clash ? 0xFFE5372D : Gfx.mix(Th.ln, Th.ln2, t));
         Gfx.textC(Gfx.SEMI, 11, x + w / 2, y + 14, code < 0 && !cap ? Th.mut : Th.tx, name, 1f);
         if (hit(x, y, w, 28) || used(f) != 0) capture = cid;
     }
@@ -525,9 +545,9 @@ final class Menu {
 
     /** Open the Nether menu at a tab (the party lobby's CHANGE OUTFIT). */
     static void openTab(int t) {
-        hub = false;
-        tab = t;
         Input.setMenu(true);
+        // Opening the menu runs opened(), which resets it to the hub. Navigate only after that reset.
+        go(t);
     }
 
     /** Title screen with the top bar: every Menu screen is a page under it (TitleNav). */
@@ -651,7 +671,12 @@ final class Menu {
                     Gfx.s = sc;
                     Gfx.alpha = e;
                 }
-                if (Screenshots.open) Screenshots.drawBrowser(e, wheel);
+                SettingsPage.before();
+                if (live != null && !liveOk(live)) live = null;
+                dev.nether.agent.Hook.fireForce = live instanceof Views.Fire;
+                if (live instanceof Lyrics) LyricsStudio.live((Lyrics) live, e, wheel);
+                else if (live != null) liveEdit(e, wheel);
+                else if (Screenshots.open) Screenshots.drawBrowser(e, wheel);
                 else if (PackBrowser.open) PackBrowser.draw(e, wheel);
                 else if (PackMixer.open) PackMixer.draw(e, wheel);
                 else if (WorldShare.open) WorldShare.draw(e, wheel);
@@ -683,6 +708,8 @@ final class Menu {
                     clickRt = c1;
                     Wardrobe.askDraw(e);
                 } else if (hub) hub(e); else panel(wheel, e);
+                SettingsPage.after();
+                if (tip != null && live != null) tooltip(0);
                 if (want && pageMode()) { TitleNav.drawOver(fbW, fbH); Gfx.s = sc; }
             } finally { Gfx.round = false; }
             if (click && fieldFocus()) commitEdit(); // clicked somewhere else
@@ -702,30 +729,31 @@ final class Menu {
     private static void hub(float e) {
         // over the title screen the hub is the only thing to look at: its buttons and logo recede further
         Gfx.rect(0, 0, W, H, 0, Gfx.a(0xFF000000, (Th.light() ? 0.18f : 0.34f) + (MainMenu.title ? 0.26f : 0)));
-        float lh = 150, sq = 52, mw = 232, gap = 8, rw = sq * 3 + mw + gap * 3; // fireball + NETHER CLIENT wordmark
-        float y = (H - (lh + 24 + sq)) / 2 + (1 - e) * 14, x = (W - rw) / 2, by = y + lh + 24;
-        float a0 = Gfx.alpha, kl = k(tS, 0, 0.34f), ks = k(tS, 0.12f, 0.3f), km = k(tS, 0.07f, 0.3f);
+        // 2x2 grid: MODS / WARDROBE over FRIENDS / SETTINGS, equal tiles (icon + label)
+        float lh = 150, bw0 = 196, bh = 56, gap = 10, rw = bw0 * 2 + gap, gh = bh * 2 + gap;
+        float y = (H - (lh + 24 + gh)) / 2 + (1 - e) * 14, x = (W - rw) / 2, by = y + lh + 24;
+        float a0 = Gfx.alpha, kl = k(tS, 0, 0.34f), k0 = k(tS, 0.07f, 0.3f), k1 = k(tS, 0.12f, 0.3f);
         Gfx.alpha = a0 * kl;
         Logo.brand(W / 2 - Logo.brandWidth(lh) / 2, y - (1 - kl) * 18, lh);
-        Gfx.alpha = a0 * ks;
-        boolean bs = hubBtn("hs", x - (1 - ks) * 16, by + (1 - ks) * 14, sq, sq, "settings", null);
-        Gfx.alpha = a0 * km;
-        boolean bm = hubBtn("hm", x + sq + gap, by + (1 - km) * 14, mw, sq, null, "MODS");
-        Gfx.alpha = a0 * ks;
-        boolean bw = hubBtn("hw", x + sq + mw + gap * 2 + (1 - ks) * 16, by + (1 - ks) * 14, sq, sq, "wardrobe", null);
-        float fx = x + sq * 2 + mw + gap * 3 + (1 - ks) * 16, fy = by + (1 - ks) * 14;
-        boolean bf = hubBtn("hf", fx, fy, sq, sq, "friends", null);
+        Gfx.alpha = a0 * k0;
+        boolean bm = hubBtn("hm", x, by + (1 - k0) * 14, bw0, bh, "all", "MODS");
+        boolean bw = hubBtn("hw", x + bw0 + gap, by + (1 - k0) * 14, bw0, bh, "wardrobe", "WARDROBE");
+        Gfx.alpha = a0 * k1;
+        float fx = x, fy = by + bh + gap + (1 - k1) * 14;
+        boolean bf = hubBtn("hf", fx, fy, bw0, bh, "friends", "FRIENDS");
+        boolean bs = hubBtn("hs", x + bw0 + gap, fy, bw0, bh, "settings", "SETTINGS");
+        float ks = k1;
         int badge = Friends.badge();
         if (badge > 0) { // requests + asks to join
             String b = badge > 9 ? "9+" : String.valueOf(badge);
-            float bw0 = Math.max(16, Gfx.width(Gfx.UI, 10, b) + 8);
-            Gfx.rect(fx + sq - bw0 + 4, fy - 4, bw0, 16, 8, Th.ac);
-            Gfx.textC(Gfx.UI, 10, fx + sq - bw0 / 2 + 4, fy + 4, 0xFFFFFFFF, b, 0);
+            float bw1 = Math.max(16, Gfx.width(Gfx.UI, 10, b) + 8);
+            Gfx.rect(fx + bw0 - bw1 + 4, fy - 4, bw1, 16, 8, Th.ac);
+            Gfx.textC(Gfx.UI, 10, fx + bw0 - bw1 / 2 + 4, fy + 4, 0xFFFFFFFF, b, 0);
         }
         int n = Friends.everyone;
         if (n > 0) { // live count under the buttons: green dot + "1,284 players online"
             String t = String.format(java.util.Locale.US, "%,d", n), u = n == 1 ? "  player online" : "  players online";
-            float tw = Gfx.width(Gfx.SEMI, 12, t), uw = Gfx.width(Gfx.UI, 12, u), lx = W / 2 - (14 + tw + uw) / 2, ly = by + sq + 22 + (1 - ks) * 14;
+            float tw = Gfx.width(Gfx.SEMI, 12, t), uw = Gfx.width(Gfx.UI, 12, u), lx = W / 2 - (14 + tw + uw) / 2, ly = by + gh + 22 + (1 - ks) * 14;
             Gfx.alpha = a0 * ks * 0.92f;
             Gfx.rect(lx, ly - 5, 10, 10, 5, Gfx.a(0xFF3FB950, 0.2f));
             Gfx.rect(lx + 2, ly - 3, 6, 6, 3, 0xFF3FB950);
@@ -747,7 +775,11 @@ final class Menu {
         Gfx.ring(x, y, w, h, 6, 1, Gfx.mix(Th.ln2, Gfx.a(Th.tx, 0.4f), t));
         int c = Gfx.mix(Th.dim, Th.tx, 0.4f + 0.6f * t);
         float dy = down ? 1 : 0;
-        if (icon != null) ModIcons.draw(icon, x + w / 2 - 11, y + h / 2 - 11 + dy, 22, c);
+        if (icon != null && label != null) { // icon + label, centred as a pair
+            float lw = Gfx.width(Gfx.SEMI, 15, label), ix = x + (w - (22 + 10 + lw)) / 2;
+            ModIcons.draw(icon, ix, y + h / 2 - 11 + dy, 22, c);
+            Gfx.text(Gfx.SEMI, 15, ix + 32, y + h / 2 + dy, c, label);
+        } else if (icon != null) ModIcons.draw(icon, x + w / 2 - 11, y + h / 2 - 11 + dy, 22, c);
         else Gfx.textC(Gfx.SEMI, 16, x + w / 2, y + h / 2 + dy, c, label, 0);
         return hit(x, y, w, h) | used(f) != 0;
     }
@@ -770,7 +802,7 @@ final class Menu {
         hub = true;
         tS = 0;
         tDir = 0;
-        fCur = kbNav ? (tab == T_SETTINGS ? 0 : tab == T_WARDROBE ? 2 : tab == T_FRIENDS ? 3 : 1) : -1;
+        fCur = kbNav ? (tab == T_SETTINGS ? 3 : tab == T_WARDROBE ? 1 : tab == T_FRIENDS ? 2 : 0) : -1;
     }
 
     /** Leave the hub for the screen of tab t. */
@@ -848,8 +880,8 @@ final class Menu {
             if (tab != i) {
                 Gfx.alpha = a0 * k(tS, 0.05f + i * 0.03f, 0.24f);
                 float h = an("chh" + i, in(x + cxs[i], y, cws[i], 28));
-                Gfx.rect(x + cxs[i], y, cws[i], 28, 14, Gfx.mix(Gfx.a(Th.s2, 0.7f), Th.s3, h));
-                Gfx.ring(x + cxs[i], y, cws[i], 28, 14, 1, Th.ln2);
+                // Feather category pills: filled quiet plates, no outline; the open one is the accent
+                Gfx.rect(x + cxs[i], y, cws[i], 28, 6, Gfx.mix(Th.s2, Th.s3, h));
             }
         }
         Gfx.alpha = a0;
@@ -858,7 +890,7 @@ final class Menu {
             float f0 = Math.min(1, Gfx.dt * 14);
             pillX += (cxs[tab] - pillX) * f0;
             pillW += (cws[tab] - pillW) * f0;
-            Gfx.rect(x + pillX, y, pillW, 28, 14, Th.ac);
+            Gfx.rect(x + pillX, y, pillW, 28, 6, Th.ac);
         }
         for (int i = 0; i < T_WARDROBE; i++) {
             String c = String.valueOf(count(i));
@@ -876,7 +908,7 @@ final class Menu {
         Gfx.alpha = a0;
         float top = sy + TOP + 48;
         list(sx, top, sw, sh - (top - sy) - FOOT, wheel);
-        footer(page != null ? "Esc back to modules" : "Arrows move  \u00b7  Space toggle  \u00b7  Enter settings  \u00b7  Esc back");
+        footer(page != null ? (SettingsPage.takesTyping(page) ? "Type to search settings  ·  Arrows move  ·  Left / Right adjust  ·  Esc back to modules" : "Esc back to modules") : "Arrows move  \u00b7  Space toggle  \u00b7  Enter settings  \u00b7  Esc back");
     }
 
     /** Settings: gear + SETTINGS; General / Controls / Profiles. */
@@ -922,15 +954,11 @@ final class Menu {
         sx = (W - pw) / 2 + tDir * (1 - kk) * 70;
         sy = pg ? nh + 14 + Math.max(0, (H - nh - 30 - ph) / 2) * 0.35f + (1 - e) * 10 + (tDir == 0 ? (1 - kk) * 16 : 0)
             : (H - ph) / 2 + (1 - e) * 14 + (tDir == 0 ? (1 - kk) * 26 : 0);
-        // Glass: see-through panel, larger radius and a soft top sheen; Minecraft: near-opaque square plate with a 2 px edge
-        if (Th.round()) {
-            Gfx.rect(sx, sy, pw, ph, 14, Gfx.a(Th.s1, Th.light() ? 0.82f : 0.74f));
-            Gfx.rectG(sx, sy, pw, Math.min(ph, 180), 14, Gfx.a(0xFFFFFFFF, Th.light() ? 0.30f : 0.05f), 0);
-            Gfx.ring(sx, sy, pw, ph, 14, 1, Th.ln2);
-        } else {
-            Gfx.rect(sx, sy, pw, ph, 0, Gfx.a(Th.s1, 0.94f));
-            Gfx.ring(sx, sy, pw, ph, 0, 2, Th.ln2);
-        }
+        // v8: a near-solid charcoal / paper panel (Feather), small radius, faint top sheen and a soft drop shadow
+        Gfx.rect(sx - 2, sy + 4, pw + 4, ph + 6, Th.R + 4, Gfx.a(0xFF000000, Th.light() ? 0.10f : 0.30f));
+        Gfx.rect(sx, sy, pw, ph, Th.R, Gfx.a(Th.s1, Th.light() ? 0.94f : 0.90f));
+        Gfx.rectG(sx, sy, pw, Math.min(ph, 120), Th.R, Gfx.a(0xFFFFFFFF, Th.light() ? 0.25f : 0.03f), 0);
+        Gfx.ring(sx, sy, pw, ph, Th.R, 1, Th.ln2);
         float cy = sy + TOP / 2f;
         float tx = sx + 50;
         if (pg) tx = sx + 20; // the bar is the way back: no arrow, no close
@@ -941,7 +969,7 @@ final class Menu {
             if (hit(sx + 12, cy - 14, 28, 28)) toHub();
         }
         if (icon == null) { Logo.draw(tx, cy - 12, 24); tx += Logo.width(24) + 10; }
-        else { if (!ModIcons.drawItem(icon, tx, cy - 9, 18)) ModIcons.draw(icon, tx, cy - 9, 18, Th.ac2); tx += 28; }
+        else { if (!ModIcons.drawItem(icon, tx, cy - 9, 18)) ModIcons.draw(icon, tx, cy - 9, 18, Th.tx); tx += 28; }
         float tw = Gfx.text(Gfx.HEAD, 16, tx, cy, Th.tx, title);
         float cx = sx + pw - 16 - 28;
         if (!pg) {
@@ -970,7 +998,7 @@ final class Menu {
         if (hit(sx0, cy - 15, 250, 30)) searchFocus = true;
         float st = an("search", searchFocus || sh0);
         Gfx.rect(sx0, cy - 15, 250, 30, 4, Gfx.a(Th.s1, 0.5f));
-        Gfx.ring(sx0, cy - 15, 250, 30, 4, 1, Gfx.mix(Th.ln2, Th.ac, searchFocus ? st : 0));
+        Gfx.ring(sx0, cy - 15, 250, 30, 6, 1, Gfx.mix(Th.ln, Th.ln2, searchFocus ? 1 : st));
         ModIcons.draw("zoom", sx0 + 9, cy - 7, 14, Th.mut);
         if (search.isEmpty() && !searchFocus) {
             Gfx.text(Gfx.UI, 12, sx0 + 30, cy, Th.mut, "Search modules");
@@ -1018,14 +1046,14 @@ final class Menu {
     private static final float CARD_H = 132, GAP = 10, CARD_MIN = 172;
 
     /** Scrolls the view to the wheel within [0, contentH - viewH]; returns the max scroll. */
-    private static float scrollTo(float contentH, float viewH, float wheel) {
+    static float scrollTo(float contentH, float viewH, float wheel) {
         float maxS = Math.max(0, contentH - viewH);
         scrollT = Math.max(0, Math.min(maxS, scrollT - wheel * 46));
         scroll = Config.calm() ? scrollT : scroll + (scrollT - scroll) * Math.min(1, Gfx.dt * 16);
         return maxS;
     }
 
-    private static void scrollBar(float lx, float top, float lw, float viewH, float contentH, float maxS) {
+    static void scrollBar(float lx, float top, float lw, float viewH, float contentH, float maxS) {
         if (maxS <= 0) return;
         float th = Math.max(30, viewH * viewH / contentH);
         Gfx.rect(lx + lw - 8, top + (viewH - th) * (scroll / maxS), 3, th, 1.5f, Gfx.a(Th.ov, 0.16f));
@@ -1040,21 +1068,8 @@ final class Menu {
         if (page != null) {
             Module pm = null;
             for (Module m : Modules.all) if (m.id.equals(page)) pm = m;
-            if (pm != null) {
-                navCols = 1;
-                float contentH = 16 + ROW + expH(pm);
-                float maxS = scrollTo(contentH, viewH, wheel);
-                beginClip(lx, top, lw, viewH);
-                float y = top + 8 - scroll, a0 = Gfx.alpha, pk = k(pageT, 0, 0.26f);
-                Gfx.alpha = a0 * pk;
-                x += (1 - pk) * 40;
-                row(pm, x, y, w, focus(x, y, w, ROW), true);
-                expand(pm, x, y + ROW, w);
-                Gfx.alpha = a0;
-                endClip();
-                scrollBar(lx, top, lw, viewH, contentH, maxS);
-                return;
-            }
+            if (pm instanceof Lyrics) { navCols = 1; LyricsStudio.page((Lyrics) pm, lx, top, lw, viewH, wheel); return; }
+            if (pm != null) { SettingsPage.page(pm, lx, top, lw, viewH, wheel); return; }
             page = null;
         }
         List<Module> list = filtered();
@@ -1085,7 +1100,7 @@ final class Menu {
         for (String s : secs) {
             int n = 0;
             for (Module m : list) if ((tab == 1 ? m.cat : TABS[tab]).equals(s)) n++;
-            float tw = Gfx.text(Gfx.HEAD, 12, x + 4, y + 12, Th.dim, s);
+            float tw = Gfx.text(Gfx.SEMI, 12, x + 4, y + 12, Th.dim, s);
             String c = String.valueOf(n);
             float bw0 = Gfx.width(Gfx.UI, 10, c) + 12;
             Gfx.rect(x + 4 + tw + 10, y + 4, bw0, 16, 8, Th.s3);
@@ -1113,15 +1128,15 @@ final class Menu {
         boolean on = m.enabled(), lock = m.locked(), hv = in(x, y, w, CARD_H);
         float t = an("r" + m.id, hv || f && kbNav), on1 = an("on" + m.id, on);
         y -= t * 2;
-        Gfx.rect(x, y, w, CARD_H, 8, Gfx.mix(Gfx.a(Th.s2, 0.92f), Th.s3, t * 0.7f));
-        Gfx.ring(x, y, w, CARD_H, 8, 1, Gfx.mix(Th.ln, Th.ln2, t));
+        Gfx.rect(x, y, w, CARD_H, Th.R, Gfx.mix(Th.s2, Th.s3, t * 0.8f));
+        Gfx.ring(x, y, w, CARD_H, Th.R, 1, Gfx.mix(Th.ln, Th.ln2, t));
         float a0 = Gfx.alpha;
         if (lock) Gfx.alpha = a0 * 0.55f;
         // name + star
         boolean fav = m.fav();
         float sx = x + w - 28, sy = y + 6;
         boolean sh = in(sx, sy, 22, 22);
-        Gfx.text(Gfx.UI, 13, x + 12, y + 17, Gfx.mix(Th.dim, Th.tx, Math.max(t, on1)), fit(m.name, Gfx.UI, 13, w - 46, 0));
+        Gfx.text(Gfx.SEMI, 13, x + 12, y + 17, Gfx.mix(Th.dim, Th.tx, Math.max(t, on1)), fit(m.name, Gfx.SEMI, 13, w - 46, 0));
         if (fav || hv) drawStar(sx + 11, sy + 11, fav, fav ? 0xFFFFB020 : Gfx.mix(Th.mut, Th.tx, an("star" + m.id, sh)));
         boolean starHit = (fav || hv) && hit(sx, sy, 22, 22);
         // icon
@@ -1141,8 +1156,10 @@ final class Menu {
         boolean cogHit = hit(gx, by, bh, bh);
         float bx = gx + bh + 6, bw = x + w - 10 - bx;
         float bt = an("tg" + m.id, in(bx, by, bw, bh));
-        Gfx.rect(bx, by, bw, bh, 5, Gfx.mix(Gfx.a(Th.ov, 0.06f + 0.05f * bt), Gfx.mix(Th.ac, Th.ac2, bt), on1));
-        Gfx.textC(Gfx.SEMI, 10, bx + bw / 2, by + bh / 2, Gfx.mix(Th.dim, Th.onAccent(), on1), lock ? "UNAVAILABLE" : on ? "ENABLED" : "DISABLED", 0.6f);
+        // Feather: Enabled = green plate with green text, Disabled = quiet grey plate (state colours, not the accent)
+        int gOn = Th.light() ? 0xFFCFF2D8 : 0xFF1D5C2A, gTx = Th.light() ? 0xFF167C35 : 0xFF6BE58A;
+        Gfx.rect(bx, by, bw, bh, 5, Gfx.mix(Gfx.a(Th.ov, 0.06f + 0.05f * bt), Gfx.mix(gOn, 0xFFFFFFFF, 0.08f * bt), on1));
+        Gfx.textC(Gfx.UI, 10.5f, bx + bw / 2, by + bh / 2, Gfx.mix(Th.dim, gTx, on1), lock ? "Unavailable" : on ? "Enabled" : "Disabled", 0);
         Gfx.alpha = a0;
         if (lock && hv && m.lockNote() != null) tip = m.lockNote();
         int u = used(f);
@@ -1152,12 +1169,11 @@ final class Menu {
     }
 
     /** One list row: icon box, name + description, star, key chip, toggle. Click the name = settings, the pill = on / off. */
-    private static void row(Module m, float x, float y, float w, boolean f, boolean open) {
+    static void row(Module m, float x, float y, float w, boolean f, boolean open) {
         boolean on = m.enabled(), lock = m.locked();
         float hv0 = in(x, y, w, ROW) ? 1 : 0;
         float t = an("r" + m.id, hv0 > 0), o = an("ro" + m.id, open), on1 = an("on" + m.id, on);
         Gfx.rect(x, y, w, ROW, 4, Gfx.a(Th.ov, 0.04f * t + 0.05f * o));
-        if (o > 0.02f) Gfx.rect(x, y + 5, 2, ROW - 10, 1, Gfx.a(Th.ac, o));
         float a0 = Gfx.alpha;
         if (lock) Gfx.alpha = a0 * 0.55f;
         Gfx.rect(x + 12, y + (ROW - 28) / 2, 28, 28, 4, Gfx.a(Th.ov, 0.06f));
@@ -1165,7 +1181,7 @@ final class Menu {
         Gfx.alpha = a1 * (0.55f + 0.45f * on1); // item icons keep their colours: off = faded
         boolean item = ModIcons.drawItem(m.id, x + 18, y + ROW / 2f - 8, 16);
         Gfx.alpha = a1;
-        if (!item && !ModIcons.draw(m.id, x + 12 + 6.5f, y + ROW / 2f - 7.5f, 15, Gfx.mix(Th.dim, Th.ac2, on1)))
+        if (!item && !ModIcons.draw(m.id, x + 12 + 6.5f, y + ROW / 2f - 7.5f, 15, Gfx.mix(Th.dim, Th.tx, on1)))
             Gfx.textC(Gfx.HEAD, 12, x + 26, y + ROW / 2f, Th.dim, m.name.substring(0, 1), 0);
         // right side first: pill, key chip, star
         float rx = x + w - 14 - 30;
@@ -1205,49 +1221,93 @@ final class Menu {
         else if (a < 0 && open) { commitEdit(); ColorPicker.close(); page = null; }
     }
 
-    // ---------------------------------------------------------------- settings of one module, inline under its row
+    // ---------------------------------------------------------------- live view editor (fire, shield, hand, mount)
+
+    /** A view module that can be edited over the running game (in a world, its hook in place). */
+    static boolean liveOk(Module m) {
+        return (m instanceof Views.Fire || m instanceof Views.Shield || m instanceof Views.Hand || m instanceof Views.Ride)
+            && Game.player0() != null && !MainMenu.title && m.available()
+            || m instanceof Lyrics && Game.player0() != null && !MainMenu.title && m.available();
+    }
+
+    private static boolean liveDrag;
+    private static float liveX0, liveY0;
+    private static double liveA, liveB;
+    private static float liveScroll;
+
+    /**
+     * The game shows through (no dim, no panel over the middle): a settings sheet on the left, a status chip on top.
+     * Dragging anywhere else moves the effect (fire / shield height; hand sideways + height). The fire overlay is
+     * forced on while this is open (Hook.fireForce), so it is the game's own overlay, not a picture of it.
+     */
+    private static void liveEdit(float e, float wheel) {
+        Module m = live;
+        float pw = 392, px = 20, py = 20, top = 64, foot = 54;
+        float rows = SettingsPage.flatH(m, pw - 40);
+        float ph = Math.min(H - 40, top + rows + foot), view = ph - top - foot;
+        float a0 = Gfx.alpha;
+        Gfx.rect(px, py + 4, pw, ph, 12, Gfx.a(Gfx.BLACK, 0.35f * e));
+        Gfx.rect(px, py, pw, ph, 12, Gfx.a(Th.s1, 0.94f));
+        Gfx.ring(px, py, pw, ph, 12, 1, Th.ln2);
+        Gfx.rect(px + 18, py + 22, 7, 7, 4, Th.ac);
+        Gfx.text(Gfx.UI, 10, px + 32, py + 26, Th.ac2, "LIVE", false, 1.4f);
+        Gfx.text(Gfx.SEMI, 15, px + 18, py + 46, Th.tx, m.name);
+        boolean on = m.enabled();
+        String tl = on ? "ON" : "OFF";
+        pill("lv" + m.id, px + pw - 52, py + 38, on);
+        Gfx.text(Gfx.UI, 10, px + pw - 60 - Gfx.width(Gfx.UI, 10, tl, 1.2f), py + 47, on ? Th.tx : Th.mut, tl, false, 1.2f);
+        if (hit(px + pw - 62, py + 30, 56, 34)) { Config.set(m.id, "enabled", !on); Sfx.toggle(!on); }
+        // the rows scroll when they are taller than the screen (Ride View Editor)
+        float maxS = Math.max(0, rows - view);
+        if (in(px, py, pw, ph)) liveScroll = Math.max(0, Math.min(maxS, liveScroll - wheel * 40));
+        liveScroll = Math.min(liveScroll, maxS);
+        Gfx.clip(px, py + top, pw, view);
+        SettingsPage.flat(m, px + 20, py + top - liveScroll, pw - 40);
+        Gfx.unclip();
+        float fy = py + ph - foot + 12;
+        Gfx.rect(px + 1, py + ph - foot, pw - 2, 1, 0, Th.ln2);
+        if (fbutton("livedone", "DONE", px + 20, fy, 96, 30, true)) live = null;
+        if (fbutton("livereset", "RESET", px + 124, fy, 86, 30, false)) { ColorPicker.close(); m.reset(); }
+
+        // status chip, top centre of the game view
+        String note = !on ? "Turn it on to see your changes"
+            : m instanceof Views.Fire ? "This is the game's own fire  \u00b7  drag up or down to move it"
+            : m instanceof Views.Shield ? "Hold a shield to see it  \u00b7  drag up or down to move it"
+            : m instanceof Views.Hand ? "Drag to move your hand and held item"
+            : "Ride a horse, pig, camel or other mount to see it";
+        float cx = px + pw + (W - px - pw) / 2, nw = Gfx.width(Gfx.UI, 12, note) + 36;
+        Gfx.rect(cx - nw / 2, 18, nw, 32, 16, 0xD9101014);
+        Gfx.ring(cx - nw / 2, 18, nw, 32, 16, 1, Gfx.a(0xFFFFFFFF, 0.12f));
+        Gfx.textC(Gfx.UI, 12, cx, 34, 0xF2FFFFFF, note, 0);
+
+        // drag on the game view (outside the sheet) moves the effect, relative to where the drag began
+        boolean movable = m instanceof Views.Fire || m instanceof Views.Shield || m instanceof Views.Hand;
+        if (movable && click && !in(px, py, pw, ph) && !in(cx - nw / 2, 18, nw, 32)) {
+            liveDrag = true; liveX0 = L; liveY0 = T; click = false;
+            if (m instanceof Views.Hand) { liveA = m.num("x"); liveB = m.num("y"); }
+            else liveA = m.num("height");
+        }
+        if (liveDrag && !Input.btn[0]) liveDrag = false;
+        if (liveDrag) {
+            if (m instanceof Views.Hand) {
+                Config.set(m.id, "x", Math.round(Math.max(-0.6, Math.min(0.6, liveA + (L - liveX0) / W * 1.2)) * 100) / 100.0);
+                Config.set(m.id, "y", Math.round(Math.max(-0.6, Math.min(0.6, liveB - (T - liveY0) / H * 1.2)) * 100) / 100.0);
+            } else Config.set(m.id, "height", Math.round(Math.max(-0.5, Math.min(0, liveA - (T - liveY0) / H)) * 100) / 100.0);
+        }
+        Gfx.alpha = a0;
+    }
+
+    // ---------------------------------------------------------------- one setting row (the Lyrics studio's rows; other pages use SettingsPage)
 
     private static final float SROW = 46;
 
-    private static float expH(Module m) {
-        float h = 10;
-        if (m.lockNote() != null) h += 42;
-        for (int i = 0; i < m.settings.size(); i++) { Setting s = m.settings.get(i); if (m.row(i)) h += SROW + (s.t == Setting.COLOR && ColorPicker.isOpen(m.id, s.key) ? ColorPicker.H : 0); }
-        h += SROW; // the Enabled-free footer: reset buttons
-        if (m instanceof Waypoints) h += wpHeight((Waypoints) m);
-        if (ViewEditor.has(m)) h += ViewEditor.H + 12;
-        return h;
-    }
+    /** Opens the live view editor of m (the menu steps aside over the game). */
+    static void startLive(Module m) { live = m; liveDrag = false; }
 
-    private static void expand(Module m, float x, float y, float w) {
-        if (ColorPicker.id != null && !ColorPicker.id.equals(m.id)) ColorPicker.close();
-        float h = expH(m);
-        Gfx.rect(x + 6, y, w - 12, h - 4, 4, Gfx.a(Th.ov, 0.025f));
-        float lx = x + 52, lw = w - 52 - 20;
-        float yy = y + 6;
-        String note = m.lockNote();
-        if (note != null) {
-            Gfx.rect(lx, yy, lw, 34, 4, Gfx.a(Th.ac, 0.12f));
-            Gfx.rect(lx, yy, 3, 34, 1, Th.ac2);
-            Gfx.text(Gfx.UI, 11, lx + 14, yy + 17, Th.tx, note);
-            yy += 42;
-        }
-        Waypoints wp = m instanceof Waypoints ? (Waypoints) m : null;
-        if (wp == null && editWp >= 0) commitEdit();
-        if (ViewEditor.has(m)) { ViewEditor.draw(m, lx, yy + 4, lw, "ve" + m.id); yy += ViewEditor.H + 12; }
-        yy = settingRows(m, lx, yy, lw);
-        if (wp != null) { wpList(wp, lx, yy, lw); yy += wpHeight(wp); }
-        String rl = "Reset to default";
-        float rw = Gfx.width(Gfx.SEMI, 11, rl, 1.2f) + 32;
-        if (fbutton("reset" + m.id, rl, lx, yy + 6, rw, 28, false)) { ColorPicker.close(); m.reset(); }
-    }
-
-    /** The setting rows of module m from y; returns the y after them. */
-    private static float settingRows(Module m, float lx, float y, float lw) {
+    /** One setting row of module m at y (header, toggle, slider, colour, choice, key, text, action); returns the y after it. */
+    static float settingRow(Module m, Setting s, float lx, float y, float lw) {
         float rowH = SROW;
-        for (int si = 0; si < m.settings.size(); si++) {
-            Setting s = m.settings.get(si);
-            if (!m.row(si)) continue;
+        {
             float xr = lx + lw, rh = rowH;
             if (s.t == Setting.HEADER) {
                 if (s.fold != null) { // folding group: the whole row opens / closes it
@@ -1257,8 +1317,7 @@ final class Menu {
                     if (hit(lx - 4, y + 3, lw + 8, rowH - 6) || used(f) != 0) { if (op) Setting.open.remove(s.fold); else Setting.open.add(s.fold); }
                 } else Gfx.text(Gfx.UI, 10, lx, y + rowH - 14, Th.mut, s.label.toUpperCase(Locale.ROOT), false, 1.2f);
                 Gfx.rect(lx, y + rowH - 1, lw, 1, 0, Th.ln2);
-                y += rowH;
-                continue;
+                return y + rowH;
             }
             boolean f = focus(lx - 4, y + 3, lw + 8, rowH - 6);
             Gfx.text(Gfx.UI, 12, lx, y + rowH / 2 - (s.hint != null ? 7 : 0), Th.tx, s.label);
@@ -1301,7 +1360,7 @@ final class Menu {
                     boolean hv = in(x, by, bw, 28);
                     float t = an("cl" + id, hv || op);
                     Gfx.rect(x, by, bw, 28, 4, Gfx.a(Th.ov, 0.035f + 0.03f * t));
-                    Gfx.ring(x, by, bw, 28, 4, 1, op ? Th.ac : Gfx.mix(Th.ln, Th.ln2, t));
+                    Gfx.ring(x, by, bw, 28, 4, 1, op ? Th.dim : Gfx.mix(Th.ln, Th.ln2, t));
                     ColorPicker.swatch(x + 7, by + 6, 16, 16, col);
                     Gfx.text(Gfx.UI, 11, x + 31, by + 14, Th.tx, ch ? "RAINBOW" : Config.hex(col));
                     chevron(x + bw - 15, by + 14, op, Gfx.mix(Th.dim, Th.tx, t));
@@ -1399,7 +1458,7 @@ final class Menu {
             float w = Gfx.width(Gfx.UI, 12, names[i]) + 28;
             boolean sel = sub == i, hv = in(x, y, w, 28);
             float t = an("ss" + i, sel);
-            Gfx.rect(x, y, w, 28, 4, Gfx.a(Th.ac, 0.16f * t));
+            Gfx.rect(x, y, w, 28, 4, Gfx.a(Th.ov, 0.10f * t));
             if (!sel && hv) Gfx.rect(x, y, w, 28, 4, Gfx.a(Th.ov, 0.07f));
             Gfx.textC(Gfx.UI, 12, x + w / 2, y + 14, Gfx.mix(Th.dim, Th.tx, t), names[i], 0);
             if (hit(x, y, w, 28) && sub != i) { sub = i; scroll = scrollT = 0; fCur = -1; commitEdit(); }
@@ -1408,7 +1467,7 @@ final class Menu {
         if (sub == 1) { float sp = PH; PH -= 40; Controls.draw(cpx, cpy + 40, wheel); PH = sp; return; }
         if (sub == 2) { float sp = PH; PH -= 40; Profiles.draw(cpx, cpy + 40, wheel); PH = sp; return; }
         float lx = mx + 20, lw = mw - 40, top = py + TOP + 48, viewH = py + ph - FOOT - top;
-        float contentH = 8 + 62 + 62 + 62 + 30 + (page != null && page.equals("menu") ? expH(MainMenu.MODULE) : 0) + ROW + 20;
+        float contentH = 8 + 62 + 62 + 62 + 30 + (page != null && page.equals("menu") ? SettingsPage.inlineH(MainMenu.MODULE, lw) + 10 : 0) + ROW + 20;
         float maxS = Math.max(0, contentH - viewH);
         scrollT = Math.max(0, Math.min(maxS, scrollT - wheel * 46));
         scroll = Config.calm() ? scrollT : scroll + (scrollT - scroll) * Math.min(1, Gfx.dt * 16);
@@ -1416,15 +1475,14 @@ final class Menu {
         float yy = top + 8 - scroll;
         // theme
         Gfx.text(Gfx.UI, 13, lx, yy + 15, Th.tx, "Theme");
-        float cx = lx + lw - 4 * 96;
+        float cx = lx + lw - Th.NAMES.length * 96;
         Gfx.text(Gfx.UI, 10, lx, yy + 31, Th.mut,
-            fit("Glass is rounded and smooth, Minecraft square and pixel. Also the launcher.", Gfx.UI, 10, cx - lx - 12, 0));
-        for (int i = 0; i < 4; i++) {
+            fit("Dark or Light. Your accent is the only colour that changes. Also the launcher.", Gfx.UI, 10, cx - lx - 12, 0));
+        for (int i = 0; i < Th.NAMES.length; i++) {
             boolean sel = Th.theme == i, hv = in(cx, yy + 8, 90, 28);
             float t = an("th" + i, sel);
-            Gfx.rect(cx, yy + 8, 90, 28, 4, Gfx.a(Th.ac, 0.16f * t));
-            Gfx.ring(cx, yy + 8, 90, 28, 4, 1, Gfx.mix(Th.ln2, Th.ac, t));
-            Gfx.textC(Gfx.UI, 11, cx + 45, yy + 22, Gfx.mix(Th.dim, Th.tx, Math.max(t, hv ? 1 : 0)), Th.LABELS[i], 0);
+            Gfx.rect(cx, yy + 8, 90, 28, 6, Gfx.mix(Gfx.a(Th.ov, 0.05f), Th.ac, t));
+            Gfx.textC(Gfx.UI, 11, cx + 45, yy + 22, Gfx.mix(Gfx.mix(Th.dim, Th.tx, hv ? 1 : 0), 0xFFFFFFFF, t), Th.LABELS[i], 0);
             if (hit(cx, yy + 8, 90, 28)) Config.set("client", "theme", Th.NAMES[i]);
             cx += 96;
         }
@@ -1467,7 +1525,7 @@ final class Menu {
         chevron(lx + lw - 20, yy + ROW / 2f, open, Th.dim);
         if (hit(lx, yy, lw, ROW) || used(f) != 0) { commitEdit(); ColorPicker.close(); page = open ? null : "menu"; }
         yy += ROW + 2;
-        if (open) expand(mm, lx, yy, lw);
+        if (open) SettingsPage.inline(mm, lx, yy + 8, lw);
         endClip();
         if (maxS > 0) {
             float th = Math.max(30, viewH * viewH / contentH);
@@ -1477,12 +1535,12 @@ final class Menu {
 
     // ---------------------------------------------------------------- waypoint list (settings page of Waypoints)
 
-    private static float wpHeight(Waypoints w) {
+    static float wpHeight(Waypoints w) {
         List<Map<String, Object>> l = w.list(false);
         return 66 + Math.max(1, l == null ? 0 : l.size()) * 46;
     }
 
-    private static void wpList(Waypoints w, float lx, float y, float lw) {
+    static void wpList(Waypoints w, float lx, float y, float lw) {
         float xr = lx + lw;
         String k = w.world();
         Gfx.text(Gfx.MONO, 9, lx, y + 33, Th.mut, "THIS WORLD", false, 2f);
@@ -1522,7 +1580,7 @@ final class Menu {
             boolean nh = in(nx - 8, cy - 14, nw, 28);
             float nt = an("wpn" + i, nh || ed);
             Gfx.rect(nx - 8, cy - 14, nw, 28, 6, Gfx.a(Th.ov, 0.045f * nt));
-            Gfx.ring(nx - 8, cy - 14, nw, 28, 6, 1, ed ? Th.ac : Gfx.a(Th.ln2, nt));
+            Gfx.ring(nx - 8, cy - 14, nw, 28, 6, 1, ed ? Th.dim : Gfx.a(Th.ln2, nt));
             String nm = ed ? editBuf : Waypoints.str(p, "name", "Waypoint");
             float tw = Gfx.text(Gfx.UI, 13, nx, cy, Th.tx, nm);
             if (ed && (Config.calm() || (System.currentTimeMillis() / 530) % 2 == 0)) Gfx.rect(nx + tw + 1, cy - 8, 1.5f, 16, 0, Th.ac2);

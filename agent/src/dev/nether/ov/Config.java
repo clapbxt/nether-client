@@ -72,7 +72,30 @@ final class Config {
 
     /** First run / new modules: the global file gets the complete schema with defaults (only keys missing there). */
     private static void defaults() {
-        if (addDefaults(g)) { gDirty = true; dirtyAt = System.currentTimeMillis() - 1000; }
+        boolean gm = hudLook(g), im = iPath != null && iOk && hudLook(in);
+        if (im) iDirty = true;
+        if (addDefaults(g) || gm || im) { gDirty = true; dirtyAt = System.currentTimeMillis() - 1000; }
+    }
+
+    /**
+     * v8 HUD look (Feather): files written before it carry the old defaults for every HUD box (the full schema is
+     * saved). Once per file, values still at an old default move to the new one: no accent bar, text shadow on,
+     * a lighter plate, brighter labels. Values the player changed stay. Marked with "hudLook": 8.
+     */
+    private static boolean hudLook(Map<String, Object> root) {
+        Object v = root.get("hudLook");
+        if (v instanceof Number && ((Number) v).intValue() >= 8) return false;
+        for (Module m : Modules.all) {
+            if (!m.hud) continue;
+            Map<String, Object> o = mod(root, m.id, false);
+            if (o == null) continue;
+            if (Boolean.TRUE.equals(o.get("accent"))) o.put("accent", false);
+            if (Boolean.FALSE.equals(o.get("shadow"))) o.put("shadow", true);
+            if (o.get("bgAlpha") instanceof Number && Math.abs(((Number) o.get("bgAlpha")).doubleValue() - 0.62) < 1e-6) o.put("bgAlpha", 0.45);
+            if ("#8A93A1".equalsIgnoreCase(String.valueOf(o.get("labelColor")))) o.put("labelColor", "#C9CDD4");
+        }
+        root.put("hudLook", 8.0);
+        return true;
     }
 
     private static boolean addDefaults(Map<String, Object> root) {
@@ -205,6 +228,7 @@ final class Config {
             Map<String, Object> touched = global ? gTouched : iTouched;
             for (Map.Entry<String, Object> e : touched.entrySet()) apply(disk, e.getKey(), e.getValue());
             if (global) addDefaults(disk);
+            hudLook(disk); // the file as it is on disk gets the one-time v8 HUD move too
             byte[] bytes = Json.write(disk).getBytes(StandardCharsets.UTF_8);
             Files.createDirectories(p.toAbsolutePath().getParent());
             Path tmp = p.resolveSibling(p.getFileName() + "." + Long.toHexString(System.nanoTime()) + ".tmp");

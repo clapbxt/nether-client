@@ -124,7 +124,6 @@ final class QuickJoin {
             float t = MainMenu.an("qj" + i, hv);
             if (t > 0.01f) {
                 Gfx.rect(x + 4, ry, w - 8, rh, 4, Gfx.a(Gfx.ICE, 0.06f * t));
-                Gfx.rect(x + 4, ry + 6, 3, rh - 12, 1.5f, Gfx.a(Th.ac, t));
             }
             float ix = x + 14, iy = ry + (rh - 26) / 2;
             if (s.img != null && (s.tex == null || !Gfx.hasTexture(s.tex))) { s.tex = "menu.srv." + Integer.toHexString(s.ip.toLowerCase(Locale.ROOT).hashCode()); Gfx.texture(s.tex, s.img, true); }
@@ -146,8 +145,8 @@ final class QuickJoin {
             String nm = MainMenu.fit(Gfx.SEMI, 12, s.name, 0, maxW - (s.last ? 34 : 0));
             float nw = Gfx.text(Gfx.SEMI, 12, tx, ry + 14, Gfx.mix(Gfx.ICE, 0xFFFFFFFF, t), nm);
             if (s.last) { // v6 Chip (hot)
-                Gfx.rect(tx + nw + 6, ry + 8, 26, 12, 3, Gfx.a(Th.ac, 0.19f));
-                Gfx.textC(Gfx.MONO, 7.5f, tx + nw + 19, ry + 14, Th.ac2, "LAST", 0);
+                Gfx.rect(tx + nw + 6, ry + 8, 26, 12, 3, Gfx.a(Gfx.ICE, 0.1f));
+                Gfx.textC(Gfx.MONO, 7.5f, tx + nw + 19, ry + 14, Gfx.DIM, "LAST", 0);
             }
             String sub = !MainMenu.MODULE.bool("ping") ? s.ip : s.state == 2 && s.motd != null && !s.motd.isEmpty() ? s.motd : s.state == 3 ? "Can't reach server" : s.state == 2 ? s.ip : "Pinging...";
             Gfx.text(Gfx.UI, 10.5f, tx, ry + 28, Gfx.DIM, MainMenu.fit(Gfx.UI, 10.5f, sub, 0, maxW));

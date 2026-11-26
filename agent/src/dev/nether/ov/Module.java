@@ -68,33 +68,26 @@ abstract class Module {
     Module(String id, String name, String cat, String desc, boolean hud, boolean defOn, double dx, double dy) {
         this.id = id; this.name = name; this.cat = cat; this.desc = desc; this.hud = hud; this.defOn = defOn; this.dx = dx; this.dy = dy;
         if (hud) {
-            // the shared look of every HUD box: a folded "Style" group kept after the module's own settings (see add)
-            Setting h = Setting.header("Style");
+            // the shared look of every HUD box: a folding "Appearance" group kept after the module's own settings (see add);
+            // its fold id stays "<id>#Style" (the settings page shows it as an open card)
+            Setting h = Setting.header("Appearance");
             h.fold = id + "#Style";
             String f = h.fold;
             java.util.function.BooleanSupplier op = () -> Setting.open.contains(f);
             add(h);
             add(Setting.slider("scale", "Scale", 0.5, 2.5, 0.05, 1.0).when(op));
+            add(Setting.bool("mcFont", "Minecraft font", true).hint("Pixel type like the game's own HUD. Off: Nether's clean type.").when(op));
             add(Setting.color("color", "Text color", "#EAEEF3").when(op));
             add(Setting.bool("chroma", "Rainbow text", false).when(op));
             add(Setting.bool("labels", "Show labels", true).when(op));
-            add(Setting.color("labelColor", "Label color", "#8A93A1").when(op).when(() -> bool("labels")));
-            add(Setting.bool("shadow", "Text shadow", false).when(op));
+            add(Setting.color("labelColor", "Label color", "#C9CDD4").when(op).when(() -> bool("labels")));
+            add(Setting.bool("shadow", "Text shadow", true).when(op));
             add(Setting.bool("bg", "Background", true).when(op));
-            add(Setting.slider("bgAlpha", "Background opacity", 0.2, 0.95, 0.01, 0.62).when(op).when(() -> bool("bg")));
-            add(Setting.bool("accent", "Accent bar", true).when(op).when(() -> bool("bg")));
+            add(Setting.slider("bgAlpha", "Background opacity", 0.2, 0.95, 0.01, 0.45).when(op).when(() -> bool("bg")));
+            add(Setting.bool("accent", "Accent bar", false).when(op).when(() -> bool("bg")));
             add(Setting.bool("border", "Outline", false).when(op).when(() -> bool("bg")));
             styleN = settings.size();
         }
-    }
-
-    /** Row i of the settings page is drawn: a shown setting, a folding header, or a header with a shown setting under it. */
-    boolean row(int i) {
-        Setting s = settings.get(i);
-        if (s.t != Setting.HEADER) return s.shown();
-        if (s.fold != null) return true;
-        for (int j = i + 1; j < settings.size() && settings.get(j).t != Setting.HEADER; j++) if (settings.get(j).shown()) return true;
-        return false;
     }
 
     /** settings at the end of the list that belong to the Style group (HUD modules) */
@@ -141,6 +134,8 @@ abstract class Module {
     /** switched on in the config (ignores locks) */
     boolean wantedOn() { return Config.bool(id, "enabled", defOn); }
     boolean enabled() { return wantedOn() && !locked(); }
+    /** laid out as a box on the HUD (and in the HUD editor) now; a HUD module may draw elsewhere instead (Lyrics in world mode) */
+    boolean hudPiece() { return hud; }
     /** worth refreshing data for: on, or being previewed in the menu */
     boolean live() { return enabled() || (Input.menuOpen && id.equals(Menu.page)); }
     float scale() { return (float) Config.num(id, "scale", 1.0); }
@@ -193,22 +188,29 @@ abstract class Module {
     float layout() {
         float k = Gfx.base * scale();
         Gfx.s = k;
-        measure();
+        Gfx.hudPix = mcFont();
+        try { measure(); } finally { Gfx.hudPix = false; }
         return k;
     }
+
+    /** HUD text in the Minecraft-style pixel face (Style > Minecraft font). Lyrics keep their own type. */
+    boolean mcFont() { return hud && has("mcFont") && !(this instanceof Lyrics) && !(this instanceof LyricsBar) && bool("mcFont"); }
 
     /** Settings-page preview centred on (cx, cy) in the caller's current Gfx.s units. */
     void preview(float cx, float cy) {
         float outer = Gfx.s;
         Gfx.s = outer * Math.max(0.8f, Math.min(1.6f, scale()));
-        measure();
-        draw((cx * outer / Gfx.s) - w / 2, (cy * outer / Gfx.s) - h / 2);
+        Gfx.hudPix = mcFont();
+        try {
+            measure();
+            draw((cx * outer / Gfx.s) - w / 2, (cy * outer / Gfx.s) - h / 2);
+        } finally { Gfx.hudPix = false; }
         Gfx.s = outer;
     }
 
     // ---- drawing helpers for HUD modules
 
-    /** v6 HUD box: flat, radius 6, optional hairline outline and the 3 px accent bar of the menu's list rows. */
+    /** HUD box (Feather): flat dark plate, radius 6, optional hairline outline and (off by default) a 3 px accent bar. */
     void panel(float x, float y, float w, float h) { panel(x, y, w, h, Th.ac); }
 
     void panel(float x, float y, float w, float h, int accent) {
@@ -225,7 +227,7 @@ abstract class Module {
 
 /** HUD module showing label/value rows in a small panel. */
 abstract class RowsModule extends Module {
-    static final float PX = 8, PY = 5, RH = 17;
+    static final float PX = 9, PY = 6, RH = 18;
     private String[][] rows = new String[0][];
     private float lw;
     private long rowsAt;
@@ -236,6 +238,9 @@ abstract class RowsModule extends Module {
 
     abstract String[][] rows();
 
+    /** Labels match the value size in the Minecraft font (one line of game text), smaller caps in Nether's type. */
+    private float labSize() { return Gfx.hudPix ? 13 : 10; }
+
     @Override void measure() {
         // values are formatted at most 20 times a second, not every frame
         long now = System.currentTimeMillis();
@@ -244,7 +249,7 @@ abstract class RowsModule extends Module {
         float vw = 0;
         boolean labels = bool("labels");
         for (String[] r : rows) {
-            if (labels) lw = Math.max(lw, Gfx.width(Gfx.SEMI, 10, r[0]));
+            if (labels) lw = Math.max(lw, Gfx.width(Gfx.SEMI, labSize(), r[0]));
             vw = Math.max(vw, Gfx.width(Gfx.MONO, 13, r[1].length() > 8 && r[1].charAt(0) == '#' && r[1].charAt(7) == '|' ? r[1].substring(8) : r[1]));
         }
         w = PX * 2 + (labels ? lw + 8 : 0) + vw;
@@ -257,7 +262,7 @@ abstract class RowsModule extends Module {
         boolean labels = bool("labels");
         for (int i = 0; i < rows.length; i++) {
             float cy = y + PY + RH * (i + 0.5f);
-            if (labels) Gfx.text(Gfx.SEMI, 10, x + PX + (bool("accent") && bool("bg") ? 1 : 0), cy, lc, rows[i][0], bool("shadow"), 0);
+            if (labels) Gfx.text(Gfx.SEMI, labSize(), x + PX + (bool("accent") && bool("bg") ? 1 : 0), cy, lc, rows[i][0], bool("shadow"), 0);
             // a row may pick its own value colour ("#RRGGBB|value"), e.g. FPS or ping by speed
             String v = rows[i][1];
             int vc = col;

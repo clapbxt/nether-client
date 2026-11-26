@@ -88,6 +88,7 @@ public final class Overlay {
                     String pg = System.getProperty("nether.page");
                     if (pg != null && Modules.byId(pg) != null) Menu.page = pg;
                     String tb = System.getProperty("nether.tab");
+                    if (tb != null) Menu.hub = false; // a tab asked for = the MODS grid, not the hub
                     if (tb != null) Menu.tab = Math.max(0, Math.min(Menu.TABS.length - 1, Integer.parseInt(tb)));
                     // -Dnether.picker=<module>:<colour key> opens that module's page with the colour picker open
                     String pk = System.getProperty("nether.picker");
@@ -97,6 +98,8 @@ public final class Overlay {
                     if (Menu.hudEdit) Menu.hudEdit = true;
                     if ("1".equals(System.getProperty("nether.friends"))) { Menu.hub = false; Menu.tab = Menu.T_FRIENDS; } // dev: the Friends screen
                     if ("1".equals(System.getProperty("nether.splashes"))) { Menu.hub = false; Menu.tab = Menu.TABS.length - 1; Menu.page = "menu"; Splashes.show(); } // dev: the splash texts dialog
+                    String lv = System.getProperty("nether.live"); // dev: the live view editor of a module (fireview, shieldview, handview, rideview)
+                    if (lv != null && Modules.byId(lv) != null) { Menu.hub = false; Menu.live = Modules.byId(lv); }
                     if ("0".equals(System.getProperty("nether.hub"))) { Menu.hub = false; if (tb != null) Menu.tab = Math.max(0, Math.min(Menu.TABS.length - 1, Integer.parseInt(tb))); } // dev: skip the hub (with -Dnether.tab)
                 }
             }

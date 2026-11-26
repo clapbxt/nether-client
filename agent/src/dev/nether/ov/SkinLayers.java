@@ -37,18 +37,22 @@ final class SkinLayers extends Module {
 
     private SkinLayers() {
         super("skinlayers", "3D Skin Layers", "Visual", "Every player's outer skin layer (hat, jacket, sleeves, trousers) in 3D up close; further away the flat layer stays.", false, false, 0, 0);
+        add(Setting.header("Layers"));
         add(Setting.bool("hat", "Hat", true));
         add(Setting.bool("jacket", "Jacket", true));
         add(Setting.bool("sleeves", "Sleeves", true));
         add(Setting.bool("pants", "Trousers", true));
+        add(Setting.header("Range"));
         add(Setting.slider("dist", "Distance (blocks)", 4, 48, 1, 14).hint("Players further away keep the flat layer (cheaper)."));
         needs(2);
     }
 
     private static Boolean ok;
     private static String why;
+    /** 1.21.9+: the model is drawn after the layers (submit system), so the flags can be cleared from the layer itself */
+    private static boolean deferred, loggedPre;
 
-    /** 1.21.9+ (deferred model drawing) or 1.8.9 (the doRender hook), with the cosmetics layer, and no other 3D skin layers mod. */
+    /** 1.21.2+ (render states) or 1.8.9 (the doRender hook), with the cosmetics layer, and no other 3D skin layers mod. */
     private static boolean supported() {
         if (ok == null && (Game.fabric() || Game.legacy())) {
             boolean mod = false;
@@ -59,9 +63,16 @@ final class SkinLayers extends Module {
             else if (Game.legacy()) {
                 ok = Game.is189() && Cosmetics.renders();
                 if (ok) { dev.nether.agent.Hook.layersIn = SkinLayers::legacyIn; dev.nether.agent.Hook.layersOut = SkinLayers::legacyOut; }
-                else why = "NEEDS MINECRAFT 1.8.9 OR 1.21.9+";
+                else why = "NEEDS MINECRAFT 1.8.9 OR 1.21.2+";
             }
-            else { ok = Cosmetics.renders() && Game.cls0("net.minecraft.class_11659") != null; if (!ok) why = "NEEDS MINECRAFT 1.8.9 OR 1.21.9+"; }
+            else {
+                deferred = Game.cls0("net.minecraft.class_11659") != null;
+                // 1.21.2 - 1.21.8 draw the model right away: the flat parts are hidden when the render state is made
+                if (!deferred && !dev.nether.agent.Hook.tagHooked && Game.player0() == null) return false; // renderers not loaded yet: ask again later
+                ok = Cosmetics.renders() && (deferred || dev.nether.agent.Hook.tagHooked);
+                if (ok && !deferred) dev.nether.agent.Hook.stateDone = SkinLayers::preHide;
+                if (!ok) why = "NEEDS MINECRAFT 1.8.9 OR 1.21.2+";
+            }
         }
         return Boolean.TRUE.equals(ok);
     }
@@ -264,6 +275,34 @@ final class SkinLayers extends Module {
         return f;
     }
 
+    /** 1.21.2 - 1.21.8: parts hidden per render state at createRenderState (bit p = ANCHORS part p), drawn by the layer. */
+    private static final Map<Object, Integer> hidden = java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+    /** Hook.stateDone: a player state close enough, with its skin's voxels ready, gets its flat outer parts switched off. */
+    private static void preHide(Object st) {
+        if (!M.enabled() || deferred || !(Game.fld(st, "field_53528") instanceof Integer)) return;
+        hidden.remove(st);
+        if (Boolean.TRUE.equals(Game.fld(st, "field_53333")) || Boolean.TRUE.equals(Game.fld(st, "field_53542"))) return;
+        Object dsq = Game.fld(st, "field_53332");
+        double far = M.num("dist");
+        if (!(dsq instanceof Double) || (Double) dsq > far * far) return;
+        Object skin = Game.fld(st, "field_53520"), tex = skin == null ? null : Game.call(skin, "comp_1626");
+        if (tex == null) return;
+        Skin s = skin(tex);
+        if (s == null || s.type == null || s.mesh[0] == null || s.mesh[1] == null) return; // keep the flat layer until ours is ready
+        int mask = 0;
+        try {
+            for (int p = 0; p < 6; p++) {
+                if (!M.bool(KEY[p])) continue;
+                Field f = show(st, SHOW[p]);
+                if (f == null || !f.getBoolean(st)) continue;
+                f.setBoolean(st, false);
+                mask |= 1 << p;
+            }
+        } catch (Throwable t) { return; }
+        if (mask != 0) hidden.put(st, mask);
+    }
+
     /** Called by Cosmetics.draw for every player (args: PoseStack, collector, light, render state, ...). */
     static void draw(Object layer, Object[] a) {
         if (!M.enabled() || !supported() || a.length < 4 || !(a[2] instanceof Integer)) return;
@@ -283,14 +322,18 @@ final class SkinLayers extends Module {
         Cosmetics.Mesh[] meshes = s.mesh[slim];
         if (meshes == null) return;
         int light = (Integer) a[2];
+        Integer pre = deferred ? null : hidden.get(st);
+        if (!deferred && pre == null) return; // 1.21.2 - 1.21.8: only what preHide switched off
+        if (pre != null && !loggedPre) { loggedPre = true; System.out.println("[nether-agent] 3D skin layers: drawing parts " + Integer.toBinaryString(pre) + " (render-state hide)"); }
         try {
             for (int p = 0; p < 6; p++) {
                 if (!M.bool(KEY[p])) continue;
                 Field f = show(st, SHOW[p]);
-                if (f == null || !f.getBoolean(st)) continue; // hidden by the player's own skin settings (or unknown)
+                if (pre != null) { if ((pre & 1 << p) == 0) continue; }
+                else if (f == null || !f.getBoolean(st)) continue; // hidden by the player's own skin settings (or unknown)
                 Object part = p == 0 ? Game.call(model, "method_2838") : Game.fld(model, PARTS[p]);
                 if (part == null || Boolean.FALSE.equals(Game.fld(part, "field_3665"))) continue; // part not drawn this frame
-                f.setBoolean(st, false); // the game's flat layer steps aside
+                if (pre == null) f.setBoolean(st, false); // the game's flat layer steps aside (1.21.9+: drawn later)
                 Cosmetics.Mesh m = meshes[p].lit(light);
                 Cosmetics.push(ps);
                 Game.call(part, "method_22703", ps); // translateAndRotate

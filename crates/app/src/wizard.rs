@@ -9,10 +9,10 @@ use slint::{ComponentHandle, Model, ModelRc, VecModel};
 use crate::mods::{cached_icon, count, icon_image, icon_px, update_rows};
 use crate::{show_toast, ui_do, AppWindow, Row, Shared, Wizard};
 
-/// Pack list (built-ins + user packs) for the Nether pack step.
+/// The single built-in mod list for new Fabric Nether profiles.
 pub fn init(ui: &AppWindow, sh: &Arc<Shared>) {
-    let rows: Vec<Row> = netherpack::all(&sh.paths).iter().map(|p| Row {
-        id: p.id.as_str().into(), name: p.name.as_str().into(), sub: p.desc.as_str().into(),
+    let rows: Vec<Row> = netherpack::all(&sh.paths).into_iter().filter(|p| p.id == "essentials").map(|p| Row {
+        id: p.id.as_str().into(), name: "Nether built-in mods".into(), sub: "The current default mods for new Fabric Nether profiles".into(),
         meta: format!("{} mods", p.mods.len()).into(), ok: p.client.is_some() as i32, ..Default::default()
     }).collect();
     ui.global::<Wizard>().set_packs(ModelRc::new(VecModel::from(rows)));
@@ -68,13 +68,18 @@ pub fn load_rps(ui: &AppWindow, sh: &Arc<Shared>, ver: &str) {
 pub fn finish(ui: &AppWindow, sh: &Arc<Shared>, name: &str, ver: &str) {
     let name = name.trim();
     let w = ui.global::<Wizard>();
-    let pack = (!w.get_pack().is_empty()).then(|| netherpack::find(&sh.paths, w.get_pack().as_str())).flatten();
+    let pack_id = w.get_pack().to_string();
+    let pack = (!pack_id.is_empty()).then(|| netherpack::find(&sh.paths, &pack_id)).flatten();
     crate::client::setup_instance(&sh.paths, name, pack.as_ref().and_then(|p| p.client.as_ref()));
     let rps: Vec<(String, String)> = w.get_rps().iter().filter(|r| r.on).map(|r| (r.id.to_string(), r.name.to_string())).collect();
-    if pack.is_none() && rps.is_empty() { return; }
+    if pack_id.is_empty() && rps.is_empty() { return; }
     let (weak, sh, name, ver) = (ui.as_weak(), sh.clone(), name.to_string(), ver.to_string());
     std::thread::spawn(move || {
         let c = client();
+        // Resolve the published default after refreshing signed content so a just-published list is used even on a
+        // first launch with no content cache. Failure falls back to the last verified cache / bundled defaults.
+        let _ = nether_core::backend::packs(&c);
+        let pack = (!pack_id.is_empty()).then(|| netherpack::find(&sh.paths, &pack_id)).flatten();
         let w2 = weak.clone();
         let key = format!("setup:{name}");
         let k2 = key.clone();

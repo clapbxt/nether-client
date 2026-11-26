@@ -163,6 +163,7 @@ final class Views {
     static final class Shield extends Module {
         Shield() {
             super("shieldview", "Shield View Editor", "Visual", "Lower the shield you hold in first person so it covers less of your view.", false, false, 0, 0);
+            add(Setting.header("Position"));
             add(Setting.slider("height", "Shield height", -0.5, 0, 0.01, -0.2).hint("How far the held shield sits below its normal spot. 0 = vanilla."));
             needs(4); // 1.12.2 too (Forge)
         }
@@ -192,9 +193,11 @@ final class Views {
     static final class Hand extends Module {
         Hand() {
             super("handview", "Hand View Editor", "Visual", "Move and resize your first-person hand and the item you hold.", false, false, 0, 0);
+            add(Setting.header("Position"));
             add(Setting.slider("x", "Sideways", -0.6, 0.6, 0.01, 0).hint("Positive moves it right; the off hand mirrors it."));
             add(Setting.slider("y", "Height", -0.6, 0.6, 0.01, 0).hint("Positive moves it up."));
             add(Setting.slider("z", "Distance", -0.6, 0.6, 0.01, 0).hint("Positive brings it closer."));
+            add(Setting.header("Size"));
             add(Setting.slider("scale", "Size", 0.4, 1.5, 0.01, 1).hint("1 = vanilla."));
             needs(4);
         }
@@ -228,8 +231,10 @@ final class Views {
     static final class Fire extends Module {
         Fire() {
             super("fireview", "Fire View Editor", "Visual", "Lower the burning overlay and make it see-through, or hide it while you are fire resistant.", false, false, 0, 0);
+            add(Setting.header("Overlay"));
             add(Setting.slider("height", "Fire height", -0.5, 0, 0.01, -0.3).hint("How far the overlay sits below its normal spot. 0 = vanilla."));
             add(Setting.slider("opacity", "Fire opacity", 0, 100, 1, 90).hint("90 = vanilla."));
+            add(Setting.header("Behaviour"));
             add(Setting.bool("resist", "Hide when fire resistant", false).hint("Hidden while you have Fire Resistance (or are in Creative). On 1.8.9 it blinks back in the last 5 seconds."));
             needs(4);
         }

@@ -6,7 +6,7 @@ package dev.nether.ov;
  * the next draw through {@link #clicked}. Presses only land while the cursor is free: our menu is open and its panel did
  * not use the click, or a game screen is up (chat, inventory). A press that lands is swallowed, its release too, so the
  * game never sees it. In plain gameplay (cursor grabbed) nothing is routed: a widget can never take an attack or use
- * click. Frames without widgets cost one comparison.
+ * click. Frames without widgets cost one comparison. (The 3D lyric panel keeps its own crosshair-aimed hit list.)
  */
 final class Hits {
     private Hits() {}
@@ -18,6 +18,7 @@ final class Hits {
     private static String pending;
     private static int pendingBtn;
     private static long pendingAt;
+    private static float pendingX, clickX;
 
     /** Overlay, once per frame before drawing: this frame's boxes become the ones presses are matched against. */
     static void frame() {
@@ -35,6 +36,11 @@ final class Hits {
     /** Cursor position in framebuffer pixels. */
     private static float mx() { return (float) (Input.mx * Gfx.fbW / Input.ww); }
     private static float my() { return (float) (Input.my * Gfx.fbH / Input.wh); }
+
+    static void clear() {
+        n = lastN = 0;
+        pending = null;
+    }
 
     /**
      * Registers the clickable box of widget id for this frame (logical units at the current {@link Gfx#s}); returns true
@@ -55,13 +61,19 @@ final class Hits {
     /** Mouse press b (0 left, 1 right, 2 middle) at the cursor; true = it hit a widget and is swallowed. */
     static boolean press(int b) {
         if (lastN == 0 || !free()) return false;
-        float cx = mx(), cy = my();
+        return pressAt(b, mx(), my());
+    }
+
+    /** Matches a screen event against the last frame's hit boxes. */
+    static boolean pressAt(int b, float x, float y) {
+        if (lastN == 0 || !free()) return false;
         for (int k = lastN - 1; k >= 0; k--) { // topmost (drawn last) first
             int i = k * 4;
-            if (cx >= last[i] && cy >= last[i + 1] && cx < last[i] + last[i + 2] && cy < last[i + 1] + last[i + 3]) {
+            if (x >= last[i] && y >= last[i + 1] && x < last[i] + last[i + 2] && y < last[i + 1] + last[i + 3]) {
                 pending = seen[k];
                 pendingBtn = b;
                 pendingAt = Game.frame;
+                pendingX = x;
                 return true;
             }
         }
@@ -72,6 +84,9 @@ final class Hits {
     static int clicked(String id) {
         if (pending == null || !pending.equals(id)) return -1;
         pending = null;
+        clickX = pendingX;
         return pendingBtn;
     }
+
+    static float clickX() { return clickX; }
 }

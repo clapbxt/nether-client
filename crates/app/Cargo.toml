@@ -12,7 +12,7 @@ anyhow = "1"
 nether-core = { path = "../core" }
 # the generated screens, in their own crate (see crates/ui/build.rs)
 nether-ui = { path = "../ui" }
-slint = { version = "1", features = ["raw-window-handle-06"] }
+slint = { version = "1", features = ["raw-window-handle-06", "renderer-skia-opengl"] }
 raw-window-handle = "0.6"
 windows-sys = { version = "0.61", features = ["Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_Foundation", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_HiDpi", "Win32_System_Threading", "Win32_System_Ole", "Win32_System_Com", "Win32_System_Time", "Win32_System_LibraryLoader", "Win32_System_DataExchange"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "gif"] }

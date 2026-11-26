@@ -62,6 +62,9 @@ abstract class GlBackend {
     /** Per frame, after save: bind program, atlas and buffers. */
     abstract void begin(int w, int h);
 
+    /** Maps screen-local overlay coordinates through a projective transform. */
+    abstract void map(float[] matrix);
+
     /** Uploads and draws `verts` vertices (the buffer is already flipped). */
     abstract void draw(FloatBuffer data, int verts);
 

@@ -8,6 +8,8 @@ their own licenses.
 | Velo Client: HUD auto-layout approach | `agent/src/dev/nether/ov/Modules.java` | MIT, see [`agent/NOTICE.md`](agent/NOTICE.md) |
 | Lumes Texture Combiner (Kzxmi) | `crates/core/src/combine.rs` | MIT, notice below |
 | Barlow, JetBrains Mono, Nether Pixel fonts | `crates/app/ui/fonts`, `site/assets/fonts`, `agent/res/fonts` | SIL Open Font License 1.1, [`crates/app/ui/fonts/OFL.txt`](crates/app/ui/fonts/OFL.txt) |
+| Righteous, Bebas Neue, Poppins, Lilita One, Pacifico, Kaushan Script, Neonderthaw, Monoton fonts (unmodified, from google/fonts) | `agent/res/fonts/lyrics` | SIL Open Font License 1.1, `agent/res/fonts/lyrics/OFL-*.txt` |
+| Permanent Marker font (unmodified, from google/fonts) | `agent/res/fonts/lyrics` | Apache License 2.0, `agent/res/fonts/lyrics/APACHE-2.0.txt` |
 | Rust crates | `Cargo.lock` | Each crate's own license (MIT / Apache-2.0 and others); see `cargo about` or crates.io |
 
 ## Lumes Texture Combiner (MIT)

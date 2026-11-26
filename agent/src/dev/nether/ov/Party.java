@@ -710,11 +710,11 @@ final class Party {
                 float sw2 = tw * 0.5f, sh2 = th * 0.74f, sx2 = cx - sw2 / 2, sy2 = fy - sh2 - 6 * sc - hv * 3;
                 glow(cx, fy, tw * 0.8f, 18 * sc * u, Gfx.a(Gfx.ICE, 0.04f + 0.05f * hv));
                 Gfx.rect(sx2, sy2, sw2, sh2, 16 * sc, Gfx.a(Gfx.CARD, 0.22f + 0.18f * hv));
-                Gfx.ring(sx2, sy2, sw2, sh2, 16 * sc, 1, Gfx.mix(Gfx.a(Gfx.ICE, 0.10f), Gfx.a(Th.ac2, 0.7f), hv));
+                Gfx.ring(sx2, sy2, sw2, sh2, 16 * sc, 1, Gfx.mix(Gfx.a(Gfx.ICE, 0.10f), Gfx.a(Gfx.ICE, 0.35f), hv));
                 float pr = 16 * sc * Math.min(u, 1.5f);
                 float py = sy2 + sh2 * 0.44f;
-                Gfx.rect(cx - pr, py - pr, pr * 2, pr * 2, pr, Gfx.mix(Gfx.a(Gfx.CARD, 0.8f), Gfx.a(Th.ac, 0.9f), hv));
-                Gfx.ring(cx - pr, py - pr, pr * 2, pr * 2, pr, 1, Gfx.mix(Gfx.LN2, Gfx.a(Th.ac2, 0.8f), hv));
+                Gfx.rect(cx - pr, py - pr, pr * 2, pr * 2, pr, Gfx.mix(Gfx.a(Gfx.CARD, 0.8f), Gfx.a(Gfx.ICE, 0.22f), hv));
+                Gfx.ring(cx - pr, py - pr, pr * 2, pr * 2, pr, 1, Gfx.mix(Gfx.LN2, Gfx.a(Gfx.ICE, 0.45f), hv));
                 ModIcons.draw("plus", cx - pr * 0.55f, py - pr * 0.55f, pr * 1.1f, Gfx.mix(Gfx.DIM, 0xFFFFFFFF, hv));
                 Gfx.textC(Gfx.SEMI, 10, cx, py + pr + 18, Gfx.mix(Gfx.SUB, Gfx.ICE, hv), "INVITE", 1.4f);
                 if (hov) MainMenu.tip("Invite a friend (in game, same version)");
@@ -771,7 +771,7 @@ final class Party {
         nw = Math.min(nw, plateW);
         float h = status.isEmpty() ? 24 : 36, x = cx - nw / 2;
         Gfx.rect(x, y, nw, h, 8, Gfx.mix(Gfx.a(Gfx.CARD, 0.82f), Gfx.CARD2, hv));
-        Gfx.ring(x, y, nw, h, 8, 1, Gfx.mix(Gfx.LN, Gfx.a(Th.ac2, 0.7f), Math.max(tk, hv * 0.4f)));
+        Gfx.ring(x, y, nw, h, 8, 1, Gfx.mix(Gfx.LN, tk > 0 ? Gfx.a(0xFF3DD873, 0.8f) : Gfx.LN2, Math.max(tk, hv * 0.6f)));
         // mic: muted / off / on (talking = accent)
         String mi = m.deaf ? "deaf" : m.mic == 0 ? "micoff" : "mic";
         int mc = tk > 0.05f ? Gfx.mix(Gfx.SUB, Th.ac2, tk) : m.mic == 0 || m.deaf ? Gfx.MUT : Gfx.SUB;
@@ -924,8 +924,7 @@ final class Party {
         Gfx.alpha = a0 * t;
         Gfx.rect(x, y + 3, w, h, 10, Gfx.a(Gfx.BLACK, 0.35f));
         Gfx.rect(x, y, w, h, 10, Gfx.a(Gfx.CARD, 0.94f));
-        Gfx.ring(x, y, w, h, 10, 1, Gfx.a(Th.ac, 0.55f));
-        Gfx.rect(x, y + 10, 3, h - 20, 1.5f, Th.ac);
+        Gfx.ring(x, y, w, h, 10, 1, Gfx.LN2);
         drawHead(uuid, name, x + 12, y + 13, 32, false);
         float bw = Gfx.width(Gfx.SEMI, 10.5f, yes, 1.2f) + 22;
         float bx = x + w - 10 - 26 - 6 - bw;
@@ -1052,7 +1051,7 @@ final class Party {
         boolean hv = MainMenu.over(x, y, w, h);
         float t = MainMenu.an(id, hv);
         Gfx.rect(x, y, w, h, 7, Gfx.mix(Gfx.a(Gfx.CARD, 0.82f), Gfx.CARD2, t));
-        Gfx.ring(x, y, w, h, 7, 1, sel ? Gfx.a(Th.ac2, 0.85f) : Gfx.mix(Gfx.a(Gfx.ICE, 0.1f), Gfx.LN2, t));
+        Gfx.ring(x, y, w, h, 7, 1, sel ? Gfx.a(Gfx.ICE, 0.45f) : Gfx.mix(Gfx.a(Gfx.ICE, 0.1f), Gfx.LN2, t));
         float lw = Gfx.width(Gfx.SEMI, 10.5f, label, 1.3f), ix = x + (w - lw - 20) / 2;
         ModIcons.draw(icon, ix, y + h / 2 - 7, 14, sel ? Th.ac2 : Gfx.mix(Gfx.SUB, Gfx.ICE, t));
         Gfx.text(Gfx.SEMI, 10.5f, ix + 20, y + h / 2, Gfx.mix(Gfx.DIM, Gfx.ICE, Math.max(t, sel ? 1 : 0)), label, false, 1.3f);
@@ -1087,7 +1086,7 @@ final class Party {
             String title = worlds ? s[1] : s[0], line = worlds ? s[0] : s[1];
             boolean sel = dest != null && (worlds ? s[0].equals(str(dest.get("name"))) : s[1].equalsIgnoreCase(str(dest.get("address"))));
             boolean hv = MainMenu.over(x + 6, yy, w - 12, 28);
-            Gfx.rect(x + 6, yy, w - 12, 28, 6, sel ? Gfx.a(Th.ac, 0.2f) : Gfx.a(Gfx.ICE, hv ? 0.07f : 0));
+            Gfx.rect(x + 6, yy, w - 12, 28, 6, sel ? Gfx.a(Gfx.ICE, 0.12f) : Gfx.a(Gfx.ICE, hv ? 0.07f : 0));
             Gfx.text(Gfx.SEMI, 11, x + 16, yy + 10, Gfx.ICE, MainMenu.fit(Gfx.SEMI, 11, title, 0, w - 40));
             Gfx.text(Gfx.UI, 9, x + 16, yy + 21, Gfx.SUB, MainMenu.fit(Gfx.UI, 9, line, 0, w - 40));
             if (MainMenu.hit(x + 6, yy, w - 12, 28)) { if (worlds) pickWorld(s[0]); else pickServer(s[1], s[0]); destOpen = false; }
@@ -1159,7 +1158,7 @@ final class Party {
         // input
         float iy = y + h - 8 - inH;
         Gfx.rect(x + 8, iy, w - 16, inH, 6, Gfx.a(Gfx.ICE, typing ? 0.09f : 0.04f));
-        Gfx.ring(x + 8, iy, w - 16, inH, 6, 1, typing ? Gfx.a(Th.ac2, 0.8f) : Gfx.LN);
+        Gfx.ring(x + 8, iy, w - 16, inH, 6, 1, typing ? Gfx.a(Gfx.ICE, 0.4f) : Gfx.LN);
         boolean caret = typing && (now / 500) % 2 == 0;
         if (!typing && field.isEmpty()) Gfx.text(Gfx.UI, 10.5f, x + 16, iy + inH / 2, Gfx.MUT, "Press ENTER to chat");
         else {
@@ -1531,7 +1530,7 @@ final class Party {
         Gfx.rect(x + 8, y, w - 16, 48, 8, Gfx.a(Gfx.ICE, 0.03f + 0.04f * t));
         drawHead(m.uuid, m.name, x + 16, y + 9, 30, m.away);
         boolean talk = talking.contains(m.uuid) || (m.me && sending);
-        if (talk) Gfx.ring(x + 14, y + 7, 34, 34, 6, 1.6f, Th.ac2);
+        if (talk) Gfx.ring(x + 14, y + 7, 34, 34, 6, 1.6f, 0xFF3DD873);
         float nx = x + 56;
         float nw = Gfx.text(Gfx.SEMI, 12, nx, y + 18, m.away ? Gfx.DIM : Gfx.ICE, MainMenu.fit(Gfx.SEMI, 12, m.name + (m.me ? " (you)" : ""), 0, w - 170));
         if (m.leader && members.size() > 1) ModIcons.draw("crown", nx + nw + 5, y + 12, 12, 0xFFF2C94C);
@@ -1641,9 +1640,9 @@ final class Party {
             if (m == null) continue;
             float w = Gfx.width(Gfx.SEMI, 11, m.name) + 46;
             Gfx.rect(x, y, w, 24, 12, Gfx.a(Gfx.CARD, 0.72f));
-            Gfx.ring(x, y, w, 24, 12, 1, Gfx.a(Th.ac2, 0.7f));
+            Gfx.ring(x, y, w, 24, 12, 1, Gfx.a(0xFF3DD873, 0.7f));
             drawHead(m.uuid, m.name, x + 4, y + 4, 16, false);
-            ModIcons.draw("mic", x + 24, y + 6, 12, Th.ac2);
+            ModIcons.draw("mic", x + 24, y + 6, 12, 0xFF3DD873);
             Gfx.text(Gfx.SEMI, 11, x + 40, y + 12, Gfx.ICE, m.name);
             y += 28;
         }
@@ -1657,9 +1656,9 @@ final class Party {
         float yy = y;
         for (Inv v : new ArrayList<>(invites)) {
             boolean hv = Menu.in(x - 6, yy, w + 12, 44);
-            Gfx.rect(x - 6, yy, w + 12, 44, 8, Gfx.a(Th.ac, hv ? 0.16f : 0.1f));
-            Gfx.ring(x - 6, yy, w + 12, 44, 8, 1, Gfx.a(Th.ac, 0.5f));
-            ModIcons.draw("party", x + 4, yy + 13, 18, Th.ac2);
+            Gfx.rect(x - 6, yy, w + 12, 44, 8, Gfx.a(Th.ov, hv ? 0.09f : 0.06f));
+            Gfx.ring(x - 6, yy, w + 12, 44, 8, 1, Th.ln2);
+            ModIcons.draw("party", x + 4, yy + 13, 18, Th.tx);
             float tw = w - 6 - 80 - 86 - 30 - 8; // stop before JOIN / NOT NOW
             Gfx.text(Gfx.SEMI, 12.5f, x + 30, yy + 15, Th.tx, Menu.fit(v.fromName + " invited you to their party", Gfx.SEMI, 12.5f, tw, 0));
             Gfx.text(Gfx.UI, 10.5f, x + 30, yy + 30, Th.dim, Menu.fit(v.size > 1 ? "Party of " + v.size + " · voice works while you play" : "Voice works while you play", Gfx.UI, 10.5f, tw, 0));
