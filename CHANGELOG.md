@@ -10,6 +10,8 @@ This is the launcher's changelog. The in-game client has its own, in
 ## Unreleased
 
 ### Launcher
+- Importing a modpack file or instance folder (picked or dropped on the window) first shows what it is: its
+  name (editable), Minecraft version, loader and file count, and how many CurseForge mods won't download.
 - New **Host** page: run a server from a Vanilla or Fabric profile. Set it up and start it in two clicks, agree to
   the EULA yourself, then watch the console, manage players, whitelist and ops, change settings, copy a world in and
   make backups. It shows the address to share, and can check whether the internet can reach it.
