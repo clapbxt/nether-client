@@ -7,6 +7,8 @@ crates/
   common/       nether-common: data folder paths, safe JSON files, Recycle Bin, Progress, Session (no other crate deps)
   net/          nether-net: HTTP downloads with hash checks, UPnP / public IP, launcher auto-update; res/ = release key
   auth/         nether-auth: Microsoft account sign-in and the launch ownership gate
+  game/         nether-game: installing the game (Mojang files, Java, Fabric, Forge, OptiFine, options, packs)
+  social/       nether-social: parties and peer-to-peer links, cosmetic models, skins
   core/         nether-core: the rest of the launcher logic, no UI, and a facade re-exporting the crates above under
                 their old module names; res/ = content key and resource pack; examples/ = dev harnesses
   media/        nether-media.exe (Windows media session helper)

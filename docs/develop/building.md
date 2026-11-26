@@ -55,7 +55,7 @@ profiles and accounts.
 ## Check your change
 
 ```powershell
-cargo test -p nether-common -p nether-net -p nether-auth -p nether-core
+cargo test -p nether-common -p nether-net -p nether-auth -p nether-game -p nether-social -p nether-core
 cargo clippy --workspace --release
 ```
 

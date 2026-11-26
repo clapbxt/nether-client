@@ -37,7 +37,9 @@ Everything that isn't UI. `nether-core` is being split into crates that each hav
 | `nether-common` | `crates/common` | `paths`, `store` (safe JSON files), `trash`, `Progress`, `Session` | nothing of ours |
 | `nether-net` | `crates/net` | `download` (shared client, hash-checked fetches), `net` (UPnP, IPs), `update` (signed auto-update) | common |
 | `nether-auth` | `crates/auth` | Microsoft sign-in, accounts file, launch ownership gate | common |
-| `nether-core` | `crates/core` | installs, launching, instances, content, social, backend clients, Horizon | all of the above |
+| `nether-game` | `crates/game` | installing the game: `mojang`, `versions`, `java`, `fabric`, `forge`, `optifine`, `gamesettings`, `rpacks` | common, net |
+| `nether-social` | `crates/social` | `party`, `party_net`, `p2p` (iroh QUIC), `cosmetics`, `preview`, `skins` | common, net |
+| `nether-core` | `crates/core` | launching, instances, content, backend clients, Horizon | all of the above |
 
 Code that differs by operating system goes in `nether_common::platform` (console-less helper processes, game
 process priority, GPU preference, power throttling, RAM size, class path separator), not in `#[cfg(windows)]`
@@ -47,8 +49,9 @@ in `java.rs`, the media helper (`crates/media`) and the launcher window code in 
 
 `nether-core` re-exports the moved modules under their old names (`nether_core::paths`, `nether_core::download`,
 `nether_core::auth`...), so code that uses them doesn't change. A crate may only depend on crates above it in the
-table. What is still in core is tangled in cycles (for example `launch` needs `backend` for cape settings, and
-`forge` and `launch` call each other), which have to be untangled before the rest can move.
+table. What is still in core is tangled: `launch` needs `backend` for cape settings, `backend` and `ugc`,
+`cosimport` and `netherpack` call each other, and `instances`, `modpack`, `crash` and `preflight` lean on `launch`.
+Those have to be untangled before the rest can move.
 
 - **Accounts:** Microsoft device-code OAuth → Xbox Live → Minecraft services. Tokens are stored in Windows Credential
   Manager, never in plain files.

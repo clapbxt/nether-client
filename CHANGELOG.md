@@ -18,8 +18,8 @@ trains (the launcher will fetch newer client builds on its own).
   You no longer need to launch the game before the first build. `agent\build.ps1` still works and calls Gradle.
 - The in-game client's code is split into packages: `platform`, `game`, `framework`, `ui`, `menu`, and one
   `features.*` package per feature.
-- The launcher library is being split into crates: `nether-common`, `nether-net` and `nether-auth` are out of
-  `nether-core`. `nether-core` re-exports them under their old names, so existing imports keep working.
+- The launcher library is being split into crates: `nether-common`, `nether-net`, `nether-auth`, `nether-game` and
+  `nether-social` are out of `nether-core`. `nether-core` re-exports them under their old names, so existing imports keep working.
 - Windows-only launcher code lives in `nether_common::platform`.
 - CI builds the in-game client, tests the launcher libraries on Linux, and type-checks the workspace on Windows on
   every push and pull request.

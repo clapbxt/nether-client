@@ -21,7 +21,7 @@ installed until the next full release.
 ## Before tagging a release
 
 1. Build in order: agent, launcher, installer (see [Building](building.md)).
-2. CI is green on the release commit, and locally `cargo test -p nether-common -p nether-net -p nether-auth -p nether-core`
+2. CI is green on the release commit, and locally `cargo test -p nether-common -p nether-net -p nether-auth -p nether-game -p nether-social -p nether-core`
    and `cargo clippy --workspace --release` pass.
 3. New network destinations are in [PRIVACY.md](../../PRIVACY.md); new modules are in the
    [module list](../guide/modules.md) and both SAFETY files.

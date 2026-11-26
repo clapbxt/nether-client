@@ -46,7 +46,7 @@ jobs:
           persist-credentials: false
       - uses: Swatinem/rust-cache@v2
       - name: Test the launcher libraries
-        run: cargo test -p nether-common -p nether-net -p nether-auth -p nether-core
+        run: cargo test -p nether-common -p nether-net -p nether-auth -p nether-game -p nether-social -p nether-core
 
   windows:
     runs-on: windows-latest
