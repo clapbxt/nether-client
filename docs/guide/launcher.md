@@ -18,9 +18,11 @@ The bar along the bottom always shows what will launch (the **launch target**), 
 
 ## Play
 
-All your profiles in one list: name, Minecraft version, loader and when you last played. From here you can:
+Three tabs: **Instances** (yours, with a dot when the Nether client is on), **Modpacks** and **Horizon**. The list
+shows name, Minecraft version, loader and when you last played. From here you can:
 
-- **New profile**: make a profile, step by step. See [Profiles](profiles.md).
+- **New instance**: Quick (pick a version and play) or Manual (version, loader, Nether on / off, mods, resource packs).
+  With no instances yet, Play shows these steps right away. See [Profiles](profiles.md).
 - **Import**: bring in a modpack file or the profiles of another launcher.
 - Open a profile to manage its mods, packs, worlds, screenshots and logs.
 
@@ -56,7 +58,7 @@ players. See [Friends, parties and world invites](friends.md).
 | **Ctrl+K** | Search everything: pages, settings, profiles, worlds and mods |
 | **Ctrl+1** to **Ctrl+5** | Go to a page |
 | **Ctrl+,** | Settings |
-| **Ctrl+N** | New profile |
+| **Ctrl+N** | New instance |
 | **Esc** | Close the open dialog |
 
 ## When something goes wrong
