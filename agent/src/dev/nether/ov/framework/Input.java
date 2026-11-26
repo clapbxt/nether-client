@@ -62,7 +62,7 @@ public final class Input {
 
     // ---------------------------------------------------------------- queries
 
-    static int cps(int button) {
+    public static int cps(int button) {
         long now = System.currentTimeMillis();
         int n = 0;
         for (long t : clicks[button]) if (t != 0 && now - t <= 1000) n++;

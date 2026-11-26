@@ -14,7 +14,7 @@ public final class FrameStats {
     private static int n;
     private static long at;
     /** fps over the window (0 = not enough frames yet): average, worst frame, 1% low, 0.1% low */
-    static float avg, min, low1, low01;
+    public static float avg, min, low1, low01;
     /** worst frame time in ms per graph column, oldest first */
     static final float[] cols = new float[120];
     static int colsUsed;
@@ -22,7 +22,7 @@ public final class FrameStats {
     public static void add(float dt) { ring[n++ & (N - 1)] = dt; }
 
     /** Recomputes the numbers at most 4 times a second. */
-    static void refresh(int windowS, int columns) {
+    public static void refresh(int windowS, int columns) {
         long now = System.currentTimeMillis();
         if (now - at < 250) return;
         at = now;
