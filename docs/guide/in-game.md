@@ -6,7 +6,7 @@ party.
 
 ## The Nether menu
 
-Press **Right Shift** in game or on the title screen. A small hub opens with four buttons:
+Press **Right Shift** in game or on the title screen. A hub opens with four big buttons in a 2×2 grid:
 
 | Button | Opens |
 |---|---|
@@ -20,7 +20,8 @@ The same buttons sit on the Nether title screen, so you can use them before you 
 ### Finding a module
 
 The **Mods** page sorts modules into tabs: **Favorites**, **All**, **HUD**, **Visual**, **PvP** and **Utility**.
-Press **Ctrl+F** to search by name. Star a module to add it to Favorites.
+Press **Ctrl+F** to search by name; on a module's own page, **Ctrl+F** searches its settings. Star a module to add it
+to Favorites.
 
 Click a module to turn it on or off. Open its settings to change colours (with a colour picker, including a rainbow
 "chroma" option), sizes, keys and other options. Every setting has a short explanation; slider values can also be typed

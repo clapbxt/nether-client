@@ -31,7 +31,7 @@ Information boxes on your screen. Move them in the HUD Editor.
 | Combo Counter | Hits in a row on your target, reset when you get hit (off by default) | |
 | Stopwatch | A stopwatch with lap times, driven by keys | |
 | Media Player | What's playing in Spotify, your browser or any app in the Windows media controls, with album art and controls. Nothing leaves your PC. | |
-| Lyrics | Synced lyrics for the song in Media Player, as a karaoke panel or floating in the world (off by default) | |
+| Lyrics | Synced lyrics for the song in Media Player, lit word by word as they're sung, as a karaoke panel or floating in the world (off by default) | |
 
 ## Visual
 
