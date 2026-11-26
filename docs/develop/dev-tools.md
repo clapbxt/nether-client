@@ -65,6 +65,6 @@ with `agent/tools/names.js` (`--official`, `--obf` and `--srg` inputs; usage is 
 ## Tests
 
 ```powershell
-cargo test -p nether-core
+cargo test -p nether-common -p nether-net -p nether-auth -p nether-game -p nether-social -p nether-core
 cargo clippy --workspace --release
 ```

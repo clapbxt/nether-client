@@ -5,12 +5,16 @@ you don't write any launcher UI.
 
 ## Steps
 
-1. Create `agent/src/dev/nether/ov/<Name>.java` extending `Module`, with its id, name, group (`HUD`, `Visual` or
+1. Create `agent/src/dev/nether/ov/features/<area>/<Name>.java` (a public class) extending `Module` (from
+   `dev.nether.ov.framework`), in the feature package it belongs to (`hud`, `visual`, `lyrics`...; a new area gets a
+   new package with a `package-info.java`), with its id, name, group (`HUD`, `Visual` or
    `Utility`), a one-sentence description a player understands, its default state and HUD position.
 2. Give every `Setting` a `hint` (one plain sentence) and a sensible default. Implement `icon()` for its card.
-3. Register it in `Modules.java`. Add its id to the `PVP` set in `Menu.java` if it belongs on the PvP tab.
-4. Read game state only through `Data` / `Game`, and draw only through `Gfx`.
-5. Run `agent\build.ps1`. The launcher picks the module up from `schema.json` on its next build.
+3. Register it in `framework/Modules.java`. Add its id to the `PVP` set in `menu/Menu.java` if it belongs on the PvP
+   tab.
+4. Read game state only through `game.Data` / `game.Game`, and draw only through `ui.Gfx`. Never use `platform`
+   classes directly from a feature.
+5. Run `agent\gradlew.bat -p agent build`. The launcher picks the module up from `schema.json` on its next build.
 6. Document it: a row in [the player module list](../guide/modules.md), [SAFETY.md](../../SAFETY.md) and
    [`agent/SAFETY.md`](../../agent/SAFETY.md).
 

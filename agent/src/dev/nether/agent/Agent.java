@@ -341,8 +341,8 @@ public final class Agent {
             for (String l : new String(read("/ov.list"), StandardCharsets.UTF_8).split("\\r?\\n")) {
                 String n = l.trim();
                 // each platform only gets its own classes: the other one's supertypes (GLFW callbacks) would not resolve
-                int only = n.startsWith("dev.nether.ov.InputGlfw") ? 0 : n.startsWith("dev.nether.ov.PlatLwjgl2") || n.startsWith("dev.nether.ov.GlCompat") ? 1
-                    : n.startsWith("dev.nether.ov.PlatSdl") ? 2 : n.startsWith("dev.nether.ov.GlCore") ? (platform == 1 ? 0 : platform) : -1;
+                int only = n.startsWith("dev.nether.ov.platform.InputGlfw") ? 0 : n.startsWith("dev.nether.ov.platform.PlatLwjgl2") || n.startsWith("dev.nether.ov.platform.GlCompat") ? 1
+                    : n.startsWith("dev.nether.ov.platform.PlatSdl") ? 2 : n.startsWith("dev.nether.ov.platform.GlCore") ? (platform == 1 ? 0 : platform) : -1;
                 if (n.length() > 0 && (only < 0 || only == platform)) names.add(n);
             }
             Method dc = ClassLoader.class.getDeclaredMethod("defineClass", String.class, byte[].class, int.class, int.class);

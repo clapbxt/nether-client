@@ -1,4 +1,4 @@
-//! Bundles the built agent jars (agent/build, made by agent/build.ps1) into the launcher.
+//! Bundles the built agent jars (agent/build, made by the Gradle build in agent/) into the launcher.
 //! Missing jars -> empty placeholders, and the game then launches without the agent.
 //! The now-playing helper (`crates/media` -> nether-media.exe) is built here, so a release build never ships an
 //! empty one: Windows release builds fail when it can't be built.
@@ -20,6 +20,11 @@ fn main() {
     println!("cargo:rerun-if-changed={}", from.display());
     if fs::copy(&from, out.join("schema.json")).is_err() { fs::write(out.join("schema.json"), br#"{"modules":[]}"#).unwrap(); }
     media(&manifest, &out);
+    // tests that read the private backend's content (backend/, not in the public repo) only build when it is there
+    println!("cargo::rustc-check-cfg=cfg(backend_content)");
+    let content = manifest.join("../../backend/content/manifest.json");
+    println!("cargo:rerun-if-changed={}", content.display());
+    if content.exists() { println!("cargo:rustc-cfg=backend_content"); }
 }
 
 /// nether-media.exe for the agent's Media module. Built with a nested cargo into its own target dir

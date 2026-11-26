@@ -1,0 +1,27 @@
+# Pinned compile inputs for the in-game client (agent). These replace build.ps1's search of
+# %APPDATA%\NetherClient\libraries, so the agent builds on a fresh machine and in CI.
+#
+# LWJGL 3 is the OLDEST version the supported games ship (1.13 = 3.1.6): compiling against the oldest API keeps
+# every game version linkable. A newer pin would let a call that 1.13-1.18 don't have slip through.
+# LWJGL 2 is only on the compile class path of PlatLwjgl2 and GlCompat (1.8.9 / 1.12.2). Mojang's 2.9.4 nightly
+# is not on Maven Central; 2.9.3 has the same API for everything the agent calls.
+# SDL is the first LWJGL release with SDL3 bindings (26.3+).
+# ASM is bundled (relocated to dev.nether.shaded.asm), so it is a runtime choice too: 9.8+ is needed to read
+# Java 25 class files (26.x); newer releases only add class-file versions.
+[versions]
+lwjgl3 = "3.1.6"
+lwjgl2 = "2.9.3"
+lwjglSdl = "3.4.0"
+asm = "9.9.1"
+
+[libraries]
+lwjgl3-core = { module = "org.lwjgl:lwjgl", version.ref = "lwjgl3" }
+lwjgl3-glfw = { module = "org.lwjgl:lwjgl-glfw", version.ref = "lwjgl3" }
+lwjgl3-opengl = { module = "org.lwjgl:lwjgl-opengl", version.ref = "lwjgl3" }
+lwjgl2 = { module = "org.lwjgl.lwjgl:lwjgl", version.ref = "lwjgl2" }
+lwjglSdl-core = { module = "org.lwjgl:lwjgl", version.ref = "lwjglSdl" }
+lwjglSdl-sdl = { module = "org.lwjgl:lwjgl-sdl", version.ref = "lwjglSdl" }
+asm-core = { module = "org.ow2.asm:asm", version.ref = "asm" }
+asm-commons = { module = "org.ow2.asm:asm-commons", version.ref = "asm" }
+asm-tree = { module = "org.ow2.asm:asm-tree", version.ref = "asm" }
+asm-analysis = { module = "org.ow2.asm:asm-analysis", version.ref = "asm" }

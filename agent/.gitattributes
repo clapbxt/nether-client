@@ -1,2 +1,4 @@
 # name tables are split per line by the agent: keep them LF on every checkout
 res/names/*.txt text eol=lf
+gradlew text eol=lf
+*.bat text eol=crlf
