@@ -27,9 +27,11 @@ final class Items extends Module {
 
     Items() {
         super("items", "Item Counter", "HUD", "How many of the chosen items you carry, such as pearls and golden apples.", true, false, 0.012, 0.5);
+        add(Setting.header("Items to count"));
         for (String[] p : PRESETS) add(Setting.bool(p[0], p[1], p[0].equals("pearls") || p[0].equals("gapples")));
         add(Setting.bool("held", "Held item total", false).hint("Total of the item you are holding, across your whole inventory."));
         add(Setting.text("custom", "More item ids", "", 120).hint("Item ids separated by commas, e.g. snowball, minecraft:cobweb."));
+        add(Setting.header("Display"));
         add(Setting.choice("layout", "Layout", "Column", "Column", "Row", "Vanilla").hint("Vanilla: the game's own hotbar slots and stack counts (resource packs apply)"));
         add(Setting.bool("icons", "Item icons", true).when(() -> !str("layout").equals("Vanilla")).hint("Flat item textures; items without one show their name."));
         add(Setting.bool("hideZero", "Hide at zero", true).hint("Items you have none of are left out."));

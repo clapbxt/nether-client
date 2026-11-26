@@ -169,7 +169,7 @@ final class Modules {
         fixed.clear();
         for (Module m : all) {
             m.placed = false;
-            if (!m.hud || !m.enabled() || !(edit || m.visible())) continue;
+            if (!m.hud || !m.hudPiece() || !m.enabled() || !(edit || m.visible())) continue;
             m.lk = m.layout();
             m.placed = true;
             float bw = m.w * m.lk, bh = m.h * m.lk;
@@ -287,7 +287,9 @@ final class Modules {
         boolean menu = Input.menuOpen;
         if (!menu && (!inGame() || Game.hudHidden() || (Game.screenOpen() && !Game.chatOpen()))) {
             for (Module m : all) m.tick();
+            if (!Input.inWorld() || (Game.screenOpen() && !Game.chatOpen())) Hits.clear();
             if (!Game.hudHidden() && LYRICS.enabled()) menuLyrics(fbW, fbH);
+            if (LYRICS.enabled() && Input.inWorld() && !Game.screenOpen() && LyricsWorldPanel.visible()) LyricsWorldPanel.draw(fbW, fbH);
             return;
         }
         float[] chat = null;
@@ -332,8 +334,8 @@ final class Modules {
         boolean world = Input.inWorld() && !Game.hudHidden();
         if (WAYPOINTS.enabled() && world) WAYPOINTS.drawMarkers(fbW, fbH);
         if (TntTimer.M.enabled() && world) TntTimer.M.drawWorld(fbW, fbH);
-        if (LYRICS.enabled() && world) LYRICS.drawWorld(fbW, fbH);
-        if (LYRICS.enabled() && Input.inWorld() && (world || Input.worldGuiOpen)) LyricsWorldPanel.draw(fbW, fbH);
+        if (LYRICS.enabled() && world || Menu.live == LYRICS && Game.playing()) LYRICS.drawWorld(fbW, fbH); // the menu's world preview too
+        if (LYRICS.enabled() && Input.inWorld() && (world || LyricsWorldPanel.visible() || Input.worldGuiOpen)) LyricsWorldPanel.draw(fbW, fbH);
         SELFTAG.drawWorld(fbW, fbH, SELFTAG.enabled() && world);
         if (world) { Toast.draw(fbW); SHOTS.drawCard(fbW); menuHint(fbW); }
     }
@@ -376,7 +378,8 @@ final class Modules {
                 if (chat != null && bot > chat[2]) continue;
                 if (chat != null && m.bx < chat[0] && bot > chat[1]) continue;
                 Gfx.s = k;
-                m.draw(m.bx / k, m.by / k);
+                Gfx.hudPix = m.mcFont();
+                try { m.draw(m.bx / k, m.by / k); } finally { Gfx.hudPix = false; }
                 Slow.mark2("draw ", m.id);
             }
         } finally {
@@ -464,6 +467,7 @@ final class Modules {
     static final class Fps extends RowsModule {
         Fps() {
             super("fps", "FPS", "HUD", "Frames per second, updated every second.", true, 0.012, 0.02);
+            add(Setting.header("Display"));
             add(Setting.bool("ms", "Show frame time", false));
             add(Setting.bool("tint", "Color by speed", false).hint("Green at 60 FPS and up, amber from 30, red below."));
             add(Setting.bool("stats", "Show average, minimum, 1% low", false).hint("Over the last 10 seconds. The 1% low is the speed of your worst frames."));
@@ -503,6 +507,7 @@ final class Modules {
         private String dim = "";
         Coords() {
             super("coords", "Coordinates", "HUD", "Position and the direction you are facing.", true, 0.012, 0.19);
+            add(Setting.header("Display"));
             add(Setting.slider("decimals", "Decimals", 0, 3, 1, 1));
             add(Setting.bool("dir", "Show direction", true));
             add(Setting.bool("other", "Show Nether / Overworld match", false));
@@ -538,6 +543,7 @@ final class Modules {
     static final class Clock extends RowsModule {
         Clock() {
             super("clock", "Clock", "HUD", "Local time of day.", false, 0.92, 0.02);
+            add(Setting.header("Format"));
             add(Setting.bool("h24", "24-hour clock", true));
             add(Setting.bool("seconds", "Show seconds", false));
             add(Setting.bool("date", "Show date", false));
@@ -606,9 +612,11 @@ final class Modules {
 
         Keystrokes() {
             super("keys", "Keystrokes", "HUD", "WASD, space and mouse buttons with live CPS.", true, true, 1.0, 1.0);
+            add(Setting.header("Keys shown"));
             add(Setting.bool("mouse", "Mouse buttons", true));
             add(Setting.bool("cps", "Show CPS", true).when(() -> bool("mouse")));
             add(Setting.bool("space", "Space bar", true));
+            add(Setting.header("Animation"));
             add(Setting.slider("fade", "Pressed fade (ms)", 10, 400, 5, 55).hint("How long a key takes to light up and fade out."));
             drop("accent");
         }
@@ -686,11 +694,14 @@ final class Modules {
 
         Zoom() {
             super("zoom", "Zoom", "Visual", "Hold a key to zoom in smoothly. Scroll while zooming to adjust the level.", false, true, 0, 0);
+            add(Setting.header("Controls"));
             add(Setting.key("zoomKey", "Zoom key", 67));
             add(Setting.choice("mode", "Mode", "Hold", "Hold", "Toggle"));
+            add(Setting.header("Zoom"));
             add(Setting.slider("level", "Zoom level", 1.5, 10, 0.5, 4));
             add(Setting.bool("smooth", "Smooth zoom", true));
             add(Setting.bool("scroll", "Scroll to adjust", true).hint("Up to 50x, for this zoom only: the next one starts at the zoom level again."));
+            add(Setting.header("While zoomed"));
             add(Setting.bool("sens", "Lower sensitivity while zoomed", true));
             add(Setting.bool("hideHand", "Hide held item while zoomed", false).hint("Eases it down out of view and back up (Fabric, Forge, NeoForge and 26.x)"));
             needs(3);
@@ -808,12 +819,14 @@ final class Modules {
 
         Potions() {
             super("potions", "Potion Effects", "HUD", "Active status effects with their icon, level and time left.", true, false, 0.87, 0.24);
+            add(Setting.header("Display"));
             add(Setting.bool("icons", "Effect icons", true));
-            add(Setting.bool("blink", "Blink when running out", true));
-            add(Setting.slider("lowSecs", "Warn below (s)", 3, 60, 1, 10).hint("Time left under this turns red."));
+            add(Setting.bool("compact", "Compact", false).when(() -> bool("icons")).hint("Icon and time only, tighter rows (names stay for effects without an icon)."));
             add(Setting.choice("sort", "Sort by", "Time left", "Time left", "Level", "Name").hint("Order of the list."));
             add(Setting.bool("ambient", "Hide beacon effects", false).hint("Leaves out the effects a beacon or conduit keeps giving you."));
-            add(Setting.bool("compact", "Compact", false).when(() -> bool("icons")).hint("Icon and time only, tighter rows (names stay for effects without an icon)."));
+            add(Setting.header("Warnings"));
+            add(Setting.bool("blink", "Blink when running out", true));
+            add(Setting.slider("lowSecs", "Warn below (s)", 3, 60, 1, 10).hint("Time left under this turns red."));
             needs(4);
         }
 
@@ -1036,12 +1049,12 @@ final class Modules {
                 if (hh % 45 == 0) {
                     String s = DIRS[hh / 45];
                     boolean major = s.length() == 1;
-                    Gfx.textC(Gfx.SEMI, major ? 12 : 9, tx, y + 10, Gfx.a(major ? (hh == 0 ? Th.ac2 : col) : Gfx.DIM, fade), s, 0);
+                    Gfx.textC(Gfx.SEMI, major ? 12 : 9, tx, y + 10, Gfx.a(major ? (hh == 0 ? 0xFFFF5555 : col) : Gfx.DIM, fade), s, 0);
                 } else if (hh % 15 == 0) Gfx.rect(tx - 0.5f, ty - 4, 1, 4, 0, Gfx.a(Gfx.DIM, fade));
                 else Gfx.rect(tx - 0.5f, ty - 2, 1, 2, 0, Gfx.a(Gfx.MUT, fade));
             }
             waypointTicks(x, y, cx, ppd, span);
-            Gfx.rect(cx - 1, y + 5, 2, h - (hd ? 20 : 10), 1, Gfx.a(Th.ac, 0.9f));
+            Gfx.rect(cx - 1, y + 5, 2, h - (hd ? 20 : 10), 1, Gfx.a(0xFFFFFFFF, 0.9f));
             if (hd) Gfx.textC(Gfx.MONO, 10, cx, y + h - 6, Gfx.DIM, String.valueOf(Math.round(bearing) % 360), 0);
         }
     }
@@ -1056,6 +1069,7 @@ final class Modules {
     static final class Crosshair extends Module {
         Crosshair() {
             super("crosshair", "Crosshair", "Visual", "Your own crosshair shape, drawn by the game like a resource pack's.", false, false, 0, 0);
+            add(Setting.header("Shape"));
             add(Setting.choice("style", "Style", "Cross", "Cross", "Dot", "Circle", "Square").hint("Cross with gap 0 is a plus."));
             add(Setting.slider("size", "Size", 2, 12, 1, 5));
             add(Setting.slider("thickness", "Thickness", 0.5, 3, 0.5, 1));

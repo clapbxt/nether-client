@@ -190,12 +190,22 @@ public final class Hook {
         try { if (p != null && ps != null) p.pop(ps); } catch (Throwable t) { viewFail(t); }
     }
     /** The fire quads' alpha (float colour, or packed ARGB on 26.x). */
+    /** The live fire editor shows the game's own fire overlay while it is open, burning or not. */
+    public static volatile boolean fireForce;
+    public static boolean fireShown(boolean burning) { return burning || fireForce; }
     public static float fireA(float a) { float f = fireAlpha; return f < 0 ? a : f; }
     public static int fireArgb(int c) { float f = fireAlpha; return f < 0 ? c : (c & 0xFFFFFF) | (Math.round(Math.max(0, Math.min(1, f)) * 255) << 24); }
 
     /** EntityRenderer.createRenderState(entity, partial): its entity at the start, its result at the return (remembers the ridden entity's state). */
     public static void mountArg(Object entity) { mountArg = entity; }
-    public static void mountTag(Object state) { Object e = mountArg; mountArg = null; if (e != null && e == mountOf) mountState = state; }
+    public static void mountTag(Object state) {
+        Object e = mountArg; mountArg = null; if (e != null && e == mountOf) mountState = state;
+        java.util.function.Consumer<Object> c = stateDone;
+        if (c != null) try { c.accept(state); } catch (Throwable x) { stateDone = null; System.out.println("[nether-agent] render state hook off: " + x); }
+    }
+    /** EntityRenderer.createRenderState returned this state (1.21.2+): 3D skin layers hides flat parts before the model draws. */
+    public static volatile java.util.function.Consumer<Object> stateDone;
+    public static volatile boolean tagHooked;
     /** LivingEntityRenderer.submit's translucent flag for getRenderType: forced on for the faded mount. */
     public static boolean mountTranslucent(boolean t, Object state) {
         Object m = mountOf; // 1.21.2+ passes the render state, 1.21.1 the entity itself
@@ -233,6 +243,10 @@ public final class Hook {
     /** Custom sky (1.8.9 / 1.12.2): drawn at the end of RenderGlobal.renderSky with the game's camera matrices. */
     public static volatile java.util.function.Consumer<Float> skyDraw;
     public static volatile boolean skyHooked;
+    /** LevelRenderer.renderLevel arguments of the current frame: view rotation, projection (1.21.x), CameraRenderState (26.1). */
+    public static volatile Object levelView, levelProj, levelCam;
+    public static volatile long levelFrame, levelNs;
+    public static void levelMats(Object view, Object proj, Object cam) { levelView = view; levelProj = proj; levelCam = cam; levelFrame++; levelNs = System.nanoTime(); }
     /** Custom sky (1.21.2 - 26.1): drawn after SkyRenderer.renderSkyDisc, inside the world pass. */
     public static volatile Runnable skyModernDraw;
     public static void skyModern() {

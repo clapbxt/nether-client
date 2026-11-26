@@ -113,7 +113,7 @@ final class PlatLwjgl2 extends Plat implements Hook.Legacy {
     @Override public boolean kbDown(boolean r, int key) {
         if (inside) return r;
         if (Input.dead) return r;
-        if (Input.menuOpen || Input.worldGuiOpen) return false;
+        if (Input.menuOpen || Input.worldGuiOpen && !LyricsWorldPanel.dragging()) return false;
         return r && !Input.devOnly;
     }
 

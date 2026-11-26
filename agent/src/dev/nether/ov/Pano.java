@@ -3,22 +3,21 @@ package dev.nether.ov;
 import java.awt.image.BufferedImage;
 
 /**
- * Nether's own title panoramas (2026-11-20). Each is a cylindrical strip, {@code pano/<name>.jpg} in the agent jar:
- * u = yaw 0..360 degrees from north turning right, v = the tangent of the elevation from +HMAX (top) to -HMAX. They
- * were shot with shaders in generated worlds by the dev capture (vault: projects/Custom panoramas). Drawn in
- * perspective as thin vertical slices (each its own yaw and height span), so no 3D renderer of our own is needed and
- * the same code runs on 1.8.9 and 26.x. Also the backdrop of the fire / shield / mount editors.
+ * Nether title panoramas, stored as six vanilla-style cube faces under {@code pano/<name>/panorama_N.png}. The faces
+ * are resampled off-thread into a tangent strip, then projected into the view; the strip is only an intermediate
+ * representation. This keeps the same path working on 1.8.9 through 26.x, and in editor previews.
  */
 final class Pano {
     private Pano() {}
 
-    /** shipped strips (file names under pano/), in the order the setting lists them */
+    /** panorama folders under pano/, in the order the setting lists them */
     static final String[] NAMES = {"Sakura", "Valley", "Peaks", "Village", "Mesa"};
     static final String[] CHOICES = new String[NAMES.length + 1];
     static { CHOICES[0] = "Random"; System.arraycopy(NAMES, 0, CHOICES, 1, NAMES.length); }
 
     /** half the strip's height in h units (tangent of elevation) */
     private static final float HMAX = 0.75f;
+    private static final int STRIP_W = 4096, STRIP_H = 768;
     /** degrees per second of the slow turn (one turn in ~2.7 minutes, close to vanilla's) */
     private static final float SPEED = 2.2f;
 
@@ -35,7 +34,7 @@ final class Pano {
         return NAMES[RANDOM];
     }
 
-    /** Loads (in the background) and uploads the strip; true once its texture is ready. */
+    /** Uploads the decoded cube map once ready, or starts decoding and resampling it off-thread. */
     private static boolean ready(String name) {
         BufferedImage img = ready;
         if (img != null) {
@@ -50,10 +49,27 @@ final class Pano {
             busy = true;
             Thread t = new Thread(() -> {
                 try {
-                    byte[] b = dev.nether.agent.Hook.file.apply("pano/" + name + ".jpg");
-                    BufferedImage i = b == null ? null : javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(b));
-                    if (i == null) failed = name;
-                    else { readyName = name; ready = i; }
+                    // shipped strips (pano/<name>.jpg) until cube-face folders replace them
+                    byte[] jpg = dev.nether.agent.Hook.file.apply("pano/" + name + "/panorama_0.png") == null ? dev.nether.agent.Hook.file.apply("pano/" + name + ".jpg") : null;
+                    if (jpg != null) {
+                        BufferedImage i = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(jpg));
+                        if (i == null) throw new IllegalArgumentException("unreadable strip");
+                        readyName = name;
+                        ready = i;
+                        return;
+                    }
+                    BufferedImage[] faces = new BufferedImage[6];
+                    int edge = -1;
+                    for (int f = 0; f < faces.length; f++) {
+                        byte[] b = dev.nether.agent.Hook.file.apply("pano/" + name + "/panorama_" + f + ".png");
+                        faces[f] = b == null ? null : javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(b));
+                        if (faces[f] == null || faces[f].getWidth() != faces[f].getHeight()
+                                || (edge >= 0 && faces[f].getWidth() != edge)) throw new IllegalArgumentException("missing or mismatched panorama face " + f);
+                        edge = faces[f].getWidth();
+                    }
+                    BufferedImage strip = cubeStrip(faces, edge);
+                    readyName = name;
+                    ready = strip;
                 } catch (Throwable e) {
                     failed = name;
                     System.out.println("[nether-agent] panorama " + name + ": " + e);
@@ -66,17 +82,49 @@ final class Pano {
         return false;
     }
 
+    /** Resamples Minecraft's face order (+Z, +X, -Z, -X, +Y, -Y) into a yaw/tangent strip. */
+    private static BufferedImage cubeStrip(BufferedImage[] f, int edge) {
+        BufferedImage out = new BufferedImage(STRIP_W, STRIP_H, BufferedImage.TYPE_INT_RGB);
+        int[] row = new int[STRIP_W];
+        for (int py = 0; py < STRIP_H; py++) {
+            float tangent = HMAX * (1 - 2f * (py + 0.5f) / STRIP_H);
+            float elev = (float) Math.atan(tangent), ce = (float) Math.cos(elev), sy = (float) Math.sin(elev);
+            for (int px = 0; px < STRIP_W; px++) {
+                double yaw = (px + 0.5) * (Math.PI * 2 / STRIP_W);
+                float dx = (float) Math.sin(yaw) * ce, dy = sy, dz = (float) Math.cos(yaw) * ce;
+                float ax = Math.abs(dx), ay = Math.abs(dy), az = Math.abs(dz), u, v;
+                int face;
+                if (az >= ax && az >= ay) {
+                    if (dz >= 0) { face = 0; u = (dx / az + 1) * 0.5f; }
+                    else { face = 2; u = (1 - dx / az) * 0.5f; }
+                    v = (1 - dy / az) * 0.5f;
+                } else if (ax >= ay) {
+                    if (dx >= 0) { face = 1; u = (1 - dz / ax) * 0.5f; }
+                    else { face = 3; u = (1 + dz / ax) * 0.5f; }
+                    v = (1 - dy / ax) * 0.5f;
+                } else {
+                    if (dy >= 0) { face = 4; u = (dx / ay + 1) * 0.5f; v = (dz / ay + 1) * 0.5f; }
+                    else { face = 5; u = (dx / ay + 1) * 0.5f; v = (1 - dz / ay) * 0.5f; }
+                }
+                int ix = Math.max(0, Math.min(edge - 1, (int) (u * edge)));
+                int iy = Math.max(0, Math.min(edge - 1, (int) (v * edge)));
+                row[px] = f[face].getRGB(ix, iy);
+            }
+            out.setRGB(0, py, STRIP_W, 1, row, 0, STRIP_W);
+        }
+        return out;
+    }
+
     /**
      * Whole-screen title background. False until the picture is loaded (the caller keeps vanilla's panorama under it).
-     * px, py: eased cursor offset -1..1 (a little parallax).
      */
-    static boolean title(float W, float H, String choice, boolean anim, float px, float py) {
+    static boolean title(float W, float H, String choice, boolean anim) {
         String name = wanted(choice);
         if (!ready(name)) return false;
         if (yaw < 0) yaw = new java.util.Random().nextFloat() * 360; // each start opens on a different side
         if (anim) yaw = (yaw + SPEED * Math.min(Gfx.dt, 0.1f)) % 360;
         fade = Math.min(1, fade + Gfx.dt * 1.6f);
-        view(name, 0, 0, W, H, yaw + px * 2.5f, 0.6f, py * 0.03f, fade);
+        view(name, 0, 0, W, H, yaw, 0.6f, 0, fade);
         return true;
     }
 
@@ -92,15 +140,15 @@ final class Pano {
 
     /**
      * Perspective view of a strip into the box: tv = tangent of half the vertical field of view (kept under HMAX), lift
-     * shifts the horizon (h units), a = alpha. Slices are 2 device pixels wide (whole pixels, no seams): each slice
-     * has one vertical span, so wider slices (1/96 of the width before) left visible vertical steps between them.
+     * shifts the horizon (h units), a = alpha. Use one slice per framebuffer pixel so the projection has no visible
+     * vertical steps. (Vanilla renders a cube map; these assets are equirectangular strips, so they need this projection.)
      */
     private static void view(String name, float x, float y, float w, float h, float yawDeg, float tv, float lift, float a) {
         String key = "pano:" + name;
         tv = Math.min(tv, HMAX - Math.abs(lift) - 0.01f);
         float f = (h / 2) / tv, cx = x + w / 2, s = Gfx.s;
         int tint = (Math.round(a * 255) << 24) | 0xFFFFFF;
-        int n = Math.max(96, Math.round(w * s / 2));
+        int n = Math.max(1, Math.round(w * s));
         float base = yawDeg / 360f;
         for (int i = 0, p0 = Math.round(x * s); i < n; i++) {
             int p1 = Math.round((x + w * (i + 1) / n) * s);

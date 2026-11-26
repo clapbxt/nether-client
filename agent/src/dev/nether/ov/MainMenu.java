@@ -381,7 +381,7 @@ final class MainMenu {
         if (panelOpen && click && !inPanel && !inside(custBox)) { panelOpen = false; click = false; modal = null; }
         account();
 
-        MenuBack.draw(W, H, legacy, MX, MY);
+        MenuBack.draw(W, H, legacy);
         float a0 = Gfx.alpha;
         Gfx.alpha = a0 * e;
         float rise = (1 - e) * 8;
@@ -567,7 +567,6 @@ final class MainMenu {
             boolean rv = over(x + 6, ry, w - 12, rh), sel = o[0].equals(m[0]);
             float rt = an("pm" + i, rv);
             if (rt > 0.01f || sel) Gfx.rect(x + 6, ry, w - 12, rh, 6, Gfx.a(Gfx.ICE, 0.05f * rt + (sel ? 0.05f : 0)));
-            if (sel) Gfx.rect(x + 6, ry + 10, 3, rh - 20, 1.5f, Th.ac);
             if (i == 2) Gfx.rect(x + 14, ry - 1, w - 28, 1, 0, Gfx.LN);
             Gfx.text(Gfx.SEMI, 12, x + 18, ry + 16, Gfx.ICE, fit(Gfx.SEMI, 12, o[1], 0, w - 40));
             Gfx.text(Gfx.UI, 10, x + 18, ry + 31, Gfx.DIM, fit(Gfx.UI, 10, o[2], 0, w - 40));
@@ -813,7 +812,6 @@ final class MainMenu {
                     break;
                 case "Minimal":
                     if (t > 0.01f) Gfx.rect(x, y, w, h, 6, Gfx.a(Gfx.ICE, 0.06f * t));
-                    if (left && t > 0.01f) Gfx.rect(x, y + 6, 3, h - 12, 1.5f, Gfx.a(Th.ac, t));
                     break;
                 default: // flat glass
                     Gfx.rect(x, y, w, h, 6, down ? Gfx.S3 : Gfx.mix(Gfx.a(Gfx.CARD, 0.8f), Gfx.CARD2, t));

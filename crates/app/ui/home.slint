@@ -60,16 +60,19 @@ export component HomeScreen inherits Rectangle {
                 color: root.cur.running || root.cur.crashed ? Theme.red2 : #ffffffb0; font-family: Theme.disp; font-size: 16px; font-weight: 700;
                 text: root.cur.running ? "RUNNING NOW" : (root.cur.crashed ? "LAST SESSION CRASHED" : (root.cur.last == "" ? "READY TO PLAY" : "LAST PLAYED · " + root.cur.last)); }
             Text { x: -100px; y: 30px; width: parent.width + 200px; height: 56px; horizontal-alignment: center; vertical-alignment: center; overflow: elide;
-                text: root.cur.title; color: #FFFFFF; font-family: Theme.disp; font-size: 48px; font-weight: 700; }
+                text: root.cur.title; color: #FFFFFF; font-family: Theme.pix; font-size: 40px; font-weight: 700; }
             Text { x: -100px; y: 88px; width: parent.width + 200px; height: 22px; horizontal-alignment: center; vertical-alignment: center; overflow: elide;
                 text: root.cur.ver + "  ·  " + root.cur.loader + "  ·  " + root.cur.mods + " mods  ·  " + root.cur.hours + " h played";
                 color: #ffffffb8; font-family: Theme.ui; font-size: 14px * Theme.ts; }
             // LAUNCH: main part plays / stops, the chevron segment picks the instance
             Rectangle {
-                y: 126px; width: parent.width; height: 68px; border-radius: Theme.r3; clip: true;
-                background: !root.can ? Theme.s3 : (lt.pressed ? Theme.press : (lt.has-hover ? Theme.red2 : Theme.red));
+                y: 126px; width: parent.width; height: 68px; border-radius: Theme.r3;
+                background: !root.can ? Theme.s3 : (lt.pressed ? Theme.press : (lt.has-hover ? Theme.red.brighter(0.1) : Theme.red));
                 animate background { duration: Theme.fast; }
-                Text { x: 0px; y: 10px; width: parent.width - 56px; height: 30px; horizontal-alignment: center; vertical-alignment: center; color: #FFFFFF; font-family: Theme.disp; font-size: 24px; font-weight: 700;
+                // bevel lip (Minecraft button edge), seated when pressed
+                drop-shadow-offset-y: root.can && !lt.pressed ? 4px : 0px;
+                drop-shadow-color: root.can ? Theme.red.darker(0.5) : transparent;
+                Text { x: 0px; y: 10px; width: parent.width - 56px; height: 30px; horizontal-alignment: center; vertical-alignment: center; color: #FFFFFF; font-family: Theme.pix; font-size: 24px; font-weight: 700;
                     text: root.cur.stopping ? "STOPPING" : (root.cur.running ? "STOP" : (root.cur.starting ? "STARTING" : "LAUNCH " + root.cur.ver)); }
                 Text { x: 0px; y: 40px; width: parent.width - 56px; height: 18px; horizontal-alignment: center; vertical-alignment: center; color: #ffffffcc; font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 600; overflow: elide;
                     text: root.cur.running ? "Close the game from here" : (root.cur.starting ? "Getting everything ready…" : root.cur.name); }
@@ -116,7 +119,7 @@ export component HomeScreen inherits Rectangle {
         if !root.any: Rectangle {
             x: (parent.width - 600px) / 2; y: (parent.height - 250px) / 2; width: 600px; height: 250px;
             Text { y: 0px; width: parent.width; height: 24px; horizontal-alignment: center; vertical-alignment: center; text: "START HERE"; color: #ffffffb0; font-family: Theme.disp; font-size: 16px; font-weight: 700; }
-            Text { y: 30px; width: parent.width; height: 56px; horizontal-alignment: center; vertical-alignment: center; text: "Pick a version and play"; color: #FFFFFF; font-family: Theme.disp; font-size: 44px; font-weight: 700; }
+            Text { y: 30px; width: parent.width; height: 56px; horizontal-alignment: center; vertical-alignment: center; text: "Pick a version and play"; color: #FFFFFF; font-family: Theme.pix; font-size: 40px; font-weight: 700; }
             for p[k] in Backend.presets: Rectangle {
                 x: k * (parent.width / 2 + 6px); y: 100px; width: parent.width / 2 - 6px; height: 82px; border-radius: Theme.r3;
                 background: pc.pressed ? Theme.press : (pc.has-hover ? Theme.red2 : (k == 0 ? Theme.red : #ffffff1c));
@@ -149,7 +152,7 @@ export component HomeScreen inherits Rectangle {
     property <length> card-w: (root.news-w - 2 * 16px) / 3;
     property <length> card-h: 190px;
     property <bool> no-news: Backend.news-failed && Backend.news.length == 0;
-    Text { x: root.m; y: root.low-y; height: 24px; vertical-alignment: center; text: "LATEST NEWS"; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; }
+    Text { x: root.m; y: root.low-y; height: 24px; vertical-alignment: center; text: "LATEST NEWS"; color: Theme.tx; font-family: Theme.pix; font-size: 24px; font-weight: 700; }
     LinkBtn { x: root.m + root.news-w - self.width; y: root.low-y + 2px; text: "DISCOVER"; clicked => { root.go-discover(); } }
     if Backend.news.length == 0: Rectangle {
         x: root.m; y: root.low-y + 40px; width: root.news-w; height: root.card-h; border-radius: Theme.r3; background: Theme.s1; border-width: 1px; border-color: Theme.ln;
@@ -183,9 +186,11 @@ export component HomeScreen inherits Rectangle {
     // -1 = not picked: FRIENDS while any friend is online, else PROFILES
     property <int> side-pick: -1;
     property <int> side: root.side-pick >= 0 ? root.side-pick : (Friends.online > 0 ? 1 : 0);
+    // Nether Pixel runs wide: the second tab starts after the measured first one
+    pw := Text { visible: false; text: "PROFILES"; font-family: Theme.pix; font-size: 20px; font-weight: 700; }
     for t[i] in ["PROFILES", "FRIENDS"]: Rectangle {
-        x: root.side-x + (i == 0 ? 0px : 128px); y: root.low-y; height: 24px; width: tt.preferred-width + (i == 1 && Friends.online > 0 ? 34px : 0px);
-        tt := Text { x: 0px; height: parent.height; vertical-alignment: center; text: t; font-family: Theme.disp; font-size: 24px; font-weight: 700;
+        x: root.side-x + (i == 0 ? 0px : pw.preferred-width + 20px); y: root.low-y; height: 24px; width: tt.preferred-width + (i == 1 && Friends.online > 0 ? 34px : 0px);
+        tt := Text { x: 0px; height: parent.height; vertical-alignment: center; text: t; font-family: Theme.pix; font-size: 20px; font-weight: 700;
             color: root.side == i ? Theme.tx : (ta.has-hover ? Theme.dim : Theme.mut); animate color { duration: Theme.fast; } }
         if i == 1 && Friends.online > 0: Rectangle {
             x: tt.preferred-width + 10px; y: 8px; width: 8px; height: 8px; border-radius: 4px; background: FColor.dot[1]; }

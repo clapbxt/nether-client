@@ -110,7 +110,9 @@ final class TitleNav {
         x += 30;
         boolean tight = W < 980; // narrow windows: smaller tabs so the right cluster never runs into them
         float fs = tight ? 13 : 15, pad = tight ? 20 : 28;
-        float bw = Gfx.text(Gfx.HEAD, fs, x, cy, Gfx.ICE, "NETHER", false, 1.2f);
+        // Nether Pixel (HEAD) runs wide and snaps to 16: narrow windows set the bar in Barlow so the tabs still fit
+        int nf = tight ? Gfx.SEMI : Gfx.HEAD;
+        float bw = Gfx.text(nf, fs, x, cy, Gfx.ICE, "NETHER", false, 1.2f);
         x += bw + (tight ? 24 : 30);
         Gfx.rect(x - 15, cy - 11, 1, 22, 0, Gfx.a(Gfx.ICE, 0.12f));
 
@@ -119,25 +121,19 @@ final class TitleNav {
         float tx = x;
         float[] txs = new float[TABS.length], tws = new float[TABS.length];
         for (int i = 0; i < TABS.length; i++) {
-            float w = Gfx.width(Gfx.HEAD, fs, TABS[i], 1.4f) + pad;
+            float w = Gfx.width(nf, fs, TABS[i], 1.4f) + pad;
             txs[i] = tx;
             tws[i] = w;
-            boolean on = cur == i, hv = over(tx, 0, w, H);
+            boolean on = cur == i, hv = over(tx, cy - 16, w, 32);
             float t = an("t" + i, hv), a = an("a" + i, on);
-            int col = Gfx.mix(Gfx.mix(Gfx.DIM, Gfx.ICE, t * 0.8f), Gfx.ICE, a);
-            Gfx.textC(Gfx.HEAD, fs, tx + w / 2, cy, col, TABS[i], 1.4f);
-            if (i == SOCIAL) badge(tx + w - 10, cy - 12, Friends.badge() + Party.badge());
-            if (hit(tx, 0, w, H)) go(i);
-            tx += w;
+            // Feather's tab row: the open page is a solid accent plate, the rest quiet dark plates
+            Gfx.rect(tx, cy - 16, w, 32, 6, Gfx.mix(Gfx.a(0xFF000000, 0.32f + 0.1f * t), Th.ac, a));
+            int col = Gfx.mix(Gfx.mix(Gfx.DIM, Gfx.ICE, t), 0xFFFFFFFF, a);
+            Gfx.textC(nf, fs, tx + w / 2, cy, col, TABS[i], 1.4f);
+            if (i == SOCIAL) badge(tx + w - 4, cy - 15, Friends.badge() + Party.badge());
+            if (hit(tx, cy - 16, w, 32)) go(i);
+            tx += w + 6;
         }
-        // the underline glides to the active tab (none for the gear's SETTINGS page)
-        if (cur < TABS.length) {
-            float f = Config.calm() || ulX < 0 ? 1 : Math.min(1, Gfx.dt * 14);
-            ulX += (txs[cur] + 12 - ulX) * f;
-            ulW += (tws[cur] - 24 - ulW) * f;
-            Gfx.rect(ulX - 6, H - 6, ulW + 12, 8, 4, Gfx.a(Th.ac, 0.25f));
-            Gfx.rect(ulX, H - 3, ulW, 3, 1.5f, Th.ac);
-        } else ulX = -1;
 
         // right cluster, right to left
         float rx = W - 18;
@@ -220,7 +216,7 @@ final class TitleNav {
         if (n <= 0) return;
         String b = n > 9 ? "9+" : String.valueOf(n);
         float w = Math.max(14, Gfx.width(Gfx.SEMI, 9, b) + 7);
-        Gfx.rect(x - w / 2, y - 7, w, 14, 7, Th.ac);
+        Gfx.rect(x - w / 2, y - 7, w, 14, 7, 0xFFE5372D); // notification count: plain red, not the accent
         Gfx.textC(Gfx.SEMI, 9, x, y, 0xFFFFFFFF, b, 0);
     }
 

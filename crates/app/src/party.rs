@@ -830,7 +830,8 @@ impl Actor {
                 if !self.in_game() {
                     // the game closed: no lobby, not ready; the party ends shortly unless a game links again
                     self.game_gone = Some(Instant::now());
-                    self.mine = Mine { at: "launcher".into(), ..Default::default() };
+                    // keep the last look: the member still shows their cape and cosmetics until a game links again
+                    self.mine = Mine { at: "launcher".into(), look: std::mem::take(&mut self.mine.look), ..Default::default() };
                     self.invites.clear();
                     self.send_me();
                     self.publish();

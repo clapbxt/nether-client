@@ -1108,7 +1108,7 @@ fn main() -> Result<(), slint::PlatformError> {
         discord::enable(&shared.paths, p.discord);
         settings::apply_look(&ui, p.accent, p.text);
         settings::apply_theme(&ui, p.theme);
-        client::set_look(&shared, settings::THEME_NAMES[p.theme.clamp(0, 3) as usize], settings::accent_hex(p.accent));
+        client::set_look(&shared, settings::THEME_NAMES[settings::theme_idx(p.theme)], settings::accent_hex(p.accent));
     }
     {
         let (weak, sh) = (ui.as_weak(), shared.clone());
@@ -1120,7 +1120,7 @@ fn main() -> Result<(), slint::PlatformError> {
             sfx::set_level(p.sounds);
             settings::apply_look(&ui, p.accent, p.text);
             settings::apply_theme(&ui, p.theme);
-            client::set_look(&sh, settings::THEME_NAMES[p.theme.clamp(0, 3) as usize], settings::accent_hex(p.accent));
+            client::set_look(&sh, settings::THEME_NAMES[settings::theme_idx(p.theme)], settings::accent_hex(p.accent));
             discord::enable(&sh.paths, p.discord);
             ui.global::<Theme>().set_calm(p.calm);
             if p.autostart != old.autostart {

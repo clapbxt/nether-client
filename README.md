@@ -7,219 +7,42 @@
   <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%2010%20%C2%B7%2011%20x64-15151b">
 </p>
 
-Nether Client is a native Minecraft: Java Edition launcher with a built-in in-game client. The launcher is written in
-Rust with a [Slint](https://slint.dev) UI (no web view). The in-game client is a Java agent that works on every
-supported version and loader without being a mod.
+Nether Client is a Minecraft: Java Edition launcher with a built-in in-game client. One app to install Minecraft,
+manage profiles, mods and modpacks, and play with a clean HUD, cosmetics, friends and parties.
 
-This repository holds the launcher, the in-game client, the installer and the website. The backend that serves
-signed content, capes and cosmetics is private.
+- **Fast, native launcher.** Written in Rust with a [Slint](https://slint.dev) UI, no web view.
+- **One client on every loader.** The in-game client isn't a mod, so it runs the same on Vanilla, Fabric, Forge and
+  OptiFine, on 1.8.9, 1.12.2 and 1.14 or newer, and never clashes with Sodium or Iris.
+- **Play together.** Friends, a party lobby with voice, and one-click invites into your singleplayer world.
+- **Safe by design.** Fair-play modules only, no telemetry, signed updates, and backups before anything changes.
 
-- **Users:** download the installer from [Releases](https://github.com/clapbxt/nether-client/releases/latest) or the
-  [website](https://clapbxt.github.io/nether-client/). Help and community: [Discord](https://discord.gg/R5vxAxVjwu).
-- **Developers:** read on. Contributions are welcome under the terms in [CONTRIBUTING.md](CONTRIBUTING.md).
+## Get it
 
-## Contents
+Download the installer from [Releases](https://github.com/clapbxt/nether-client/releases/latest) or the
+[website](https://clapbxt.github.io/nether-client/). Windows 10/11 x64. Help and community:
+[Discord](https://discord.gg/R5vxAxVjwu).
 
-- [Architecture](#architecture)
-- [Repository layout](#repository-layout)
-- [Building](#building)
-- [Development](#development)
-- [Release and update signing](#release-and-update-signing)
-- [Data on disk](#data-on-disk)
-- [Project rules](#project-rules)
-- [Legal](#legal)
+## Documentation
 
-## Architecture
+All documentation is in [`docs/`](docs/README.md).
 
-```
-NetherClientSetup.exe ──installs──▶ nether-app.exe (launcher, Slint UI)
-                                        │  uses
-                                        ▼
-                                    nether-core (no UI): accounts, installs, launching, mods, hosting, backend clients
-                                        │  starts java with
-                                        ▼
-                          Minecraft  +  -javaagent:nether-agent.jar  ◀── embedded in the launcher at build time
-                                        │
-                                        └─ nether-media.exe (Windows media session over stdio, exits with the game)
-```
+**Playing**
 
-| Component | Crate / folder | Language | Output |
-|---|---|---|---|
-| Launcher | `crates/app` | Rust + Slint | `nether-app.exe` |
-| Core library | `crates/core` | Rust | library, used by the launcher and the dev examples |
-| In-game client | `agent/` | Java (bytecode level 8) | `nether-agent.jar` + `schema.json` |
-| Media helper | `crates/media` | Rust | `nether-media.exe` |
-| Installer / updater | `crates/installer` | Rust + Slint | `NetherClientSetup.exe` |
-| Website | `site/` | static HTML/CSS/JS | GitHub Pages |
+- [Install and first launch](docs/guide/install.md)
+- [The launcher](docs/guide/launcher.md) · [Profiles](docs/guide/profiles.md)
+- [In game](docs/guide/in-game.md) · [Module list](docs/guide/modules.md)
+- [Friends, parties and world invites](docs/guide/friends.md) · [Skins, capes and cosmetics](docs/guide/wardrobe.md)
+- [Troubleshooting and FAQ](docs/guide/troubleshooting.md)
 
-### Launcher (`crates/app`)
+**Building and contributing**
 
-One Rust module per screen or area in `src/` and one `.slint` file per screen in `ui/`. `ui/theme.slint` holds the
-design tokens and `ui/components.slint` the shared widgets. Rust owns all state and pushes it into Slint globals;
-long-running work runs on background threads and reports through a jobs list, so the UI thread never blocks.
+- [Building from source](docs/develop/building.md)
+- [How it fits together](docs/develop/architecture.md) · [Repository layout](docs/develop/layout.md)
+- [Tweaking and dev tools](docs/develop/dev-tools.md) · [Adding an in-game module](docs/develop/modules.md)
+- [Releases and signing](docs/develop/releasing.md) · [Contributing](CONTRIBUTING.md)
 
-### Core (`crates/core`)
-
-Everything that is not UI:
-
-- **Accounts:** Microsoft device-code OAuth → Xbox Live → Minecraft services. Tokens are stored in Windows Credential
-  Manager, never in plain files.
-- **Installs:** version manifests, libraries, assets, mod loaders (Fabric, Quilt, Forge, NeoForge) and Java runtimes,
-  all verified by hash.
-- **Launching:** builds the JVM and game arguments, adds the agent, supports Quick Play.
-- **Content:** Modrinth search and installs, `.mrpack` / CurseForge / Prism / MultiMC import, snapshots before
-  updates, verify and repair, crash analysis.
-- **Hosting:** local servers (Vanilla, Fabric, Paper), UPnP, a tunnel fallback, and peer-to-peer world invites
-  (`p2p.rs`, QUIC via iroh).
-- **Backend clients:** signed content, capes and cosmetics, friends and invites, auto-update. The backend
-  authenticates players with Mojang's `join` / `hasJoined` handshake, so it never receives a Minecraft token.
-
-### In-game client (`agent/`)
-
-A `java.lang.instrument` agent. `dev.nether.agent` bootstraps it and installs a small number of ASM hooks (frame end,
-input, chat, game arguments). Everything else lives in `dev.nether.ov`: it reads game state by reflection with
-per-version name tables (`res/names/*.txt`, generated by `tools/names.js`) and draws its own overlay on the finished
-frame (GL core/compat; LWJGL 2, LWJGL 3 and SDL3 back ends).
-
-The agent never patches renderer classes, so Sodium, Iris, Embeddium and Distant Horizons are unaffected. Lookups are
-null-safe: a field missing on a version hides that feature instead of crashing the game. See
-[`agent/SAFETY.md`](agent/SAFETY.md).
-
-The launcher reads `agent/build/schema.json` at compile time and generates the client settings pages from it, so a new
-module needs no launcher UI code.
-
-## Repository layout
-
-```
-crates/
-  app/          launcher: src/*.rs (one file per area), ui/*.slint (theme, components, one file per screen)
-  core/         launcher logic, no UI; res/ = embedded public keys and resource pack; examples/ = dev harnesses
-  media/        nether-media.exe (Windows media session helper)
-  installer/    NetherClientSetup.exe (setup wizard, uninstall, update applier)
-agent/          in-game client: src/dev/nether/agent (bootstrap, hooks), src/dev/nether/ov (overlay, modules, menus),
-                res/ (fonts, name tables, brand art), build.ps1, tools/names.js
-art/            brand art used by the README, launcher and site
-design/         icon/ (logo sources), module-icons/ (20 px line icons used by the launcher and the agent)
-docs/           screenshots used by documentation
-site/           website (deployed by .github/workflows/pages.yml)
-```
-
-## Building
-
-Nether Client currently builds and runs on **Windows 10/11 x64** only.
-
-### Prerequisites
-
-| Tool | Version | Used for |
-|---|---|---|
-| Rust (MSVC toolchain) | stable | all crates |
-| Visual Studio Build Tools 2022 | C++ workload + Windows SDK | linking, resources |
-| JDK | 17 or newer | compiling the agent (output targets Java 8) |
-| Node.js | 18 or newer | `agent/tools/names.js` (only when updating name tables) |
-
-The agent compiles against the LWJGL and ASM jars the launcher downloads. Before the first agent build, launch
-**Fabric 1.21.x**, **1.8.9** and **26.x** once from an installed Nether Client (or the dev harness below) so those jars
-are in `%APPDATA%\NetherClient\libraries`.
-
-### Build order
-
-The outputs embed each other, so the order matters:
-
-```powershell
-# 1. In-game client -> agent\build\nether-agent.jar + schema.json
-powershell -File agent\build.ps1
-
-# 2. Launcher (core's build.rs also builds and embeds nether-media.exe and the agent jar)
-cargo build -p nether-app --release
-
-# 3. Installer (embeds target\release\nether-app.exe)
-cargo build -p nether-setup --release
-```
-
-Outputs: `target\release\nether-app.exe` and `target\release\NetherClientSetup.exe`.
-
-A self-built launcher works for local use, but it cannot install official updates' replacements of itself unless it
-is signed with the release key (see [Release and update signing](#release-and-update-signing)). Some backend features
-need the official content keys and service.
-
-## Development
-
-### Running
-
-```powershell
-cargo run -p nether-app --release
-```
-
-### Developer switches
-
-Developer-only behaviour sits behind the `dev` cargo feature and is never compiled into release builds.
-
-| Task | Command |
-|---|---|
-| Launcher screenshot | `cargo build -p nether-app --release --features dev`, then `target\release\nether-app.exe --snapshot out.png <tab> [inst] [instTab] [mode] [gate]` |
-| Launch the game without the launcher UI | `$env:NETHER_DEV_OFFLINE=1; cargo run -p nether-core --release --features dev --example launch -- 1.21.11 Player 60 fabric` |
-| Installer screens | `cargo build -p nether-setup --release --features dev`, then `$env:NC_SETUP_SNAP="out.png\|<mode>\|<step>\|<installed>"` |
-| Installer end to end | `$env:NC_SETUP_AUTO="install:<dir>"` or `"uninstall"`, with `NC_SETUP_AUTO_OUT=<file>` |
-
-Options for the `launch` example:
-
-| Variable / property | Effect |
-|---|---|
-| `NETHER_INSTANCE=<name>` | use an existing instance folder |
-| `NETHER_AGENT=<jar>` | use another agent jar |
-| `NETHER_NO_AGENT=1` | launch without the agent |
-| `NETHER_SNAPSHOT=<png>` | the agent writes a frame to this file (`<png>.req` requests more) |
-| `NC_TEST_SIZE=<w>x<h>` | window size |
-| `-Dnether.world=<save>` | join a singleplayer world |
-| `-Dnether.cmd=a;b` | run commands as the integrated server (`+` = space) |
-| `-Dnether.keys=t:key:action,…`, `-Dnether.shots=t,…`, `-Dnether.quitAt=t` | scripted input, timed snapshots, quit |
-
-Pass `-D` properties through `JAVA_TOOL_OPTIONS`.
-
-### Tests
-
-```powershell
-cargo test -p nether-core
-cargo clippy --workspace --release
-```
-
-Content tests need the private backend's content next to the repository.
-
-### Adding an in-game module
-
-1. Create `agent/src/dev/nether/ov/<Name>.java` extending `Module` with its id, name, group, description, default
-   state and HUD position. Give every `Setting` a `hint` and a sensible default. Implement `safe()` if servers may
-   restrict it, and `icon()` for its card.
-2. Register it in `Modules.java`.
-3. Read game state only through `Data` / `Game` and draw only through `Gfx`.
-4. Run `agent\build.ps1`. The launcher picks the module up from `schema.json`.
-5. Add a row to [SAFETY.md](SAFETY.md) and [`agent/SAFETY.md`](agent/SAFETY.md).
-
-### Updating name tables
-
-`agent/res/names/<version>.txt` maps the intermediary names the agent uses to each version's obfuscated names.
-After adding a version or a new lookup, regenerate them with `agent/tools/names.js` (`--official`, `--obf` and `--srg`
-inputs; usage is in the file header).
-
-## Release and update signing
-
-Releases are built and signed by the maintainer and published to this repository's Releases.
-
-- Each installer has a detached **Ed25519** signature (`.sig`). The launcher accepts an update only if GitHub's SHA-256
-  matches and the signature verifies against `crates/core/res/release-ed25519.pub`. The update is applied by the
-  installer (`--update`) when the launcher closes.
-- Remote content (news, packs, capes, cosmetics) is signed separately and checked against
-  `crates/core/res/content-ed25519.pub`.
-- Private keys are never in this repository (`.gitignore` blocks `*.key`).
-- The installer is not Authenticode-signed yet, so Windows SmartScreen may warn on first run.
-
-## Data on disk
-
-| Path | Contents |
-|---|---|
-| `%LOCALAPPDATA%\Programs\Nether Client` | installed launcher (per-user, no admin rights) |
-| `%APPDATA%\NetherClient` | instances, versions, libraries, assets, Java runtimes, settings, client config, logs |
-| Windows Credential Manager | Microsoft account tokens |
+This repository holds the launcher, the in-game client and the installer. The backend that serves signed content,
+capes and cosmetics is private.
 
 ## Project rules
 

@@ -16,6 +16,7 @@ final class Freelook extends Module {
 
     Freelook() {
         super("freelook", "Freelook", "Visual", "Hold a key to look around your player in third person without turning it.", false, false, 0, 0);
+        add(Setting.header("Controls"));
         add(Setting.key("lookKey", "Freelook key", 342).hint("Default Left Alt."));
         add(Setting.choice("mode", "Mode", "Hold", "Hold", "Toggle"));
         add(Setting.bool("invert", "Invert vertical", false));

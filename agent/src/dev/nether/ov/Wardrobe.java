@@ -280,7 +280,7 @@ final class Wardrobe {
         List<String> f = upFiles;
         if (f == null) return;
         Gfx.rect(x, y, w, h, 8, Gfx.a(Th.s1, 0.97f));
-        Gfx.ring(x, y, w, h, 8, 1, Gfx.a(Th.ac2, 0.55f));
+        Gfx.ring(x, y, w, h, 8, 1, Th.ln2);
         float tx = x + 16, ty = y + 26, tw = w - 32;
         Gfx.text(Gfx.SEMI, 12, tx, ty, Th.tx, "UPLOAD AS " + UP_AS[cat], false, 1.2f);
         String first = new java.io.File(f.get(0)).getName();
@@ -345,7 +345,7 @@ final class Wardrobe {
         boolean dirty = dirty();
         float dt = Menu.an("wddirty", dirty);
         Gfx.rectG(lx, top, pw, ph, 8, Th.s2, Th.s1);
-        Gfx.ring(lx, top, pw, ph, 8, 1, Gfx.mix(Th.ln2, Gfx.a(Th.ac2, 0.55f), dt));
+        Gfx.ring(lx, top, pw, ph, 8, 1, Gfx.mix(Th.ln, Th.ln2, dt));
         boolean over = Menu.in(lx, top, pw, ph);
         if (over && Input.btn[0] && !dragging) { dragging = true; dragX = Menu.L; }
         if (!Input.btn[0]) dragging = false;
@@ -359,9 +359,9 @@ final class Wardrobe {
             int n = changes();
             String u = n + (n == 1 ? " UNSAVED CHANGE" : " UNSAVED CHANGES");
             float uw = Gfx.width(Gfx.MONO, 9, u, 1.4f) + 24;
-            Gfx.rect(lx + 10, top + 8, uw, 18, 9, Gfx.a(Th.ac, 0.22f));
-            Gfx.rect(lx + 17, top + 15, 4, 4, 2, Th.ac2);
-            Gfx.text(Gfx.MONO, 9, lx + 26, top + 17, Th.ac2, u, false, 1.4f);
+            Gfx.rect(lx + 10, top + 8, uw, 18, 9, Gfx.a(Th.ov, 0.1f));
+            Gfx.rect(lx + 17, top + 15, 4, 4, 2, 0xFFFFB020);
+            Gfx.text(Gfx.MONO, 9, lx + 26, top + 17, Th.tx, u, false, 1.4f);
         } else Gfx.text(Gfx.MONO, 9, lx + 12, top + 16, Th.mut, "DRAG TO SPIN", false, 1.4f);
         long age = System.currentTimeMillis() - noteAt;
         if (!note.isEmpty() && age < 5000) {
@@ -391,7 +391,7 @@ final class Wardrobe {
         String al = busy ? (pendingLimit > 20000 ? "UPLOADING..." : "APPLYING...") : can ? "APPLY" : "APPLIED";
         if (can) { if (Menu.button("wdapply", al, lx, ay, aw, 30, true)) apply(); }
         else {
-            Gfx.rect(lx, ay, aw, 30, 6, Gfx.a(Th.ac, 0.16f));
+            Gfx.rect(lx, ay, aw, 30, 6, Gfx.a(Th.ov, 0.08f));
             Gfx.textC(Gfx.SEMI, 11, lx + aw / 2, ay + 15, Gfx.a(0xFFFFFFFF, 0.45f), al, 1.2f);
         }
         if (can) {
@@ -418,10 +418,9 @@ final class Wardrobe {
             float w = Gfx.width(Gfx.SEMI, 10, CATS[i], 1.2f) + pad;
             boolean on = cat == i, hv2 = Menu.in(tx0, top, w, 24);
             float a = Menu.an("wdc" + i, on), hh = Menu.an("wdch" + i, hv2);
-            Gfx.rect(tx0, top, w, 24, 12, on ? Gfx.a(Th.ac, 0.2f + 0.05f * hh) : Gfx.a(Th.ov, 0.03f + 0.05f * hh));
-            if (on) Gfx.ring(tx0, top, w, 24, 12, 1, Gfx.a(Th.ac2, 0.6f));
-            Gfx.textC(Gfx.SEMI, 10, tx0 + w / 2, top + 12, Gfx.mix(Gfx.mix(Th.mut, Th.tx, hh), Th.ac2, a), CATS[i], 1.2f);
-            if (i == 0 ? capeDirty() : !picked[i - 1].equals(worn[i - 1])) Gfx.rect(tx0 + w - 9, top + 4, 5, 5, 2.5f, Th.ac2); // unsaved pick here
+            Gfx.rect(tx0, top, w, 24, 6, Gfx.mix(Gfx.a(Th.ov, 0.05f + 0.05f * hh), Th.ac, a));
+            Gfx.textC(Gfx.SEMI, 10, tx0 + w / 2, top + 12, Gfx.mix(Gfx.mix(Th.mut, Th.tx, hh), 0xFFFFFFFF, a), CATS[i], 1.2f);
+            if (i == 0 ? capeDirty() : !picked[i - 1].equals(worn[i - 1])) Gfx.rect(tx0 + w - 9, top + 4, 5, 5, 2.5f, 0xFFFFB020); // unsaved pick here
             if (Menu.hit(tx0, top, w, 24) && cat != i) { cat = i; gridScrollT = gridScroll = 0; }
             tx0 += w + 6;
         }
@@ -485,7 +484,7 @@ final class Wardrobe {
             if (hv) { hoverSlot = si; hoverCos = cid; }
             float t = Menu.an("wdk" + cat + "." + i, hv), o = Menu.an("wdke" + cat + "." + i, eq);
             Gfx.rect(x, y, tw, th, 8, Gfx.mix(Th.s1, Th.s2, Math.max(t, o * 0.6f)));
-            Gfx.ring(x, y, tw, th, 8, 1, Gfx.mix(Gfx.mix(Th.ln, Th.ln2, t), Th.ac2, o));
+            Gfx.ring(x, y, tw, th, 8, 1, Gfx.mix(Gfx.mix(Th.ln, Th.ln2, t), Th.dim, o));
             float ih = th - 40;
             if (c == null) {
                 Menu.drawX(x + tw / 2, y + ih / 2 + 4, 10, Th.mut);
@@ -523,7 +522,7 @@ final class Wardrobe {
         boolean hv = Menu.in(x, y, w, h);
         float t = Menu.an("wdt" + slot, hv), o = Menu.an("wdte" + slot, picked);
         Gfx.rect(x, y, w, h, 8, Gfx.mix(Th.s1, Th.s2, Math.max(t, o * 0.6f)));
-        Gfx.ring(x, y, w, h, 8, 1, Gfx.mix(Gfx.mix(Th.ln, Th.ln2, t), Th.ac2, o));
+        Gfx.ring(x, y, w, h, 8, 1, Gfx.mix(Gfx.mix(Th.ln, Th.ln2, t), Th.dim, o));
         float iw = 60, ih = 96, ix = x + (w - iw) / 2, iy = y + 14;
         if (c == null) {
             Gfx.ring(ix, iy, iw, ih, 4, 1, Th.ln2);
@@ -537,9 +536,9 @@ final class Wardrobe {
         String name = c == null ? "NONE" : Menu.fit(c.name.toUpperCase(java.util.Locale.ROOT), Gfx.SEMI, 10, w - 16, 1f);
         Gfx.textC(Gfx.SEMI, 10, x + w / 2, y + h - 34, picked ? Th.tx : Th.dim, name, 1f);
         float bw = w - 20, by = y + h - 24;
-        Gfx.rect(x + (w - bw) / 2, by, bw, 18, 5, picked ? Gfx.a(Th.ac, 0.22f) : Gfx.a(Th.ov, 0.04f + 0.05f * t));
+        Gfx.rect(x + (w - bw) / 2, by, bw, 18, 5, picked ? Th.ac : Gfx.a(Th.ov, 0.04f + 0.05f * t));
         String lab = picked ? (on ? "EQUIPPED" : "SELECTED") : on ? "EQUIPPED NOW" : "SELECT";
-        Gfx.textC(Gfx.MONO, 9, x + w / 2, by + 9, picked ? Th.ac2 : Gfx.mix(Th.mut, Th.tx, t), lab, 1.4f);
+        Gfx.textC(Gfx.MONO, 9, x + w / 2, by + 9, picked ? 0xFFFFFFFF : Gfx.mix(Th.mut, Th.tx, t), lab, 1.4f);
         if (picked) { // check mark badge
             Gfx.rect(x + w - 24, y + 8, 16, 16, 8, Th.ac);
             Gfx.rect(x + w - 20.5f, y + 15, 3, 1.6f, 0.8f, 0xFFFFFFFF);
@@ -581,8 +580,7 @@ final class Wardrobe {
         Gfx.rect(x, y + 4, w, h, 10, Gfx.a(0xFF000000, 0.35f));
         Gfx.rect(x, y, w, h, 10, Th.s1);
         Gfx.ring(x, y, w, h, 10, 1, Th.ln2);
-        Gfx.rect(x + 20, y + 22, 3, 14, 1.5f, Th.ac);
-        Gfx.text(Gfx.SEMI, 13, x + 30, y + 29, Th.tx, "UNSAVED CHANGES", false, 1.4f);
+        Gfx.text(Gfx.SEMI, 13, x + 20, y + 29, Th.tx, "UNSAVED CHANGES", false, 1.4f);
         String hint = "ESC KEEPS EDITING";
         Gfx.text(Gfx.MONO, 9, x + w - 20 - Gfx.width(Gfx.MONO, 9, hint, 1.2f), y + 29, Th.mut, hint, false, 1.2f);
         int n = changes();

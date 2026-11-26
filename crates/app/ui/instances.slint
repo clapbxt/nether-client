@@ -291,7 +291,7 @@ export component InstancesScreen inherits Rectangle {
             if Backend.visible-insts.length == 0: es := Rectangle {
                 property <bool> searched: Backend.inst-query != "";
                 x: 0px; y: 40px; width: parent.width; height: 240px;
-                Text { x: 18px; y: 0px; text: es.searched ? "NOTHING MATCHES" : "NO MODPACKS YET"; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 700; }
+                Text { x: 18px; y: 0px; text: es.searched ? "NOTHING MATCHES" : "NO MODPACKS YET"; color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 700; }
                 Text { x: 18px; y: 44px; width: 560px; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap;
                     text: es.searched ? "Nothing here has that in its name, version or loader." : "Modpacks you install from Modrinth or import from another launcher show up here."; }
                 if !es.searched: Rectangle {
@@ -572,7 +572,7 @@ export component InstancesScreen inherits Rectangle {
                 if lst.list.length == 0 && !(root.mode == 1 && Backend.browse-loading): Rectangle {
                     x: 0px; y: 1px; width: parent.width; height: 260px;
                     Hatch { width: parent.width; height: parent.height; }
-                    Text { x: 32px; y: 56px; text: root.mode == 0 ? (Backend.mod-query != "" ? "NOTHING MATCHES" : "NOTHING INSTALLED YET") : "NO RESULTS"; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 700; }
+                    Text { x: 32px; y: 56px; text: root.mode == 0 ? (Backend.mod-query != "" ? "NOTHING MATCHES" : "NOTHING INSTALLED YET") : "NO RESULTS"; color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 700; }
                     Text { x: 32px; y: 98px; width: 700px; text: root.mode == 0 ? "Browse Modrinth for " + root.what + " built for " + Backend.instances[root.sel].ver + " · " + Backend.instances[root.sel].loader + "." : "Nothing on Modrinth matches this search for your profile. Try fewer words or another category."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
                     if root.mode == 0: Btn { x: 32px; y: 144px; text: "BROWSE " + (root.itab == 1 ? "MODS" : (root.kind == 0 ? "RESOURCE PACKS" : "SHADERS")); solid: true; clicked => { root.mode = 1; root.load-mods(); } }
                 }
@@ -637,7 +637,7 @@ export component InstancesScreen inherits Rectangle {
                 if Backend.worlds.length == 0: Rectangle {
                     y: 1px; height: 220px;
                     Hatch { width: parent.width; height: parent.height; }
-                    Text { x: 32px; y: 56px; text: Backend.world-query != "" ? "NOTHING MATCHES" : "NO WORLDS YET"; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 700; }
+                    Text { x: 32px; y: 56px; text: Backend.world-query != "" ? "NOTHING MATCHES" : "NO WORLDS YET"; color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 700; }
                     Text { x: 32px; y: 98px; width: 700px; text: Backend.world-query != "" ? "No world or server here has that in its name." : "Worlds you create in this profile show up here, ready to launch straight into. Already have one? Import it from .minecraft or anywhere else.";
                         color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
                     if Backend.world-query == "": Btn { x: 32px; y: 144px; text: "PLAY " + Backend.instances[root.sel].title; solid: true; icon: Ico.play; clicked => { Backend.play(Backend.instances[root.sel].name); } }
@@ -676,7 +676,7 @@ export component InstancesScreen inherits Rectangle {
                 if Backend.shots.length == 0: Rectangle {
                     y: 0px; height: 200px;
                     Hatch { width: parent.width; height: parent.height; }
-                    Text { x: 32px; y: 56px; text: "NO SCREENSHOTS YET"; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 700; }
+                    Text { x: 32px; y: 56px; text: "NO SCREENSHOTS YET"; color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 700; }
                     Text { x: 32px; y: 98px; width: 700px; text: "Press F2 in game. Your shots land here, ready to copy straight into a chat."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
                 }
                 Flickable { content-height: Math.ceil(Backend.shots.length / 4) * 204px + 16px;
@@ -837,7 +837,7 @@ export component InstancesScreen inherits Rectangle {
             background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
             TouchArea { }
             Eyebrow { x: 28px; y: 28px; text: "DELETE INSTANCE"; color: Theme.redtx; }
-            Text { x: 28px; y: 48px; width: parent.width - 56px; text: Backend.instances[root.del-idx].title; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800;  overflow: elide; }
+            Text { x: 28px; y: 48px; width: parent.width - 56px; text: Backend.instances[root.del-idx].title; color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 800;  overflow: elide; }
             Text { x: 28px; y: 98px; width: parent.width - 56px; text: "Its worlds, mods and settings go to the Recycle Bin. Restore them from there if you change your mind."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
             cb := Btn { x: parent.width - 28px - self.width - db.width - 10px; y: parent.height - 64px; text: "KEEP IT"; clicked => { root.confirm-del = false; } }
             db := Btn { x: parent.width - 28px - self.width; y: parent.height - 64px; text: "DELETE"; danger: true; solid: true; icon: Ico.trash;

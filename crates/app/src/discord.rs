@@ -42,7 +42,10 @@ fn send(paths: &Paths, m: Msg) {
             let (mut on, mut idle, mut pipe): (bool, bool, Option<File>) = (false, true, None);
             while let Ok(m) = rx.recv() {
                 match m { Msg::Enabled(e) => on = e, Msg::Idle(i) => idle = i }
-                if !on { pipe = None; continue; } // dropping the pipe clears our status in Discord
+                // Dropping the pipe clears our status in Discord. While a game runs the launcher closes its connection
+                // instead of sending a null activity, so the game's agent (same application id, connects a few seconds
+                // later) is the only connection Discord sees; an open launcher socket left the game's status hidden.
+                if !on || !idle { pipe = None; continue; }
                 // one reconnect attempt per change: Discord may have been restarted since the last one
                 for _ in 0..2 {
                     if pipe.is_none() { pipe = connect(&id); }

@@ -165,6 +165,10 @@ public final class Agent {
         VIEW_HOOKS.put("net/minecraft/client/renderer/RenderGlobal", new String[] {"lsky", "func_174976_a", "(FI)V", "", ""}); // Forge 1.8.9 / 1.12.2 renderSky: custom sky layers at its end
         VIEW_HOOKS.put("net/minecraft/class_9975", new String[] {"sky", "method_62302", "", "", ""}); // Fabric SkyRenderer.renderSkyDisc (1.21.2+)
         VIEW_HOOKS.put("net/minecraft/client/renderer/SkyRenderer", new String[] {"sky", "renderSkyDisc", "", "", ""}); // Mojang names (26.x, Forge / NeoForge)
+        // LevelRenderer.renderLevel entry: the frame's real view rotation + projection (view bobbing, hurt tilt, FOV
+        // effects), so the custom sky projects exactly as the game's own sky does (1.21.2+; 26.1: its CameraRenderState)
+        VIEW_HOOKS.put("net/minecraft/class_761", new String[] {"lvlmat", "method_22710", "", "", ""});
+        VIEW_HOOKS.put("net/minecraft/client/renderer/LevelRenderer", new String[] {"lvlmat", "renderLevel", "", "", ""});
         String[] a = String.valueOf(System.getProperty("sun.java.command")).split(" ");
         String v = null;
         for (int i = 0; i + 1 < a.length; i++) if (a[i].equals("--version")) v = a[i + 1];
@@ -233,6 +237,7 @@ public final class Agent {
         viewRow(rows, "tag", "net.minecraft.class_897", "method_62425", null, null);
         viewRow(rows, "mount", "net.minecraft.class_922", null, null, null);
         viewRow(rows, "sky", "net.minecraft.class_9975", "method_62302", null, null);
+        viewRow(rows, "lvlmat", "net.minecraft.class_761", "method_22710", null, null);
         if (rows.containsKey("net.minecraft.class_12249")) viewRow(rows, "armor", "net.minecraft.class_10197", null, "method_75966", "net.minecraft.class_12249");
         else viewRow(rows, "armor", "net.minecraft.class_10197", null, "method_25448", "net.minecraft.class_1921"); // 1.21.4-1.21.10: RenderType
         String[] ps = rows.get("net.minecraft.class_4587");
@@ -818,6 +823,8 @@ public final class Agent {
                 ClassReader cr = new ClassReader(bytes);
                 ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
                 final int[] n = {0}, shields = {0}, hands = {0};
+                // legacy fire: which ()Z call guards the call of renderFireInFirstPerson (player.isBurning(), IFEQ, the call)
+                final Map<String, Integer> burnAt = kind.equals("lfire") ? burning(cr, names) : Collections.<String, Integer>emptyMap();
                 cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
                     @Override
                     public MethodVisitor visitMethod(int access, String mname, String desc, String sig, String[] ex) {
@@ -850,7 +857,19 @@ public final class Agent {
                             for (int k = 0; k < at.length && pi < 0; k++) if (at[k].getSort() == Type.OBJECT && POSES.contains(at[k].getInternalName())) pi = k;
                             final boolean wrap = named && stat && pi >= 0;
                             final int poseSlot = wrap ? slot(at, pi) - 1 : 0; // static: no this
-                            if (!named && !helpers.contains(mname)) return mv;
+                            if (!named && !helpers.contains(mname)) { // renderScreenEffect: its isOnFire check, so the live fire editor shows the real overlay
+                                if (stat) return mv;
+                                return new MethodVisitor(Opcodes.ASM9, mv) {
+                                    @Override
+                                    public void visitMethodInsn(int op, String o, String nm, String d, boolean itf) {
+                                        super.visitMethodInsn(op, o, nm, d, itf);
+                                        if (op == Opcodes.INVOKEVIRTUAL && "()Z".equals(d) && (nm.equals("method_5809") || nm.equals("isOnFire"))) {
+                                            n[0]++;
+                                            super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "fireShown", "(Z)Z", false);
+                                        }
+                                    }
+                                };
+                            }
                             return new MethodVisitor(Opcodes.ASM9, mv) {
                                 @Override
                                 public void visitCode() {
@@ -985,6 +1004,20 @@ public final class Agent {
                                 }
                             };
                         }
+                        if (kind.equals("lfire") && !named && burnAt.containsKey(mname + desc)) { // renderOverlays: its isBurning check (live fire editor)
+                            final int at0 = burnAt.get(mname + desc);
+                            return new MethodVisitor(Opcodes.ASM9, mv) {
+                                int z;
+                                @Override
+                                public void visitMethodInsn(int op, String o, String nm, String d, boolean itf) {
+                                    super.visitMethodInsn(op, o, nm, d, itf);
+                                    if (op == Opcodes.INVOKEVIRTUAL && "()Z".equals(d) && z++ == at0) {
+                                        n[0]++;
+                                        super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "fireShown", "(Z)Z", false);
+                                    }
+                                }
+                            };
+                        }
                         if (kind.equals("lfire")) { // 1.8.9 / 1.12.2 renderFireInFirstPerson: translate y -0.3F and colour alpha 0.9F
                             if (!named) return mv;
                             return new MethodVisitor(Opcodes.ASM9, mv) {
@@ -1003,6 +1036,27 @@ public final class Agent {
                                 public void visitInsn(int op) {
                                     if (op == Opcodes.RETURN) { n[0]++; super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "skyModern", "()V", false); }
                                     super.visitInsn(op);
+                                }
+                            };
+                        }
+                        if (kind.equals("lvlmat")) { // LevelRenderer.renderLevel: hand its first two matrices (view rotation, projection) and a CameraRenderState arg (26.1) to the sky
+                            if (!named || stat) return mv;
+                            int m0 = -1, m1 = -1, cs = -1;
+                            for (int k = 0; k < at.length; k++) {
+                                if (at[k].getSort() != Type.OBJECT) continue;
+                                String in = at[k].getInternalName();
+                                if (in.equals("org/joml/Matrix4f") || in.equals("org/joml/Matrix4fc")) { if (m0 < 0) m0 = k; else if (m1 < 0) m1 = k; }
+                                else if (in.endsWith("/CameraRenderState") && cs < 0) cs = k;
+                            }
+                            if (m0 < 0 && cs < 0) return mv;
+                            final int s0 = m0 < 0 ? -1 : slot(at, m0), s1 = m1 < 0 ? -1 : slot(at, m1), s2 = cs < 0 ? -1 : slot(at, cs);
+                            return new MethodVisitor(Opcodes.ASM9, mv) {
+                                @Override
+                                public void visitCode() {
+                                    super.visitCode();
+                                    n[0]++;
+                                    for (int s : new int[] {s0, s1, s2}) { if (s < 0) super.visitInsn(Opcodes.ACONST_NULL); else super.visitVarInsn(Opcodes.ALOAD, s); }
+                                    super.visitMethodInsn(Opcodes.INVOKESTATIC, HOOK, "levelMats", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V", false);
                                 }
                             };
                         }
@@ -1047,12 +1101,45 @@ public final class Agent {
                 else if (kind.equals("fire") || (kind.equals("lfire") && n[0] > 0)) Hook.fireHooked = true;
                 else if (kind.equals("mount") || kind.equals("lmount")) Hook.mountHooked = true;
                 else if (kind.equals("lsky") || kind.equals("sky")) Hook.skyHooked = true;
+                else if (kind.equals("tag")) Hook.tagHooked = true;
                 System.out.println("[nether-agent] hooked view " + kind + " (" + n[0] + ")");
                 return cw.toByteArray();
             } catch (Throwable t) {
                 System.out.println("[nether-agent] view " + kind + " hook failed: " + t);
                 return null;
             }
+        }
+
+        /**
+         * Methods that call the fire method (names) right after "if (x.someBoolean())": method name + desc -> the index
+         * of that ()Z INVOKEVIRTUAL among the method's ()Z INVOKEVIRTUALs. Shape only, so no obfuscated names needed.
+         */
+        private static Map<String, Integer> burning(ClassReader cr, final Set<String> names) {
+            final Map<String, Integer> out = new HashMap<>();
+            cr.accept(new ClassVisitor(Opcodes.ASM9) {
+                @Override
+                public MethodVisitor visitMethod(int access, final String mname, final String desc, String sig, String[] ex) {
+                    if (names.contains(mname)) return null;
+                    return new MethodVisitor(Opcodes.ASM9) {
+                        int z = -1, cand = -1, since = 99;
+                        boolean armed;
+                        private void step() { since++; }
+                        @Override public void visitMethodInsn(int op, String o, String nm, String d, boolean itf) {
+                            if (op == Opcodes.INVOKEVIRTUAL && "()Z".equals(d)) { z++; cand = z; armed = false; since = 0; return; }
+                            if (armed && since <= 6 && names.contains(nm) && !out.containsKey(mname + desc)) out.put(mname + desc, cand);
+                            step();
+                        }
+                        @Override public void visitJumpInsn(int op, dev.nether.shaded.asm.Label l) { armed = op == Opcodes.IFEQ && since == 0; step(); }
+                        @Override public void visitVarInsn(int op, int v) { step(); }
+                        @Override public void visitInsn(int op) { step(); }
+                        @Override public void visitFieldInsn(int op, String o, String nm, String d) { step(); }
+                        @Override public void visitLdcInsn(Object v) { step(); }
+                        @Override public void visitTypeInsn(int op, String t) { step(); }
+                        @Override public void visitIntInsn(int op, int v) { step(); }
+                    };
+                }
+            }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            return out;
         }
 
         /** Local slot of argument i of an instance method. */

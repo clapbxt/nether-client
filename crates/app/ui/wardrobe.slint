@@ -149,7 +149,7 @@ export component WardrobeScreen inherits Rectangle {
         if !Backend.skin-ready: Text { text: "Loading skin…"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }
         nm := Text { x: 20px; y: 16px; width: Math.min(self.preferred-width, 250px); height: 32px; overflow: elide;
             text: root.picked ? SkinLib.skins[root.sel].name : (root.signed ? Backend.acct-name : "Player");
-            color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 700; vertical-alignment: center; }
+            color: Theme.tx; font-family: Theme.pix; font-size: 24px; font-weight: 700; vertical-alignment: center; }
         if root.picked: Chip { x: parent.width - self.width - 16px; y: 21px; text: "Preview"; }
         if root.page >= 1: Btn { x: parent.width - self.width - 14px; y: 14px; height: 36px; icon: Ico.refresh;
             text: Backend.look-refreshing ? "CHECKING…" : "REFRESH"; enabled: !Backend.look-refreshing;
@@ -267,7 +267,7 @@ export component WardrobeScreen inherits Rectangle {
             background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
             TouchArea { }
             Eyebrow { x: 28px; y: 28px; text: "DELETE SKIN"; color: Theme.redtx; }
-            Text { x: 28px; y: 48px; width: parent.width - 56px; text: SkinLib.skins[root.del-idx].name; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800;  overflow: elide; }
+            Text { x: 28px; y: 48px; width: parent.width - 56px; text: SkinLib.skins[root.del-idx].name; color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 800;  overflow: elide; }
             Text { x: 28px; y: 98px; width: parent.width - 56px; text: "It is removed from your library on this PC. The skin your account is wearing does not change."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
             kb := Btn { x: parent.width - 28px - self.width - db.width - 10px; y: parent.height - 64px; text: "KEEP IT"; clicked => { root.del-idx = -1; } }
             db := Btn { x: parent.width - 28px - self.width; y: parent.height - 64px; text: "DELETE"; danger: true; solid: true; icon: Ico.trash;

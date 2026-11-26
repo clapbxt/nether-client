@@ -20,9 +20,11 @@ final class Performance extends Module {
 
     private Performance() {
         super("performance", "Performance", "Utility", "Nether's own fixes that make the game's frame loop faster. On by default.", false, true, 0, 0);
+        add(Setting.header("Rendering"));
         add(Setting.bool("gpuChecks", "Skip GPU error checks", true).hint("The game stops to ask the graphics driver for errors around every chunk upload, which stalls each frame. Turn off to keep the game's own checks."));
         add(Setting.bool("cull", "Skip hidden entities", true).hint("Mobs and items fully behind solid blocks are not drawn. Players, glowing and named mobs always are. Turn off if something pops in late."));
         add(Setting.bool("beCull", "Skip hidden block entities", true).hint("Chests, signs, banners, heads and other block entities fully behind solid blocks are not drawn. Beacons always are. Turn off if one pops in late."));
+        add(Setting.header("Frame pacing"));
         add(Setting.bool("preciseCap", "Precise frame cap", true).hint("With a max frame rate set, the game waits out the last moment of each frame itself instead of trusting a Windows timer that wakes late, so frames come evenly and reach the cap. Uses a little more CPU while capped."));
         add(Setting.bool("hudCache", "Reuse HUD drawing", true).hint("Nether's HUD is rebuilt up to 144 times a second and redrawn as-is in between, so high frame rates spend less time on it. Keys and clicks still update it at once."));
     }

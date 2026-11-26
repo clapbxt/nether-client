@@ -235,7 +235,7 @@ export component ReportDialog inherits Rectangle {
             background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
             TouchArea { }
             Eyebrow { x: 28px; y: 28px; text: "REPORT"; color: Theme.redtx; }
-            Text { x: 28px; y: 48px; width: parent.width - 56px; text: Community.report-name; color: Theme.tx; font-family: Theme.disp; font-size: 24px; font-weight: 800; overflow: elide; }
+            Text { x: 28px; y: 48px; width: parent.width - 56px; text: Community.report-name; color: Theme.tx; font-family: Theme.pix; font-size: 24px; font-weight: 800; overflow: elide; }
             Text { x: 28px; y: 84px; width: parent.width - 56px; text: "What's wrong with it? Enough reports take it down for everyone."; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; wrap: word-wrap; }
             for l[i] in root.labels: Rectangle {
                 x: 28px; y: 118px + i * 40px; width: parent.width - 56px; height: 36px; border-radius: Theme.r1;
@@ -261,7 +261,7 @@ export component DeleteUploadDialog inherits Rectangle {
             background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
             TouchArea { }
             Eyebrow { x: 28px; y: 28px; text: "DELETE UPLOAD"; color: Theme.redtx; }
-            Text { x: 28px; y: 48px; width: parent.width - 56px; text: Community.delete-name; color: Theme.tx; font-family: Theme.disp; font-size: 32px; font-weight: 800; overflow: elide; }
+            Text { x: 28px; y: 48px; width: parent.width - 56px; text: Community.delete-name; color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 800; overflow: elide; }
             Text { x: 28px; y: 98px; width: parent.width - 56px; text: "It's removed for everyone, and players wearing it see nothing in its place."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
             db := Btn { x: parent.width - 28px - self.width; y: parent.height - 64px; text: "DELETE"; danger: true; solid: true; icon: Ico.trash;
                 clicked => { Community.remove(Community.delete-id); Community.delete-id = ""; } }

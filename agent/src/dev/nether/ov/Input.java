@@ -109,11 +109,12 @@ final class Input {
     }
 
     static void setWorldGui(boolean on) {
-        if (on == worldGuiOpen || menuOpen) return;
-        if (window == 0) { worldGuiOpen = on; return; }
+        if (on && menuOpen) return;
+        if (on == worldGuiOpen) return;
         worldGuiOpen = on;
+        if (window == 0) { if (!on) LyricsWorldPanel.inputClosed(); return; }
         if (on) Plat.cur.opened();
-        else { Plat.cur.closed(); clickL = clickR = upL = false; }
+        else { Plat.cur.closed(); clickL = clickR = upL = false; LyricsWorldPanel.inputClosed(); }
     }
 
     // ---------------------------------------------------------------- filters (true = swallow)
@@ -137,8 +138,8 @@ final class Input {
         if (!menuOpen && PartyPick.key(key, action)) return true;
         if (worldGuiOpen) {
             if (Menu.capturing() && action == PRESS) { Menu.capture(key); return true; }
-            if (key == 256 && action == PRESS) { setWorldGui(false); return true; }
-            if (action == PRESS) Modules.LYRICS.key(key);
+            if (key == 256 && action == PRESS) { LyricsWorldPanel.finishDrag(); return true; }
+            if (LyricsWorldPanel.dragging()) return Modules.onKey(key, action); // movement and gameplay keys keep working during a border drag
             return true;
         }
         // Esc with nothing left to step back from closes the menu here, like the menu key (not a frame later, so the
@@ -187,12 +188,17 @@ final class Input {
         if (action == PRESS && modHeld) modUsed = true; // shift-click
         // middle / side buttons bind like keys (code 400 + button); left and right stay the menu's own clicks
         if (b >= 2 && action == PRESS && Menu.capturing()) { Menu.capture(MOUSE + b); return true; }
-        if (action == PRESS && !menuOpen && Party.button(b)) return true;
         if (worldGuiOpen) {
-            if (action == PRESS && Hits.press(b)) ourBtn[b] = true;
-            if (action != PRESS && ourBtn[b]) ourBtn[b] = false;
+            if (action == PRESS && LyricsWorldPanel.pointerPress(b)) ourBtn[b] = true;
+            if (action != PRESS) {
+                boolean dragEnded = LyricsWorldPanel.pointerRelease(b);
+                if (ourBtn[b]) ourBtn[b] = false;
+                if (dragEnded) return true;
+            }
             return true;
         }
+        if (!menuOpen && action == PRESS && b <= 1 && LyricsWorldPanel.visible() && LyricsWorldPanel.pointerPress(b)) { ourBtn[b] = true; return true; }
+        if (action == PRESS && !menuOpen && Party.button(b)) return true;
         if (menuOpen) {
             if (action == PRESS) {
                 if (b == 0) clickL = true;
@@ -219,6 +225,7 @@ final class Input {
         if (dead) return false;
         if (menuOpen) { scrollY += y; return true; }
         if (worldGuiOpen) { LyricsWorldPanel.scroll(y); return true; }
+        if (!menuOpen && LyricsWorldPanel.scroll(y)) return true;
         if (MainMenu.title || (MainMenu.pause && Party.panelOpen())) { Party.wheel += (float) y; return true; }
         return Modules.onScroll(y);
     }
@@ -230,7 +237,7 @@ final class Input {
             eatCharAt = 0;
             if (eat) return true;
         }
-        if (!menuOpen && !worldGuiOpen) {
+        if (!menuOpen && (!worldGuiOpen || LyricsWorldPanel.dragging())) {
             if (Party.typing && MainMenu.title) { if (cp >= 32 && cp <= 0xFFFF && !Character.isSurrogate((char) cp)) Party.chars(String.valueOf((char) cp)); return true; }
             return false;
         }

@@ -46,20 +46,34 @@ final class Gfx {
     private static boolean ready;
 
     private static final int FLOATS = 14, ATLAS = 2048;
+    private static final float[] IDENTITY_MAP = {1, 0, 0, 0, 1, 0, 0, 0, 1};
     private static FloatBuffer buf = BufferUtils.createFloatBuffer(FLOATS * 6 * 3000);
     private static int verts, penX, penY, rowH;
     private static final Font[] faces = new Font[8]; // 0-3 Nether Pixel, 4-7 Barlow
-    /** Nether Pixel (Minecraft themes) or Barlow (Glass themes); set by {@link #face}. */
+    /** v8 blend: HEAD (titles, nav, PLAY) in Nether Pixel, the rest in Barlow; false = Barlow everywhere. Set by {@link #face}. */
     static boolean pixel = true;
-    private static final Font[] fonts = new Font[5]; // 4 = fallback for characters our fonts lack (accents, Cyrillic, CJK)
-    private static final Glyph[][] fast = new Glyph[4 * 256][]; // ASCII glyphs per (font, pixel size): no boxing per char
+    /** first face index of the lyric display fonts ({@link #lyricFace}); they keep their own shapes whatever the theme */
+    static final int LYRIC0 = 7;
+    /** HUD text in Nether Pixel (Feather / vanilla HUD look): Bold for HEAD, Regular for the rest. Set per module while it lays out and draws. */
+    static final int PIXB = 5, PIXR = 6;
+    static boolean hudPix;
+    private static final String[] LYRIC_FILES = {"Righteous-Regular", "BebasNeue-Regular", "Poppins-SemiBold", "LilitaOne-Regular", "Pacifico-Regular", "KaushanScript-Regular", "PermanentMarker-Regular", "Neonderthaw-Regular", "Monoton-Regular",
+        "Quicksand-Bold", "Outfit-Bold", "Syne-Bold", "Yellowtail-Regular", "Courgette-Regular", "Damion-Regular", "GrandHotel-Regular", "Yesteryear-Regular",
+        "Audiowide-Regular", "Bungee-Regular", "Bangers-Regular", "PressStart2P-Regular", "Shrikhand-Regular"};
+    private static final Font[] fonts = new Font[LYRIC0 + LYRIC_FILES.length]; // 4 = fallback for characters our fonts lack (accents, Cyrillic, CJK)
+    private static final boolean[] lyricTried = new boolean[LYRIC_FILES.length];
+    private static final Glyph[][] fast = new Glyph[fonts.length * 256][]; // ASCII glyphs per (font, pixel size): no boxing per char
     private static final Map<Long, Font> derived = new HashMap<>();
     private static final Map<Long, Glyph> glyphs = new HashMap<>();
     private static final Map<String, Glyph> masks = new HashMap<>();
     private static final Map<Long, int[]> metrics = new HashMap<>();
     private static BufferedImage scratch;
     private static Graphics2D g2;
-    private static final FontRenderContext FRC = new FontRenderContext(null, true, true);
+    // Overlay text lands on framebuffer pixels. Fractional metrics create fractional advances which are then rounded
+    // when quads are emitted, making neighboring glyphs look softer and uneven at common GUI scales.
+    private static final FontRenderContext FRC = new FontRenderContext(null, true, false), FRAC = new FontRenderContext(null, true, true);
+    /** unhinted advance per pixel of size, by (face, char): projected text keeps its proportions at every size */
+    private static final Map<Long, Float> freeAdv = new HashMap<>();
 
     private static final class Glyph {
         float u0, v0, u1, v1, adv;
@@ -81,12 +95,14 @@ final class Gfx {
                 faces[i] = new Font((i & 3) == 3 ? Font.MONOSPACED : Font.SANS_SERIF, Font.PLAIN, 12);
             }
         }
-        System.arraycopy(faces, pixel ? 0 : 4, fonts, 0, 4);
+        pick();
         fonts[4] = new Font(Font.DIALOG, Font.PLAIN, 12);
+        fonts[PIXB] = faces[0];
+        fonts[PIXR] = faces[2];
         scratch = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
         g2 = scratch.createGraphics();
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-        g2.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
     }
 
     // ---------------------------------------------------------------- frame
@@ -127,6 +143,19 @@ final class Gfx {
         GlBackend.cur.draw(buf, verts);
         buf.clear();
         verts = 0;
+    }
+
+    /** Applies a projective map to following quads; used by the world-anchored panel. */
+    static void map(float[] matrix) {
+        ensure();
+        flush();
+        GlBackend.cur.map(matrix);
+    }
+
+    static void unmap() {
+        ensure();
+        flush();
+        GlBackend.cur.map(IDENTITY_MAP);
     }
 
     static void clip(float x, float y, float w, float h) {
@@ -508,7 +537,7 @@ final class Gfx {
             scratch = new BufferedImage(Math.max(w, scratch.getWidth()), Math.max(h, scratch.getHeight()), BufferedImage.TYPE_INT_ARGB);
             g2 = scratch.createGraphics();
             g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-            g2.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
         }
         g2.setComposite(AlphaComposite.Clear);
         g2.fillRect(0, 0, scratch.getWidth(), scratch.getHeight());
@@ -574,18 +603,50 @@ final class Gfx {
         quad(Math.round(x * s) - 1, Math.round(y * s) - 1, g.w, g.h, g.u0, g.v0, g.u1, g.v1, col, col, -1, 0);
     }
 
-    /** Nether Pixel is drawn at whole multiples of 8 px (one font pixel = a whole number of screen pixels); Barlow at any whole size. */
-    private static int pxSize(float size) {
+    /** Nether Pixel is drawn at whole multiples of 8 px (one font pixel = a whole number of screen pixels); Barlow and the lyric fonts at any whole size. */
+    private static int pxSize(int f, float size) {
         float px = Math.max(Math.max(5, minPx), size * s);
-        return pixel ? Math.max(8, Math.round(px / 8f) * 8) : Math.max(7, Math.round(px));
+        return (pixel && f == HEAD) || f == PIXB || f == PIXR ? Math.max(8, Math.round(px / 8f) * 8) : Math.max(7, Math.round(px));
+    }
+
+    /** The face actually drawn: theme slots become Nether Pixel while {@link #hudPix} is on. */
+    private static int hf(int f) {
+        return hudPix && f < 4 ? (f == HEAD ? PIXB : PIXR) : f;
+    }
+
+    /**
+     * Face index of lyric display font n (0-based, see LYRIC_FILES: Righteous, Bebas Neue, Poppins, Lilita One, Pacifico,
+     * Kaushan Script, Permanent Marker, Neonderthaw, Monoton; res/fonts/lyrics, OFL / Apache 2.0). Read from the agent jar
+     * the first time it is asked for, so unused fonts cost nothing; SEMI when it cannot be read.
+     */
+    static int lyricFace(int n) {
+        if (n < 0 || n >= LYRIC_FILES.length) return SEMI;
+        int f = LYRIC0 + n;
+        if (fonts[f] == null && !lyricTried[n]) {
+            lyricTried[n] = true;
+            try {
+                byte[] b = Hook.file.apply("fonts/lyrics/" + LYRIC_FILES[n] + ".ttf");
+                if (b != null) fonts[f] = Font.createFont(Font.TRUETYPE_FONT, new ByteArrayInputStream(b));
+            } catch (Throwable t) {
+                System.out.println("[nether-agent] lyric font " + LYRIC_FILES[n] + " unavailable: " + t);
+            }
+        }
+        return fonts[f] != null ? f : SEMI;
+    }
+
+    /** Fill the four theme slots: HEAD from Nether Pixel Bold when {@link #pixel}, everything else Barlow. */
+    private static void pick() {
+        System.arraycopy(faces, 4, fonts, 0, 4);
+        if (pixel) fonts[HEAD] = faces[0];
     }
 
     /** Switch the type face (theme change): drops every cached glyph so the atlas refills with the new face. */
     static void face(boolean px) {
         if (px == pixel) return;
         pixel = px;
-        if (faces[0] != null) System.arraycopy(faces, px ? 0 : 4, fonts, 0, 4);
+        if (faces[0] != null) pick();
         derived.clear();
+        freeAdv.clear();
         metrics.clear();
         glyphs.clear();
         masks.clear();
@@ -595,7 +656,8 @@ final class Gfx {
 
     /** Width in logical units. spacing is extra logical units per glyph. */
     static float width(int f, float size, String str, float spacing) {
-        int px = pxSize(size);
+        f = hf(f);
+        int px = pxSize(f, size);
         float w = 0;
         for (int i = 0; i < str.length(); i++) w += glyph(f, px, str.charAt(i)).adv + spacing * s;
         return w / s;
@@ -607,7 +669,8 @@ final class Gfx {
 
     /** Draws str with its left edge at x and capital letters centred on cy. Returns the logical width. */
     static float text(int f, float size, float x, float cy, int col, String str, boolean shadow, float spacing) {
-        int px = pxSize(size);
+        f = hf(f);
+        int px = pxSize(f, size);
         int[] m = met(f, px);
         float cap = px * 0.36f;
         float base = Math.round(cy * s + cap);
@@ -630,29 +693,47 @@ final class Gfx {
     }
 
     /**
-     * Text at any pixel size and sub-pixel spot (framebuffer px; x = left edge, cy = capital centre): rasterised at the
-     * next whole 8 px and drawn scaled down, so text moving or zooming in the world glides instead of stepping.
+     * Text in framebuffer pixels. Rasterise close to the final size so projected labels do not get softened by
+     * scaling a much larger glyph down from the next 8 px step.
      */
     static void textFree(int f, float size, float x, float cy, int col, String str) {
+        f = hf(f);
         int px = freePx(size);
-        float k = size / px, top = cy + size * 0.36f - (met(f, px)[0] + 2) * k, pen = -2 * k;
+        // glyph bitmaps come from the nearest whole pixel size, but the pen advances by the unhinted advance: as the size
+        // changes smoothly (walking towards world lyrics) letters scale smoothly instead of jumping as hinted widths snap
+        float k = size / px, top = cy + size * 0.36f - (met(f, px)[0] + 2) * k, pen = 0;
         for (int i = 0; i < str.length(); i++) {
             char c = str.charAt(i);
             Glyph g = glyph(f, px, c);
-            if (c != ' ') quad(x + pen, top, g.w * k, g.h * k, g.u0, g.v0, g.u1, g.v1, col, col, -1, 0);
-            pen += g.adv * k;
+            float adv = advFree(f, px, c, g) * size;
+            if (c != ' ') quad(x + pen + (adv - g.adv * k) / 2 - 2 * k, top, g.w * k, g.h * k, g.u0, g.v0, g.u1, g.v1, col, col, -1, 0);
+            pen += adv;
         }
     }
 
     /** Width in framebuffer px of {@link #textFree} text. */
     static float widthFree(int f, float size, String str) {
+        f = hf(f);
         int px = freePx(size);
         float w = 0;
-        for (int i = 0; i < str.length(); i++) w += glyph(f, px, str.charAt(i)).adv;
-        return w * size / px;
+        for (int i = 0; i < str.length(); i++) { char c = str.charAt(i); w += advFree(f, px, c, glyph(f, px, c)); }
+        return w * size;
     }
 
-    private static int freePx(float size) { return Math.min(248, Math.max(8, (int) Math.ceil(size / 8) * 8)); }
+    /** Unhinted advance of c per pixel of size (the glyph's own face, as {@link #slowGlyph} picks it). */
+    private static float advFree(int f, int px, char c, Glyph g) {
+        long key = ((long) f << 32) | c;
+        Float a = freeAdv.get(key);
+        if (a == null) {
+            Font fo = font(f, 100);
+            if (!fo.canDisplay(c)) { Font fb = font(4, 100); fo = fb.canDisplay(c) ? fb : null; }
+            a = fo == null ? g.adv / px : (float) fo.getStringBounds(String.valueOf(c), FRAC).getWidth() / 100f;
+            freeAdv.put(key, a);
+        }
+        return a;
+    }
+
+    private static int freePx(float size) { return Math.min(248, Math.max(5, Math.round(size))); }
 
     static float textC(int f, float size, float cx, float cy, int col, String str, float spacing) {
         float w = width(f, size, str, spacing) - spacing;

@@ -23,9 +23,9 @@ import dev.nether.agent.Hook;
  */
 final class GlCompat extends GlBackend {
     private static final String VS = "#version 120\n"
-        + "attribute vec2 pos; attribute vec2 uv; attribute vec4 col; attribute vec2 loc; attribute vec4 par; uniform vec2 res;\n"
+        + "attribute vec2 pos; attribute vec2 uv; attribute vec4 col; attribute vec2 loc; attribute vec4 par; uniform vec2 res; uniform mat3 map;\n"
         + "varying vec2 vuv; varying vec4 vcol; varying vec2 vloc; varying vec4 vpar;\n"
-        + "void main(){ vec2 p = pos / res * 2.0 - 1.0; gl_Position = vec4(p.x, -p.y, 0.0, 1.0); vuv = uv; vcol = col; vloc = loc; vpar = par; }";
+        + "void main(){ vec3 q = map * vec3(pos, 1.0); vec2 p = q.xy / q.z / res * 2.0 - 1.0; gl_Position = vec4(p.x * q.z, -p.y * q.z, 0.0, q.z); vuv = uv; vcol = col; vloc = loc; vpar = par; }";
     private static final String FS = "#version 120\n"
         + "varying vec2 vuv; varying vec4 vcol; varying vec2 vloc; varying vec4 vpar; uniform sampler2D tex; uniform sampler2D img;\n"
         + "void main(){ float a; vec4 c = vcol;\n"
@@ -38,7 +38,8 @@ final class GlCompat extends GlBackend {
         + " gl_FragColor = vec4(c.rgb, c.a * a); }";
     private static final int FLOATS = 14, CLAMP_TO_EDGE = 0x812F, ALPHA8 = 0x803C, FRAMEBUFFER_BINDING = 0x8CA6;
 
-    private int program, vbo, uRes, uTex, uImg, atlas;
+    private int program, vbo, uRes, uMap, uTex, uImg, atlas;
+    private final java.nio.FloatBuffer mapBuf = org.lwjgl.BufferUtils.createFloatBuffer(9);
     /** unit 1 (image textures): its binding is saved on first use in a frame and put back before the attrib pop */
     private boolean unit1;
     private int prevTex1;
@@ -70,6 +71,7 @@ final class GlCompat extends GlBackend {
         GL20.glDeleteShader(vs);
         GL20.glDeleteShader(fs);
         uRes = GL20.glGetUniformLocation(program, "res");
+        uMap = GL20.glGetUniformLocation(program, "map");
         uTex = GL20.glGetUniformLocation(program, "tex");
         uImg = GL20.glGetUniformLocation(program, "img");
 
@@ -84,8 +86,10 @@ final class GlCompat extends GlBackend {
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, atlas);
         GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, 1);
         GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, ALPHA8, size, size, 0, GL11.GL_ALPHA, GL11.GL_UNSIGNED_BYTE, (ByteBuffer) null);
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
-        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+        // Glyphs and shape masks are rasterised at their final framebuffer size. Nearest filtering preserves those
+        // coverage pixels instead of blending them again and softening every edge.
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, CLAMP_TO_EDGE);
         GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, CLAMP_TO_EDGE);
         GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, pAlign);
@@ -174,6 +178,7 @@ final class GlCompat extends GlBackend {
         GL11.glBindTexture(GL11.GL_TEXTURE_2D, atlas);
         GL20.glUseProgram(program);
         GL20.glUniform2f(uRes, w, h);
+        identityMap();
         GL20.glUniform1i(uTex, 0);
         GL20.glUniform1i(uImg, 1);
         GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
@@ -184,6 +189,16 @@ final class GlCompat extends GlBackend {
             GL20.glVertexAttribPointer(i, sizes[i], GL11.GL_FLOAT, false, FLOATS * 4, off * 4L);
             off += sizes[i];
         }
+    }
+
+    private void identityMap() {
+        mapBuf.clear(); mapBuf.put(new float[] {1, 0, 0, 0, 1, 0, 0, 0, 1}).flip();
+        GL20.glUniformMatrix3(uMap, false, mapBuf);
+    }
+
+    @Override void map(float[] matrix) {
+        mapBuf.clear(); mapBuf.put(matrix).flip();
+        GL20.glUniformMatrix3(uMap, false, mapBuf);
     }
 
     @Override void draw(FloatBuffer data, int verts) {
