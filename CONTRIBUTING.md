@@ -24,14 +24,16 @@ Report security problems privately, as described in [SECURITY.md](SECURITY.md).
 
 ## Pull requests
 
-1. Build and run the project as described in the [README](README.md#building).
+1. Build and run the project as described in [Building from source](docs/develop/building.md).
 2. Keep each pull request to one change. No unrelated refactors or formatting churn.
 3. Follow the [project rules](README.md#project-rules). Changes that patch renderer classes, automate input, send
    packets, or read data the server did not send will not be accepted.
 4. Run `cargo test -p nether-core` and `cargo clippy --workspace --release`, and rebuild the agent if you changed it.
-5. For UI changes, attach before and after screenshots (the `--snapshot` switch in the README makes them).
-6. If you add a network destination, list it in [PRIVACY.md](PRIVACY.md). If you add a module, add it to
-   [SAFETY.md](SAFETY.md) and [`agent/SAFETY.md`](agent/SAFETY.md).
+5. For UI changes, attach before and after screenshots (the `--snapshot` switch in
+   [dev tools](docs/develop/dev-tools.md#developer-switches) makes them).
+6. If you add a network destination, list it in [PRIVACY.md](PRIVACY.md). If you add a module, follow
+   [Adding an in-game module](docs/develop/modules.md), including its documentation rows.
+7. If you change something a player sees, update the matching page in [`docs/guide`](docs/guide).
 
 ## Code style
 
