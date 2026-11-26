@@ -1,0 +1,356 @@
+// New-instance walkthrough (2026-11-26): QUICK (a version, then Fabric + the Nether client + performance mods) or
+// MANUAL (version -> loader -> Nether on / off -> first mods + performance mods -> resource packs). Shown on Play in
+// place of the instance list while there are none, and as the NEW INSTANCE dialog. Logic: crates/app/src/newflow.rs.
+import { Theme } from "theme.slint";
+import { Backend, NewInst, Wizard, Row } from "structs.slint";
+import { Btn, LinkBtn, Chip, ModIcon, Icon, Ico, IconBtn, Field, Toggle, Heading } from "components.slint";
+
+// A big choice tile: title, text, a few lines that say what you get, picked ring.
+component Choice inherits Rectangle {
+    in property <string> title;
+    in property <string> text;
+    in property <[string]> lines;
+    in property <string> tag;
+    in property <bool> picked;
+    in property <bool> ok: true;
+    in property <string> foot;
+    callback chosen();
+    callback chosen-twice();
+    border-radius: Theme.r2;
+    background: root.picked ? Theme.red.with-alpha(0.094) : (ta.has-hover && root.ok ? Theme.s2 : Theme.bg);
+    border-width: 1px; border-color: root.picked ? Theme.red2 : (ta.has-hover && root.ok ? Theme.ln2 : Theme.ln);
+    opacity: root.ok ? 1 : 0.5;
+    animate background, border-color { duration: Theme.fast; }
+    Text { x: 24px; y: 20px; text: root.title; color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 800; }
+    if root.tag != "": Chip { x: parent.width - self.width - 20px; y: 26px; text: root.tag; hot: true; }
+    if root.picked: Icon { x: parent.width - 34px; y: root.tag != "" ? 60px : 30px; d: Ico.check; tint: Theme.red2; }
+    Text { x: 24px; y: 66px; width: parent.width - 48px; text: root.text; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
+    for l[i] in root.lines: Rectangle {
+        x: 24px; y: 124px + i * 26px; width: parent.width - 48px; height: 22px;
+        Rectangle { x: 0px; y: 8px; width: 6px; height: 6px; border-radius: 3px; background: Theme.red2; }
+        Text { x: 16px; width: parent.width - 16px; text: l; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
+    }
+    if root.foot != "": Text { x: 24px; y: parent.height - 34px; width: parent.width - 48px; height: 20px; text: root.foot; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; overflow: elide; }
+    ta := TouchArea { mouse-cursor: root.ok ? pointer : default; clicked => { if root.ok { root.chosen(); } } double-clicked => { if root.ok { root.chosen-twice(); } } }
+}
+
+// Versions as a grid of chips, newest first. dot = the Nether client runs on it (any loader).
+component VersionGrid inherits Rectangle {
+    in property <[string]> vers;
+    in-out property <int> current;
+    in property <bool> dots;
+    callback twice();
+    property <int> cols: 7;
+    Flickable {
+        content-height: Math.ceil(root.vers.length / root.cols) * 50px;
+        for v[i] in root.vers: Rectangle {
+            x: mod(i, root.cols) * (parent.width / root.cols); y: floor(i / root.cols) * 50px; width: parent.width / root.cols - 8px; height: 42px;
+            border-radius: Theme.r1;
+            background: root.current == i ? Theme.ice : (vt.has-hover ? Theme.s2 : Theme.bg);
+            border-width: 1px; border-color: root.current == i ? Theme.ice : Theme.ln;
+            Text { text: v; color: root.current == i ? Theme.ink : Theme.tx; font-family: Theme.mono; font-size: 14px * Theme.ts; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+            if v == Backend.new-version: Text { x: 6px; y: 3px; text: "NEW"; color: root.current == i ? Theme.ink : Theme.red2; font-family: Theme.mono; font-size: 9px * Theme.ts; font-weight: 700; }
+            if root.dots && Backend.nether-ok(v, "Vanilla"): Rectangle { x: parent.width - 12px; y: 6px; width: 6px; height: 6px; border-radius: 3px; background: root.current == i ? Theme.red : Theme.red2; }
+            vt := TouchArea { mouse-cursor: pointer; clicked => { root.current = i; } double-clicked => { root.current = i; root.twice(); } }
+        }
+    }
+}
+
+// A Modrinth project with a check box (mods and resource packs steps).
+component PickRow inherits Rectangle {
+    in property <Row> r;
+    callback toggled();
+    border-radius: Theme.r1;
+    background: root.r.on ? Theme.red.with-alpha(0.094) : (ta.has-hover ? Theme.s2 : Theme.bg);
+    border-width: 1px; border-color: root.r.on ? Theme.red2 : Theme.ln;
+    animate background, border-color { duration: Theme.fast; }
+    ModIcon { x: 10px; y: (parent.height - self.height) / 2; src: root.r.icon; has: root.r.has-icon; }
+    Text { x: 60px; y: 9px; width: parent.width - 150px; text: root.r.name; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; overflow: elide; }
+    Text { x: 60px; y: 31px; width: parent.width - 100px; text: root.r.sub; color: Theme.mut; font-family: Theme.ui; font-size: 11px * Theme.ts; overflow: elide; }
+    Text { x: parent.width - 120px; y: 9px; width: 76px; text: root.r.meta; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: right; }
+    Rectangle { x: parent.width - 34px; y: (parent.height - 18px) / 2; width: 18px; height: 18px; border-radius: 4px; border-width: 1px;
+        border-color: root.r.on ? Theme.red2 : Theme.mut; background: root.r.on ? Theme.red : transparent;
+        if root.r.on: Icon { x: 3px; y: 3px; d: Ico.check; tint: white; } }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { root.toggled(); } }
+}
+
+export component CreateFlow inherits Rectangle {
+    // on Play with no instances yet (no close button, a welcome title)
+    in property <bool> inline: false;
+    callback closed();
+    callback created();
+    callback go-discover();
+    callback go-import();
+
+    // 0 = quick or manual, 1 = quick, 2 = manual
+    in-out property <int> mode: 0;
+    // manual: 0 version, 1 loader, 2 Nether, 3 mods, 4 resource packs
+    in-out property <int> step: 0;
+    property <int> qi: 0;
+    property <int> vi: 0;
+    property <int> loader: 1;
+    property <bool> nether: true;
+    property <bool> perf: true;
+    property <string> name;
+    property <string> query;
+    property <[string]> loader-names: ["Vanilla", "Fabric", "Forge", "NeoForge"];
+    property <string> qver: Backend.nether-fabric-versions.length > 0 ? Backend.nether-fabric-versions[Math.min(root.qi, Backend.nether-fabric-versions.length - 1)] : "";
+    property <string> ver: Backend.mc-versions.length > 0 ? Backend.mc-versions[Math.min(root.vi, Backend.mc-versions.length - 1)] : "";
+    property <string> lname: root.loader-names[root.loader];
+    property <string> why: NewInst.nether-why(root.ver, root.loader);
+    property <bool> nether-on: root.nether && root.why == "";
+    property <int> picked-n: NewInst.picked.length;
+    property <length> body-y: root.mode == 2 ? 184px : 150px;
+    property <length> body-h: root.height - root.body-y - 96px;
+
+    public function reset() {
+        root.mode = 0; root.step = 0; root.qi = 0; root.vi = 0; root.loader = 1; root.nether = true; root.perf = true;
+        root.name = ""; root.query = "";
+        NewInst.reset();
+        Wizard.load-rps("");
+    }
+    function go(to: int) {
+        // Vanilla loads no mods: skip the mods step both ways
+        let s = to == 3 && root.loader == 0 ? (root.step < 3 ? 4 : 2) : to;
+        // a loader this version has no build for: Fabric, else Vanilla
+        if s == 1 && !NewInst.loader-ok(root.ver, root.loader) { root.loader = NewInst.loader-ok(root.ver, 1) ? 1 : 0; }
+        // moving on from the loader: Nether on wherever it can run
+        if s == 2 && root.step == 1 { root.nether = NewInst.nether-why(root.ver, root.loader) == ""; }
+        if s == 3 { NewInst.load-mods(root.ver, root.loader, root.query); }
+        if s == 4 {
+            Wizard.load-rps(root.ver);
+            if root.name == "" { root.name = NewInst.free-name(root.lname + " " + root.ver); }
+        }
+        root.step = s;
+    }
+    function back() {
+        if root.mode == 1 || (root.mode == 2 && root.step == 0) { root.mode = 0; } else { root.go(root.step - 1); }
+    }
+    function make(play: bool) {
+        if root.mode == 1 {
+            if root.qver != "" && NewInst.create(NewInst.free-name("Nether " + root.qver), root.qver, 1, true, true, play) { root.created(); }
+        } else {
+            if root.name == "" { root.name = NewInst.free-name(root.lname + " " + root.ver); }
+            if root.ver != "" && NewInst.create(root.name, root.ver, root.loader, root.nether-on, root.perf && root.loader != 0, play) { root.created(); }
+        }
+    }
+
+    init => {
+        root.reset();
+        // captures: open on a given screen
+        if NewInst.snap >= 1 {
+            root.mode = NewInst.snap == 1 ? 1 : 2;
+            root.vi = NewInst.snap-vi;
+            root.qi = NewInst.snap-vi;
+            root.loader = NewInst.snap-loader;
+            if NewInst.snap >= 3 { root.step = 1; }
+            if NewInst.snap >= 4 { root.go(2); }
+            if NewInst.snap >= 5 { root.go(3); }
+            if NewInst.snap >= 6 { root.go(4); }
+        }
+    }
+    background: Theme.s1; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
+    TouchArea { }
+
+    // ---------- header ----------
+    Text { x: 32px; y: 30px; height: 18px; vertical-alignment: center; color: Theme.red2; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 1.6px;
+        text: root.mode == 0 ? (root.inline ? "WELCOME TO NETHER" : "NEW INSTANCE") : (root.mode == 1 ? "QUICK SETUP" : "MANUAL SETUP  ·  STEP \{root.step + 1} OF 5"); }
+    Heading { x: 30px; y: 50px; width: parent.width - 120px; font-size: 44px; overflow: elide;
+        text: root.mode == 0 ? (root.inline ? "LET'S SET UP YOUR GAME" : "HOW DO YOU WANT TO START?")
+            : (root.mode == 1 ? "PICK A VERSION"
+            : (root.step == 0 ? "PICK A VERSION" : (root.step == 1 ? "PICK A LOADER" : (root.step == 2 ? "NETHER CLIENT" : (root.step == 3 ? "YOUR FIRST MODS" : "RESOURCE PACKS"))))); }
+    Text { x: 32px; y: 102px; width: parent.width - 64px; height: 22px; vertical-alignment: center; overflow: elide; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts;
+        text: root.mode == 0 ? "Quick gets you playing in one step. Manual lets you choose everything."
+            : (root.mode == 1 ? "Fabric with the Nether client and performance mods, ready to play. Newest first."
+            : (root.step == 0 ? "Every Minecraft release, newest first. A dot means the Nether client runs on it."
+            : (root.step == 1 ? "What runs your mods. Fabric suits most players; pick Forge or NeoForge for big content mods."
+            : (root.step == 2 ? "Minecraft " + root.ver + " with " + root.lname + ". You can switch it later on the instance page."
+            : (root.step == 3 ? "Popular " + root.lname + " mods for " + root.ver + ". Pick any to download with the instance, or skip."
+            : "Popular packs for " + root.ver + ". Pick any to download with the instance, or skip."))))); }
+    if !root.inline: IconBtn { x: parent.width - 32px - 34px; y: 28px; size: 34px; d: Ico.close; tip: "Close"; clicked => { root.closed(); } }
+
+    // ---------- manual: step rail ----------
+    if root.mode == 2: HorizontalLayout {
+        x: 32px; y: 138px; width: parent.width - 64px; height: 30px; spacing: 6px;
+        for st[i] in ["VERSION", "LOADER", "NETHER", "MODS", "RESOURCE PACKS"]: Rectangle {
+            property <bool> skip: i == 3 && root.loader == 0;
+            border-radius: Theme.r1;
+            background: root.step == i ? Theme.s3 : transparent;
+            opacity: self.skip ? 0.35 : 1;
+            Rectangle { y: parent.height - 2px; height: 2px; background: i < root.step ? Theme.ice : (root.step == i ? Theme.red2 : Theme.ln2); }
+            Text { x: 10px; height: parent.height; text: "0\{i + 1}"; color: root.step == i ? Theme.red2 : Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; vertical-alignment: center; }
+            Text { x: 34px; width: parent.width - 40px; height: parent.height; overflow: elide; text: st; color: root.step == i ? Theme.tx : (i < root.step ? Theme.dim : Theme.mut); font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; vertical-alignment: center; }
+            TouchArea { mouse-cursor: i < root.step && !parent.skip ? pointer : default; clicked => { if i < root.step && !parent.skip { root.step = i; } } }
+        }
+    }
+
+    // ---------- 0: quick or manual ----------
+    if root.mode == 0: Rectangle {
+        x: 32px; y: root.body-y; width: parent.width - 64px; height: root.body-h;
+        Choice {
+            x: 0px; y: (parent.height - self.height) / 2; width: (parent.width - 16px) / 2; height: 340px;
+            title: "QUICK"; tag: "RECOMMENDED";
+            text: "Pick a version and you're ready. We set up the rest.";
+            lines: ["Fabric, the light and fast loader", "Nether client on: HUD, zoom, cosmetics, friends", "Performance mods: Sodium, Lithium and more"];
+            foot: "Two clicks. Change anything later.";
+            chosen => { root.mode = 1; }
+            chosen-twice => { root.mode = 1; }
+        }
+        Choice {
+            x: (parent.width + 16px) / 2; y: (parent.height - self.height) / 2; width: (parent.width - 16px) / 2; height: 340px;
+            title: "MANUAL";
+            text: "Choose each part yourself, one step at a time.";
+            lines: ["Any release with Vanilla, Fabric, Forge or NeoForge", "Nether client on or off", "Your first mods and resource packs"];
+            foot: "Five short steps.";
+            chosen => { root.mode = 2; root.step = 0; }
+            chosen-twice => { root.mode = 2; root.step = 0; }
+        }
+    }
+    // other ways in, where the buttons sit on later screens
+    if root.mode == 0: HorizontalLayout {
+        x: 32px; y: root.height - 60px; width: root.width - 64px; height: 40px; spacing: 28px; alignment: start;
+        Text { text: "Already play somewhere else?"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; }
+        LinkBtn { text: "IMPORT FROM ANOTHER LAUNCHER"; clicked => { root.go-import(); } }
+        LinkBtn { text: "BROWSE MODPACKS"; clicked => { root.go-discover(); } }
+    }
+
+    // ---------- quick: version ----------
+    if root.mode == 1: Rectangle {
+        x: 32px; y: root.body-y; width: parent.width - 64px; height: root.body-h;
+        if Backend.nether-fabric-versions.length == 0: Text { y: 0px; width: parent.width; wrap: word-wrap; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts;
+            text: Backend.versions-state == 2 ? "Couldn't reach the version list. Check your connection; it retries on its own." : "Loading versions…"; }
+        VersionGrid { y: 0px; height: parent.height - 36px; vers: Backend.nether-fabric-versions; current <=> root.qi; twice => { root.make(false); } }
+        Text { y: parent.height - 24px; height: 24px; width: parent.width; vertical-alignment: center; overflow: elide; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts;
+            text: "Looking for 1.8.9, Forge or plain Minecraft? Go back and pick Manual."; }
+    }
+
+    // ---------- manual 0: version ----------
+    if root.mode == 2 && root.step == 0: Rectangle {
+        x: 32px; y: root.body-y; width: parent.width - 64px; height: root.body-h;
+        if Backend.mc-versions.length == 0: Text { y: 0px; width: parent.width; wrap: word-wrap; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts;
+            text: Backend.versions-state == 2 ? "Couldn't reach Mojang's version list. Check your connection; it retries on its own." : "Loading versions…"; }
+        VersionGrid { y: 0px; height: parent.height; vers: Backend.mc-versions; current <=> root.vi; dots: true; twice => { root.go(1); } }
+    }
+
+    // ---------- manual 1: loader ----------
+    if root.mode == 2 && root.step == 1: Rectangle {
+        x: 32px; y: root.body-y; width: parent.width - 64px; height: root.body-h;
+        for l[i] in [{t: "VANILLA", d: "Minecraft exactly as Mojang ships it. No mods."},
+                     {t: "FABRIC", d: "Light and fast. Sodium, Iris and most performance and client mods."},
+                     {t: "FORGE", d: "The classic loader for big content mods and older modpacks."},
+                     {t: "NEOFORGE", d: "Forge's modern successor for new content mods."}]: Choice {
+            property <bool> can: NewInst.loader-ok(root.ver, i);
+            property <bool> n-ok: NewInst.nether-why(root.ver, i) == "";
+            x: mod(i, 2) * (parent.width / 2 + 8px); y: floor(i / 2) * 176px;
+            width: parent.width / 2 - 8px; height: 164px;
+            title: l.t; text: l.d; tag: i == 1 && self.can ? "RECOMMENDED" : "";
+            ok: self.can; picked: root.loader == i;
+            foot: !self.can ? "No " + root.loader-names[i] + " build for " + root.ver + " yet."
+                : (self.n-ok ? "The Nether client runs here." : "No Nether client with " + root.loader-names[i] + " on " + root.ver + ".");
+            chosen => { root.loader = i; }
+            chosen-twice => { root.loader = i; root.go(2); }
+        }
+    }
+
+    // ---------- manual 2: Nether on / off ----------
+    if root.mode == 2 && root.step == 2: Rectangle {
+        x: 32px; y: root.body-y; width: parent.width - 64px; height: root.body-h;
+        Choice {
+            x: 0px; y: 0px; width: (parent.width - 16px) / 2; height: 236px;
+            title: "NETHER ON"; tag: root.why == "" ? "RECOMMENDED" : "";
+            ok: root.why == ""; picked: root.nether-on;
+            text: "Minecraft with the Nether client built in. Press Right Shift in game to set it up.";
+            lines: ["HUD, zoom, keystrokes and other client features", "Cosmetics, capes and emotes", "Friends, parties and world invites"];
+            chosen => { root.nether = true; }
+            chosen-twice => { root.nether = true; root.go(3); }
+        }
+        Choice {
+            x: (parent.width + 16px) / 2; y: 0px; width: (parent.width - 16px) / 2; height: 236px;
+            title: "NETHER OFF";
+            picked: !root.nether-on;
+            text: "Plain Minecraft. Your mods and worlds work the same either way.";
+            lines: ["Nothing from Nether runs in game", "Turn it on later if this version supports it"];
+            chosen => { root.nether = false; }
+            chosen-twice => { root.nether = false; root.go(3); }
+        }
+        // why it can't run here, and the way to a setup where it does
+        if root.why != "": Rectangle {
+            y: 256px; width: parent.width; height: 64px; border-radius: Theme.r2;
+            background: Theme.red.with-alpha(0.07); border-width: 1px; border-color: Theme.red2.with-alpha(0.45);
+            Text { x: 18px; y: 12px; text: "WHY NOT HERE"; color: Theme.red2; font-family: Theme.mono; font-size: 10px * Theme.ts; font-weight: 700; letter-spacing: 1.4px; }
+            Text { x: 18px; y: 30px; width: parent.width - 260px; height: 22px; vertical-alignment: center; overflow: elide; text: root.why; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; }
+            if root.loader != 1 && NewInst.loader-ok(root.ver, 1) && NewInst.nether-why(root.ver, 1) == "": LinkBtn {
+                x: parent.width - self.width - 18px; y: 20px; text: "USE FABRIC INSTEAD"; clicked => { root.loader = 1; root.nether = true; } }
+            if root.loader != 0 && root.loader != 1 && NewInst.nether-why(root.ver, 0) == "" && NewInst.nether-why(root.ver, 1) != "": LinkBtn {
+                x: parent.width - self.width - 18px; y: 20px; text: "USE VANILLA INSTEAD"; clicked => { root.loader = 0; root.nether = true; } }
+        }
+    }
+
+    // ---------- manual 3: mods + performance mods ----------
+    if root.mode == 2 && root.step == 3: Rectangle {
+        x: 32px; y: root.body-y; width: parent.width - 64px; height: root.body-h;
+        // the performance set, on by default
+        Rectangle {
+            y: 0px; width: parent.width; height: 64px; border-radius: Theme.r2;
+            background: root.perf ? Theme.red.with-alpha(0.07) : Theme.bg; border-width: 1px; border-color: root.perf ? Theme.red2.with-alpha(0.45) : Theme.ln;
+            Text { x: 18px; y: 12px; text: "Performance mods"; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; }
+            Text { x: 18px; y: 34px; width: parent.width - 100px; overflow: elide; text: NewInst.perf-text(root.loader); color: Theme.dim; font-family: Theme.ui; font-size: 12px * Theme.ts; }
+            Toggle { x: parent.width - 60px; y: 21px; on: root.perf; toggled(v) => { root.perf = v; } }
+        }
+        Field { x: 0px; y: 80px; width: parent.width; height: 38px; text-size: 13px; search: true;
+            placeholder: "Search Modrinth for " + root.lname + " " + root.ver + " mods"; text <=> root.query;
+            edited => { NewInst.load-mods(root.ver, root.loader, root.query); } }
+        if NewInst.mods-loading && NewInst.mods.length == 0: Text { y: 136px; text: "Loading from Modrinth…"; color: Theme.mut; font-family: Theme.ui; font-size: 14px * Theme.ts; }
+        if !NewInst.mods-loading && NewInst.mods.length == 0: Text { y: 136px; width: parent.width; wrap: word-wrap; color: Theme.mut; font-family: Theme.ui; font-size: 14px * Theme.ts;
+            text: root.query == "" ? "Couldn't load mods from Modrinth. You can add mods later from the instance page." : "No " + root.lname + " mods for " + root.ver + " match that."; }
+        Flickable {
+            y: 130px; height: parent.height - 130px; content-height: Math.ceil(NewInst.mods.length / 2) * 66px;
+            for r[i] in NewInst.mods: PickRow {
+                x: mod(i, 2) * (parent.width / 2 + 4px); y: floor(i / 2) * 66px; width: parent.width / 2 - 4px; height: 58px;
+                r: r; toggled => { NewInst.toggle-mod(r.id); }
+            }
+        }
+    }
+
+    // ---------- manual 4: resource packs ----------
+    if root.mode == 2 && root.step == 4: Rectangle {
+        x: 32px; y: root.body-y; width: parent.width - 64px; height: root.body-h;
+        if Wizard.rp-loading: Text { y: 0px; text: "Loading from Modrinth…"; color: Theme.mut; font-family: Theme.ui; font-size: 14px * Theme.ts; }
+        Flickable {
+            y: 0px; height: parent.height; content-height: Math.ceil(Wizard.rps.length / 2) * 66px;
+            for r[i] in Wizard.rps: PickRow {
+                x: mod(i, 2) * (parent.width / 2 + 4px); y: floor(i / 2) * 66px; width: parent.width / 2 - 4px; height: 58px;
+                r: r; toggled => { Wizard.rps[i].on = !r.on; }
+            }
+        }
+    }
+
+    // ---------- footer: what you'll get, back, next / create ----------
+    Rectangle { x: 0px; y: parent.height - 80px; width: parent.width; height: 1px; background: Theme.ln; }
+    if root.mode == 1: Text { x: 32px; y: parent.height - 60px; width: parent.width - 520px; height: 40px; vertical-alignment: center; overflow: elide;
+        color: Theme.dim; font-family: Theme.mono; font-size: 12px * Theme.ts;
+        text: root.qver == "" ? "" : root.qver + "  ·  Fabric  ·  Nether on  ·  performance mods"; }
+    if root.mode == 2 && root.step < 4: Text { x: 32px; y: parent.height - 60px; width: parent.width - 520px; height: 40px; vertical-alignment: center; overflow: elide;
+        color: Theme.dim; font-family: Theme.mono; font-size: 12px * Theme.ts;
+        text: root.ver + (root.step >= 1 ? "  ·  " + root.lname : "") + (root.step >= 2 ? (root.nether-on ? "  ·  Nether on" : "  ·  Nether off") : "")
+            + (root.step >= 3 && root.loader != 0 ? (root.perf ? "  ·  performance mods" : "") + (root.picked-n > 0 ? "  ·  \{root.picked-n} picked" : "") : ""); }
+    // last step: the name, filled in for you
+    if root.mode == 2 && root.step == 4: Rectangle {
+        x: 32px; y: parent.height - 62px; width: 380px; height: 44px;
+        Text { x: 0px; width: 52px; height: parent.height; vertical-alignment: center; text: "NAME"; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 1.2px; }
+        Field { x: 56px; y: 3px; width: parent.width - 56px; height: 38px; text-size: 14px; placeholder: "My instance"; text <=> root.name; accepted => { root.make(false); } }
+    }
+    if root.mode != 0: Btn { x: parent.width - 32px - 200px - 12px - (root.mode == 2 && root.step < 4 ? 0px : 212px) - self.width; y: parent.height - 60px; height: 40px; text: "BACK"; clicked => { root.back(); } }
+    if root.mode == 2 && root.step < 4: Btn {
+        x: parent.width - 32px - 200px; y: parent.height - 60px; width: 200px; height: 40px; text: "NEXT"; solid: true;
+        enabled: root.ver != "" && (root.step != 1 || NewInst.loader-ok(root.ver, root.loader));
+        clicked => { root.go(root.step + 1); } }
+    if root.mode == 1 || (root.mode == 2 && root.step == 4): Btn {
+        x: parent.width - 32px - 200px - 12px - 200px; y: parent.height - 60px; width: 200px; height: 40px; text: "CREATE";
+        enabled: root.mode == 1 ? root.qver != "" : root.ver != "";
+        clicked => { root.make(false); } }
+    if root.mode == 1 || (root.mode == 2 && root.step == 4): Btn {
+        x: parent.width - 32px - 200px; y: parent.height - 60px; width: 200px; height: 40px; text: "CREATE & PLAY"; solid: true; icon: Ico.play;
+        enabled: root.mode == 1 ? root.qver != "" : root.ver != "";
+        clicked => { root.make(true); } }
+}

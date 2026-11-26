@@ -1,8 +1,9 @@
 import { Theme } from "theme.slint";
-import { Backend, Row, Inst, Art, Wizard, Combiner, ImportRow } from "structs.slint";
+import { Backend, Row, Inst, Art, Wizard, Combiner, ImportRow, NewInst } from "structs.slint";
 import { Glass, PlayButton, Eyebrow, Heading, Slot, Chip, Btn, ModIcon, Seg, UTabs, Toggle, Dropdown, VerTag, Icon, Ico, Page, IconBtn, Hatch, Ticks, Slash, SectionHead, Stat, LinkBtn, Slider, Field, Scrim, SetRow, Pulse } from "components.slint";
 import { ModDetail } from "moddetail.slint";
-import { CardGrid, CardPanel, HorizonHero, HorizonPanel } from "play.slint";
+import { HorizonHero, HorizonPanel } from "play.slint";
+import { CreateFlow } from "newflow.slint";
 
 // Block-texture icon grid; "" means the default (grass block).
 component IconPicker inherits Rectangle {
@@ -145,11 +146,11 @@ export component InstancesScreen inherits Rectangle {
     property <string> ren-name;
     property <bool> searching: false;
     property <int> pick: Backend.active-inst;
-    // Play > Nether: the right panel shows the picked card (true) or a profile row (false)
-    in-out property <bool> card-on: true;
-    // Vanilla / Modpacks list profiles; Nether shows cards, Horizon its own panel
-    property <bool> list-tab: Backend.play-tab == 1 || Backend.play-tab == 2;
-    function new-profile() { Backend.create-nether = Backend.play-tab != 1; Backend.create-open = true; }
+    // Play tabs: 0 Instances, 1 Modpacks (both list instances), 2 Horizon (its own panel)
+    property <bool> list-tab: Backend.play-tab <= 1;
+    // no instances of your own yet: the Instances tab is the new-instance walkthrough
+    property <bool> welcome: Backend.play-tab == 0 && NewInst.first;
+    function new-profile() { Backend.create-open = true; }
     property <Inst> pk: Backend.instances[Math.min(root.pick, Math.max(0, Backend.instances.length - 1))];
     property <[string]> mod-cats: ["Any category", "Optimization", "Utility", "Decoration", "Adventure", "Magic", "Technology", "Storage", "Worldgen", "Mobs", "Equipment", "Food", "Game mechanics", "Library", "Social", "Transportation"];
     property <[string]> pack-cats: ["Any category", "Vanilla-like", "Simplistic", "Realistic", "Themed", "Decoration", "Combat", "Tweaks", "Utility", "16x", "32x", "64x"];
@@ -164,42 +165,44 @@ export component InstancesScreen inherits Rectangle {
     if root.sel < 0: Page {
         Heading { x: 56px; y: 28px; text: "PLAY"; font-size: 32px; }
         im := Btn { x: ni.x - 10px - self.width; y: 40px; height: 34px; text: "IMPORT"; icon: Ico.download; clicked => { Backend.import-open = true; Backend.import-instance(); } }
-        if Backend.play-tab == 2: Btn { x: im.x - 10px - self.width; y: 40px; height: 34px; text: "BROWSE MODPACKS"; clicked => { root.go-discover(); } }
-        // Nether (default) / Vanilla (plain Minecraft, any loader) / Modpacks
-        tabs := Seg { x: 56px; y: 84px; items: ["NETHER", "VANILLA", "MODPACKS", "HORIZON"]; current <=> Backend.play-tab;
-            changed(i) => { Backend.refilter(); root.card-on = true; if Backend.visible-insts.length > 0 { root.pick = Backend.visible-insts[0]; } } }
-        if Backend.play-tab == 0 || Backend.play-tab == 3: Text { x: tabs.x + tabs.width + 16px; y: 84px; width: 836px - tabs.x - tabs.width - 16px; height: 34px; vertical-alignment: center; overflow: elide;
-            text: Backend.play-tab == 3 ? "Minecraft 26.3 rewritten in Rust." : "Ready-made versions with the Nether client."; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; }
+        if Backend.play-tab == 1: Btn { x: im.x - 10px - self.width; y: 40px; height: 34px; text: "BROWSE MODPACKS"; clicked => { root.go-discover(); } }
+        // Instances (yours, Nether on or off) / Modpacks / Horizon
+        tabs := Seg { x: 56px; y: 84px; items: ["INSTANCES", "MODPACKS", "HORIZON"]; current <=> Backend.play-tab;
+            changed(i) => { Backend.refilter(); if Backend.visible-insts.length > 0 { root.pick = Backend.visible-insts[0]; } } }
+        if Backend.play-tab == 2: Text { x: tabs.x + tabs.width + 16px; y: 84px; width: 836px - tabs.x - tabs.width - 16px; height: 34px; vertical-alignment: center; overflow: elide;
+            text: "Minecraft 26.3 rewritten in Rust."; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; }
         // search (name, version, loader) + sort
-        if root.list-tab: Field { x: tabs.x + tabs.width + 14px; y: 84px; width: 650px - 10px - tabs.x - tabs.width - 14px; height: 34px; text-size: 13px; search: true;
-            placeholder: Backend.play-tab == 1 ? "Search profiles" : "Search modpacks and profiles"; text <=> Backend.inst-query; edited => { Backend.refilter(); } }
-        if root.list-tab: Dropdown { x: 650px; y: 84px; width: 186px; height: 34px; items: ["Last played", "Name", "Play time", "Created"]; current <=> Backend.inst-sort; changed(i) => { Backend.refilter(); } }
-        ni := Btn { x: 836px - self.width; y: 40px; height: 34px; text: "NEW PROFILE"; solid: true; icon: Ico.plus; clicked => { root.new-profile(); } }
+        if root.list-tab && !root.welcome: Field { x: tabs.x + tabs.width + 14px; y: 84px; width: 650px - 10px - tabs.x - tabs.width - 14px; height: 34px; text-size: 13px; search: true;
+            placeholder: Backend.play-tab == 0 ? "Search instances" : "Search modpacks"; text <=> Backend.inst-query; edited => { Backend.refilter(); } }
+        if root.list-tab && !root.welcome: Dropdown { x: 650px; y: 84px; width: 186px; height: 34px; items: ["Last played", "Name", "Play time", "Created"]; current <=> Backend.inst-sort; changed(i) => { Backend.refilter(); } }
+        ni := Btn { x: 836px - self.width; y: 40px; height: 34px; text: "NEW INSTANCE"; solid: true; icon: Ico.plus; clicked => { root.new-profile(); } }
 
-        // Nether: version cards + your Nether profiles
-        if Backend.play-tab == 0: CardGrid {
-            x: 56px; y: 136px; width: 780px; height: parent.height - 136px - 12px;
-            card-on: root.card-on;
-            picked => { root.card-on = true; }
+        // first visit: the walkthrough itself, where the list will be
+        if root.welcome: CreateFlow {
+            x: 56px; y: 136px; width: parent.width - 112px; height: Math.min(700px, parent.height - 136px - 20px);
+            inline: true;
+            go-discover => { root.go-discover(); }
+            go-import => { Backend.import-open = true; Backend.import-instance(); }
+            created => { root.pick = Backend.instances.length - 1; }
         }
 
         // Horizon: what it is, and its panel
-        if Backend.play-tab == 3: HorizonHero { x: 56px; y: 136px; width: 780px; height: parent.height - 136px - 12px; }
-        if Backend.play-tab == 3: HorizonPanel {
+        if Backend.play-tab == 2: HorizonHero { x: 56px; y: 136px; width: 780px; height: parent.height - 136px - 12px; }
+        if Backend.play-tab == 2: HorizonPanel {
             x: 868px; y: 0px; width: 572px; height: parent.height;
-            go-nether => { Backend.play-tab = 0; Backend.refilter(); root.card-on = true; Backend.card-pick("26", -1, ""); }
+            go-nether => { Backend.play-tab = 0; Backend.refilter(); root.new-profile(); }
         }
 
         // column heads
-        if root.list-tab: Rectangle {
+        if root.list-tab && !root.welcome: Rectangle {
             x: 56px; y: 130px; width: 780px; height: 28px;
-            ColHead { x: 66px; height: parent.height; text: "PROFILE"; }
+            ColHead { x: 66px; height: parent.height; text: "INSTANCE"; }
             ColHead { x: 396px; height: parent.height; text: "VERSION"; }
             ColHead { x: 482px; height: parent.height; text: "LOADER"; }
             ColHead { x: 600px; height: parent.height; text: "LAST PLAYED"; }
             Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln2; }
         }
-        if root.list-tab: Flickable {
+        if root.list-tab && !root.welcome: Flickable {
             x: 56px; y: 158px; width: 780px; height: 590px; content-height: rows-col.preferred-height + 8px;
             // L2: group headers (click folds the group) between the instance rows
             rows-col := VerticalLayout { alignment: start;
@@ -219,7 +222,7 @@ export component InstancesScreen inherits Rectangle {
                     Rectangle { x: 0px; y: parent.height - 1px; height: 1px; background: Theme.ln2; }
                     Icon { x: 18px; y: 22px; d: row.folded ? Ico.chev : Ico.down; tint: hta.has-hover ? Theme.tx : Theme.mut; }
                     Text { x: 44px; y: 14px; height: 28px; text: row.head.to-uppercase(); color: hta.has-hover ? Theme.tx : Theme.dim; font-family: Theme.ui; font-size: 16px; font-weight: 600; letter-spacing: 1.2px; vertical-alignment: center; }
-                    Text { x: parent.width - 120px; y: 14px; width: 104px; height: 28px; text: row.n == 1 ? "1 profile" : "\{row.n} profiles"; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; }
+                    Text { x: parent.width - 120px; y: 14px; width: 104px; height: 28px; text: row.n == 1 ? "1 instance" : "\{row.n} instances"; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; }
                     hta := TouchArea { mouse-cursor: pointer; clicked => { Backend.fold-group(row.head); } }
                 }
                 Rectangle {
@@ -241,7 +244,9 @@ export component InstancesScreen inherits Rectangle {
                     Image { x: 4px; y: 4px; width: 28px; height: 28px; source: card.inst.icon-img; image-rendering: pixelated; } }
                 Text { x: 66px; width: 320px; text: card.inst.title; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; overflow: elide; }
                 Text { x: 396px; width: 80px; text: card.inst.ver; color: Theme.dim; font-family: Theme.mono; font-size: 12px * Theme.ts; vertical-alignment: center; }
-                Text { x: 482px; width: 112px; text: card.inst.loader; color: card.inst.loader == "Vanilla" ? Theme.mut : Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
+                // loader, with a dot when the Nether client runs in it
+                Rectangle { x: 482px; y: (parent.height - 6px) / 2; width: 6px; height: 6px; border-radius: 3px; background: card.inst.nether ? Theme.red2 : Theme.ln2; }
+                Text { x: 494px; width: 100px; text: card.inst.loader; color: card.inst.loader == "Vanilla" ? Theme.mut : Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
                 if !card.inst.running && !card.inst.starting && !card.inst.crashed: Text { x: 600px; width: 110px; text: card.inst.last; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
                 if !card.inst.running && !card.inst.starting && card.inst.crashed: Text { x: 600px; width: 110px; text: "Crashed"; color: Theme.redtx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 500; vertical-alignment: center; }
                 if card.inst.running || card.inst.starting: Rectangle { x: 600px; width: 110px;
@@ -255,7 +260,7 @@ export component InstancesScreen inherits Rectangle {
                     Rectangle {
                         background: Theme.s2; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
                         // order on screen; a = the action number for root.act
-                        for it[j] in [{t: "Play", d: Ico.play, a: 0}, {t: "Edit profile", d: Ico.edit, a: 1}, {t: "Rename", d: Ico.edit, a: 6}, {t: "Move to group", d: Ico.folder, a: 7}, {t: "Open folder", d: Ico.folder, a: 2}, {t: "Duplicate", d: Ico.copy, a: 3}, {t: "Export as .mrpack", d: Ico.export, a: 4}, {t: "Delete", d: Ico.trash, a: 5}]: Rectangle {
+                        for it[j] in [{t: "Play", d: Ico.play, a: 0}, {t: "Edit instance", d: Ico.edit, a: 1}, {t: "Rename", d: Ico.edit, a: 6}, {t: "Move to group", d: Ico.folder, a: 7}, {t: "Open folder", d: Ico.folder, a: 2}, {t: "Duplicate", d: Ico.copy, a: 3}, {t: "Export as .mrpack", d: Ico.export, a: 4}, {t: "Delete", d: Ico.trash, a: 5}]: Rectangle {
                             y: 4px + j * 36px; height: 36px; width: parent.width;
                             background: mt.has-hover ? (it.a == 5 ? Theme.red.with-alpha(0.188) : Theme.s3) : transparent;
                             if it.a == 5: Rectangle { y: 0px; height: 1px; x: 0px; width: parent.width; background: Theme.ln; }
@@ -275,8 +280,8 @@ export component InstancesScreen inherits Rectangle {
                     animate background, border-color { duration: Theme.fast; }
                     Rectangle { x: 18px; y: 10px; width: 36px; height: 36px; border-radius: Theme.r1; border-width: 1px; border-color: Theme.ln2;
                         Icon { x: 12px; y: 12px; d: Ico.plus; tint: adt.has-hover ? Theme.tx : Theme.dim; } }
-                    Text { x: 66px; y: 9px; text: "New profile"; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; }
-                    Text { x: 66px; y: 30px; text: Backend.play-tab == 2 ? "Your own Nether setup: Fabric, Forge or plain, with your mods" : "Any version and loader, without the Nether client"; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
+                    Text { x: 66px; y: 9px; text: "New instance"; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; }
+                    Text { x: 66px; y: 30px; text: "Quick, or pick the version, loader, Nether client and mods yourself"; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
                     adt := TouchArea { mouse-cursor: pointer; clicked => { root.new-profile(); } }
                     LinkBtn { x: parent.width - self.width - 18px; y: 14px; text: "BROWSE MODPACKS"; clicked => { root.go-discover(); } }
                 }
@@ -286,51 +291,32 @@ export component InstancesScreen inherits Rectangle {
             if Backend.visible-insts.length == 0: es := Rectangle {
                 property <bool> searched: Backend.inst-query != "";
                 x: 0px; y: 40px; width: parent.width; height: 240px;
-                Text { x: 18px; y: 0px; text: es.searched ? "NOTHING MATCHES" : (Backend.play-tab == 2 ? "NOTHING HERE YET" : "NO VANILLA PROFILES YET"); color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 700; }
+                Text { x: 18px; y: 0px; text: es.searched ? "NOTHING MATCHES" : "NO MODPACKS YET"; color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 700; }
                 Text { x: 18px; y: 44px; width: 560px; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap;
-                    text: es.searched ? "Nothing here has that in its name, version or loader." : (Backend.play-tab == 2
-                        ? "Modpacks you install and Nether profiles you make yourself show up here. Make one with your own mods, or start from a modpack."
-                        : "Plain Minecraft without the Nether client: any version, with Vanilla, Fabric, Forge, NeoForge or Quilt."); }
+                    text: es.searched ? "Nothing here has that in its name, version or loader." : "Modpacks you install from Modrinth or import from another launcher show up here."; }
                 if !es.searched: Rectangle {
-                    eb1 := Btn { x: 18px; y: 110px; text: "NEW PROFILE"; solid: true; icon: Ico.plus; clicked => { root.new-profile(); } }
-                    eb2 := Btn { x: eb1.x + eb1.width + 10px; y: 110px; text: Backend.play-tab == 2 ? "BROWSE MODPACKS" : "IMPORT"; icon: Backend.play-tab == 2 ? Ico.chev : Ico.download;
-                        clicked => { if Backend.play-tab == 2 { root.go-discover(); } else { Backend.import-open = true; Backend.import-instance(); } } }
+                    eb1 := Btn { x: 18px; y: 110px; text: "BROWSE MODPACKS"; solid: true; icon: Ico.chev; clicked => { root.go-discover(); } }
+                    eb2 := Btn { x: eb1.x + eb1.width + 10px; y: 110px; text: "IMPORT"; icon: Ico.download; clicked => { Backend.import-open = true; Backend.import-instance(); } }
                 }
             }
         }
         Text { x: 56px; y: parent.height - 34px; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts;
             text: "Click to preview · double-click to edit · right-click for more · drop modpacks on the window to import";
-            visible: root.list-tab && Backend.visible-insts.length > 0; }
+            visible: root.list-tab && !root.welcome && Backend.visible-insts.length > 0; }
 
-        // Nether: the picked card
-        if Backend.play-tab == 0 && root.card-on: CardPanel {
-            x: 868px; y: 0px; width: 572px; height: parent.height;
-            edit(i) => { root.open(i); }
-            go-vanilla => { Backend.play-tab = 1; Backend.refilter(); if Backend.visible-insts.length > 0 { root.pick = Backend.visible-insts[0]; } }
-        }
-        // Vanilla / Modpacks with nothing in them yet: what they are
-        if root.list-tab && Backend.visible-insts.length == 0: Rectangle {
+        // Modpacks with nothing in them yet: what they are
+        if Backend.play-tab == 1 && Backend.visible-insts.length == 0: Rectangle {
             x: 868px; y: 0px; width: 572px; height: parent.height;
             background: Theme.s1;
             Rectangle { x: 0px; width: 1px; background: Theme.ln; }
-            Text { x: 32px; y: 186px; height: 20px; text: Backend.play-tab == 1 ? "VANILLA" : "MODPACKS"; color: Theme.mut; font-family: Theme.mono; font-size: 12px * Theme.ts; font-weight: 700; letter-spacing: 2px; vertical-alignment: center; }
-            Heading { x: 30px; y: 208px; width: parent.width - 60px; text: Backend.play-tab == 1 ? "PLAIN MINECRAFT" : "YOUR OWN SETUPS"; font-size: 48px; }
+            Text { x: 32px; y: 186px; height: 20px; text: "MODPACKS"; color: Theme.mut; font-family: Theme.mono; font-size: 12px * Theme.ts; font-weight: 700; letter-spacing: 2px; vertical-alignment: center; }
+            Heading { x: 30px; y: 208px; width: parent.width - 60px; text: "READY-MADE SETUPS"; font-size: 48px; }
             Text { x: 32px; y: 272px; width: parent.width - 64px; wrap: word-wrap; color: Theme.dim; font-family: Theme.ui; font-size: 15px * Theme.ts;
-                text: Backend.play-tab == 1 ? "Every version since 1.0 with Vanilla, Fabric, Forge, NeoForge or Quilt, exactly as their makers ship them."
-                    : "Nether profiles you build yourself, and modpacks from Modrinth installed with their mods and settings in one click."; }
-            Text { x: 32px; y: 352px; height: 18px; text: Backend.play-tab == 1 ? "NOT IN VANILLA PROFILES" : "NETHER IN MODPACKS"; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 1.4px; vertical-alignment: center; }
-            for l[i] in (Backend.play-tab == 1 ? ["The Nether HUD, mods menu and zoom", "Cosmetics, capes and emotes in game", "Friends, parties and world invites in game"]
-                    : ["Your own profiles: Nether, Nether + Fabric or Nether + Forge", "Fabric and Forge packs on 1.14 or newer run with the Nether client", "Every one stays fully editable"]): Rectangle {
-                x: 32px; y: 380px + i * 30px; width: parent.width - 64px; height: 26px;
-                Rectangle { x: 0px; y: 11px; width: 5px; height: 5px; border-radius: 2.5px; background: Backend.play-tab == 1 ? Theme.mut : Theme.red2; }
-                Text { x: 16px; width: parent.width - 16px; text: l; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; vertical-alignment: center; overflow: elide; }
-            }
-            if Backend.play-tab == 1: LinkBtn { x: 32px; y: 486px; text: "PLAY WITH NETHER INSTEAD"; clicked => { Backend.play-tab = 0; Backend.refilter(); root.card-on = true; } }
-            if Backend.play-tab == 2: Btn { x: 32px; y: 486px; text: "NEW PROFILE"; solid: true; icon: Ico.plus; clicked => { root.new-profile(); } }
-            if Backend.play-tab == 2: LinkBtn { x: 32px + 176px; y: 489px; text: "BROWSE MODPACKS"; clicked => { root.go-discover(); } }
+                text: "Modpacks from Modrinth install with all their mods and settings in one click. Fabric and Forge packs on 1.14 or newer run with the Nether client."; }
+            Btn { x: 32px; y: 352px; text: "BROWSE MODPACKS"; solid: true; icon: Ico.chev; clicked => { root.go-discover(); } }
         }
         // preview of the picked profile
-        if Backend.instances.length > 0 && Backend.visible-insts.length > 0 && (root.list-tab || (Backend.play-tab == 0 && !root.card-on)): Rectangle {
+        if Backend.instances.length > 0 && Backend.visible-insts.length > 0 && root.list-tab && !root.welcome: Rectangle {
             x: 868px; y: 0px; width: 572px; height: parent.height;
             background: Theme.s1;
             Rectangle { x: 0px; width: 1px; background: Theme.ln; }
@@ -349,10 +335,10 @@ export component InstancesScreen inherits Rectangle {
             }
             PlayButton { x: 32px; y: 452px; width: 260px; height: 64px; text-size: 32px;
                 label: root.pk.stopping ? "STOPPING" : (root.pk.running ? "STOP" : (root.pk.starting ? "STARTING" : "PLAY")); arrow: !root.pk.running && !root.pk.starting; enabled: !root.pk.starting && !root.pk.stopping; clicked => { if root.pk.running { Backend.stop(root.pk.name); } else { Backend.play(root.pk.name); } } }
-            Btn { x: 308px; y: 452px; height: 64px; text: "EDIT PROFILE"; icon: Ico.edit; clicked => { root.open(root.pick); } }
+            Btn { x: 308px; y: 452px; height: 64px; text: "EDIT"; icon: Ico.edit; clicked => { root.open(root.pick); } }
             Text { x: 32px; y: 530px; width: parent.width - 64px; height: 20px; vertical-alignment: center; overflow: elide; font-family: Theme.ui; font-size: 12px * Theme.ts;
                 color: root.pk.nether ? Theme.dim : Theme.mut;
-                text: root.pk.nether ? "Nether profile: the Nether client runs in this game." : "Plain Minecraft: no Nether client, HUD or cosmetics in game."; }
+                text: root.pk.nether ? "Nether client on: HUD, client features and cosmetics in game." : "Nether client off: plain Minecraft."; }
             SectionHead { x: 32px; y: 566px; width: parent.width - 64px; title: "MANAGE"; }
             IconBtn { x: 32px; y: 600px; size: 36px; d: Ico.folder; tip: "Open folder"; clicked => { root.act(root.pick, 2); } }
             IconBtn { x: 76px; y: 600px; size: 36px; d: Ico.copy; tip: "Duplicate"; clicked => { root.act(root.pick, 3); } }
@@ -443,13 +429,11 @@ export component InstancesScreen inherits Rectangle {
                 SectionHead { x: 56px; y: g0; width: 880px; title: "GAME & CLIENT SETTINGS"; }
                 // Nether client on / off (Play: Nether vs Vanilla)
                 property <bool> n-ok: Backend.nether-ok(Backend.instances[root.sel].ver, Backend.instances[root.sel].loader);
-                property <bool> card: Backend.is-card(Backend.instances[root.sel].name);
                 SetRow { x: 56px; y: g0 + 24px; width: 880px; title: "Nether client";
                     sub: !n-ok ? "Not on \{Backend.instances[root.sel].loader} \{Backend.instances[root.sel].ver}: it runs on Vanilla, Fabric and Forge 1.14+, and on 1.8.9 and 1.12.2."
-                        : (card ? "A ready-made Nether profile. Modules are set in game with Right Shift." + later
-                        : (Backend.instances[root.sel].nether ? "On: HUD, modules and cosmetics in game (Right Shift). Off makes this plain Minecraft." + later
-                        : "Off: plain Minecraft. Turn it on for the HUD, modules and cosmetics; mods and worlds stay as they are." + later));
-                    if n-ok && !card: Toggle { x: parent.width - 42px; y: 21px; on: Backend.instances[root.sel].nether; toggled(v) => { Backend.set-inst-nether(root.sel, v); Backend.load-boosts(); } }
+                        : (Backend.instances[root.sel].nether ? "On: HUD, client features and cosmetics in game (Right Shift). Off makes this plain Minecraft." + later
+                        : "Off: plain Minecraft. Turn it on for the HUD, client features and cosmetics; mods and worlds stay as they are." + later);
+                    if n-ok: Toggle { x: parent.width - 42px; y: 21px; on: Backend.instances[root.sel].nether; toggled(v) => { Backend.set-inst-nether(root.sel, v); Backend.load-boosts(); } }
                 }
                 SetRow { x: 56px; y: g0 + 88px; width: 880px; title: "Share game settings";
                     sub: !Backend.sync-on ? "Sharing is turned off in Settings: this instance keeps its own settings and client modules." : (Backend.instances[root.sel].shared ? "Keybinds, video, audio and client modules follow you between instances." : "This instance keeps its own game settings and client modules.");
@@ -919,240 +903,15 @@ export component InstancesScreen inherits Rectangle {
         }
     }
 
-    // ---------- create instance: setup wizard (or CREATE RAW INSTANCE straight to the last step) ----------
+    // ---------- new instance: the walkthrough (quick or manual), as a dialog ----------
     if Backend.create-open: Scrim {
         dismiss => { Backend.create-open = false; }
-        dlg := Rectangle {
-            // loader: 0 Vanilla, 1 Fabric, 2 Forge, 3 NeoForge, 4 Quilt, 5 Legacy Fabric (main.rs create-instance)
-            property <int> loader: 1;
-            property <int> vi: 0;
-            property <int> ram: Backend.new-ram;
-            property <string> icon: "";
-            property <string> wall: "";
-            // 0 loader, 1 version, 2 Nether pack (Fabric only), 4 resource packs, 5 finish (3, the old client step, is skipped:
-            // client modules are set in game)
-            property <int> step: Wizard.snap-step;
-            property <bool> raw: false;
-            property <string> name;
-            property <bool> nether: Backend.create-nether;
-            property <[{t: string, s: int}]> steps: [{t: dlg.nether ? "HOW TO PLAY" : "LOADER", s: 0}, {t: "VERSION", s: 1}, {t: "DEFAULT MODS", s: 2}, {t: "RESOURCE PACKS", s: 4}, {t: "FINISH", s: 5}];
-            property <[string]> vers: dlg.nether ? (dlg.loader == 1 ? Backend.nether-fabric-versions : (dlg.loader == 2 ? Backend.nether-forge-versions : (dlg.loader == 6 ? ["1.12.2", "1.8.9"] : Backend.nether-versions)))
-                : (dlg.loader == 1 ? Backend.fabric-versions : (dlg.loader == 2 ? Backend.forge-versions : (dlg.loader == 3 ? Backend.neoforge-versions
-                : (dlg.loader == 4 ? Backend.quilt-versions : (dlg.loader == 5 ? Backend.legacy-versions : Backend.mc-versions)))));
-            property <[string]> loader-names: ["Vanilla", "Fabric", "Forge", "NeoForge", "Quilt", "Legacy Fabric"];
-            property <string> ver: dlg.vers.length > 0 ? dlg.vers[Math.min(dlg.vi, dlg.vers.length - 1)] : "";
-            property <string> loader-name: dlg.loader == 6 ? "OptiFine" : dlg.loader-names[dlg.loader];
-            changed ver => { Backend.cover-for(dlg.ver); }
-            function go(s: int) {
-                dlg.step = s == 3 ? (dlg.step < 3 ? 4 : (dlg.loader == 1 ? 2 : 1)) : ((s == 2 && dlg.loader != 1) ? (dlg.step < 2 ? 4 : 1) : s);
-                if dlg.step == 4 { Wizard.load-rps(dlg.ver); }
-            }
+        CreateFlow {
             x: (parent.width - 1040px) / 2; y: 30px; width: 1040px; height: 728px;
-            background: Theme.s1; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
-            init => { Backend.cover-for(dlg.ver); Wizard.pick-pack(dlg.nether && dlg.loader == 1 ? "essentials" : ""); Wizard.load-rps(""); }
-            TouchArea { }
-            Heading { x: 30px; y: 44px; text: dlg.raw ? "RAW PROFILE" : (dlg.nether ? "NEW NETHER PROFILE" : "NEW VANILLA PROFILE"); font-size: 48px; }
-            IconBtn { x: parent.width - 32px - 34px; y: 28px; size: 34px; d: Ico.close; tip: "Close"; clicked => { Backend.create-open = false; } }
-
-            // step rail
-            if !dlg.raw: HorizontalLayout {
-                x: 32px; y: 112px; width: parent.width - 64px; height: 30px; spacing: 6px;
-                for st[i] in dlg.steps: Rectangle {
-                    property <bool> skip: st.s == 2 && dlg.loader != 1;
-                    border-radius: Theme.r1;
-                    background: dlg.step == st.s ? Theme.s3 : transparent;
-                    opacity: self.skip ? 0.35 : 1;
-                    Rectangle { y: parent.height - 2px; height: 2px; background: st.s < dlg.step ? Theme.ice : (dlg.step == st.s ? Theme.red2 : Theme.ln2); }
-                    Text { x: 10px; height: parent.height; text: "0\{i + 1}"; color: dlg.step == st.s ? Theme.red2 : Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; vertical-alignment: center; }
-                    Text { x: 34px; width: parent.width - 40px; height: parent.height; overflow: elide; text: st.t; color: dlg.step == st.s ? Theme.tx : (st.s < dlg.step ? Theme.dim : Theme.mut); font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.8px; vertical-alignment: center; }
-                    TouchArea { mouse-cursor: st.s < dlg.step && !parent.skip ? pointer : default; clicked => { if st.s < dlg.step && !parent.skip { dlg.go(st.s); } } }
-                }
-            }
-
-            // ---- 01 how to play (Nether profiles) ----
-            if dlg.step == 0 && dlg.nether: Rectangle {
-                x: 32px; y: 166px; width: parent.width - 64px; height: 450px;
-                for l[i] in [{t: "NETHER", d: "Minecraft with the Nether client: HUD, cosmetics, friends and parties. 1.8.9, 1.12.2 and 1.14 or newer."},
-                             {t: "+ FABRIC", d: "The Nether client on Fabric: add Sodium, Iris and your own Fabric mods. 1.14 or newer."},
-                             {t: "+ FORGE", d: "The Nether client on Forge, for big content mods and Forge modpacks. 1.14 or newer."},
-                             {t: "+ OPTIFINE", d: "OptiFine on 1.8.9 or 1.12.2: zoom, shaders and connected textures, set up for you."}]: wt := Rectangle {
-                    property <int> ld: i == 3 ? 6 : i;
-                    x: i * ((parent.width + 12px) / 4); y: 0px; width: (parent.width + 12px) / 4 - 12px; height: 190px;
-                    background: dlg.loader == wt.ld ? Theme.red.with-alpha(0.094) : (nt.has-hover ? Theme.s2 : Theme.s1);
-                    border-width: 1px; border-color: dlg.loader == wt.ld ? Theme.red2 : Theme.ln; border-radius: Theme.r2;
-                    animate background, border-color { duration: Theme.fast; }
-                    Text { x: 24px; y: 22px; text: l.t; color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 800; }
-                    if i == 1: Chip { x: 24px; y: parent.height - 38px; text: "RECOMMENDED"; hot: true; }
-                    Text { x: 24px; y: 72px; width: parent.width - 48px; text: l.d; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
-                    nt := TouchArea { mouse-cursor: pointer; clicked => { dlg.loader = wt.ld; dlg.vi = 0; } double-clicked => { dlg.loader = wt.ld; dlg.vi = 0; dlg.go(1); } }
-                }
-                Text { x: 0px; y: 214px; width: parent.width; wrap: word-wrap; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts;
-                    text: "Need NeoForge, Quilt or another version? Make a Vanilla profile: it plays without the Nether client."; }
-                LinkBtn { x: 0px; y: 242px; text: "MAKE A VANILLA PROFILE INSTEAD"; clicked => { Backend.create-nether = false; dlg.loader = 1; dlg.vi = 0; } }
-            }
-
-            // ---- 01 loader (Vanilla profiles: plain Minecraft, no Nether client) ----
-            if dlg.step == 0 && !dlg.nether: Rectangle {
-                x: 32px; y: 166px; width: parent.width - 64px; height: 450px;
-                for l[i] in [{t: "VANILLA", d: "Plain Minecraft, exactly as Mojang ships it."},
-                             {t: "FABRIC", d: "Light and fast. Sodium, Iris and the Nether packs live here. Recommended."},
-                             {t: "FORGE", d: "The classic loader for big content mods and older modpacks."},
-                             {t: "NEOFORGE", d: "Forge's modern successor for new versions and new content mods."},
-                             {t: "QUILT", d: "A Fabric fork with its own mods. Most Fabric mods run on it too."},
-                             {t: "LEGACY FABRIC", d: "Fabric for older Minecraft, 1.3 to 1.13.2. Light PvP setups on 1.8.9."}]: Rectangle {
-                    x: mod(i, 2) * (parent.width / 2 + 6px); y: floor(i / 2) * 150px;
-                    width: parent.width / 2 - 6px; height: 138px;
-                    background: dlg.loader == i ? Theme.red.with-alpha(0.094) : (lt.has-hover ? Theme.s2 : Theme.s1);
-                    border-width: 1px; border-color: dlg.loader == i ? Theme.red2 : Theme.ln; border-radius: Theme.r2;
-                    animate background, border-color { duration: Theme.fast; }
-                    Text { x: 24px; y: 22px; text: l.t; color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 800;  }
-                    if i == 1: Chip { x: parent.width - self.width - 20px; y: 24px; text: "RECOMMENDED"; hot: true; }
-                    Text { x: 24px; y: 72px; width: parent.width - 48px; text: l.d; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
-                    lt := TouchArea { mouse-cursor: pointer; clicked => { dlg.loader = i; dlg.vi = 0; } double-clicked => { dlg.loader = i; dlg.vi = 0; dlg.go(1); } }
-                }
-            }
-
-            // ---- 02 version ----
-            if dlg.step == 1: Rectangle {
-                x: 32px; y: 166px; width: parent.width - 64px; height: 450px;
-                Text { x: 0px; y: 0px; text: "Minecraft versions with " + dlg.loader-name + ". Newest first."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; }
-                if dlg.vers.length == 0: Text { x: 0px; y: 40px; width: parent.width;
-                    text: Backend.versions-state == 0 ? "Loading versions…"
-                        : (Backend.versions-state == 2 ? "Couldn't reach Mojang's version list, and there's no saved copy yet. Check your connection; it retries on its own."
-                        : (Backend.versions-failed != "" ? "Couldn't reach " + Backend.versions-failed + " for its versions. It retries on its own." : "No " + dlg.loader-name + " versions yet."));
-                    color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
-                if dlg.vers.length == 0 && Backend.versions-state != 0: Btn { x: 0px; y: 96px; text: "RETRY"; clicked => { Backend.retry-versions(); } }
-                Flickable {
-                    y: 32px; height: parent.height - 32px; content-height: Math.ceil(dlg.vers.length / 6) * 52px;
-                    for v[i] in dlg.vers: Rectangle {
-                        x: mod(i, 6) * (parent.width / 6); y: floor(i / 6) * 52px; width: parent.width / 6 - 8px; height: 44px;
-                        background: dlg.vi == i ? Theme.ice : (vt.has-hover ? Theme.s2 : Theme.s1);
-                        border-width: 1px; border-color: dlg.vi == i ? Theme.ice : Theme.ln; border-radius: Theme.r2;
-                        Text { text: v; color: dlg.vi == i ? Theme.ink : Theme.tx; font-family: Theme.mono; font-size: 14px * Theme.ts; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
-                        if i == 0: Rectangle { x: parent.width - 8px; y: 0px; width: 8px; height: 8px; background: Theme.red2; }
-                        if v == Backend.new-version: Text { x: 6px; y: 3px; text: "NEW"; color: dlg.vi == i ? Theme.ink : Theme.red2; font-family: Theme.mono; font-size: 9px * Theme.ts; font-weight: 700; }
-                        vt := TouchArea { mouse-cursor: pointer; clicked => { dlg.vi = i; } double-clicked => { dlg.vi = i; dlg.go(2); } }
-                    }
-                }
-            }
-
-            // ---- 03 Nether pack ----
-            if dlg.step == 2: Rectangle {
-                x: 32px; y: 166px; width: parent.width - 64px; height: 450px;
-                Text { x: 0px; y: 0px; text: "Choose whether to install Nether's current built-in mods for " + dlg.ver + ". Existing profiles are never changed."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; }
-                Flickable {
-                    y: 32px; height: parent.height - 32px; content-height: (Wizard.packs.length + 1) * 74px;
-                    Rectangle {
-                        y: 0px; height: 66px;
-                        background: Wizard.pack == "" ? Theme.red.with-alpha(0.094) : (n0.has-hover ? Theme.s2 : Theme.s1);
-                        border-width: 1px; border-color: Wizard.pack == "" ? Theme.red2 : Theme.ln; border-radius: Theme.r2;
-                        Text { x: 22px; y: 12px; text: "No built-in mods"; color: Theme.tx; font-family: Theme.ui; font-size: 16px * Theme.ts; font-weight: 600; }
-                        Text { x: 22px; y: 36px; text: "Create an empty Fabric profile and add mods yourself."; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
-                        n0 := TouchArea { mouse-cursor: pointer; clicked => { Wizard.pick-pack(""); } }
-                    }
-                    for p[i] in Wizard.packs: Rectangle {
-                        y: (i + 1) * 74px; height: 66px;
-                        background: Wizard.pack == p.id ? Theme.red.with-alpha(0.094) : (pt.has-hover ? Theme.s2 : Theme.s1);
-                        border-width: 1px; border-color: Wizard.pack == p.id ? Theme.red2 : Theme.ln; border-radius: Theme.r2;
-                        Rectangle { border-radius: Theme.r2; x: 14px; y: 13px; width: 40px; height: 40px; background: Theme.s2; border-width: 1px; border-color: Theme.ln2;
-                            Image { x: 6px; y: 6px; width: 28px; height: 28px; source: @image-url("assets/nether-icon.png"); image-fit: contain; } }
-                        Text { x: 70px; y: 12px; width: parent.width - 300px; text: "Nether built-in mods"; color: Theme.tx; font-family: Theme.ui; font-size: 16px * Theme.ts; font-weight: 600; overflow: elide; }
-                        Text { x: 70px; y: 36px; width: parent.width - 300px; text: "Current defaults for new Fabric Nether profiles. No updates to existing profiles."; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
-                        if p.ok == 1: Chip { x: parent.width - 220px; y: 21px; text: "CLIENT SETTINGS"; }
-                        Text { x: parent.width - 90px; width: 70px; text: p.meta; color: Theme.dim; font-family: Theme.mono; font-size: 12px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; }
-                        pt := TouchArea { mouse-cursor: pointer; clicked => { Wizard.pick-pack(p.id); } }
-                    }
-                }
-            }
-
-            // ---- 05 resource packs ----
-            if dlg.step == 4: Rectangle {
-                x: 32px; y: 166px; width: parent.width - 64px; height: 450px;
-                Text { x: 0px; y: 0px; text: "Popular resource packs for " + dlg.ver + ". Pick any to download with the profile, or skip."; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; }
-                if Wizard.rp-loading: Text { x: 0px; y: 40px; text: "Loading from Modrinth…"; color: Theme.mut; font-family: Theme.ui; font-size: 14px * Theme.ts; }
-                Flickable {
-                    y: 32px; height: parent.height - 32px; content-height: Math.ceil(Wizard.rps.length / 2) * 66px;
-                    for r[i] in Wizard.rps: Rectangle {
-                        x: mod(i, 2) * (parent.width / 2 + 4px); y: floor(i / 2) * 66px; width: parent.width / 2 - 4px; height: 58px;
-                        background: r.on ? Theme.red.with-alpha(0.094) : (rt.has-hover ? Theme.s2 : Theme.s1);
-                        border-width: 1px; border-color: r.on ? Theme.red2 : Theme.ln; border-radius: Theme.r2;
-                        ModIcon { x: 10px; y: 10px; src: r.icon; has: r.has-icon; }
-                        Text { x: 60px; y: 9px; width: parent.width - 130px; text: r.name; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; overflow: elide; }
-                        Text { x: 60px; y: 31px; width: parent.width - 130px; text: r.sub; color: Theme.mut; font-family: Theme.ui; font-size: 11px * Theme.ts; overflow: elide; }
-                        Rectangle { x: parent.width - 34px; y: 20px; width: 18px; height: 18px; border-width: 1px; border-color: r.on ? Theme.red2 : Theme.mut; background: r.on ? Theme.red : transparent;
-                            if r.on: Icon { x: 3px; y: 3px; d: Ico.check; tint: white; } }
-                        rt := TouchArea { mouse-cursor: pointer; clicked => { Wizard.rps[i].on = !r.on; } }
-                    }
-                }
-            }
-
-            // ---- 06 finish: name, memory, look ----
-            if dlg.step == 5: Rectangle {
-                x: 0px; y: dlg.raw ? 112px : 166px; width: parent.width; height: 470px;
-                Eyebrow { x: 32px; y: 0px; text: "NAME"; }
-                Field { x: 32px; y: 22px; width: 460px; height: 44px; text-size: 16px; placeholder: "My instance"; text <=> dlg.name; init => { self.focus-input(); } accepted => { dlg.create(); } }
-                if dlg.raw: Rectangle {
-                    x: 32px; y: 88px; width: 460px; height: 120px;
-                    Eyebrow { x: 0px; y: 0px; text: "LOADER"; }
-                    Dropdown { x: 0px; y: 22px; width: 460px; items: dlg.loader-names; current <=> dlg.loader; changed(i) => { dlg.vi = 0; } }
-                    Eyebrow { x: 0px; y: 70px; text: "MINECRAFT VERSION"; }
-                    if dlg.vers.length > 0: Dropdown { x: 150px; y: 62px; width: 310px; items: dlg.vers; current <=> dlg.vi; }
-                }
-                if !dlg.raw: Rectangle {
-                    x: 32px; y: 88px; width: 460px; height: 120px; background: Theme.s1;
-                    Eyebrow { x: 18px; y: 14px; text: "SUMMARY"; }
-                    Text { x: 18px; y: 36px; width: parent.width - 36px; text: dlg.ver + " · " + dlg.loader-name + (Wizard.pack == "" ? "" : " · Nether pack"); color: Theme.tx; font-family: Theme.mono; font-size: 13px * Theme.ts; }
-                    Text { x: 18px; y: 60px; width: parent.width - 36px; text: "Client modules · set in game with Right Shift"; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; }
-                    Text { x: 18px; y: 84px; width: parent.width - 36px; text: "\{Wizard.rps.length > 0 ? "Resource packs are downloaded right after." : "No resource packs."}"; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
-                }
-                Eyebrow { x: 32px; y: 232px; text: "MEMORY"; }
-                Text { x: 32px + 460px - 80px; y: 230px; width: 80px; text: "\{dlg.ram} GB"; color: Theme.tx; font-family: Theme.mono; font-size: 13px * Theme.ts; horizontal-alignment: right; }
-                Slider { x: 32px; y: 256px; width: 460px; min: 1; max: 16; value <=> dlg.ram; }
-                Text { x: 32px; y: 292px; width: 460px; text: "4 GB suits vanilla and light packs; large modpacks want 6-8 GB."; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
-
-                Rectangle { x: 522px; y: 0px; width: 1px; height: 450px; background: Theme.ln; }
-                Rectangle {
-                    x: 554px; y: 0px; width: 454px; height: 112px; clip: true; background: Theme.s1;
-                    Hatch { width: parent.width; height: parent.height; }
-                    Image { width: parent.width; height: parent.height; source: Backend.version-cover; image-fit: cover; opacity: 0.8; visible: dlg.wall == ""; }
-                    for c in Backend.cover-choices: Image { width: parent.width; height: parent.height; source: c.img; image-fit: cover; opacity: 0.8; visible: dlg.wall != "" && c.key == dlg.wall; }
-                    Rectangle { background: @linear-gradient(180deg, #10101400 20%, #101014e8 100%); }
-                    Rectangle { x: 14px; y: 56px; width: 44px; height: 44px; background: #060608d0;
-                        for a in Backend.icon-choices: Image { x: 6px; y: 6px; width: 32px; height: 32px; source: a.img; image-rendering: pixelated; visible: a.key == dlg.icon || (dlg.icon == "" && a.key == "grass_block_side"); } }
-                    Text { x: 70px; y: 54px; width: parent.width - 84px; text: dlg.name == "" ? "MY INSTANCE" : dlg.name.to-uppercase(); color: Theme.tx; font-family: Theme.pix; font-size: 24px; font-weight: 800;  overflow: elide; }
-                    Text { x: 70px; y: 84px; text: dlg.ver + " · " + dlg.loader-name; color: Theme.dim; font-family: Theme.mono; font-size: 11px * Theme.ts; }
-                    Ticks { width: parent.width; height: parent.height; }
-                }
-                Eyebrow { x: 554px; y: 128px; text: "ICON"; }
-                IconPicker { x: 554px; y: 150px; width: 454px; cols: 14; tile: 28px; items: Backend.icon-choices; current <=> dlg.icon; }
-                Eyebrow { x: 554px; y: 318px; text: "WALLPAPER"; }
-                Flickable {
-                    x: 554px; y: 340px; width: 454px; height: 110px; content-height: cp.height;
-                    cp := CoverPicker { width: 454px; cols: 8; tile: 52px; items: Backend.cover-choices; current <=> dlg.wall; own: Backend.version-cover; own-label: dlg.ver == "" ? "This version" : dlg.ver; }
-                }
-            }
-
-            // footer
-            Rectangle { x: 0px; y: parent.height - 76px; width: parent.width; height: 1px; background: Theme.ln; }
-            if dlg.step < 5: HorizontalLayout {
-                x: 32px; y: parent.height - 58px; width: parent.width - 64px - 330px; height: 40px; spacing: 24px; alignment: start;
-                LinkBtn { text: "CREATE RAW PROFILE"; clicked => { dlg.raw = true; Wizard.pick-pack(""); dlg.step = 5; } }
-                Text { text: "Just a name and a version. Skips packs and setup."; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; overflow: elide; }
-            }
-            Btn { x: parent.width - 32px - nx.width - 12px - self.width; y: parent.height - 58px; height: 40px; text: dlg.step == 0 || dlg.raw ? "CANCEL" : "BACK";
-                clicked => { if dlg.step == 0 || dlg.raw { Backend.create-open = false; } else { dlg.go(dlg.step - 1); } } }
-            nx := Btn { x: parent.width - 32px - self.width; y: parent.height - 58px; height: 40px; width: 200px; visible: dlg.step < 5; text: "NEXT"; solid: true; enabled: dlg.step != 1 || dlg.vers.length > 0;
-                clicked => { dlg.go(dlg.step + 1); } }
-            cr := Btn { x: parent.width - 32px - self.width; y: parent.height - 58px; height: 40px; width: 200px; visible: dlg.step == 5; text: "CREATE INSTANCE"; solid: true; enabled: dlg.vers.length > 0;
-                clicked => { dlg.create(); } }
-            function create() {
-                    if dlg.step == 5 && dlg.vers.length > 0 && Backend.create-instance(dlg.name, dlg.ver, dlg.loader, dlg.ram, dlg.icon, dlg.wall) {
-                        if dlg.loader != 1 { Wizard.pick-pack(""); }
-                        Wizard.finish(dlg.name, dlg.ver);
-                        Backend.create-open = false;
-                        root.pick = Backend.instances.length - 1;
-                    }
-            }
+            closed => { Backend.create-open = false; }
+            go-discover => { Backend.create-open = false; root.go-discover(); }
+            go-import => { Backend.create-open = false; Backend.import-open = true; Backend.import-instance(); }
+            created => { Backend.create-open = false; root.pick = Backend.instances.length - 1; }
         }
     }
 }
