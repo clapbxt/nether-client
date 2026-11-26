@@ -28,9 +28,6 @@ export struct Acct { uuid: string, name: string, active: bool }
 // Settings > Java: one major version, what the launcher will run for it (custom = picked by the user)
 // ready: a Java of this major is on this PC (ours, the system's or a custom one)
 export struct JavaRt { major: int, title: string, sub: string, custom: bool, ready: bool }
-// one Home news line (live: Minecraft releases/snapshots, Fabric loader)
-// img = the release art from Mojang's launcher feed (has-img false: our banner)
-export struct News { tag: string, title: string, url: string, img: image, has-img: bool }
 // a world (or, server: true, a saved server; folder = its address) in an instance; sub = mode · version · last played · size
 export struct WorldRow { folder: string, name: string, sub: string, icon: image, has-icon: bool, hardcore: bool, server: bool, status: string, online: bool }
 // a screenshot thumbnail (screenshots tab)
@@ -176,9 +173,12 @@ export global Backend {
     in-out property <[Row]> pack-rows;
     in-out property <bool> pack-loading: false;
     in-out property <string> pack-query;
+    // packs.rs SORTS: 0 relevance (downloads while the search box is empty), 1 downloads, 2 follows, 3 newest, 4 updated
     in-out property <int> pack-sort: 0;
     // Modrinth modpack category (0 = all; packs.rs PACK_CATS)
     in-out property <int> pack-cat: 0;
+    // Modrinth modpack loader (0 = any; packs.rs PACK_LOADERS)
+    in-out property <int> pack-loader: 0;
     in-out property <bool> detail-pack: false;
     callback load-packs();
     callback open-pack(int);
@@ -416,7 +416,6 @@ export global Backend {
     // every saved account; acct-offline = restored from cache without network (singleplayer only)
     in-out property <[Acct]> accounts;
     in-out property <bool> acct-offline: false;
-    in-out property <[News]> news;
     // bottom deck: names of the running games
     in-out property <string> running-label;
     // settings: storage & about
@@ -475,8 +474,7 @@ export global Backend {
     callback fold-group(string);
     callback set-inst-group(int, string);
     callback set-inst-notes(int, string);
-    // L2: Home news could not be fetched (the section is hidden); Settings section to scroll to (-1 none)
-    in-out property <bool> news-failed;
+    // L2: Settings section to scroll to (-1 none)
     in-out property <int> settings-goto: -1;
     // L2: Settings > Privacy: capes and cosmetics in game (player service lookups)
     in-out property <bool> lp-capes: true;
@@ -642,4 +640,71 @@ export global Combiner {
 // Interface sounds (Rust: sfx.rs). 0 press, 1 toggle on, 2 toggle off, 3 panel open, 4 launch, 5 error.
 export global Sound {
     callback play(int);
+}
+
+// Host page (crates/app/src/host.rs). One server runs at a time.
+export struct HostPlayer { name: string, op: bool, wl: bool }
+export struct HostBackup { name: string, size: string, date: string }
+// console line; k: 0 output, 1 warning/error, 2 typed command
+export struct ConLine { t: string, k: int }
+export global HostState {
+    // selected profile (index into Backend.instances)
+    in-out property <int> idx: -1;
+    // open tab: 0 console, 1 players, 2 settings, 3 world
+    in-out property <int> tab: 0;
+    in-out property <string> inst-name;
+    in-out property <string> inst-meta;
+    // 0 loading, 1 cannot host (phase-note says why), 2 not set up yet, 3 set up
+    in-out property <int> phase: 0;
+    in-out property <string> phase-note;
+    // 0 stopped, 1 starting, 2 running, 3 stopping, 4 crashed (exit-code)
+    in-out property <int> status: 0;
+    in-out property <int> exit-code: 0;
+    // install / start / stop in flight; live = a server process exists (feeds the bottom deck)
+    in-out property <bool> busy;
+    in-out property <bool> live;
+    in-out property <string> deck-text;
+    in-out property <string> uptime: "—";
+    in-out property <bool> eula-open;
+    in-out property <[ConLine]> console;
+    in-out property <int> console-rev;
+    in-out property <[HostPlayer]> players;
+    in-out property <[string]> whitelist;
+    in-out property <[string]> ops;
+    in-out property <[string]> saves;
+    in-out property <[HostBackup]> backups;
+    // settings (server.properties + launcher-side RAM / UPnP)
+    in-out property <string> port: "25565";
+    in-out property <string> motd;
+    in-out property <string> max-players: "20";
+    in-out property <int> difficulty: 1;
+    in-out property <int> gamemode: 0;
+    in-out property <bool> pvp: true;
+    in-out property <bool> online: true;
+    in-out property <bool> wl-on;
+    in-out property <bool> upnp: true;
+    in-out property <int> ram: 2;
+    // sharing: addresses; upnp-state 0 off, 1 opening, 2 open, 3 failed, 4 turned off
+    in-out property <string> lan;
+    in-out property <string> pub-addr;
+    // what to give friends: the public address when there is one, else the LAN one
+    in-out property <string> share-addr;
+    // outside check of pub-addr: 0 not checked, 1 checking, 2 reachable, 3 not reachable
+    in-out property <int> reach;
+    in-out property <int> upnp-state;
+    in-out property <string> upnp-msg;
+    callback opened();
+    callback select(int);
+    callback primary();
+    callback accept-eula();
+    callback send(string);
+    callback history(int) -> string;
+    callback player(string, int);
+    callback list-add(int, string);
+    callback list-remove(int, string);
+    callback save-settings();
+    callback import-save(int);
+    callback backup();
+    callback open-backups();
+    callback check-reach();
 }

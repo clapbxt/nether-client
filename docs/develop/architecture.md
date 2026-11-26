@@ -62,6 +62,9 @@ Those have to be untangled before the rest can move.
 - **Launching:** builds the JVM and game arguments, adds the agent, supports Quick Play, runs the pre-launch check.
 - **Content:** Modrinth search and installs, modpack and other-launcher import, update snapshots, restore points,
   verify and repair, crash analysis.
+- **Hosting:** `server.rs` runs one dedicated server per instance in `<instance>/server/`: installs the vanilla or
+  Fabric server jar, starts it with the right Java, reads its log for status and players, and manages
+  `server.properties`, whitelist, ops, world copy-in and backups. It never accepts the EULA by itself.
 - **Shared settings:** one global `options.txt` merged into each instance before launch and read back after.
 - **Social:** friends, parties (`party.rs`, `party_net.rs`) and world invites (`share.rs`), linked peer-to-peer over
   QUIC with iroh (`p2p.rs`).

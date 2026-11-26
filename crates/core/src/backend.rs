@@ -1,4 +1,4 @@
-//! Nether's own backend (see `backend/README.md`): signed static content (news, Nether packs) and the player API
+//! Nether's own backend (see `backend/README.md`): signed static content (Nether packs) and the player API
 //! (who plays Nether, what they wear), both served by one Cloudflare Worker. Capes and cosmetics are all public
 //! community items (`ugc.rs`): Nether's own are uploads credited to "Nether". URLs: env `NETHER_CONTENT_URL` / `NETHER_API_URL`,
 //! then `config.json` `content_url` / `api_url`, then the defaults below. Empty = not set up yet: every call is a no-op.
@@ -133,19 +133,6 @@ fn content<T: for<'de> Deserialize<'de>>(c: &Client, file: &str) -> Vec<T> {
     content_file(Some(c), file).and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
 }
 
-#[derive(Clone, Debug, Deserialize)]
-pub struct NewsItem {
-    #[serde(default = "nether_tag")]
-    pub tag: String,
-    pub title: String,
-    #[serde(default)]
-    pub url: String,
-    /// Card image (https), "" = the launcher's own art.
-    #[serde(default)]
-    pub image: String,
-}
-fn nether_tag() -> String { "NETHER".into() }
-
 /// Look ids (capes and cosmetics, `u-` + 12 characters since every item is public) are path and URL components:
 /// lowercase letters, digits, `_`, `-`, 1 to 32 characters.
 pub fn valid_cape_id(id: &str) -> bool { (1..=32).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-') }
@@ -175,8 +162,6 @@ impl CapeLayout {
     }
 }
 
-/// Launcher news, newest first.
-pub fn news(c: &Client) -> Vec<NewsItem> { content(c, "news.json") }
 /// Nether packs published in the content repo (network; call off the UI thread).
 pub fn packs(c: &Client) -> Vec<NetherPack> { content(c, "packs.json") }
 /// The last downloaded packs without touching the network (UI-thread safe); `packs` refreshes them.
@@ -382,8 +367,6 @@ mod tests {
     #[cfg(backend_content)]
     #[test]
     fn content_files_parse() {
-        let news: Vec<NewsItem> = serde_json::from_str(include_str!("../../../backend/content/news.json")).unwrap();
-        assert_eq!(news[0].tag, "NETHER");
         let _: Vec<NetherPack> = serde_json::from_str(include_str!("../../../backend/content/packs.json")).unwrap();
     }
 
@@ -396,7 +379,7 @@ mod tests {
     #[test]
     fn manifest_verify() {
         let h = "a".repeat(64);
-        let body = format!(r#"{{"version":5,"expires":2000,"files":{{"news.json":{{"sha256":"{h}","size":10}}}}}}"#);
+        let body = format!(r#"{{"version":5,"expires":2000,"files":{{"packs.json":{{"sha256":"{h}","size":10}}}}}}"#);
         let (key, sig) = signed(&body);
         assert!(verify_manifest(&key, body.as_bytes(), &sig, 1000, 0).is_ok());
         assert!(verify_manifest(&key, body.as_bytes(), &sig, 3000, 0).is_err(), "expired");
@@ -417,7 +400,7 @@ mod tests {
         let sig = include_str!("../../../backend/content/manifest.sig");
         let key = hex::decode(CONTENT_KEY_HEX.trim()).unwrap();
         let m = verify_manifest(&key, body, sig, 0, 0).unwrap();
-        assert!(m.files.contains_key("news.json"));
+        assert!(m.files.contains_key("packs.json"));
         for (p, e) in &m.files {
             let b = std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../backend/content").join(p)).unwrap();
             assert_eq!(hex::encode(Sha256::digest(&b)), e.sha256, "{p}");

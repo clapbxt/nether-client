@@ -8,7 +8,7 @@ Releases are built and signed by the maintainer and published to this repository
 - Each installer has a detached **Ed25519** signature (`.sig`). The launcher accepts an update only if GitHub's
   SHA-256 matches and the signature verifies against `crates/net/res/release-ed25519.pub`.
 - The update is applied by the installer (`--update`) when the launcher closes.
-- Remote content (news, packs, capes, cosmetics) is signed separately and checked against
+- Remote content (packs, capes, cosmetics) is signed separately and checked against
   `crates/core/res/content-ed25519.pub`.
 - Private keys are never in this repository. `.gitignore` blocks `*.key` and `.nether-signing/`.
 - The installer isn't Authenticode-signed yet, so Windows SmartScreen may warn on first run.

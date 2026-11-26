@@ -41,6 +41,7 @@ mod friends;
 mod party;
 mod presets;
 mod horizon;
+mod host;
 mod perfui;
 mod setup;
 mod voice;
@@ -1049,27 +1050,8 @@ fn main() -> Result<(), slint::PlatformError> {
         let (weak, sh) = (ui.as_weak(), shared.clone());
         b.on_copy_sysinfo(move || if let Some(ui) = weak.upgrade() { settings::copy_sysinfo(&ui, &sh) });
     }
-    // Home news: newest Minecraft release/snapshot and Fabric loader
-    {
-        let (weak, sh) = (ui.as_weak(), shared.clone());
-        std::thread::spawn(move || {
-            let items = nether_core::news::latest(&nether_core::download::client());
-            // the art Mojang's launcher shows with each release (cached); Nether / Fabric cards use our banner
-            let pics: Vec<_> = items.iter().take(3).map(|n| if n.image.is_empty() { None } else { artui::web_image(&sh, &n.image, 640) }).collect();
-            // refresh published Nether packs so the (UI-thread) pack lists can read them from cache
-            let _ = nether_core::backend::packs(&nether_core::download::client());
-            ui_do(&weak, move |ui| {
-                let mut pics = pics.into_iter();
-                let rows: Vec<News> = items.iter().map(|n| {
-                    let img = pics.next().flatten().map(slint::Image::from_rgba8);
-                    News { tag: n.tag.as_str().into(), title: n.title.as_str().into(), url: n.url.as_str().into(), has_img: img.is_some(), img: img.unwrap_or_default() }
-                }).collect();
-                // L2: nothing fetched (offline): Home hides the news section instead of a placeholder row
-                ui.global::<Backend>().set_news_failed(rows.is_empty());
-                ui.global::<Backend>().set_news(ModelRc::new(VecModel::from(rows)));
-            });
-        });
-    }
+    // refresh published Nether packs so the (UI-thread) pack lists can read them from cache
+    std::thread::spawn(|| { let _ = nether_core::backend::packs(&nether_core::download::client()); });
     refilter(&ui);
     // ---- launcher settings ----
     {
@@ -1146,6 +1128,7 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
     artui::init(ui.as_weak(), shared.clone());
+    host::init(&ui, shared.clone());
     worldshare::init(&ui, shared.clone());
     friends::init(&ui, shared.clone());
     party::init(&ui, shared.clone());
@@ -1572,9 +1555,10 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.global::<Backend>().set_gate_open(gate == 1);
         // NC_SNAP_WPAGE=n: Wardrobe page (0 skins, 1 capes, 2.. cosmetic slots in Kind::ALL order)
         if let Some(n) = std::env::var("NC_SNAP_WPAGE").ok().and_then(|n| n.parse::<i32>().ok()) { ui.set_ward_page(n); }
-        // NC_SNAP_STATE: dev-only page states for captures (see wardrobe::snap)
+        // NC_SNAP_STATE: dev-only page states for captures (see wardrobe::snap, host::snap)
         if let Ok(st) = std::env::var("NC_SNAP_STATE") {
             wardrobe::snap(&ui, &shared, &st);
+            host::snap(&ui, &st);
             community::snap(&ui, &st);
             friends::snap(&ui, &st);
             // L1 dialogs with sample rows (captures only)
@@ -1723,6 +1707,8 @@ java.lang.OutOfMemoryError: Java heap space
         ui.global::<Backend>().on_win_close(move || if let Some(ui) = w.upgrade() { ui.window().dispatch_event(slint::platform::WindowEvent::CloseRequested); });
     }
     let r = slint::run_event_loop_until_quit();
+    // a running server is stopped cleanly (it saves its world); killed if it doesn't stop in time
+    host::shutdown();
     party::shutdown(&shared);
     worldshare::shutdown(&shared);
     friends::shutdown(&shared);

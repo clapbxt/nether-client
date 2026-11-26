@@ -10,7 +10,6 @@ Your starting point.
   **More versions and ways to play**. On your very first visit Home offers two ready-made versions instead, plus
   **More versions** and **Browse modpacks**.
 - **View crash** appears here if the last game crashed.
-- **Latest news** from Nether Client and Mojang.
 
 The bar along the bottom always shows what will launch (the **launch target**), any downloads in progress, and a
 **Play / Stop** button for the selected profile.
@@ -31,7 +30,26 @@ can:
 
 ## Install Packs
 
-Search modpacks on Modrinth, sort and filter them, and install one as a new profile in one step.
+Search modpacks on Modrinth, filter them by loader and category, sort them (by relevance while you search), and
+install one as a new profile in one step.
+
+## Host
+
+Run a Minecraft server from one of your profiles (Vanilla or Fabric) and play on it with friends. Pick the profile at
+the top, then **Set up server** (downloads the official server into the profile's `server` folder) and **Start
+server**. The first start asks you to agree to Mojang's EULA; nothing is accepted for you.
+
+- **Share with friends** shows the address to give them: your public address when your router opened the port
+  (UPnP), otherwise your LAN address. They add it under **Multiplayer**, then **Direct Connect**. **Check from
+  outside** tests whether the internet can reach it.
+- **Console**: the server log, and a box for commands (up and down arrows go through earlier ones).
+- **Players**: who's online (kick, op, whitelist), plus the whitelist and operator lists.
+- **Settings**: port, message, max players, memory, difficulty, game mode, PvP, online mode, whitelist and
+  automatic port opening. Changes save as you type and apply on the next start.
+- **World**: copy one of the profile's singleplayer worlds in as the server world (the old one is set aside, not
+  deleted), and make backups.
+
+One server runs at a time. The bottom bar shows it while it runs, and closing the launcher stops it cleanly.
 
 ## Wardrobe
 

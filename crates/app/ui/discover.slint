@@ -26,17 +26,21 @@ export component DiscoverScreen inherits Rectangle {
     // search + sort (Modrinth)
     if root.src == 0: Rectangle {
         Field {
-            x: 56px; y: 132px; width: 724px; search: true; placeholder: "Search Modrinth modpacks";
+            x: 56px; y: 132px; width: 540px; search: true; placeholder: "Search Modrinth modpacks";
             text <=> Backend.pack-query;
             edited => { root.typing = false; root.typing = true; }
             accepted => { root.typing = false; Backend.load-packs(); }
         }
         Timer { interval: 450ms; running: root.typing; triggered => { root.typing = false; Backend.load-packs(); } }
+        // loaders: keep in step with packs.rs PACK_LOADERS
+        Dropdown { x: 612px; y: 132px; width: 190px; items: ["Any loader", "Fabric", "Forge", "NeoForge"];
+            current <=> Backend.pack-loader; changed(i) => { Backend.load-packs(); } }
         // categories: keep in step with packs.rs PACK_CATS
-        Dropdown { x: 796px; y: 132px; width: 260px; items: ["All categories", "Adventure", "Challenging", "Combat", "Kitchen sink", "Lightweight", "Magic", "Multiplayer", "Optimization", "Quests", "Technology"];
+        Dropdown { x: 818px; y: 132px; width: 230px; items: ["All categories", "Adventure", "Challenging", "Combat", "Kitchen sink", "Lightweight", "Magic", "Multiplayer", "Optimization", "Quests", "Technology"];
             current <=> Backend.pack-cat; changed(i) => { Backend.load-packs(); } }
-        Text { x: 1082px; y: 132px; height: 40px; text: "Sort"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; }
-        Dropdown { x: 1124px; y: 132px; width: 260px; items: ["Downloads", "Follows", "Newest", "Recently updated"]; current <=> Backend.pack-sort; changed(i) => { Backend.load-packs(); } }
+        Text { x: 1074px; y: 132px; height: 40px; text: "Sort"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; }
+        // sorts: keep in step with packs.rs SORTS
+        Dropdown { x: 1114px; y: 132px; width: 270px; items: ["Relevance", "Downloads", "Follows", "Newest", "Recently updated"]; current <=> Backend.pack-sort; changed(i) => { Backend.load-packs(); } }
     }
 
     lst := Rectangle {
