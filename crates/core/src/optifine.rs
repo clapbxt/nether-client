@@ -147,11 +147,7 @@ pub fn patch(paths: &Paths, s: &Setup, java: &Path, client_jar: &Path, progress:
     if has(&s.installer, "optifine/Patcher.class") {
         progress("Setting up OptiFine", 0.93);
         let mut cmd = Command::new(java);
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-        }
+        nether_common::platform::no_window(&mut cmd);
         let o = cmd.arg("-cp").arg(&s.installer).arg("optifine.Patcher").arg(client_jar).arg(&s.installer).arg(&tmp).output().context("running OptiFine's Patcher")?;
         if !o.status.success() || !has(&tmp, "optifine/OptiFineTweaker.class") {
             let _ = fs::remove_file(&tmp);

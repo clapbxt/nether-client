@@ -39,6 +39,12 @@ Everything that isn't UI. `nether-core` is being split into crates that each hav
 | `nether-auth` | `crates/auth` | Microsoft sign-in, accounts file, launch ownership gate | common |
 | `nether-core` | `crates/core` | installs, launching, instances, content, social, backend clients, Horizon | all of the above |
 
+Code that differs by operating system goes in `nether_common::platform` (console-less helper processes, game
+process priority, GPU preference, power throttling, RAM size, class path separator), not in `#[cfg(windows)]`
+blocks elsewhere. Nether ships on Windows only, but macOS and Linux are planned, so a port should mean filling in
+that module. What's still Windows-only outside it: AVIF decoding in `cosimport.rs` (has a fallback), Java discovery
+in `java.rs`, the media helper (`crates/media`) and the launcher window code in `crates/app`.
+
 `nether-core` re-exports the moved modules under their old names (`nether_core::paths`, `nether_core::download`,
 `nether_core::auth`...), so code that uses them doesn't change. A crate may only depend on crates above it in the
 table. What is still in core is tangled in cycles (for example `launch` needs `backend` for cape settings, and

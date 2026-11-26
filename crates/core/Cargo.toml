@@ -34,7 +34,6 @@ bytes = "1"
 rusqlite = { version = "0.43.0", features = ["bundled"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_System_SystemInformation", "Win32_UI_Shell", "Win32_Foundation", "Win32_System_Registry", "Win32_System_Threading"] }
 # AVIF textures in cosmetic uploads (Lunar uses some): Windows' own decoder (AV1 Video Extension)
 windows = { version = "0.62", features = ["Foundation", "Graphics_Imaging", "Storage_Streams"] }
 

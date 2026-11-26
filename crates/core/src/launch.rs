@@ -13,6 +13,7 @@ use crate::java;
 use crate::mojang::{self, rules_allow, Arg, AssetIndex, VersionJson};
 use crate::paths::Paths;
 use crate::{Progress, Session};
+use nether_common::platform;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Loader {
@@ -125,37 +126,6 @@ pub fn quick_play_args(q: &QuickPlay, modern: bool) -> Vec<String> {
             vec!["--server".into(), host.into(), "--port".into(), port.into()]
         }
     }
-}
-
-/// Windows "Graphics performance preference" = High performance for this Java, unless the user already chose one for
-/// it (Settings > System > Display > Graphics). On a laptop with integrated + dedicated graphics the game otherwise
-/// often lands on the integrated GPU. Per user and per program, the same value Windows' own settings page writes.
-#[cfg(windows)]
-fn prefer_fast_gpu(exe: &std::path::Path) {
-    use windows_sys::Win32::System::Registry::{RegCloseKey, RegCreateKeyExW, RegQueryValueExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER, KEY_READ, KEY_WRITE, REG_SZ};
-    fn w(s: &str) -> Vec<u16> { s.encode_utf16().chain(Some(0)).collect() }
-    let name = w(&exe.to_string_lossy());
-    let mut key: HKEY = std::ptr::null_mut();
-    unsafe {
-        if RegCreateKeyExW(HKEY_CURRENT_USER, w(r"Software\Microsoft\DirectX\UserGpuPreferences").as_ptr(), 0, std::ptr::null(), 0, KEY_READ | KEY_WRITE, std::ptr::null(), &mut key, std::ptr::null_mut()) != 0 { return; }
-        let exists = RegQueryValueExW(key, name.as_ptr(), std::ptr::null(), std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut()) == 0;
-        if !exists {
-            let v = w("GpuPreference=2;");
-            RegSetValueExW(key, name.as_ptr(), 0, REG_SZ, v.as_ptr() as *const u8, (v.len() * 2) as u32);
-        }
-        RegCloseKey(key);
-    }
-}
-
-/// Opts the game out of Windows power throttling (EcoQoS: efficiency cores, lower clocks), which Windows 11 applies to
-/// processes it thinks are in the background. Microsoft: StateMask 0 with the execution-speed bit in ControlMask = always
-/// high QoS ("SetProcessInformation", ProcessPowerThrottling). Ignored where unsupported.
-#[cfg(windows)]
-fn full_speed(child: &Child) {
-    use std::os::windows::io::AsRawHandle;
-    use windows_sys::Win32::System::Threading::{ProcessPowerThrottling, SetProcessInformation, PROCESS_POWER_THROTTLING_CURRENT_VERSION, PROCESS_POWER_THROTTLING_EXECUTION_SPEED, PROCESS_POWER_THROTTLING_STATE};
-    let st = PROCESS_POWER_THROTTLING_STATE { Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION, ControlMask: PROCESS_POWER_THROTTLING_EXECUTION_SPEED, StateMask: 0 };
-    unsafe { SetProcessInformation(child.as_raw_handle() as _, ProcessPowerThrottling, &st as *const _ as *const _, std::mem::size_of::<PROCESS_POWER_THROTTLING_STATE>() as u32); }
 }
 
 /// The vanilla launcher's G1 tuning, unless the user picked a collector themselves.
@@ -527,15 +497,10 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
     let log_dir = opts.game_dir.join("logs");
     fs::create_dir_all(&log_dir)?;
     let log = fs::File::create(log_dir.join("launcher.log")).context("creating launcher.log")?;
-    #[cfg(windows)]
-    use std::os::windows::process::CommandExt;
     let mut cmd = Command::new(&java);
-    #[cfg(windows)]
-    {
-        // no console window; above-normal priority so background programs don't take the game's CPU time
-        cmd.creation_flags(if stock { 0x0800_0000 } else { 0x0800_0000 | 0x0000_8000 });
-        if !stock { prefer_fast_gpu(&java); }
-    }
+    // no console window; above-normal priority so background programs don't take the game's CPU time
+    platform::game_process(&mut cmd, !stock);
+    if !stock { platform::prefer_fast_gpu(&java); }
     let child = cmd
         .args(&jvm)
         .arg(&v.main_class)
@@ -545,8 +510,7 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
         .stderr(Stdio::from(log))
         .spawn()
         .with_context(|| format!("starting {}", java.display()))?;
-    #[cfg(windows)]
-    if !stock { full_speed(&child); }
+    if !stock { platform::full_speed(&child); }
     progress("Minecraft started", 1.0);
     Ok(child)
 }

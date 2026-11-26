@@ -1,8 +1,10 @@
 #![deny(clippy::correctness, clippy::suspicious)]
 //! Shared vocabulary of the launcher crates, depended on by all of them and depending on none:
 //! where data lives ([`paths`]), small JSON files written safely ([`store`]), deleting to the Recycle Bin ([`trash`]),
-//! and the two types every long job passes around ([`Progress`], [`Session`]).
+//! the two types every long job passes around ([`Progress`], [`Session`]), and [`platform`], the one place
+//! for code that differs by operating system.
 pub mod paths;
+pub mod platform;
 pub mod store;
 pub mod trash;
 

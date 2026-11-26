@@ -281,12 +281,8 @@ impl Pending {
                 args.push(s);
             }
             let mut cmd = Command::new(java);
-            #[cfg(windows)]
-            {
-                use std::os::windows::process::CommandExt;
-                cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-            }
-            let out = cmd.arg("-cp").arg(cp.join(";")).arg(main_class(&jar)?).args(&args).current_dir(&tmp).output()
+            nether_common::platform::no_window(&mut cmd);
+            let out = cmd.arg("-cp").arg(cp.join(nether_common::platform::CLASSPATH_SEP)).arg(main_class(&jar)?).args(&args).current_dir(&tmp).output()
                 .with_context(|| format!("running {name} install step {}", i + 1))?;
             if !out.status.success() {
                 let log = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
