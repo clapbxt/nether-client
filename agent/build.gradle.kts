@@ -81,9 +81,11 @@ val writeOvList by tasks.registering {
     inputs.files(allClasses)
     outputs.file(ovList)
     doLast {
+        // every class under dev/nether/ov, sub-packages included (platform, game, framework, ui, menu, features.*)
         val names = allClasses.files.flatMap { root ->
-            root.resolve("dev/nether/ov").listFiles { f -> f.isFile && f.name.endsWith(".class") }?.toList() ?: emptyList()
-        }.map { "dev.nether.ov." + it.name.removeSuffix(".class") }.distinct().sorted()
+            root.resolve("dev/nether/ov").walkTopDown().filter { it.isFile && it.name.endsWith(".class") }
+                .map { it.relativeTo(root).invariantSeparatorsPath.removeSuffix(".class").replace('/', '.') }.toList()
+        }.distinct().sorted()
         ovList.get().asFile.writeText(names.joinToString("\r\n", postfix = "\r\n"), Charsets.US_ASCII)
     }
 }

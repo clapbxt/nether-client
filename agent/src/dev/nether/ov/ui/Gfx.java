@@ -1,0 +1,745 @@
+package dev.nether.ov.ui;
+
+import java.awt.AlphaComposite;
+import java.awt.Font;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.font.FontRenderContext;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.nio.ByteBuffer;
+import java.nio.FloatBuffer;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import dev.nether.ov.platform.GlBackend;
+
+import org.lwjgl.BufferUtils;
+
+import dev.nether.agent.Hook;
+
+/**
+ * Tiny batched 2D renderer (the GL calls live in {@link GlBackend}). Everything is a quad: rounded rects/rings via a
+ * signed-distance fragment shader, text via a dynamic glyph atlas (java.awt Font rasterised on demand, R8).
+ * Coordinates are "logical" units multiplied by {@link #s}; text y is the vertical centre of capital letters.
+ * The game's GL state is saved lazily on the first draw of a frame (and restored at its end), so a frame that draws
+ * nothing (HUD hidden behind a screen, nothing enabled) costs no GL calls at all.
+ */
+public final class Gfx {
+    private Gfx() {}
+
+    public static final int HEAD = 0, SEMI = 1, UI = 2, MONO = 3;
+
+    // palette (ARGB), matches crates/app/ui/theme.slint
+    /** SUB: small informative labels (between DIM and MUT, readable at 9 px on BG); MUT is for decoration only. */
+    public static final int BG = 0xFF000000, CARD = 0xFF0B0B0D, CARD2 = 0xFF141418, S3 = 0xFF1D1D23, ICE = 0xFFF1F2F5, DIM = 0xFFA3A8B3, MUT = 0xFF6B707B, SUB = 0xFF8F95A1,
+        RED = 0xFFE5372D, RED2 = 0xFFFF6157, LN = 0x14FFFFFF, LN2 = 0x29FFFFFF, BLACK = 0xFF000000;
+
+    /** s = pixels per logical unit now; base = HUD unit (half a GUI pixel); gui = the game's GUI scale in pixels */
+    public static float s = 1, base = 1, gui = 2, alpha = 1, dt = 0.016f;
+    /** Corners are square (radius ignored) unless round is set: v6 menus, title screen and HUD draw with it on. */
+    public static boolean round;
+    public static int fbW, fbH;
+    /** Smallest text size in pixels while set (menus: never below a legible size on small windows / GUI scale 1). */
+    public static int minPx;
+    /** GL state saved and our program bound for this frame. */
+    private static boolean ready;
+
+    private static final int FLOATS = 14, ATLAS = 2048;
+    private static final float[] IDENTITY_MAP = {1, 0, 0, 0, 1, 0, 0, 0, 1};
+    private static FloatBuffer buf = BufferUtils.createFloatBuffer(FLOATS * 6 * 3000);
+    private static int verts, penX, penY, rowH;
+    private static final Font[] faces = new Font[8]; // 0-3 Nether Pixel, 4-7 Barlow
+    /** v8 blend: HEAD (titles, nav, PLAY) in Nether Pixel, the rest in Barlow; false = Barlow everywhere. Set by {@link #face}. */
+    public static boolean pixel = true;
+    /** first face index of the lyric display fonts ({@link #lyricFace}); they keep their own shapes whatever the theme */
+    static final int LYRIC0 = 7;
+    /** HUD text in Nether Pixel (Feather / vanilla HUD look): Bold for HEAD, Regular for the rest. Set per module while it lays out and draws. */
+    static final int PIXB = 5, PIXR = 6;
+    public static boolean hudPix;
+    private static final String[] LYRIC_FILES = {"Righteous-Regular", "BebasNeue-Regular", "Poppins-SemiBold", "LilitaOne-Regular", "Pacifico-Regular", "KaushanScript-Regular", "PermanentMarker-Regular", "Neonderthaw-Regular", "Monoton-Regular",
+        "Quicksand-Bold", "Outfit-Bold", "Syne-Bold", "Yellowtail-Regular", "Courgette-Regular", "Damion-Regular", "GrandHotel-Regular", "Yesteryear-Regular",
+        "Audiowide-Regular", "Bungee-Regular", "Bangers-Regular", "PressStart2P-Regular", "Shrikhand-Regular"};
+    private static final Font[] fonts = new Font[LYRIC0 + LYRIC_FILES.length]; // 4 = fallback for characters our fonts lack (accents, Cyrillic, CJK)
+    private static final boolean[] lyricTried = new boolean[LYRIC_FILES.length];
+    private static final Glyph[][] fast = new Glyph[fonts.length * 256][]; // ASCII glyphs per (font, pixel size): no boxing per char
+    private static final Map<Long, Font> derived = new HashMap<>();
+    private static final Map<Long, Glyph> glyphs = new HashMap<>();
+    private static final Map<String, Glyph> masks = new HashMap<>();
+    private static final Map<Long, int[]> metrics = new HashMap<>();
+    private static BufferedImage scratch;
+    private static Graphics2D g2;
+    // Overlay text lands on framebuffer pixels. Fractional metrics create fractional advances which are then rounded
+    // when quads are emitted, making neighboring glyphs look softer and uneven at common GUI scales.
+    private static final FontRenderContext FRC = new FontRenderContext(null, true, false), FRAC = new FontRenderContext(null, true, true);
+    /** unhinted advance per pixel of size, by (face, char): projected text keeps its proportions at every size */
+    private static final Map<Long, Float> freeAdv = new HashMap<>();
+
+    private static final class Glyph {
+        float u0, v0, u1, v1, adv;
+        int w, h;
+    }
+
+    public static void init() {
+        GlBackend.cur.init(ATLAS);
+
+        // two faces (Th picks one): Nether Pixel (Minecraft themes; 8 px per em, sizes snap to whole multiples in pxSize)
+        // and Barlow (Glass themes, any size); bold/semibold for heads and labels, regular/medium for text and data
+        String[] names = {"NetherPixel-Bold", "NetherPixel-Bold", "NetherPixel-Regular", "NetherPixel-Regular", "Barlow-SemiBold", "Barlow-SemiBold", "Barlow-Medium", "Barlow-Medium"};
+        for (int i = 0; i < names.length; i++) {
+            try {
+                byte[] b = Hook.res.get("fonts/" + names[i] + ".ttf");
+                faces[i] = Font.createFont(Font.TRUETYPE_FONT, new ByteArrayInputStream(b));
+            } catch (Throwable t) {
+                System.out.println("[nether-agent] font " + names[i] + " unavailable, using fallback: " + t);
+                faces[i] = new Font((i & 3) == 3 ? Font.MONOSPACED : Font.SANS_SERIF, Font.PLAIN, 12);
+            }
+        }
+        pick();
+        fonts[4] = new Font(Font.DIALOG, Font.PLAIN, 12);
+        fonts[PIXB] = faces[0];
+        fonts[PIXR] = faces[2];
+        scratch = new BufferedImage(128, 128, BufferedImage.TYPE_INT_ARGB);
+        g2 = scratch.createGraphics();
+        g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
+    }
+
+    // ---------------------------------------------------------------- frame
+
+    public static void begin(int w, int h) {
+        fbW = w;
+        fbH = h;
+        verts = 0;
+        buf.clear();
+        ready = false;
+        boundImg = 0;
+    }
+
+    /** Before the first GL work of a frame: save the game's state, bind ours. */
+    public static void ensure() {
+        if (ready) return;
+        GlBackend.cur.save(fbW, fbH);
+        ready = true;
+        GlBackend.cur.begin(fbW, fbH);
+    }
+
+    public static void end() {
+        flush();
+        if (ready) { ready = false; GlBackend.cur.restore(); }
+    }
+
+    /** Error path: put the game's GL state back if it was taken (nothing queued is drawn). */
+    public static void abort() {
+        verts = 0;
+        buf.clear();
+        if (ready) { ready = false; try { GlBackend.cur.restore(); } catch (Throwable ignored) { } }
+    }
+
+    public static void flush() {
+        if (verts == 0) return;
+        buf.flip();
+        if (rec != null) { Rec.Op o = rec.op(0, buf.limit()); buf.get(o.data, 0, o.n); buf.rewind(); }
+        GlBackend.cur.draw(buf, verts);
+        buf.clear();
+        verts = 0;
+    }
+
+    /** Applies a projective map to following quads; used by the world-anchored panel. */
+    public static void map(float[] matrix) {
+        ensure();
+        flush();
+        GlBackend.cur.map(matrix);
+    }
+
+    public static void unmap() {
+        ensure();
+        flush();
+        GlBackend.cur.map(IDENTITY_MAP);
+    }
+
+    public static void clip(float x, float y, float w, float h) {
+        ensure();
+        flush();
+        int px = Math.round(x * s), py = Math.round(y * s), pw = Math.max(0, Math.round(w * s)), ph = Math.max(0, Math.round(h * s));
+        clipPx = new int[] {px, py, pw, ph};
+        glClip(true, px, fbH - (py + ph), pw, ph);
+    }
+
+    /** active scissor {x, y from top, w, h} in pixels, null = none */
+    private static int[] clipPx;
+
+    /** Nested clip (marquee text inside a clipped menu preview): intersects with the active one; pass the result to {@link #reclip}. */
+    public static int[] clipIn(float x, float y, float w, float h) {
+        int[] prev = clipPx;
+        ensure();
+        flush();
+        int x0 = Math.round(x * s), y0 = Math.round(y * s), x1 = x0 + Math.max(0, Math.round(w * s)), y1 = y0 + Math.max(0, Math.round(h * s));
+        if (prev != null) { x0 = Math.max(x0, prev[0]); y0 = Math.max(y0, prev[1]); x1 = Math.min(x1, prev[0] + prev[2]); y1 = Math.min(y1, prev[1] + prev[3]); }
+        clipPx = new int[] {x0, y0, Math.max(0, x1 - x0), Math.max(0, y1 - y0)};
+        glClip(true, x0, fbH - (y0 + clipPx[3]), clipPx[2], clipPx[3]);
+        return prev;
+    }
+
+    /** Back to the clip {@link #clipIn} returned (null = none). */
+    public static void reclip(int[] prev) {
+        if (prev == null) { unclip(); return; }
+        flush();
+        clipPx = prev;
+        glClip(true, prev[0], fbH - (prev[1] + prev[3]), prev[2], prev[3]);
+    }
+
+    public static void unclip() {
+        clipPx = null;
+        if (!ready) return;
+        flush();
+        glClip(false, 0, 0, 0, 0);
+    }
+
+    private static void glClip(boolean on, int x, int y, int w, int h) {
+        GlBackend.cur.clip(on, x, y, w, h);
+        if (rec == null) return;
+        int[] a = rec.op(2, 0).a, c = clipPx;
+        a[0] = on ? 1 : 0; a[1] = x; a[2] = y; a[3] = w; a[4] = h;
+        if (c != null) { a[5] = c[0]; a[6] = c[1]; a[7] = c[2]; a[8] = c[3]; }
+    }
+
+    // ---------------------------------------------------------------- recorded GL ops (Performance "Cache HUD")
+
+    /**
+     * The GL work of one HUD build: vertex batches, image binds and clips, in order. {@link #replay} draws it again
+     * without rebuilding any geometry. It is only valid while {@link #gen} is unchanged (no texture freed, glyph atlas
+     * not restarted), since the ops hold texture ids and atlas coordinates.
+     */
+    public static final class Rec {
+        static final class Op { int kind; float[] data = new float[0]; int n; final int[] a = new int[9]; }
+        private final java.util.ArrayList<Op> ops = new java.util.ArrayList<>();
+        public int size, gen = -1;
+
+        Op op(int kind, int floats) {
+            if (size == ops.size()) ops.add(new Op());
+            Op o = ops.get(size++);
+            o.kind = kind;
+            o.n = floats;
+            if (o.data.length < floats) o.data = new float[floats + floats / 2];
+            return o;
+        }
+    }
+
+    /** Bumped whenever recorded ops could point at something gone (texture freed, glyph atlas restarted). */
+    static int gen;
+    private static Rec rec;
+    private static int recGen;
+
+    /** Starts recording into r (the frame's batch so far is drawn first; the image bind is recorded fresh). */
+    public static void record(Rec r) {
+        flush();
+        r.size = 0;
+        r.gen = -1;
+        rec = r;
+        recGen = gen;
+        boundImg = 0;
+    }
+
+    /** Ends recording; the ops are replayable only if nothing they use changed while recording. */
+    public static void recordEnd() {
+        flush();
+        Rec r = rec;
+        rec = null;
+        if (r != null && gen == recGen) r.gen = gen;
+    }
+
+    /** Draws recorded ops again. False (nothing drawn) when they are stale. */
+    public static boolean replay(Rec r) {
+        if (r.gen != gen) return false;
+        if (r.size == 0) return true;
+        ensure();
+        flush();
+        for (int i = 0; i < r.size; i++) {
+            Rec.Op o = r.ops.get(i);
+            if (o.kind == 0) {
+                buf.clear();
+                buf.put(o.data, 0, o.n).flip();
+                GlBackend.cur.draw(buf, o.n / FLOATS);
+                buf.clear();
+            } else if (o.kind == 1) {
+                GlBackend.cur.texBind(o.a[0]);
+                boundImg = o.a[0];
+            } else {
+                int[] a = o.a;
+                GlBackend.cur.clip(a[0] == 1, a[1], a[2], a[3], a[4]);
+                clipPx = a[0] == 1 ? new int[] {a[5], a[6], a[7], a[8]} : null;
+            }
+        }
+        return true;
+    }
+
+    // ---------------------------------------------------------------- colours
+
+    public static int a(int c, float f) { return (Math.round(((c >>> 24) & 255) * f) << 24) | (c & 0xFFFFFF); }
+
+    public static int mix(int c1, int c2, float t) {
+        t = Math.max(0, Math.min(1, t));
+        int r = 0;
+        for (int sh = 0; sh <= 24; sh += 8) {
+            int x = (c1 >>> sh) & 255, y = (c2 >>> sh) & 255;
+            r |= Math.round(x + (y - x) * t) << sh;
+        }
+        return r;
+    }
+
+    private static void put(int c) {
+        buf.put(((c >> 16) & 255) / 255f).put(((c >> 8) & 255) / 255f).put((c & 255) / 255f).put(((c >>> 24) & 255) / 255f * alpha);
+    }
+
+    // ---------------------------------------------------------------- shapes
+
+    private static void vert(float x, float y, float u, float v, int c, float lx, float ly, float hw, float hh, float r, float b) {
+        buf.put(x).put(y).put(u).put(v);
+        put(c);
+        buf.put(lx).put(ly).put(hw).put(hh).put(r).put(b);
+        verts++;
+    }
+
+    private static void quad(float x, float y, float w, float h, float u0, float v0, float u1, float v1, int ct, int cb, float r, float b) {
+        if (!ready) ensure();
+        if ((verts + 6) * FLOATS > buf.capacity()) flush();
+        float hw = w / 2, hh = h / 2;
+        vert(x, y, u0, v0, ct, -hw, -hh, hw, hh, r, b);
+        vert(x + w, y, u1, v0, ct, hw, -hh, hw, hh, r, b);
+        vert(x, y + h, u0, v1, cb, -hw, hh, hw, hh, r, b);
+        vert(x + w, y, u1, v0, ct, hw, -hh, hw, hh, r, b);
+        vert(x + w, y + h, u1, v1, cb, hw, hh, hw, hh, r, b);
+        vert(x, y + h, u0, v1, cb, -hw, hh, hw, hh, r, b);
+    }
+
+    public static void rect(float x, float y, float w, float h, float r, int c) { rectG(x, y, w, h, r, c, c); }
+
+    public static void rectG(float x, float y, float w, float h, float r, int ct, int cb) {
+        float px = Math.round(x * s), py = Math.round(y * s), pw = Math.max(1, Math.round(w * s)), ph = Math.max(1, Math.round(h * s));
+        quad(px, py, pw, ph, 0, 0, 0, 0, ct, cb, round ? Math.min(r * s, Math.min(pw, ph) / 2) : 0, 0);
+    }
+
+    public static void ring(float x, float y, float w, float h, float r, float th, int c) {
+        float px = Math.round(x * s), py = Math.round(y * s), pw = Math.max(1, Math.round(w * s)), ph = Math.max(1, Math.round(h * s));
+        quad(px, py, pw, ph, 0, 0, 0, 0, c, c, round ? Math.min(r * s, Math.min(pw, ph) / 2) : 0, Math.max(1, Math.round(th * s)));
+    }
+
+    /** Pixel-art image (n x n ARGB) drawn as crisp colour runs, no texture needed. size in logical units. */
+    // icons: one nearest-filtered RGBA atlas (CPU copy re-uploaded when an icon is added), shelf-packed, 1 px apart
+    private static final int IA = 512;
+    private static final String ICONS = "icon-atlas";
+    private static BufferedImage iconImg;
+    private static boolean iconDirty;
+    private static int shelfX, shelfY, shelfH;
+    /** icon pixel array (by identity: Icons caches them) -> {x, y, edge} in the atlas */
+    private static final java.util.Map<int[], int[]> iconAt = new java.util.IdentityHashMap<>();
+
+    /**
+     * An n x n ARGB icon (pixel art: hard edges) in a size x size box: one quad from the icon atlas (HD pack textures are
+     * box-filtered down to the drawn size when packed), so icons batch with each other instead of a quad per pixel run.
+     */
+    public static void icon(int[] px, float x, float y, float size) {
+        int n = (int) Math.round(Math.sqrt(px.length));
+        if (n == 0 || n * n != px.length) return;
+        int m = Math.min(n, Math.max(1, Math.round(size * s)));
+        int[] at = iconAt.get(px);
+        if (at == null || at[2] != m) at = packIcon(px, n, m);
+        if (at == null) return;
+        if (iconDirty || !hasTexture(ICONS)) { texture(ICONS, iconImg, false); iconDirty = false; }
+        image(ICONS, x, y, size, size, at[0] / (float) IA, at[1] / (float) IA, (at[0] + at[2]) / (float) IA, (at[1] + at[2]) / (float) IA, 0xFFFFFFFF, 0);
+    }
+
+    private static int[] packIcon(int[] px, int n, int m) {
+        if (m > IA - 2) return null;
+        if (iconImg == null) iconImg = new BufferedImage(IA, IA, BufferedImage.TYPE_INT_ARGB);
+        if (shelfX + m + 1 > IA) { shelfX = 0; shelfY += shelfH + 1; shelfH = 0; }
+        if (shelfY + m + 1 > IA) { // full (packs changed many times): start over
+            iconAt.clear();
+            iconImg = new BufferedImage(IA, IA, BufferedImage.TYPE_INT_ARGB);
+            shelfX = shelfY = shelfH = 0;
+        }
+        iconImg.setRGB(shelfX, shelfY, m, m, m < n ? shrink(px, n, m) : px, 0, m);
+        int[] at = {shelfX, shelfY, m};
+        shelfX += m + 1;
+        shelfH = Math.max(shelfH, m);
+        iconAt.put(px, at);
+        iconDirty = true;
+        return at;
+    }
+
+
+    /** n x n ARGB box-averaged down to m x m (alpha-weighted, so transparent edges don't darken). */
+    private static int[] shrink(int[] px, int n, int m) {
+        int[] out = new int[m * m];
+        for (int oy = 0; oy < m; oy++) for (int ox = 0; ox < m; ox++) {
+            int ya = oy * n / m, yb = Math.max(ya + 1, (oy + 1) * n / m), xa = ox * n / m, xb = Math.max(xa + 1, (ox + 1) * n / m);
+            long a = 0, r = 0, g = 0, b = 0, cnt = 0;
+            for (int yy = ya; yy < yb; yy++) for (int xx = xa; xx < xb; xx++) {
+                int p = px[yy * n + xx], pa = p >>> 24;
+                a += pa; r += (p >> 16 & 255) * pa; g += (p >> 8 & 255) * pa; b += (p & 255) * pa; cnt++;
+            }
+            out[oy * m + ox] = a == 0 ? 0 : (int) (a / cnt) << 24 | (int) (r / a) << 16 | (int) (g / a) << 8 | (int) (b / a);
+        }
+        return out;
+    }
+
+    // ---------------------------------------------------------------- images (RGBA textures: our own GL objects only)
+
+    private static final int TEX_MAX = 48;
+    private static final long TEX_BYTES = 64L << 20;
+
+    private static final class Tex {
+        int id, w, h;
+    }
+
+    /** key -> texture, in access order (least recently drawn first): past 48 textures / 64 MB the oldest are freed. */
+    private static final LinkedHashMap<String, Tex> texs = new LinkedHashMap<>(16, 0.75f, true);
+    private static long texBytes;
+    /** texture bound on unit 1 in this frame (0 = none yet) */
+    private static int boundImg;
+
+    /**
+     * Uploads img as the texture "key" (replacing an older one). smooth = linear filtering (photos, album art), else
+     * nearest (pixel art). Render thread, during a frame. Decode images off the render thread; only the upload is here.
+     */
+    public static void texture(String key, BufferedImage img, boolean smooth) {
+        int w = img.getWidth(), h = img.getHeight();
+        int[] argb = img.getRGB(0, 0, w, h, null, 0, w);
+        ByteBuffer bb = BufferUtils.createByteBuffer(w * h * 4);
+        for (int p : argb) bb.put((byte) (p >> 16)).put((byte) (p >> 8)).put((byte) p).put((byte) (p >>> 24));
+        bb.flip();
+        dropTexture(key);
+        ensure();
+        flush();
+        Tex t = new Tex();
+        t.id = GlBackend.cur.texCreate(w, h, bb, smooth);
+        t.w = w;
+        t.h = h;
+        boundImg = t.id;
+        if (rec != null) rec.op(1, 0).a[0] = t.id; // texCreate leaves it bound
+        texs.put(key, t);
+        texBytes += 4L * w * h;
+        for (Iterator<Map.Entry<String, Tex>> it = texs.entrySet().iterator(); it.hasNext() && (texs.size() > TEX_MAX || texBytes > TEX_BYTES); ) {
+            Tex o = it.next().getValue();
+            if (o == t) break;
+            it.remove();
+            free(o);
+        }
+    }
+
+    public static boolean hasTexture(String key) { return texs.containsKey(key); }
+
+    /** {width, height} in pixels of texture key, or null. */
+    public static int[] textureSize(String key) { Tex t = texs.get(key); return t == null ? null : new int[] {t.w, t.h}; }
+
+    public static void dropTexture(String key) {
+        Tex t = texs.remove(key);
+        if (t != null) free(t);
+    }
+
+    private static void free(Tex t) {
+        if (ready) flush(); // queued quads may still sample it
+        if (boundImg == t.id) boundImg = 0;
+        gen++; // a cached HUD may still bind it
+        texBytes -= 4L * t.w * t.h;
+        GlBackend.cur.texDelete(t.id);
+    }
+
+    /** Frees every texture (the game is closing; render thread). */
+    public static void freeTextures() {
+        for (Tex t : texs.values()) GlBackend.cur.texDelete(t.id);
+        texs.clear();
+        texBytes = 0;
+        boundImg = 0;
+    }
+
+    public static void image(String key, float x, float y, float w, float h, int tint, float r) { image(key, x, y, w, h, 0, 0, 1, 1, tint, r); }
+
+    /**
+     * Texture "key" (uv rectangle u0,v0 - u1,v1, v down) in a w x h box, colour multiplied by tint, corners rounded by r
+     * logical units (always honoured, unlike {@link #rect}). Nothing is drawn while the texture does not exist.
+     */
+    public static void image(String key, float x, float y, float w, float h, float u0, float v0, float u1, float v1, int tint, float r) {
+        Tex t = texs.get(key);
+        if (t == null) return;
+        if (!ready) ensure();
+        if (boundImg != t.id) {
+            flush();
+            GlBackend.cur.texBind(t.id);
+            boundImg = t.id;
+            if (rec != null) rec.op(1, 0).a[0] = t.id;
+        }
+        float px = Math.round(x * s), py = Math.round(y * s), pw = Math.max(1, Math.round(w * s)), ph = Math.max(1, Math.round(h * s));
+        quad(px, py, pw, ph, u0, v0, u1, v1, tint, tint, Math.max(0, Math.min(r * s, Math.min(pw, ph) / 2)), -1);
+    }
+
+    /** Texture "key" on an arbitrary quad: p = 4 corners (x, y in framebuffer pixels, clockwise), uv = their texture coordinates. */
+    public static void imageQuad(String key, float[] p, float[] uv, int tint) {
+        Tex t = texs.get(key);
+        if (t == null) return;
+        if (!ready) ensure();
+        if (boundImg != t.id) {
+            flush();
+            GlBackend.cur.texBind(t.id);
+            boundImg = t.id;
+            if (rec != null) rec.op(1, 0).a[0] = t.id;
+        }
+        if ((verts + 6) * FLOATS > buf.capacity()) flush();
+        int[] order = {0, 1, 3, 1, 2, 3};
+        for (int i : order) vert(p[i * 2], p[i * 2 + 1], uv[i * 2], uv[i * 2 + 1], tint, 0, 0, 1e6f, 1e6f, 0, -1); // a huge box: no rounding, full coverage
+    }
+
+    // ---------------------------------------------------------------- text
+
+    private static Font font(int f, int px) {
+        long k = ((long) f << 32) | px;
+        Font d = derived.get(k);
+        if (d == null) { d = fonts[f].deriveFont((float) px); derived.put(k, d); }
+        return d;
+    }
+
+    /** {ascent, descent} in pixels. */
+    private static int[] met(int f, int px) {
+        long k = ((long) f << 32) | px;
+        int[] m = metrics.get(k);
+        if (m == null) {
+            java.awt.FontMetrics fm = g2.getFontMetrics(font(f, px));
+            m = new int[] {fm.getAscent(), fm.getDescent()};
+            metrics.put(k, m);
+        }
+        return m;
+    }
+
+    private static Glyph glyph(int f, int px, char c) {
+        if (c >= 128 || px >= 256) return slowGlyph(f, px, c);
+        Glyph[] row = fast[f * 256 + px];
+        if (row == null) fast[f * 256 + px] = row = new Glyph[128];
+        Glyph g = row[c];
+        if (g == null) row[c] = g = slowGlyph(f, px, c);
+        return g;
+    }
+
+    private static Glyph slowGlyph(int f, int px, char c) {
+        long k = ((long) f << 48) | ((long) px << 24) | c;
+        Glyph g = glyphs.get(k);
+        if (g != null) return g;
+        Font fo = font(f, px);
+        if (!fo.canDisplay(c)) {
+            Font fb = font(4, px); // the system's fallback font (any language Windows can show)
+            if (fb.canDisplay(c)) fo = fb; else c = '?';
+        }
+        int[] m = met(f, px);
+        float adv = (float) fo.getStringBounds(String.valueOf(c), FRC).getWidth();
+        int w = (int) Math.ceil(adv) + 4, h = m[0] + m[1] + 4;
+        if (w > scratch.getWidth() || h > scratch.getHeight()) {
+            g2.dispose();
+            scratch = new BufferedImage(Math.max(w, scratch.getWidth()), Math.max(h, scratch.getHeight()), BufferedImage.TYPE_INT_ARGB);
+            g2 = scratch.createGraphics();
+            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            g2.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_OFF);
+        }
+        g2.setComposite(AlphaComposite.Clear);
+        g2.fillRect(0, 0, scratch.getWidth(), scratch.getHeight());
+        g2.setComposite(AlphaComposite.SrcOver);
+        g2.setColor(java.awt.Color.WHITE);
+        g2.setFont(fo);
+        g2.drawString(String.valueOf(c), 2, 2 + m[0]);
+        g = place(scratch.getRGB(0, 0, w, h, null, 0, w), w, h);
+        g.adv = adv;
+        glyphs.put(k, g);
+        return g;
+    }
+
+    /** Uploads w*h ARGB pixels (alpha = coverage) to the next free atlas cell; a full atlas starts over. */
+    private static Glyph place(int[] argb, int w, int h) {
+        if (penX + w > ATLAS) { penX = 0; penY += rowH; rowH = 0; }
+        ensure();
+        if (penY + h > ATLAS) {
+            flush();
+            glyphs.clear();
+            masks.clear();
+            java.util.Arrays.fill(fast, null);
+            penX = penY = rowH = 0;
+            gen++; // cached HUD quads point at the old cells
+        }
+        ByteBuffer bb = BufferUtils.createByteBuffer(w * h);
+        for (int i = 0; i < argb.length; i++) bb.put((byte) (argb[i] >>> 24));
+        bb.flip();
+        GlBackend.cur.upload(penX, penY, w, h, bb);
+        Glyph g = new Glyph();
+        g.u0 = penX / (float) ATLAS;
+        g.v0 = penY / (float) ATLAS;
+        g.u1 = (penX + w) / (float) ATLAS;
+        g.v1 = (penY + h) / (float) ATLAS;
+        g.w = w;
+        g.h = h;
+        penX += w;
+        rowH = Math.max(rowH, h);
+        return g;
+    }
+
+    /**
+     * Vector shape (in a unit x unit box) drawn tinted at size x size logical units at (x, y). Rasterised once per pixel
+     * size into the glyph atlas (anti-aliased coverage), so it is exact at every GUI scale and costs one quad.
+     */
+    public static void mask(String key, java.awt.Shape shape, float unit, float x, float y, float size, int col) {
+        int n = Math.max(4, Math.round(size * s));
+        String k = key + "@" + n;
+        Glyph g = masks.get(k);
+        if (g == null) {
+            BufferedImage img = new BufferedImage(n + 2, n + 2, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D gg = img.createGraphics();
+            gg.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            gg.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
+            gg.translate(1, 1);
+            gg.scale(n / unit, n / unit);
+            gg.setColor(java.awt.Color.WHITE);
+            gg.fill(shape);
+            gg.dispose();
+            g = place(img.getRGB(0, 0, n + 2, n + 2, null, 0, n + 2), n + 2, n + 2);
+            masks.put(k, g);
+        }
+        quad(Math.round(x * s) - 1, Math.round(y * s) - 1, g.w, g.h, g.u0, g.v0, g.u1, g.v1, col, col, -1, 0);
+    }
+
+    /** Nether Pixel is drawn at whole multiples of 8 px (one font pixel = a whole number of screen pixels); Barlow and the lyric fonts at any whole size. */
+    private static int pxSize(int f, float size) {
+        float px = Math.max(Math.max(5, minPx), size * s);
+        return (pixel && f == HEAD) || f == PIXB || f == PIXR ? Math.max(8, Math.round(px / 8f) * 8) : Math.max(7, Math.round(px));
+    }
+
+    /** The face actually drawn: theme slots become Nether Pixel while {@link #hudPix} is on. */
+    private static int hf(int f) {
+        return hudPix && f < 4 ? (f == HEAD ? PIXB : PIXR) : f;
+    }
+
+    /**
+     * Face index of lyric display font n (0-based, see LYRIC_FILES: Righteous, Bebas Neue, Poppins, Lilita One, Pacifico,
+     * Kaushan Script, Permanent Marker, Neonderthaw, Monoton; res/fonts/lyrics, OFL / Apache 2.0). Read from the agent jar
+     * the first time it is asked for, so unused fonts cost nothing; SEMI when it cannot be read.
+     */
+    public static int lyricFace(int n) {
+        if (n < 0 || n >= LYRIC_FILES.length) return SEMI;
+        int f = LYRIC0 + n;
+        if (fonts[f] == null && !lyricTried[n]) {
+            lyricTried[n] = true;
+            try {
+                byte[] b = Hook.file.apply("fonts/lyrics/" + LYRIC_FILES[n] + ".ttf");
+                if (b != null) fonts[f] = Font.createFont(Font.TRUETYPE_FONT, new ByteArrayInputStream(b));
+            } catch (Throwable t) {
+                System.out.println("[nether-agent] lyric font " + LYRIC_FILES[n] + " unavailable: " + t);
+            }
+        }
+        return fonts[f] != null ? f : SEMI;
+    }
+
+    /** Fill the four theme slots: HEAD from Nether Pixel Bold when {@link #pixel}, everything else Barlow. */
+    private static void pick() {
+        System.arraycopy(faces, 4, fonts, 0, 4);
+        if (pixel) fonts[HEAD] = faces[0];
+    }
+
+    /** Switch the type face (theme change): drops every cached glyph so the atlas refills with the new face. */
+    static void face(boolean px) {
+        if (px == pixel) return;
+        pixel = px;
+        if (faces[0] != null) pick();
+        derived.clear();
+        freeAdv.clear();
+        metrics.clear();
+        glyphs.clear();
+        masks.clear();
+        java.util.Arrays.fill(fast, null);
+        penX = penY = rowH = 0;
+    }
+
+    /** Width in logical units. spacing is extra logical units per glyph. */
+    public static float width(int f, float size, String str, float spacing) {
+        f = hf(f);
+        int px = pxSize(f, size);
+        float w = 0;
+        for (int i = 0; i < str.length(); i++) w += glyph(f, px, str.charAt(i)).adv + spacing * s;
+        return w / s;
+    }
+
+    public static float width(int f, float size, String str) { return width(f, size, str, 0); }
+
+    public static float text(int f, float size, float x, float cy, int col, String str) { return text(f, size, x, cy, col, str, false, 0); }
+
+    /** Draws str with its left edge at x and capital letters centred on cy. Returns the logical width. */
+    public static float text(int f, float size, float x, float cy, int col, String str, boolean shadow, float spacing) {
+        f = hf(f);
+        int px = pxSize(f, size);
+        int[] m = met(f, px);
+        float cap = px * 0.36f;
+        float base = Math.round(cy * s + cap);
+        float X = Math.round(x * s);
+        if (shadow) {
+            int so = Math.max(1, Math.round(s * 0.75f));
+            drawRun(f, px, X + so, base + so, a(BLACK, 0.55f * ((col >>> 24) / 255f)), str, spacing, m);
+        }
+        return drawRun(f, px, X, base, col, str, spacing, m) / s;
+    }
+
+    private static float drawRun(int f, int px, float X, float baseline, int col, String str, float spacing, int[] m) {
+        float pen = 0;
+        for (int i = 0; i < str.length(); i++) {
+            Glyph g = glyph(f, px, str.charAt(i));
+            if (str.charAt(i) != ' ') quad(Math.round(X + pen) - 2, baseline - m[0] - 2, g.w, g.h, g.u0, g.v0, g.u1, g.v1, col, col, -1, 0);
+            pen += g.adv + spacing * s;
+        }
+        return pen;
+    }
+
+    /**
+     * Text in framebuffer pixels. Rasterise close to the final size so projected labels do not get softened by
+     * scaling a much larger glyph down from the next 8 px step.
+     */
+    public static void textFree(int f, float size, float x, float cy, int col, String str) {
+        f = hf(f);
+        int px = freePx(size);
+        // glyph bitmaps come from the nearest whole pixel size, but the pen advances by the unhinted advance: as the size
+        // changes smoothly (walking towards world lyrics) letters scale smoothly instead of jumping as hinted widths snap
+        float k = size / px, top = cy + size * 0.36f - (met(f, px)[0] + 2) * k, pen = 0;
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+            Glyph g = glyph(f, px, c);
+            float adv = advFree(f, px, c, g) * size;
+            if (c != ' ') quad(x + pen + (adv - g.adv * k) / 2 - 2 * k, top, g.w * k, g.h * k, g.u0, g.v0, g.u1, g.v1, col, col, -1, 0);
+            pen += adv;
+        }
+    }
+
+    /** Width in framebuffer px of {@link #textFree} text. */
+    public static float widthFree(int f, float size, String str) {
+        f = hf(f);
+        int px = freePx(size);
+        float w = 0;
+        for (int i = 0; i < str.length(); i++) { char c = str.charAt(i); w += advFree(f, px, c, glyph(f, px, c)); }
+        return w * size;
+    }
+
+    /** Unhinted advance of c per pixel of size (the glyph's own face, as {@link #slowGlyph} picks it). */
+    private static float advFree(int f, int px, char c, Glyph g) {
+        long key = ((long) f << 32) | c;
+        Float a = freeAdv.get(key);
+        if (a == null) {
+            Font fo = font(f, 100);
+            if (!fo.canDisplay(c)) { Font fb = font(4, 100); fo = fb.canDisplay(c) ? fb : null; }
+            a = fo == null ? g.adv / px : (float) fo.getStringBounds(String.valueOf(c), FRAC).getWidth() / 100f;
+            freeAdv.put(key, a);
+        }
+        return a;
+    }
+
+    private static int freePx(float size) { return Math.min(248, Math.max(5, Math.round(size))); }
+
+    public static float textC(int f, float size, float cx, float cy, int col, String str, float spacing) {
+        float w = width(f, size, str, spacing) - spacing;
+        text(f, size, cx - w / 2, cy, col, str, false, spacing);
+        return w;
+    }
+}

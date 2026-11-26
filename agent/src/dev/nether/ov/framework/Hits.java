@@ -1,0 +1,95 @@
+package dev.nether.ov.framework;
+
+import dev.nether.ov.game.Game;
+import dev.nether.ov.ui.Gfx;
+
+/**
+ * Clickable HUD widgets (media controls, buttons on HUD cards). A widget registers its box every frame it is drawn
+ * ({@link #box}); a mouse press is matched against the boxes of the previous frame (what the user saw) and delivered on
+ * the next draw through {@link #clicked}. Presses only land while the cursor is free: our menu is open and its panel did
+ * not use the click, or a game screen is up (chat, inventory). A press that lands is swallowed, its release too, so the
+ * game never sees it. In plain gameplay (cursor grabbed) nothing is routed: a widget can never take an attack or use
+ * click. Frames without widgets cost one comparison. (The 3D lyric panel keeps its own crosshair-aimed hit list.)
+ */
+public final class Hits {
+    private Hits() {}
+
+    private static final int MAX = 64;
+    private static final String[] ids = new String[MAX], seen = new String[MAX];
+    private static final float[] cur = new float[MAX * 4], last = new float[MAX * 4];
+    private static int n, lastN;
+    private static String pending;
+    private static int pendingBtn;
+    private static long pendingAt;
+    private static float pendingX, clickX;
+
+    /** Overlay, once per frame before drawing: this frame's boxes become the ones presses are matched against. */
+    public static void frame() {
+        if (n == 0 && lastN == 0 && pending == null) return;
+        System.arraycopy(ids, 0, seen, 0, n);
+        System.arraycopy(cur, 0, last, 0, n * 4);
+        lastN = n;
+        n = 0;
+        if (pending != null && Game.frame - pendingAt > 3) pending = null; // nobody drew that widget any more
+    }
+
+    /** The cursor may interact with HUD widgets: our menu or a game screen holds it. */
+    public static boolean free() { return Input.menuOpen || Input.worldGuiOpen || Game.screenOpen(); }
+
+    /** Cursor position in framebuffer pixels. */
+    private static float mx() { return (float) (Input.mx * Gfx.fbW / Input.ww); }
+    private static float my() { return (float) (Input.my * Gfx.fbH / Input.wh); }
+
+    static void clear() {
+        n = lastN = 0;
+        pending = null;
+    }
+
+    /**
+     * Registers the clickable box of widget id for this frame (logical units at the current {@link Gfx#s}); returns true
+     * while the free cursor is over it (hover look). Ids must be unique per frame ("media.play").
+     */
+    public static boolean box(String id, float x, float y, float w, float h) {
+        float s = Gfx.s, px = x * s, py = y * s, pw = w * s, ph = h * s;
+        if (n < MAX) {
+            ids[n] = id;
+            int i = n++ * 4;
+            cur[i] = px; cur[i + 1] = py; cur[i + 2] = pw; cur[i + 3] = ph;
+        }
+        if (!free()) return false;
+        float cx = mx(), cy = my();
+        return cx >= px && cy >= py && cx < px + pw && cy < py + ph;
+    }
+
+    /** Mouse press b (0 left, 1 right, 2 middle) at the cursor; true = it hit a widget and is swallowed. */
+    public static boolean press(int b) {
+        if (lastN == 0 || !free()) return false;
+        return pressAt(b, mx(), my());
+    }
+
+    /** Matches a screen event against the last frame's hit boxes. */
+    static boolean pressAt(int b, float x, float y) {
+        if (lastN == 0 || !free()) return false;
+        for (int k = lastN - 1; k >= 0; k--) { // topmost (drawn last) first
+            int i = k * 4;
+            if (x >= last[i] && y >= last[i + 1] && x < last[i] + last[i + 2] && y < last[i + 1] + last[i + 3]) {
+                pending = seen[k];
+                pendingBtn = b;
+                pendingAt = Game.frame;
+                pendingX = x;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Button (0 left, 1 right, 2 middle) that clicked widget id since its last draw, else -1; consumes the click. */
+    public static int clicked(String id) {
+        if (pending == null || !pending.equals(id)) return -1;
+        pending = null;
+        clickX = pendingX;
+        return pendingBtn;
+    }
+
+    static float clickX() { return clickX; }
+}

@@ -1,0 +1,59 @@
+package dev.nether.ov.platform;
+
+/** LWJGL2 (DirectInput scan code) and SDL3 scancode key codes <-> GLFW key codes, so config and modules stay GLFW-coded. */
+public final class Keys {
+    private Keys() {}
+
+    // pairs of {lwjgl2, glfw}
+    private static final int[] MAP = {
+        1, 256, 2, 49, 3, 50, 4, 51, 5, 52, 6, 53, 7, 54, 8, 55, 9, 56, 10, 57, 11, 48, 12, 45, 13, 61, 14, 259, 15, 258,
+        16, 81, 17, 87, 18, 69, 19, 82, 20, 84, 21, 89, 22, 85, 23, 73, 24, 79, 25, 80, 26, 91, 27, 93, 28, 257, 29, 341,
+        30, 65, 31, 83, 32, 68, 33, 70, 34, 71, 35, 72, 36, 74, 37, 75, 38, 76, 39, 59, 40, 39, 41, 96, 42, 340, 43, 92,
+        44, 90, 45, 88, 46, 67, 47, 86, 48, 66, 49, 78, 50, 77, 51, 44, 52, 46, 53, 47, 54, 344, 55, 332, 56, 342, 57, 32,
+        58, 280, 59, 290, 60, 291, 61, 292, 62, 293, 63, 294, 64, 295, 65, 296, 66, 297, 67, 298, 68, 299, 69, 282, 70, 281,
+        71, 327, 72, 328, 73, 329, 74, 333, 75, 324, 76, 325, 77, 326, 78, 334, 79, 321, 80, 322, 81, 323, 82, 320, 83, 330,
+        87, 300, 88, 301, 100, 302, 101, 303, 102, 304, 156, 335, 157, 345, 181, 331, 183, 283, 184, 346, 197, 284,
+        199, 268, 200, 265, 201, 266, 203, 263, 205, 262, 207, 269, 208, 264, 209, 267, 210, 260, 211, 261, 219, 343, 220, 347, 221, 348,
+    };
+    // pairs of {SDL scancode (USB HID usage), glfw}
+    private static final int[] SDL = {
+        4, 65, 5, 66, 6, 67, 7, 68, 8, 69, 9, 70, 10, 71, 11, 72, 12, 73, 13, 74, 14, 75, 15, 76, 16, 77, 17, 78, 18, 79,
+        19, 80, 20, 81, 21, 82, 22, 83, 23, 84, 24, 85, 25, 86, 26, 87, 27, 88, 28, 89, 29, 90, 30, 49, 31, 50, 32, 51,
+        33, 52, 34, 53, 35, 54, 36, 55, 37, 56, 38, 57, 39, 48, 40, 257, 41, 256, 42, 259, 43, 258, 44, 32, 45, 45, 46, 61,
+        47, 91, 48, 93, 49, 92, 51, 59, 52, 39, 53, 96, 54, 44, 55, 46, 56, 47, 57, 280, 58, 290, 59, 291, 60, 292, 61, 293,
+        62, 294, 63, 295, 64, 296, 65, 297, 66, 298, 67, 299, 68, 300, 69, 301, 70, 283, 71, 281, 72, 284, 73, 260, 74, 268,
+        75, 266, 76, 261, 77, 269, 78, 267, 79, 262, 80, 263, 81, 264, 82, 265, 83, 282, 84, 331, 85, 332, 86, 333, 87, 334,
+        88, 335, 89, 321, 90, 322, 91, 323, 92, 324, 93, 325, 94, 326, 95, 327, 96, 328, 97, 329, 98, 320, 99, 330, 103, 336,
+        104, 302, 105, 303, 106, 304, 224, 341, 225, 340, 226, 342, 227, 343, 228, 345, 229, 344, 230, 346, 231, 347, 101, 348,
+    };
+    private static final int[] TO_GLFW = new int[256], FROM_GLFW = new int[512], SDL_GLFW = new int[512], GLFW_SDL = new int[512];
+
+    static {
+        for (int i = 0; i < MAP.length; i += 2) {
+            TO_GLFW[MAP[i]] = MAP[i + 1];
+            FROM_GLFW[MAP[i + 1]] = MAP[i];
+        }
+        for (int i = 0; i < SDL.length; i += 2) {
+            SDL_GLFW[SDL[i]] = SDL[i + 1];
+            GLFW_SDL[SDL[i + 1]] = SDL[i];
+        }
+    }
+
+    /** GLFW key for an SDL scancode, -1 when unknown. */
+    static int fromSdl(int sc) { return sc > 0 && sc < 512 && SDL_GLFW[sc] != 0 ? SDL_GLFW[sc] : -1; }
+
+    /** SDL scancode for a GLFW key, 0 when unknown. */
+    static int toSdl(int glfw) { return glfw >= 0 && glfw < 512 ? GLFW_SDL[glfw] : 0; }
+
+    /** GLFW key for the game's own key code (InputConstants: GLFW keys, SDL scancodes on 26.3+), -1 when unknown. */
+    public static int fromGame(int c) { return Plat.cur != null && Plat.cur.sdl() ? fromSdl(c) : c; }
+
+    /** The game's own key code for a GLFW key (-1 when the SDL build has none). */
+    public static int toGame(int glfw) { if (Plat.cur == null || !Plat.cur.sdl()) return glfw; int s = toSdl(glfw); return s == 0 ? -1 : s; }
+
+    /** GLFW key for an LWJGL2 code, -1 when unknown. */
+    public static int toGlfw(int lw) { return lw > 0 && lw < 256 && TO_GLFW[lw] != 0 ? TO_GLFW[lw] : -1; }
+
+    /** LWJGL2 key for a GLFW code, 0 when unknown. */
+    public static int toLwjgl(int glfw) { return glfw >= 0 && glfw < 512 ? FROM_GLFW[glfw] : 0; }
+}
