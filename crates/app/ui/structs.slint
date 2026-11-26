@@ -83,8 +83,6 @@ export global Backend {
     in-out property <[Inst]> instances;
     in-out property <[PresetRow]> presets;
     callback preset-play(string);
-    // Play page: 0 Nether, 1 Vanilla (plain Minecraft, any loader), 2 Modpacks, 3 Horizon (26.3 rewritten in Rust)
-    in-out property <int> play-tab: 0;
     // Horizon: hz-state 0 idle, 1 installing / preparing / starting, 2 running, 3 stopping; hz-build = installed build
     // ("" = none); hz-played = "3 h played" or ""; hz-art = the 26.x key art
     in-out property <int> hz-state: 0;

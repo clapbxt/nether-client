@@ -200,7 +200,7 @@ export component AppWindow inherits Window {
                 open-crash(i) => { Backend.log-kind = 2; root.open-idx = i; root.open-tab = 5; root.open-mode = 0; root.tab = 1; }
                 go-wardrobe => { root.open-idx = -1; root.tab = 5; }
                 go-discover => { root.open-idx = -1; root.tab = 2; }
-                go-play => { root.open-idx = -1; Backend.play-tab = 0; Backend.refilter(); root.tab = 1; }
+                go-play => { root.open-idx = -1; Backend.refilter(); root.tab = 1; }
             }
         }
         if root.tab == 1: Page { x: root.rail; y: root.top; width: root.W - root.rail; height: root.body;

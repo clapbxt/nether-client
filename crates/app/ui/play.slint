@@ -170,49 +170,8 @@ export component CardPanel inherits Rectangle {
     }
 }
 
-// Play > Horizon (2026-11-21): Horizon is Minecraft 26.3 rewritten in Rust (horizon-rust/horizon, open source). One
-// ready-made way to play it, so the left side says what it is and the right panel plays it, like a Nether card.
-export component HorizonHero inherits Rectangle {
-    property <length> hh: Math.min(380px, root.height - 220px);
-    Rectangle {
-        x: 0px; y: 0px; width: parent.width; height: root.hh; border-radius: Theme.r2; clip: true; background: Theme.s2;
-        if Backend.hz-has-art: Image {
-            property <float> zoom: ht.has-hover ? 1.04 : 1.0;
-            animate zoom { duration: Theme.slow; easing: ease-out; }
-            width: parent.width * self.zoom; height: parent.height * self.zoom;
-            x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
-            source: Backend.hz-art; image-fit: cover;
-        }
-        Rectangle { background: @linear-gradient(180deg, #00000010 20%, #000000a8 62%, #000000ee 100%); }
-        Rectangle {
-            x: 16px; y: 16px; width: et.preferred-width + 14px; height: 20px; border-radius: 4px; background: #000000a0;
-            et := Text { text: "EXPERIMENTAL"; color: #ffffffc8; font-family: Theme.mono; font-size: 10px; font-weight: 700; letter-spacing: 1px; horizontal-alignment: center; vertical-alignment: center; }
-        }
-        Rectangle {
-            x: parent.width - self.width - 16px; y: 16px; width: vt.preferred-width + 14px; height: 20px; border-radius: 4px; background: #000000a0;
-            vt := Text { text: "26.3"; color: #ffffffc8; font-family: Theme.mono; font-size: 10px; font-weight: 700; letter-spacing: 1px; horizontal-alignment: center; vertical-alignment: center; }
-        }
-        Text { x: 24px; y: parent.height - 118px; height: 64px; text: "HORIZON"; color: #FFFFFF; font-family: Theme.pix; font-size: 64px; font-weight: 800; vertical-alignment: center; }
-        Text { x: 26px; y: parent.height - 52px; width: parent.width - 52px; height: 22px; text: "Minecraft: Java Edition 26.3, rewritten from scratch in Rust";
-            color: #ffffffd0; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; vertical-alignment: center; overflow: elide; }
-        Rectangle { border-radius: Theme.r2; border-width: 1px; border-color: ht.has-hover ? #ffffff40 : #ffffff14; animate border-color { duration: Theme.fast; } }
-        ht := TouchArea { double-clicked => { if Backend.hz-state == 0 { Backend.hz-play(); } } }
-    }
-    // what is different, in three tiles
-    for t[k] in [{h: "ONE VERSION", d: "Horizon plays 26.3 only. Its worlds are vanilla's format, so they open in Minecraft 26.3 too."},
-                 {h: "ITS OWN ENGINE", d: "Not the Java game: the Nether HUD, cosmetics and Java mods don't run in it. Some of vanilla is still missing."},
-                 {h: "FROM YOUR COPY", d: "Built from your own Minecraft files the first time you play. Needs an account that owns Java Edition."}]: Rectangle {
-        x: k * ((root.width - 24px) / 3 + 12px); y: root.hh + 12px; width: (root.width - 24px) / 3; height: 116px;
-        border-radius: Theme.r2; background: Theme.s1; border-width: 1px; border-color: Theme.ln;
-        Text { x: 16px; y: 14px; height: 20px; text: t.h; color: Theme.tx; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; }
-        Text { x: 16px; y: 40px; width: parent.width - 32px; height: 66px; wrap: word-wrap; overflow: elide; text: t.d; color: Theme.dim; font-family: Theme.ui; font-size: 12px * Theme.ts; }
-    }
-    Text { x: 0px; y: root.hh + 144px; width: root.width - gh.width - 16px; height: 34px; vertical-alignment: center; wrap: word-wrap; overflow: elide;
-        text: "An unofficial open-source project (MIT), not made by Nether, Mojang or Microsoft. Nether downloads its signed builds for you.";
-        color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; }
-    gh := LinkBtn { x: root.width - self.width; y: root.hh + 150px; text: "VIEW ON GITHUB"; clicked => { Backend.hz-site(); } }
-}
-
+// Play > Horizon (2026-11-21; since 2026-11-26 a row in the Play list, added from NEW INSTANCE > HORIZON): Horizon is
+// Minecraft 26.3 rewritten in Rust (horizon-rust/horizon, open source). Its row opens this panel on the right.
 // The Horizon panel: build, first-play steps, PLAY / STOP, its folder, and the way to Nether 26 for mods.
 export component HorizonPanel inherits Rectangle {
     callback go-nether();

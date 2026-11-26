@@ -60,6 +60,14 @@ pub struct State {
     pub secs: i64,
     #[serde(default)]
     pub last_ts: i64,
+    /// Listed on the Play page (NEW INSTANCE > HORIZON adds it). None = saved before the list had it: listed when a
+    /// build is installed.
+    #[serde(default)]
+    pub added: Option<bool>,
+}
+
+impl State {
+    pub fn listed(&self) -> bool { self.added.unwrap_or(!self.build.is_empty()) }
 }
 
 pub fn state(paths: &Paths) -> State {

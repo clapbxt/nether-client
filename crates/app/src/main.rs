@@ -145,19 +145,13 @@ fn category_slug(kind: i32, idx: i32) -> String {
     list.get(idx.max(0) as usize).unwrap_or(&"").to_string()
 }
 
-/// Indices of the profiles listed on the Play page (tab 0 Nether: none, it shows the version cards; 1 Vanilla: plain
-/// Minecraft; 2 Modpacks: installed packs and your own Nether profiles; search text; sort 0 last played, 1 name,
-/// 2 playtime, 3 created) and the Home order (last played first).
-fn refilter(ui: &AppWindow) {
+/// Indices of the profiles listed on the Play page (every instance, modpacks included; search text; sort 0 last
+/// played, 1 name, 2 playtime, 3 created) and the Home order (last played first).
+pub(crate) fn refilter(ui: &AppWindow) {
     let b = ui.global::<Backend>();
-    let (tab, q, sort) = (b.get_play_tab(), b.get_inst_query().trim().to_lowercase(), b.get_inst_sort());
+    let (q, sort) = (b.get_inst_query().trim().to_lowercase(), b.get_inst_sort());
     let all: Vec<Inst> = b.get_instances().iter().collect();
     let mut v: Vec<usize> = (0..all.len())
-        .filter(|n| {
-            let i = &all[*n];
-            // 0 Instances (everything but modpacks), 1 Modpacks
-            match tab { 0 => i.pack.is_empty(), 1 => !i.pack.is_empty(), _ => false }
-        })
         .filter(|n| q.is_empty() || [&all[*n].name, &all[*n].ver, &all[*n].loader].iter().any(|s| s.to_lowercase().contains(&q)))
         .collect();
     match sort {
@@ -182,8 +176,8 @@ fn refilter(ui: &AppWindow) {
         if !folded { for n in members { push(&mut rows, n); } }
     }
     b.set_inst_rows(ModelRc::new(VecModel::from(rows)));
-    // no instances of your own yet: Play shows the new-instance walkthrough in place of the list
-    ui.global::<NewInst>().set_first(all.iter().all(|i| !i.pack.is_empty()));
+    // nothing to play yet (no instance, Horizon not added): Play shows the new-instance walkthrough in place of the list
+    ui.global::<NewInst>().set_first(all.is_empty() && !b.get_hz_added());
     b.set_groups(ModelRc::new(VecModel::from(names.iter().map(|g| g.as_str().into()).collect::<Vec<slint::SharedString>>())));
     b.set_visible_insts(ModelRc::new(VecModel::from(v.into_iter().map(|n| n as i32).collect::<Vec<_>>())));
     let mut recent: Vec<usize> = (0..all.len()).collect();
@@ -1311,9 +1305,6 @@ fn main() -> Result<(), slint::PlatformError> {
             i.cover = cover;
             insts.push(i);
             persist(&sh.paths, &*insts);
-            // made from the new-instance walkthrough: show it in the instance list
-            let b = ui.global::<Backend>();
-            if b.get_create_open() || ui.global::<NewInst>().get_first() { b.set_play_tab(0); }
             refilter(&ui);
             artui::refresh(&ui, &sh);
             show_toast(&ui, &sh, &format!("{name} created"));
@@ -1653,8 +1644,6 @@ java.lang.OutOfMemoryError: Java heap space
             f.set_snap_loader(std::env::var("NC_SNAP_FLOW_LOADER").ok().and_then(|n| n.parse().ok()).unwrap_or(1));
             f.set_snap_vi(std::env::var("NC_SNAP_FLOW_VER").ok().and_then(|n| n.parse().ok()).unwrap_or(0));
         }
-        // NC_SNAP_PLAYTAB=n: Play page tab (0 Instances, 1 Modpacks, 2 Horizon)
-        if let Some(n) = std::env::var("NC_SNAP_PLAYTAB").ok().and_then(|n| n.parse::<i32>().ok()) { ui.global::<Backend>().set_play_tab(n); refilter(&ui); }
         // NC_SNAP_CARD=fam,way: pick a Play card once the cards are in
         if let Some((f, w)) = std::env::var("NC_SNAP_CARD").ok().and_then(|s| s.split_once(',').map(|(f, w)| (f.to_string(), w.parse::<i32>().unwrap_or(0)))) {
             let weak = ui.as_weak();

@@ -11,18 +11,21 @@ Your starting point.
   **More versions** and **Browse modpacks**.
 - **View crash** appears here if the last game crashed.
 - **Latest news** from Nether Client and Mojang.
-- **Profiles** and **Friends**: jump back into a recent profile, or see who's online.
 
 The bar along the bottom always shows what will launch (the **launch target**), any downloads in progress, and a
 **Play / Stop** button for the selected profile.
 
 ## Play
 
-Three tabs: **Instances** (yours, with a dot when the Nether client is on), **Modpacks** and **Horizon**. The list
-shows name, Minecraft version, loader and when you last played. From here you can:
+One list of everything you play: your instances (with a dot when the Nether client is on), modpacks you installed,
+and Horizon once you add it. The list shows name, Minecraft version, loader and when you last played. From here you
+can:
 
-- **New instance**: Quick (pick a version and play) or Manual (version, loader, Nether on / off, mods, resource packs).
-  With no instances yet, Play shows these steps right away. See [Profiles](profiles.md).
+- **New instance**: pick one of four ways to start. **Quick** (pick a version and play), **Manual** (version, loader,
+  Nether on / off, mods, resource packs), **Modpack** (search Modrinth for a pack, then Nether on / off) or
+  **Horizon** (Minecraft 26.3 rewritten in Rust; it just gets added, with nothing to set up). In Manual, the
+  **Performance mods** switch ticks every performance mod below it, and unticking any of them turns the switch off.
+  With nothing to play yet, Play shows these steps right away. See [Profiles](profiles.md).
 - **Import**: bring in a modpack file or the profiles of another launcher.
 - Open a profile to manage its mods, packs, worlds, screenshots and logs.
 
