@@ -66,6 +66,39 @@ final class Project {
         return false;
     }
 
+    /** Clip-space x, y and w of world point (x, y, z) into out (w > 0 in front of the camera; linear in the point). */
+    static void clip(double x, double y, double z, double[] out) {
+        double dx = x - cx, dy = y - cy, dz = z - cz;
+        if (real) {
+            float[] m = MVP;
+            out[0] = m[0] * dx + m[4] * dy + m[8] * dz + m[12];
+            out[1] = m[1] * dx + m[5] * dy + m[9] * dz + m[13];
+            out[2] = m[3] * dx + m[7] * dy + m[11] * dz + m[15];
+            return;
+        }
+        out[0] = (dx * rx + dz * rz) / tanX;
+        out[1] = (dx * ux + dy * uy + dz * uz) / tanY;
+        out[2] = dx * fx + dy * fy + dz * fz;
+    }
+
+    /**
+     * The overlay map ({@link Gfx#map}) drawing plane point (u, v) at world o + u * du + v * dv, built from the camera
+     * matrices themselves rather than from projected corners: its third row is the true clip w, so the GPU clips what
+     * is behind the camera and a plane partly behind you (a panel you turn away from) still draws its visible part.
+     * W x H = framebuffer px. Call after {@link #begin}.
+     */
+    static float[] planeMap(double[] o, double[] du, double[] dv, float W, float H) {
+        double[] c0 = new double[3], cu = new double[3], cv = new double[3];
+        clip(o[0], o[1], o[2], c0);
+        clip(o[0] + du[0], o[1] + du[1], o[2] + du[2], cu);
+        clip(o[0] + dv[0], o[1] + dv[1], o[2] + dv[2], cv);
+        for (int i = 0; i < 3; i++) { cu[i] -= c0[i]; cv[i] -= c0[i]; }
+        return new float[] {
+            (float) ((cu[0] + cu[2]) / 2 * W), (float) ((cu[2] - cu[1]) / 2 * H), (float) cu[2],
+            (float) ((cv[0] + cv[2]) / 2 * W), (float) ((cv[2] - cv[1]) / 2 * H), (float) cv[2],
+            (float) ((c0[0] + c0[2]) / 2 * W), (float) ((c0[2] - c0[1]) / 2 * H), (float) c0[2]};
+    }
+
     /** Screen x / y of the last projection in a W x H space (same units as {@link #begin}). */
     static float sx(float W) { return (float) ((nx + 1) / 2 * W); }
     static float sy(float H) { return (float) ((1 - ny) / 2 * H); }

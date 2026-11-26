@@ -34,8 +34,9 @@ final class LyricsStudio {
             float x = lx + 16 + (1 - pa) * 30, w = lw - 32, y = top + 8;
             Menu.row(L, x, y, w, Menu.focus(x, y, w, 44), true);
             y += 52;
-            float stageH = Math.max(160, Math.min(190, viewH * 0.32f));
-            stage(L, x, y, w, stageH);
+            boolean slim = slim(L);
+            float stageH = slim ? 46 : Math.max(160, Math.min(190, viewH * 0.32f));
+            if (slim) strip(L, x, y, w, stageH); else stage(L, x, y, w, stageH);
             y = tabs(x, y + stageH + 12, w, "ls") + 8;
             float view = top + viewH - y;
             if (view < 40) return;
@@ -51,6 +52,31 @@ final class LyricsStudio {
         }
     }
 
+    /** The preview stage is folded to a strip (remembered in the config): more room for the settings under it. */
+    private static boolean slim(Lyrics L) { return Boolean.TRUE.equals(Config.raw(L.id, "studioSlim")); }
+
+    private static void setSlim(Lyrics L, boolean v) { Config.set(L.id, "studioSlim", v); Menu.scroll = Menu.scrollT = 0; }
+
+    /**
+     * Folded stage: the line being sung (or the demo line) drawn by the lyric renderer itself with the current look,
+     * the transport and the button that opens the full stage again.
+     */
+    private static void strip(Lyrics L, float x, float y, float w, float h) {
+        float bw = 86, tw = 112, sw = w - bw - tw - 20;
+        box(x, y, sw, h);
+        int[] clip = Gfx.clipIn(x, y, sw, h);
+        float s = Gfx.s;
+        L.previewNow((x + sw / 2) * s, (y + h / 2) * s, (sw - 24) * s, h * s, Math.min(18, h * 0.4f) * s, null);
+        Gfx.reclip(clip);
+        Media.State st = Media.cur;
+        float mid = x + sw + 10 + tw / 2, cy = y + h / 2;
+        transport("lsprev", mid - 34, cy, 10, LyricsWorldPanel.PREV, st != null && st.canPrev, Media::prev, false);
+        transport("lsplay", mid, cy, 13, st != null && st.playing ? LyricsWorldPanel.PAUSE : LyricsWorldPanel.PLAY, st != null && st.canPlay, Media::toggle, true);
+        transport("lsnext", mid + 34, cy, 10, LyricsWorldPanel.NEXT, st != null && st.canNext, Media::next, false);
+        if (Menu.button("lsslim", "EXPAND", x + w - bw, y + (h - 28) / 2, bw, 28, false)) setSlim(L, false);
+        if (Menu.in(x + w - bw, y + (h - 28) / 2, bw, 28)) Menu.tip = "Show the full preview stage";
+    }
+
     /** The preview stage (the lyrics as set: in the world, or the on-screen panel) and the track beside it. */
     private static void stage(Lyrics L, float x, float y, float w, float h) {
         float rw = Math.min(260, w * 0.36f), sw = w - rw - 10;
@@ -61,6 +87,8 @@ final class LyricsStudio {
         else panelPreview(L, x, y, sw, h, null);
         Gfx.reclip(clip);
         tag(x + 10, y + 10, world ? "IN WORLD  ·  " + L.str("wStyle").toUpperCase(Locale.ROOT) : "ON SCREEN  ·  " + L.str("panelStyle").toUpperCase(Locale.ROOT));
+        if (Menu.button("lsslim", "COLLAPSE", x + sw - 86, y + 8, 78, 22, false)) setSlim(L, true);
+        if (Menu.in(x + sw - 86, y + 8, 78, 22)) Menu.tip = "Fold the preview to a strip for more room below";
 
         float rx = x + sw + 10;
         Gfx.rect(rx, y, rw, h, Th.R, Th.s2);
@@ -132,7 +160,7 @@ final class LyricsStudio {
                 y = cards(L, "preset", Lyrics.themeNames(), null, x, y, w, cols(w, 132, 3), 52, (v, cx, cy, cw, ch) -> still(L, WORD, cx, cy, cw, ch, "preset", v));
                 y = rows(L, x, y, w, "lyricsColor", "glowColor", "glowColor2") + 10;
                 y = section("Text style", null, x, y, w);
-                y = cards(L, "textStyle", new String[] {"Neon", "Glow", "Clean"}, new String[] {"Neon  ·  split glow", "Glow  ·  soft halo", "Clean  ·  shadow only"}, x, y, w, 3, 64,
+                y = cards(L, "textStyle", Lyrics.TEXT_STYLES, Lyrics.TEXT_CAPTIONS, x, y, w, cols(w, 150, 4), 64,
                     (v, cx, cy, cw, ch) -> still(L, WORD, cx, cy, cw, ch, "textStyle", v));
                 return rows(L, x, y, w, "glow", "twoTone", "beatGlow");
             }
@@ -150,8 +178,8 @@ final class LyricsStudio {
                 });
                 if (world) {
                     y = section("World layout", null, x, y, w);
-                    y = cards(L, "wStyle", new String[] {"Air", "Sky", "Walls", "Row", "Lines"}, new String[] {"Air  ·  scattered", "Sky  ·  overhead", "Walls  ·  curved ahead", "Row  ·  word by word", "Lines  ·  whole line"},
-                        x, y, w, cols(w, 190, 2), 92, (v, cx, cy, cw, ch) -> { pk.clear(); pk.put("wStyle", v); worldPreview(L, Lyrics.pvLayout(v), SHORT, cx, cy, cw, ch, pk); });
+                    y = cards(L, "wStyle", Lyrics.WORLD_STYLES, Lyrics.WORLD_CAPTIONS,
+                        x, y, w, cols(w, 190, 3), 92, (v, cx, cy, cw, ch) -> { pk.clear(); pk.put("wStyle", v); worldPreview(L, Lyrics.pvLayout(v), SHORT, cx, cy, cw, ch, pk); });
                     return rows(L, x, y, w, "airMode", "pairWords", "dist", "worldSize", "follow", "viewLock", "musicNotes", "worldIntro");
                 }
                 y = section("Screen layout", null, x, y, w);

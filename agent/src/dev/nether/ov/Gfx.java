@@ -57,7 +57,9 @@ final class Gfx {
     /** HUD text in Nether Pixel (Feather / vanilla HUD look): Bold for HEAD, Regular for the rest. Set per module while it lays out and draws. */
     static final int PIXB = 5, PIXR = 6;
     static boolean hudPix;
-    private static final String[] LYRIC_FILES = {"Righteous-Regular", "BebasNeue-Regular", "Poppins-SemiBold", "LilitaOne-Regular", "Pacifico-Regular", "KaushanScript-Regular", "PermanentMarker-Regular", "Neonderthaw-Regular", "Monoton-Regular"};
+    private static final String[] LYRIC_FILES = {"Righteous-Regular", "BebasNeue-Regular", "Poppins-SemiBold", "LilitaOne-Regular", "Pacifico-Regular", "KaushanScript-Regular", "PermanentMarker-Regular", "Neonderthaw-Regular", "Monoton-Regular",
+        "Quicksand-Bold", "Outfit-Bold", "Syne-Bold", "Yellowtail-Regular", "Courgette-Regular", "Damion-Regular", "GrandHotel-Regular", "Yesteryear-Regular",
+        "Audiowide-Regular", "Bungee-Regular", "Bangers-Regular", "PressStart2P-Regular", "Shrikhand-Regular"};
     private static final Font[] fonts = new Font[LYRIC0 + LYRIC_FILES.length]; // 4 = fallback for characters our fonts lack (accents, Cyrillic, CJK)
     private static final boolean[] lyricTried = new boolean[LYRIC_FILES.length];
     private static final Glyph[][] fast = new Glyph[fonts.length * 256][]; // ASCII glyphs per (font, pixel size): no boxing per char
@@ -69,7 +71,9 @@ final class Gfx {
     private static Graphics2D g2;
     // Overlay text lands on framebuffer pixels. Fractional metrics create fractional advances which are then rounded
     // when quads are emitted, making neighboring glyphs look softer and uneven at common GUI scales.
-    private static final FontRenderContext FRC = new FontRenderContext(null, true, false);
+    private static final FontRenderContext FRC = new FontRenderContext(null, true, false), FRAC = new FontRenderContext(null, true, true);
+    /** unhinted advance per pixel of size, by (face, char): projected text keeps its proportions at every size */
+    private static final Map<Long, Float> freeAdv = new HashMap<>();
 
     private static final class Glyph {
         float u0, v0, u1, v1, adv;
@@ -642,6 +646,7 @@ final class Gfx {
         pixel = px;
         if (faces[0] != null) pick();
         derived.clear();
+        freeAdv.clear();
         metrics.clear();
         glyphs.clear();
         masks.clear();
@@ -694,12 +699,15 @@ final class Gfx {
     static void textFree(int f, float size, float x, float cy, int col, String str) {
         f = hf(f);
         int px = freePx(size);
-        float k = size / px, top = cy + size * 0.36f - (met(f, px)[0] + 2) * k, pen = -2 * k;
+        // glyph bitmaps come from the nearest whole pixel size, but the pen advances by the unhinted advance: as the size
+        // changes smoothly (walking towards world lyrics) letters scale smoothly instead of jumping as hinted widths snap
+        float k = size / px, top = cy + size * 0.36f - (met(f, px)[0] + 2) * k, pen = 0;
         for (int i = 0; i < str.length(); i++) {
             char c = str.charAt(i);
             Glyph g = glyph(f, px, c);
-            if (c != ' ') quad(x + pen, top, g.w * k, g.h * k, g.u0, g.v0, g.u1, g.v1, col, col, -1, 0);
-            pen += g.adv * k;
+            float adv = advFree(f, px, c, g) * size;
+            if (c != ' ') quad(x + pen + (adv - g.adv * k) / 2 - 2 * k, top, g.w * k, g.h * k, g.u0, g.v0, g.u1, g.v1, col, col, -1, 0);
+            pen += adv;
         }
     }
 
@@ -708,8 +716,21 @@ final class Gfx {
         f = hf(f);
         int px = freePx(size);
         float w = 0;
-        for (int i = 0; i < str.length(); i++) w += glyph(f, px, str.charAt(i)).adv;
-        return w * size / px;
+        for (int i = 0; i < str.length(); i++) { char c = str.charAt(i); w += advFree(f, px, c, glyph(f, px, c)); }
+        return w * size;
+    }
+
+    /** Unhinted advance of c per pixel of size (the glyph's own face, as {@link #slowGlyph} picks it). */
+    private static float advFree(int f, int px, char c, Glyph g) {
+        long key = ((long) f << 32) | c;
+        Float a = freeAdv.get(key);
+        if (a == null) {
+            Font fo = font(f, 100);
+            if (!fo.canDisplay(c)) { Font fb = font(4, 100); fo = fb.canDisplay(c) ? fb : null; }
+            a = fo == null ? g.adv / px : (float) fo.getStringBounds(String.valueOf(c), FRAC).getWidth() / 100f;
+            freeAdv.put(key, a);
+        }
+        return a;
     }
 
     private static int freePx(float size) { return Math.min(248, Math.max(5, Math.round(size))); }

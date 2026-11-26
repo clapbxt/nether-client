@@ -62,7 +62,7 @@ final class LyricsWorldPanel {
         if (shown && closeAt < 0 && inView(c)) { close(); return; }
         place(c);
         shown = true;
-        openAt = System.currentTimeMillis();
+        openAt = Lyrics.ms();
         closeAt = -1;
         held = null;
         Sfx.open();
@@ -70,7 +70,7 @@ final class LyricsWorldPanel {
 
     static void hide() { shown = false; closeAt = -1; held = null; on = false; last.clear(); }
 
-    private static void close() { if (closeAt < 0) { closeAt = System.currentTimeMillis(); held = null; Sfx.click(); } }
+    private static void close() { if (closeAt < 0) { closeAt = Lyrics.ms(); held = null; Sfx.click(); } }
 
     // kept for Input's free-cursor path (unused now that the panel is aimed with the crosshair)
     static void inputClosed() { held = null; }
@@ -123,7 +123,7 @@ final class LyricsWorldPanel {
     }
 
     private static float open() {
-        long now = System.currentTimeMillis();
+        long now = Lyrics.ms();
         if (closeAt >= 0) return 1 - ease(Math.min(1, (now - closeAt) / (float) CLOSE_MS));
         return ease(Math.min(1, (now - openAt) / (float) OPEN_MS));
     }
@@ -162,7 +162,7 @@ final class LyricsWorldPanel {
 
     private static void slide(Hit h) {
         double f = Math.max(0, Math.min(1, (pu - h.x0) / h.w0));
-        if (h.id.equals("seek")) { long now = System.currentTimeMillis(); if (now - seekAt < 200) return; seekAt = now; }
+        if (h.id.equals("seek")) { long now = Lyrics.ms(); if (now - seekAt < 200) return; seekAt = now; }
         h.set.accept(f);
     }
 
@@ -180,21 +180,32 @@ final class LyricsWorldPanel {
         if (dx * dx + dy * dy + dz * dz > 32 * 32) { hide(); return; } // walked away
         if (!Input.inWorld() || Game.screenOpen() || !Project.begin(fbW, fbH)) { on = false; return; }
         double scale = 0.9 + 0.1 * k;
-        float[] q = new float[8];
+        // cull only when the whole panel is behind you or off one side of the screen; a panel partly behind the camera
+        // keeps drawing (the map below carries the clip w, so the GPU cuts away the part behind you)
         float[][] corner = {{0, 0}, {W, 0}, {W, H}, {0, H}};
+        double[] cc = new double[3];
+        int front = 0, left = 0, right = 0, above = 0, below = 0;
         for (int i = 0; i < 4; i++) {
             double[] p = at(corner[i][0], corner[i][1], scale);
-            float[] s = Project.screen(p[0], p[1], p[2], fbW, fbH);
-            if (s == null || s[2] < 0.3f) { on = false; return; } // partly behind the camera
-            q[i * 2] = s[0]; q[i * 2 + 1] = s[1];
+            Project.clip(p[0], p[1], p[2], cc);
+            if (cc[2] > 0.05) front++;
+            if (cc[0] < -cc[2]) left++;
+            if (cc[0] > cc[2]) right++;
+            if (cc[1] > cc[2]) above++;
+            if (cc[1] < -cc[2]) below++;
         }
-        float minX = Math.min(Math.min(q[0], q[2]), Math.min(q[4], q[6])), maxX = Math.max(Math.max(q[0], q[2]), Math.max(q[4], q[6]));
-        float minY = Math.min(Math.min(q[1], q[3]), Math.min(q[5], q[7])), maxY = Math.max(Math.max(q[1], q[3]), Math.max(q[5], q[7]));
-        if (maxX < 0 || minX > fbW || maxY < 0 || minY > fbH) { on = false; return; }
-        // glyphs are rasterised at the panel's on-screen size (its nearer edge), so text stays crisp at any distance
-        rs = Math.max(0.6f, Math.min(8f, Math.max(len(q[0], q[1], q[2], q[3]), len(q[6], q[7], q[4], q[5])) / W));
-        float[] map = homography(W * rs, H * rs, q);
-        if (map == null) { on = false; return; }
+        if (front == 0 || front == 4 && (left == 4 || right == 4 || above == 4 || below == 4)) { on = false; return; }
+        // glyphs are rasterised near the panel's on-screen size, in steps with some slack so the raster size does not
+        // change every frame while you walk (text would shimmer); the map scales the result to the exact size
+        double[] mid = at(W / 2, H / 2, scale), mr = at(W / 2 + 10, H / 2, scale);
+        float[] a = Project.screen(mid[0], mid[1], mid[2], fbW, fbH), b = Project.screen(mr[0], mr[1], mr[2], fbW, fbH);
+        if (a != null && b != null) {
+            float raw = Math.max(0.6f, Math.min(8f, len(a[0], a[1], b[0], b[1]) / 10));
+            if (Math.abs(Math.log(raw / rs)) > 0.22) rs = (float) Math.max(0.6, Math.min(8, Math.pow(2, Math.round(Math.log(raw) / Math.log(2) * 3) / 3.0)));
+        }
+        double[] o = at(0, 0, scale), r = right();
+        double bu = unit * scale / rs;
+        float[] map = Project.planeMap(o, new double[] {r[0] * bu, 0, r[2] * bu}, new double[] {0, -bu, 0}, fbW, fbH);
         float[] pt = closeAt < 0 && k > 0.6f ? pointer(fbW, fbH, scale) : null;
         on = pt != null;
         if (on) { pu = pt[0]; pv = pt[1]; }
@@ -337,10 +348,12 @@ final class LyricsWorldPanel {
             add("th" + i, cx - sp / 2, cy - 9, sp, 18).click = () -> set(L, "preset", n);
         }
         label("TEXT STYLE", 122);
-        seg(L, "textStyle", new String[] {"Neon", "Glow", "Clean"}, CX, 128, CW);
-        slider(L, "glow", "Glow", 158, 0, 100, 5, "%");
-        toggle(L, "beatGlow", "Pulse to the beat", CX, 172, CW / 2 - 2);
-        toggle(L, "upper", "Capitals", CX + CW / 2 + 2, 172, CW / 2 - 2);
+        String[] ts = Lyrics.TEXT_STYLES;
+        seg(L, "textStyle", java.util.Arrays.copyOfRange(ts, 0, 4), CX, 127, CW);
+        seg(L, "textStyle", java.util.Arrays.copyOfRange(ts, 4, ts.length), CX, 143, CW);
+        slider(L, "glow", "Glow", 168, 0, 100, 5, "%");
+        toggle(L, "beatGlow", "Pulse to the beat", CX, 179, CW / 2 - 2);
+        toggle(L, "upper", "Capitals", CX + CW / 2 + 2, 179, CW / 2 - 2);
     }
 
     private static void fonts(Lyrics L) {
@@ -388,7 +401,7 @@ final class LyricsWorldPanel {
             return;
         }
         label("LAYOUT", 100);
-        seg(L, "wStyle", new String[] {"Air", "Sky", "Walls", "Row", "Lines"}, CX, 106, CW);
+        seg(L, "wStyle", Lyrics.WORLD_STYLES, CX, 106, CW);
         slider(L, "dist", "Distance", 134, 3, 12, 0.5, "");
         toggle(L, "follow", "Follow you", CX, 146, CW / 2 - 2);
         toggle(L, "viewLock", "View lock", CX + CW / 2 + 2, 146, CW / 2 - 2);
@@ -539,7 +552,7 @@ final class LyricsWorldPanel {
     private static float ease(float t) { float u = 1 - t; return 1 - u * u * u; }
 
     /** Homography from a local panel rectangle to its four perspective-projected corners. */
-    private static float[] homography(float width, float height, float[] p) {
+    static float[] homography(float width, float height, float[] p) {
         double x0 = p[0], y0 = p[1], x1 = p[2], y1 = p[3], x2 = p[4], y2 = p[5], x3 = p[6], y3 = p[7];
         double dx1 = x1 - x2, dx2 = x3 - x2, dx3 = x0 - x1 + x2 - x3;
         double dy1 = y1 - y2, dy2 = y3 - y2, dy3 = y0 - y1 + y2 - y3;
