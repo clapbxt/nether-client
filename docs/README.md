@@ -34,6 +34,7 @@ back. These pages explain how.
 | [Adding an in-game module](develop/modules.md) | Step by step, plus the rules a module must follow |
 | [Releases and signing](develop/releasing.md) | How releases and updates are signed and checked |
 | [Contributing](../CONTRIBUTING.md) | Reporting bugs and sending pull requests |
+| [Changelog](../CHANGELOG.md) | What changed in each release, and what is waiting for the next one |
 
 ## Keeping these docs current
 
