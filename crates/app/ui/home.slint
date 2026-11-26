@@ -147,39 +147,7 @@ export component HomeScreen inherits Rectangle {
         }
     }
 
-    // ---------- latest news: cards, left ----------
-    property <length> news-w: root.width - 2 * root.m - root.side-w - 24px;
-    property <length> card-w: (root.news-w - 2 * 16px) / 3;
     property <length> card-h: 190px;
-    property <bool> no-news: Backend.news-failed && Backend.news.length == 0;
-    Text { x: root.m; y: root.low-y; height: 24px; vertical-alignment: center; text: "LATEST NEWS"; color: Theme.tx; font-family: Theme.pix; font-size: 24px; font-weight: 700; }
-    LinkBtn { x: root.m + root.news-w - self.width; y: root.low-y + 2px; text: "DISCOVER"; clicked => { root.go-discover(); } }
-    if Backend.news.length == 0: Rectangle {
-        x: root.m; y: root.low-y + 40px; width: root.news-w; height: root.card-h; border-radius: Theme.r3; background: Theme.s1; border-width: 1px; border-color: Theme.ln;
-        Text { text: root.no-news ? "No news right now." : "Fetching the latest releases…"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }
-    }
-    for n[i] in Backend.news: nc := Rectangle {
-        visible: i < 3;
-        x: root.m + i * (root.card-w + 16px); y: root.low-y + 40px; width: root.card-w; height: root.card-h; border-radius: Theme.r3; clip: true;
-        background: Theme.s2;
-        // the release's art from Mojang's launcher feed, else our banner; it leans in on hover
-        Image {
-            property <float> zoom: nta.has-hover ? 1.05 : 1.0;
-            animate zoom { duration: Theme.slow; easing: ease-out; }
-            width: parent.width * self.zoom; height: parent.height * self.zoom;
-            x: (parent.width - self.width) / 2; y: (parent.height - self.height) / 2;
-            source: n.has-img ? n.img : @image-url("assets/banner.jpg"); image-fit: cover;
-        }
-        Rectangle { background: @linear-gradient(180deg, #00000020 0%, #00000000 25%, #000000c0 62%, #000000f0 100%); }
-        Rectangle {
-            x: 14px; y: 14px; width: ntg.preferred-width + 14px; height: 20px; border-radius: 4px; background: i == 0 ? Theme.red : #000000a8;
-            ntg := Text { text: n.tag; color: #FFFFFF; font-family: Theme.mono; font-size: 10px; font-weight: 700; letter-spacing: 1px; horizontal-alignment: center; vertical-alignment: center; }
-        }
-        Icon { x: parent.width - 30px; y: 18px; d: Ico.ext; tint: nta.has-hover ? #FFFFFF : #ffffff80; }
-        Text { x: 16px; y: parent.height - 64px; width: parent.width - 32px; height: 46px; text: n.title; color: #FFFFFF; font-family: Theme.disp; font-size: 19px; font-weight: 700; wrap: word-wrap; overflow: elide; vertical-alignment: bottom; }
-        Rectangle { border-radius: Theme.r3; border-width: 1px; border-color: nta.has-hover ? #ffffff40 : #ffffff14; animate border-color { duration: Theme.fast; } }
-        nta := TouchArea { mouse-cursor: pointer; clicked => { Backend.open-url(n.url); } }
-    }
 
     // ---------- right column: PROFILES | FRIENDS (Lunar's friends column) ----------
     property <length> side-x: root.width - root.m - root.side-w;
