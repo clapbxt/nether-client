@@ -140,7 +140,7 @@ export component AppWindow inherits Window {
     }
     property <bool> slim: Backend.skin-slim;
     changed slim => { Backend.skin-wake(); }
-    // keyboard shortcuts (every key nothing else took): Ctrl+K command palette, Ctrl+1-5 tabs, Ctrl+, settings, Ctrl+N new instance,
+    // keyboard shortcuts (every key nothing else took): Ctrl+K command palette, Ctrl+1-4 pages in rail order, Ctrl+, settings, Ctrl+N new instance,
     // Esc closes the project page, account panel and crash page
     forward-focus: keys;
     keys := FocusScope {
@@ -165,8 +165,7 @@ export component AppWindow inherits Window {
             if e.text == "1" { root.open-idx = -1; root.tab = 0; return accept; }
             if e.text == "2" { root.tab = 1; return accept; }
             if e.text == "3" { root.open-idx = -1; root.tab = 2; return accept; }
-            if e.text == "4" { root.open-idx = -1; root.tab = 4; return accept; }
-            if e.text == "5" { root.open-idx = -1; root.tab = 5; return accept; }
+            if e.text == "4" { root.open-idx = -1; root.tab = 5; return accept; }
             return reject;
         }
 

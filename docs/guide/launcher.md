@@ -1,6 +1,6 @@
 # The launcher
 
-A quick tour of the launcher's pages. Use the bar at the top to move between them, or press **Ctrl+1** to **Ctrl+5**.
+A quick tour of the launcher's pages. Use the bar at the top to move between them, or press **Ctrl+1** to **Ctrl+4**.
 
 ## Home
 
@@ -59,7 +59,7 @@ players. See [Friends, parties and world invites](friends.md).
 | Keys | Does |
 |---|---|
 | **Ctrl+K** | Search everything: pages, settings, profiles, worlds and mods |
-| **Ctrl+1** to **Ctrl+5** | Go to a page |
+| **Ctrl+1** to **Ctrl+4** | Go to a page |
 | **Ctrl+,** | Settings |
 | **Ctrl+N** | New instance |
 | **Esc** | Close the open dialog |
