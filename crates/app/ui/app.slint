@@ -9,8 +9,8 @@ import "fonts/JetBrainsMono-Bold.ttf";
 
 import { Theme } from "theme.slint";
 export { Theme }
-import { Backend, Setup, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat, Sound } from "structs.slint";
-export { Backend, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat, Setup, Sound }
+import { Backend, Setup, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat, Sound, NewInst } from "structs.slint";
+export { Backend, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat, Setup, Sound, NewInst }
 import { Btn, Eyebrow, Page, Slash, Hatch, PlayButton, Icon, Ico, Pulse, LinkBtn, Heading, Scrim, WinButtons, Field, FocusTrap, Toggle, Dropdown } from "components.slint";
 import { HomeScreen } from "home.slint";
 import { SetupFlow } from "setup.slint";
@@ -160,7 +160,7 @@ export component AppWindow inherits Window {
             }
             if !e.modifiers.control || Backend.gate-open || Setup.open { return reject; }
             if e.text == "," { root.open-idx = -1; root.tab = 6; return accept; }
-            if e.text == "n" || e.text == "N" { Backend.create-nether = Backend.play-tab != 1; Backend.create-open = true; root.open-idx = -1; root.tab = 1; return accept; }
+            if e.text == "n" || e.text == "N" { Backend.create-open = true; root.open-idx = -1; root.tab = 1; return accept; }
             if e.text == "1" { root.open-idx = -1; root.tab = 0; return accept; }
             if e.text == "2" { root.tab = 1; return accept; }
             if e.text == "3" { root.open-idx = -1; root.tab = 2; return accept; }
