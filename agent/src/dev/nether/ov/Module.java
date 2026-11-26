@@ -5,51 +5,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** One configurable value shown on a module's settings page and stored under modules.<id>.<key>. */
-final class Setting {
-    /** TEXT: single-line string (max = length limit); HEADER: section title, stores nothing; ACTION: button (opts[0] = its label) that runs {@link #run}. */
-    static final int BOOL = 0, SLIDER = 1, COLOR = 2, CHOICE = 3, KEY = 4, TEXT = 5, HEADER = 6, ACTION = 7;
-    final int t;
-    final String key, label;
-    final double min, max, step;
-    final Object def;
-    final String[] opts;
-    /** Optional one-line explanation (menu: under the label, full text on hover; launcher: schema "hint"). */
-    String hint;
-    /** ACTION only: runs on the render thread when its button is clicked in the menu. */
-    Runnable run;
-    /** Shown on the settings page only while this holds (null = always): settings that do nothing in the current mode stay out of the way. */
-    java.util.function.BooleanSupplier when;
-    /** HEADER only: a folding group (click to open); its settings show only while open (see {@link #open}). */
-    String fold;
-    /** folding groups open this session, "<module id>#<header>" */
-    static final java.util.Set<String> open = new java.util.HashSet<>();
-
-    Setting(int t, String key, String label, double min, double max, double step, Object def, String[] opts) {
-        this.t = t; this.key = key; this.label = label; this.min = min; this.max = max; this.step = step; this.def = def; this.opts = opts;
-    }
-
-    static Setting bool(String key, String label, boolean def) { return new Setting(BOOL, key, label, 0, 1, 1, def, null); }
-    static Setting slider(String key, String label, double min, double max, double step, double def) { return new Setting(SLIDER, key, label, min, max, step, def, null); }
-    static Setting color(String key, String label, String def) { return new Setting(COLOR, key, label, 0, 0, 0, def, null); }
-    static Setting choice(String key, String label, String def, String... opts) { return new Setting(CHOICE, key, label, 0, 0, 0, def, opts); }
-    static Setting key(String key, String label, int def) { return new Setting(KEY, key, label, 0, 0, 0, (double) def, null); }
-    static Setting text(String key, String label, String def, int maxLen) { return new Setting(TEXT, key, label, 0, maxLen, 1, def, null); }
-    static Setting header(String label) { return new Setting(HEADER, "#" + label, label, 0, 0, 0, null, null); }
-    static Setting action(String key, String label, String button, Runnable run) {
-        Setting s = new Setting(ACTION, key, label, 0, 0, 0, null, new String[] {button});
-        s.run = run;
-        return s;
-    }
-
-    Setting hint(String h) { hint = h; return this; }
-    /** Shown only while w holds (added to any condition already set). */
-    Setting when(java.util.function.BooleanSupplier w) { java.util.function.BooleanSupplier a = when; when = a == null ? w : () -> a.getAsBoolean() && w.getAsBoolean(); return this; }
-    boolean shown() { try { return when == null || when.getAsBoolean(); } catch (RuntimeException e) { return true; } }
-    /** Has a value under modules.<id>.<key> (headers and buttons do not). */
-    boolean stored() { return t != HEADER && t != ACTION; }
-}
-
 /** An overlay module. HUD modules have a draggable box (anchor + offset, or auto layout) and scale. */
 abstract class Module {
     static final String[] PALETTE = {"#EAEEF3", "#E10600", "#FF3B2F", "#FFFFFF", "#8A93A1", "#3DDC84", "#4DA3FF", "#FFB020", "#A855F7"};
@@ -222,52 +177,5 @@ abstract class Module {
 
     float txt(int font, float size, float x, float cy, int col, String s) {
         return Gfx.text(font, size, x, cy, col, s, bool("shadow"), 0);
-    }
-}
-
-/** HUD module showing label/value rows in a small panel. */
-abstract class RowsModule extends Module {
-    static final float PX = 9, PY = 6, RH = 18;
-    private String[][] rows = new String[0][];
-    private float lw;
-    private long rowsAt;
-
-    RowsModule(String id, String name, String cat, String desc, boolean defOn, double dx, double dy) {
-        super(id, name, cat, desc, true, defOn, dx, dy);
-    }
-
-    abstract String[][] rows();
-
-    /** Labels match the value size in the Minecraft font (one line of game text), smaller caps in Nether's type. */
-    private float labSize() { return Gfx.hudPix ? 13 : 10; }
-
-    @Override void measure() {
-        // values are formatted at most 20 times a second, not every frame
-        long now = System.currentTimeMillis();
-        if (now >= rowsAt || rows.length == 0) { rows = rows(); rowsAt = now + 50; }
-        lw = 0;
-        float vw = 0;
-        boolean labels = bool("labels");
-        for (String[] r : rows) {
-            if (labels) lw = Math.max(lw, Gfx.width(Gfx.SEMI, labSize(), r[0]));
-            vw = Math.max(vw, Gfx.width(Gfx.MONO, 13, r[1].length() > 8 && r[1].charAt(0) == '#' && r[1].charAt(7) == '|' ? r[1].substring(8) : r[1]));
-        }
-        w = PX * 2 + (labels ? lw + 8 : 0) + vw;
-        h = PY * 2 + RH * rows.length;
-    }
-
-    @Override void draw(float x, float y) {
-        panel(x, y, w, h);
-        int col = color(), lc = labelColor();
-        boolean labels = bool("labels");
-        for (int i = 0; i < rows.length; i++) {
-            float cy = y + PY + RH * (i + 0.5f);
-            if (labels) Gfx.text(Gfx.SEMI, labSize(), x + PX + (bool("accent") && bool("bg") ? 1 : 0), cy, lc, rows[i][0], bool("shadow"), 0);
-            // a row may pick its own value colour ("#RRGGBB|value"), e.g. FPS or ping by speed
-            String v = rows[i][1];
-            int vc = col;
-            if (v.length() > 8 && v.charAt(0) == '#' && v.charAt(7) == '|') { try { vc = 0xFF000000 | Integer.parseInt(v.substring(1, 7), 16); } catch (NumberFormatException ignored) { } v = v.substring(8); }
-            Gfx.text(Gfx.MONO, 13, x + PX + (labels ? lw + 8 : 0), cy, vc, v, bool("shadow"), 0);
-        }
     }
 }
