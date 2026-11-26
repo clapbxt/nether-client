@@ -9,7 +9,12 @@ trains (the launcher will fetch newer client builds on its own).
 
 ## Unreleased
 
+### Launcher
+- The in-game client now updates by itself. When the launcher starts, it installs a newer client release into all
+  your instances, so a client fix no longer needs a launcher update. Each instance keeps its own copy of the client.
+
 ### In-game client
+- The client has its own version number (1.0.0) and a compatibility number, written into `client.json` by its build.
 - Fixed: Minecraft 1.13 could crash when drawing the overlay. The overlay called an OpenGL function through a
   class that LWJGL 3.1.6 doesn't have.
 

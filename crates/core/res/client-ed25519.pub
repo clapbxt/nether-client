@@ -1,0 +1,2 @@
+# Ed25519 public keys (hex, one per line) that sign in-game client releases (client.json.sig).
+# Lines that are not 64 hex digits are ignored. With no key here the launcher never installs a downloaded client.

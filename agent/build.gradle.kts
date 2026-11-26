@@ -1,9 +1,11 @@
 import java.io.ByteArrayOutputStream
+import java.security.MessageDigest
 
 // Builds the in-game client into agent/build/ (the folder crates/core/build.rs embeds into the launcher):
 //   nether-agent.jar       the agent: bootstrap, overlay, modules, fonts, icons, name tables, art
 //   nether-agent-boot.jar  Hook + Tiny, which must sit on the bootstrap class path (Boot-Class-Path)
 //   schema.json            every module and setting, for the launcher's Client page
+//   client.json            version, protocol and sha256 of both jars (gradle.properties); signed for releases
 //
 // Output is Java 8 bytecode, one jar for 1.8.9 (LWJGL 2), 1.13+ (LWJGL 3 GLFW) and 26.3+ (SDL3). Each platform's
 // classes compile against only that platform's LWJGL, as three source sets:
@@ -16,6 +18,9 @@ import java.io.ByteArrayOutputStream
 // Run: agent\gradlew.bat build   (or agent\build.ps1, which calls it)
 
 plugins { java }
+
+val clientVersion = providers.gradleProperty("clientVersion").get()
+val clientProtocol = providers.gradleProperty("clientProtocol").get().toInt()
 
 val legacyFiles = listOf("**/PlatLwjgl2.java", "**/GlCompat.java")
 val sdlFiles = listOf("**/PlatSdl.java")
@@ -133,7 +138,24 @@ val agentJar by tasks.registering(Jar::class) {
         "Premain-Class" to "dev.nether.agent.Agent",
         "Boot-Class-Path" to "nether-agent-boot.jar",
         "Can-Set-Native-Method-Prefix" to "true",
+        "Implementation-Version" to clientVersion,
+        "Nether-Protocol" to clientProtocol,
     )
 }
 
-tasks.named("assemble") { dependsOn(agentJar, bootJar, schema) }
+val clientJson by tasks.registering {
+    description = "Writes client.json: version, protocol and the sha256 of both jars"
+    val jars = listOf(agentJar, bootJar).map { t -> t.flatMap { it.archiveFile } }
+    inputs.files(jars)
+    inputs.property("version", clientVersion)
+    inputs.property("protocol", clientProtocol)
+    val out = layout.buildDirectory.file("client.json")
+    outputs.file(out)
+    doLast {
+        fun sha256(f: File) = MessageDigest.getInstance("SHA-256").digest(f.readBytes()).joinToString("") { "%02x".format(it) }
+        val files = jars.map { it.get().asFile }.sortedBy { it.name }.joinToString(",\n") { "    \"${it.name}\": \"${sha256(it)}\"" }
+        out.get().asFile.writeText("{\n  \"version\": \"$clientVersion\",\n  \"protocol\": $clientProtocol,\n  \"files\": {\n$files\n  }\n}\n", Charsets.UTF_8)
+    }
+}
+
+tasks.named("assemble") { dependsOn(agentJar, bootJar, schema, clientJson) }

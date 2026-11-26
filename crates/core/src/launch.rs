@@ -461,7 +461,7 @@ pub fn launch(paths: &Paths, opts: &LaunchOpts, progress: Progress) -> Result<Ch
     let agent = match dev_agent {
         Some(a) if std::path::Path::new(&a).exists() => Some(PathBuf::from(a)),
         _ if !opts.client => None,
-        _ => crate::agent::ensure(paths),
+        _ => crate::agent::ensure(paths, &opts.game_dir),
     };
     // packs the launcher turned on / off, downloaded or combined -> options.txt's list (issue #22)
     crate::rpacks::sync(&opts.game_dir, v.legacy_args.is_some());

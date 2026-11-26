@@ -15,6 +15,10 @@ fn main() {
             fs::write(out.join(name), b"").unwrap();
         }
     }
+    // version, protocol and file hashes of the bundled build (crates/core/src/agent.rs)
+    let from = src.join("client.json");
+    println!("cargo:rerun-if-changed={}", from.display());
+    if fs::copy(&from, out.join("client.json")).is_err() { fs::write(out.join("client.json"), b"{}").unwrap(); }
     // module/settings schema dumped by the agent build (the launcher's Client page)
     let from = src.join("schema.json");
     println!("cargo:rerun-if-changed={}", from.display());
