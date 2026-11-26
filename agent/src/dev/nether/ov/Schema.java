@@ -1,5 +1,9 @@
 package dev.nether.ov;
 
+import dev.nether.ov.framework.Module;
+import dev.nether.ov.framework.Modules;
+import dev.nether.ov.framework.Setting;
+
 /** Build-time dump of every module and setting as JSON (agent/build/schema.json), so the launcher's Client page
  *  edits exactly the settings the in-game menu shows. */
 public final class Schema {

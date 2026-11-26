@@ -2,7 +2,7 @@
 
 ## Velo Client (MIT)
 
-The HUD auto layout in `src/dev/nether/ov/Modules.java` (`place`: never-moved boxes stack into their home corner in
+The HUD auto layout in `src/dev/nether/ov/framework/Modules.java` (`place`: never-moved boxes stack into their home corner in
 module order, 2 px apart, closing gaps when one is off) adapts the approach of Velo Client's `HudAutoLayout`.
 
 Copyright (c) 2026 Velo Client Contributors

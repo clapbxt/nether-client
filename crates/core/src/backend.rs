@@ -492,6 +492,8 @@ mod tests {
     use super::*;
     use ring::signature::{Ed25519KeyPair, KeyPair};
 
+    // needs the private backend's content next to the repository (build.rs sets backend_content)
+    #[cfg(backend_content)]
     #[test]
     fn content_files_parse() {
         let news: Vec<NewsItem> = serde_json::from_str(include_str!("../../../backend/content/news.json")).unwrap();
@@ -525,6 +527,7 @@ mod tests {
         assert!(verify_manifest(&k2, bad.as_bytes(), &s2, 1000, 0).is_err(), "bad hash entry");
     }
 
+    #[cfg(backend_content)]
     #[test]
     fn shipped_manifest_matches_embedded_key() {
         let body = include_bytes!("../../../backend/content/manifest.json");

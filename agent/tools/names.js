@@ -9,9 +9,11 @@ const src = path.join(__dirname, "..", "src", "dev", "nether", "ov"), res = path
 const lines = f => fs.readFileSync(f, "utf8").split("\n").map(l => l.replace("\r", ""));
 const dot = s => s.split("/").join(".");
 const used = new Set(["net.minecraft.class_1657", "method_7299", "net.minecraft.class_922", "method_4055", "net.minecraft.class_338", "net.minecraft.class_1297", "method_5872", "net.minecraft.class_4184", "method_19325", "net.minecraft.class_759", "method_3228", "net.minecraft.class_4603", "method_23070", "net.minecraft.class_897", "method_62425", "net.minecraft.class_10197", "method_75966", "net.minecraft.class_4587", "net.minecraft.class_1921", "method_25448", "net.minecraft.class_757", "method_3196", "method_22976", "method_3236", "method_4054", "net.minecraft.class_898", "net.minecraft.class_824"]), usedSrg = new Set(["net.minecraft.client.Minecraft"]); // + the game class (bind), the name, nametag-visibility, freelook and entity-culling hooks (Agent)
-for (const f of fs.readdirSync(src)) {
-  if (f === "Names.java") continue;
-  const t = fs.readFileSync(path.join(src, f), "utf8");
+// every overlay source, sub-packages included (game/, features/..., see dev/nether/ov/package-info.java)
+const sources = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? sources(path.join(d, e.name)) : e.name.endsWith(".java") ? [path.join(d, e.name)] : []);
+for (const f of sources(src)) {
+  if (path.basename(f) === "Names.java") continue;
+  const t = fs.readFileSync(f, "utf8");
   for (const m of t.matchAll(/net\.minecraft\.class_[0-9a-z_$]+|"(?:field|method|comp)_[0-9]+"/g)) used.add(m[0].split('"').join(""));
   for (const m of t.matchAll(/\bl\("[^"]*", "([^"]+)"\)/g)) usedSrg.add(m[1]);
 }
@@ -46,7 +48,7 @@ function official(tinyFile, mojFile) {
   const missing = [...used].filter(u => !out[u]);
   if (missing.length) console.error("official: unmapped", missing.join(" "));
   const rows = Object.keys(out).sort().map(k => `        "${k}", "${out[k]}",`).join("\n");
-  fs.writeFileSync(path.join(src, "Names.java"), `package dev.nether.ov;
+  fs.writeFileSync(path.join(src, "game", "Names.java"), `package dev.nether.ov.game;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;

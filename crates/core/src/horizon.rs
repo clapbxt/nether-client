@@ -40,7 +40,7 @@ const ASSET: &str = "horizon-windows-arm64.zip";
 #[cfg(not(all(windows, target_arch = "aarch64")))]
 const ASSET: &str = "horizon-windows-x64.zip";
 
-const EXE: &str = if cfg!(windows) { ".exe" } else { "" };
+const EXE: &str = nether_common::platform::EXE_SUFFIX;
 
 /// `<data>/horizon`: `builds/<version>/` (unpacked builds), `prepared/` (resources, shared by every build),
 /// `game/` (saves, options, packs, logs), `server-<mc>.jar`, `state.json`.
@@ -218,10 +218,7 @@ fn unpack(zip: &Path, dir: &Path, progress: &Progress) -> Result<()> {
     Ok(())
 }
 
-#[cfg(windows)]
-fn quiet(cmd: &mut Command) { use std::os::windows::process::CommandExt; cmd.creation_flags(0x0800_0000); }
-#[cfg(not(windows))]
-fn quiet(_: &mut Command) {}
+fn quiet(cmd: &mut Command) { nether_common::platform::no_window(cmd); }
 
 /// `horizon-prepare --check`: the prepared resources are complete and current for this build.
 pub fn ready(paths: &Paths, build: &Path) -> bool {

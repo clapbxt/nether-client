@@ -175,16 +175,7 @@ pub fn save(paths: &Paths, list: &[InstanceData]) -> Result<()> {
 fn load_strict(p: &Path) -> bool { fs::read(p).ok().is_some_and(|r| serde_json::from_slice::<Vec<InstanceData>>(&r).is_ok()) }
 
 /// Total physical memory in MB (0 when unknown).
-pub fn system_ram_mb() -> u64 {
-    #[cfg(windows)]
-    unsafe {
-        use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
-        let mut m: MEMORYSTATUSEX = std::mem::zeroed();
-        m.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
-        if GlobalMemoryStatusEx(&mut m) != 0 { return m.ullTotalPhys / (1024 * 1024); }
-    }
-    0
-}
+pub fn system_ram_mb() -> u64 { nether_common::platform::system_ram_mb() }
 
 /// Content kinds inside an instance: 0 mods, 1 resource packs, 2 shader packs.
 pub fn content_dir(paths: &Paths, instance: &str, kind: i32) -> PathBuf {

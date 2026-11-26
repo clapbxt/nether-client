@@ -4,6 +4,28 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.nio.ByteBuffer;
 
+import dev.nether.ov.features.cosmetics.Capes;
+import dev.nether.ov.features.cosmetics.Cosmetics;
+import dev.nether.ov.features.performance.BackgroundFps;
+import dev.nether.ov.features.social.Discord;
+import dev.nether.ov.framework.Config;
+import dev.nether.ov.framework.FrameStats;
+import dev.nether.ov.framework.Hits;
+import dev.nether.ov.framework.Input;
+import dev.nether.ov.framework.Module;
+import dev.nether.ov.framework.Modules;
+import dev.nether.ov.framework.Slow;
+import dev.nether.ov.game.Game;
+import dev.nether.ov.game.Keybind;
+import dev.nether.ov.menu.Menu;
+import dev.nether.ov.menu.title.MainMenu;
+import dev.nether.ov.menu.title.Splashes;
+import dev.nether.ov.platform.GlBackend;
+import dev.nether.ov.platform.Plat;
+import dev.nether.ov.ui.ColorPicker;
+import dev.nether.ov.ui.Gfx;
+import dev.nether.ov.ui.Th;
+
 import javax.imageio.ImageIO;
 
 import org.lwjgl.BufferUtils;
@@ -18,21 +40,21 @@ import dev.nether.agent.Hook;
 public final class Overlay {
     private Overlay() {}
 
-    static int fps;
+    public static int fps;
     private static boolean inited, dead, shot;
     private static int shots;
     private static long lastNs, fpsNs, menuAt;
     private static int frames, total;
     /** The game's render thread (the one that swaps buffers): game state is only touched from it. */
-    static volatile Thread renderThread;
+    public static volatile Thread renderThread;
     private static final int[] sz = new int[4];
 
     /** Called once by the agent after all overlay classes are defined in the LWJGL class loader. platform: 0 GLFW, 1 LWJGL2, 2 SDL3 (each one only has its own classes defined). */
     public static void install(int platform) throws Exception {
         boolean legacy = platform == 1;
-        Plat.cur = (Plat) Class.forName(platform == 1 ? "dev.nether.ov.PlatLwjgl2" : platform == 2 ? "dev.nether.ov.PlatSdl" : "dev.nether.ov.InputGlfw").newInstance();
+        Plat.cur = (Plat) Class.forName(platform == 1 ? "dev.nether.ov.platform.PlatLwjgl2" : platform == 2 ? "dev.nether.ov.platform.PlatSdl" : "dev.nether.ov.platform.InputGlfw").newInstance();
         if ("1".equals(System.getProperty("nether.bare"))) { Hook.target = Overlay::bareFrame; return; } // benchmarks: vanilla + the dev world loader (no input hooks installed)
-        GlBackend.cur = (GlBackend) Class.forName(legacy ? "dev.nether.ov.GlCompat" : "dev.nether.ov.GlCore").newInstance();
+        GlBackend.cur = (GlBackend) Class.forName(legacy ? "dev.nether.ov.platform.GlCompat" : "dev.nether.ov.platform.GlCore").newInstance();
         Plat.cur.install();
         Hook.target = Overlay::frame;
         Hook.name = Capes::name;
