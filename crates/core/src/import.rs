@@ -68,6 +68,50 @@ pub fn detect(path: &Path) -> Result<Format> {
     bail!("unrecognised modpack/instance format")
 }
 
+/// What an import would create, read without changing anything (for a confirm step).
+#[derive(Clone, Debug)]
+pub struct Preview {
+    pub format: Format,
+    pub name: String,
+    pub minecraft: String,
+    pub loader: Loader,
+    pub loader_version: String,
+    /// Files to download (Modrinth) or that can't be downloaded without a CurseForge API key (CurseForge).
+    pub files: usize,
+}
+
+/// Detect `path` and read its name, Minecraft version and loader.
+pub fn preview(path: &Path) -> Result<Preview> {
+    let format = detect(path)?;
+    let stem = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    match format {
+        Format::Mrpack => {
+            let i = crate::modpack::info(path)?;
+            Ok(Preview { format, name: if i.name.trim().is_empty() { stem } else { i.name }, minecraft: i.minecraft, loader: i.loader, loader_version: i.loader_version, files: i.files })
+        }
+        Format::Prism => {
+            let (cfg_s, pack_s) = if path.is_dir() {
+                (fs::read_to_string(path.join("instance.cfg"))?, fs::read_to_string(path.join("mmc-pack.json")).context("mmc-pack.json missing")?)
+            } else {
+                let mut z = zip::ZipArchive::new(fs::File::open(path)?)?;
+                let base = find_in_zip(&mut z, "instance.cfg").ok_or_else(|| anyhow!("instance.cfg missing"))?;
+                let mut read = |f: &str| -> Result<String> { let mut s = String::new(); z.by_name(&format!("{base}{f}")).with_context(|| format!("{f} missing"))?.read_to_string(&mut s)?; Ok(s) };
+                (read("instance.cfg")?, read("mmc-pack.json")?)
+            };
+            let (minecraft, loader, loader_version) = parse_mmc_pack(&pack_s)?;
+            let name = parse_cfg(&cfg_s).get("name").cloned().filter(|n| !n.is_empty()).unwrap_or(stem);
+            Ok(Preview { format, name, minecraft, loader, loader_version, files: 0 })
+        }
+        Format::CurseForge => {
+            let mut zip = zip::ZipArchive::new(fs::File::open(path)?)?;
+            let mut s = String::new();
+            zip.by_name("manifest.json").context("manifest.json missing")?.read_to_string(&mut s)?;
+            let (minecraft, loader, loader_version, name, _, missing) = parse_cf_manifest(&s)?;
+            Ok(Preview { format, name: if name.is_empty() { stem } else { name }, minecraft, loader, loader_version, files: missing.len() })
+        }
+    }
+}
+
 /// Import any supported format (auto-detected) as a new instance named `name` (None = the pack's own name).
 pub fn import(c: &Client, paths: &Paths, path: &Path, name: Option<&str>, progress: &Progress) -> Result<Imported> {
     match detect(path)? {
@@ -254,6 +298,28 @@ mod tests {
         assert!(!paths.instance("Bad Pack").exists());
         let _ = fs::remove_dir_all(root);
     }
+
+    #[test]
+    fn preview_reads_without_importing() {
+        let root = tmpdir("preview");
+        let paths = Paths { root: root.join("data") };
+        let z = root.join("p.zip");
+        fs::write(&z, zip_of(&[("My Prism/instance.cfg", CFG), ("My Prism/mmc-pack.json", MMC)])).unwrap();
+        let p = preview(&z).unwrap();
+        assert_eq!((p.format, p.name.as_str(), p.minecraft.as_str(), p.loader, p.loader_version.as_str()), (Format::Prism, "My Prism", "1.20.1", Loader::Fabric, "0.15.7"));
+        let m = r#"{"minecraft":{"version":"1.20.1","modLoaders":[{"id":"neoforge-20.4.1","primary":true}]},"name":"CF","files":[{"projectID":1,"fileID":2}]}"#;
+        let c = root.join("cf.zip");
+        fs::write(&c, zip_of(&[("manifest.json", m)])).unwrap();
+        let p = preview(&c).unwrap();
+        assert_eq!((p.format, p.name.as_str(), p.loader, p.files), (Format::CurseForge, "CF", Loader::NeoForge, 1));
+        let mr = root.join("x.mrpack");
+        fs::write(&mr, zip_of(&[("modrinth.index.json", r#"{"name":"Mr","files":[],"dependencies":{"minecraft":"1.21.1","quilt-loader":"0.26.0"}}"#)])).unwrap();
+        let p = preview(&mr).unwrap();
+        assert_eq!((p.format, p.name.as_str(), p.minecraft.as_str(), p.loader), (Format::Mrpack, "Mr", "1.21.1", Loader::Quilt));
+        assert!(!paths.root.exists(), "nothing written");
+        let _ = fs::remove_dir_all(root);
+    }
+
 
     #[test]
     fn detects_mrpack_and_junk() {
