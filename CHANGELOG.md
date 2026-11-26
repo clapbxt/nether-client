@@ -12,9 +12,7 @@ This is the launcher's changelog. The in-game client has its own, in
 ### Launcher
 - Importing a modpack file or instance folder (picked or dropped on the window) first shows what it is: its
   name (editable), Minecraft version, loader and file count, and how many CurseForge mods won't download.
-- New **Host** page: run a server from a Vanilla or Fabric profile. Set it up and start it in two clicks, agree to
-  the EULA yourself, then watch the console, manage players, whitelist and ops, change settings, copy a world in and
-  make backups. It shows the address to share, and can check whether the internet can reach it.
+- Ctrl+1 to Ctrl+4 follow the left rail (Home, Play, Discover, Wardrobe); Ctrl+4 used to open an empty page.
 - Install Packs can filter by loader and sort by relevance (the default while you search). A slow search no longer
   replaces the results of a newer one.
 - The in-game client now updates by itself. When the launcher starts, it installs a newer client release into all

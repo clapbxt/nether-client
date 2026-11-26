@@ -215,7 +215,7 @@ export component SettingsScreen inherits Rectangle {
             Seg { x: parent.width - self.width; y: 15px; items: ["OFF", "QUIET", "NORMAL"]; current: Backend.lp-sounds;
                 changed(i) => { Backend.lp-sounds = i; Backend.save-launcher(); Sound.play(0); } }
         }
-        SetRow { x: 0px; y: root.y4 + 408px; width: root.cw; reserve: 0px; title: "Keyboard shortcuts"; sub: "Ctrl+K search everything  ·  Ctrl+1-5 pages  ·  Ctrl+, settings  ·  Ctrl+N new instance  ·  Esc closes"; }
+        SetRow { x: 0px; y: root.y4 + 408px; width: root.cw; reserve: 0px; title: "Keyboard shortcuts"; sub: "Ctrl+K search everything  ·  Ctrl+1-4 pages  ·  Ctrl+, settings  ·  Ctrl+N new instance  ·  Esc closes"; }
 
         // ---------- 05 personalization ----------
         SectionHead { x: 0px; y: root.y5; width: root.cw; idx: "05"; title: "PERSONALIZATION"; }
