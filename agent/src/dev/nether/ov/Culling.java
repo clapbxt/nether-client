@@ -372,6 +372,24 @@ final class Culling implements Hook.Cull {
         return lookup(x, y, z);
     }
 
+    /**
+     * Render thread: the block at x, y, z is a full opaque cube (for world lyrics printed on walls). Binds the names on
+     * first use; false when they are unknown or no world is loaded. Uncached (the worker owns the caches).
+     */
+    static boolean solidAt(int x, int y, int z) {
+        if (bound == 0) bind();
+        Object w = Game.level();
+        if (bound != 1 || w == null) return false;
+        try {
+            Object pos = posNew.newInstance(x, y, z), st = getState.invoke(w, pos);
+            if (st == null) return false;
+            Object o = stateBlock != null ? opaque.invoke(stateBlock.invoke(st)) : opaqueWithPos ? opaque.invoke(st, w, pos) : opaque.invoke(st);
+            return Boolean.TRUE.equals(o);
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     /** The game's own "full opaque cube" answer for the block at x, y, z (unloaded / racing chunk = see-through). */
     private static boolean lookup(int x, int y, int z) {
         try {
