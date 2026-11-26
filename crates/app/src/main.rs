@@ -27,6 +27,7 @@ mod wardrobe;
 mod community;
 mod packs;
 mod wizard;
+mod newflow;
 mod combine;
 mod instpage;
 mod settings;
@@ -154,7 +155,8 @@ fn refilter(ui: &AppWindow) {
     let mut v: Vec<usize> = (0..all.len())
         .filter(|n| {
             let i = &all[*n];
-            match tab { 1 => !i.nether && i.pack.is_empty(), 2 => !i.pack.is_empty() || (i.nether && !presets::is_card(&i.name)), _ => false }
+            // 0 Instances (everything but modpacks), 1 Modpacks
+            match tab { 0 => i.pack.is_empty(), 1 => !i.pack.is_empty(), _ => false }
         })
         .filter(|n| q.is_empty() || [&all[*n].name, &all[*n].ver, &all[*n].loader].iter().any(|s| s.to_lowercase().contains(&q)))
         .collect();
@@ -180,6 +182,8 @@ fn refilter(ui: &AppWindow) {
         if !folded { for n in members { push(&mut rows, n); } }
     }
     b.set_inst_rows(ModelRc::new(VecModel::from(rows)));
+    // no instances of your own yet: Play shows the new-instance walkthrough in place of the list
+    ui.global::<NewInst>().set_first(all.iter().all(|i| !i.pack.is_empty()));
     b.set_groups(ModelRc::new(VecModel::from(names.iter().map(|g| g.as_str().into()).collect::<Vec<slint::SharedString>>())));
     b.set_visible_insts(ModelRc::new(VecModel::from(v.into_iter().map(|n| n as i32).collect::<Vec<_>>())));
     let mut recent: Vec<usize> = (0..all.len()).collect();
@@ -928,6 +932,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // ---- new-instance wizard ----
     {
         wizard::init(&ui, &shared);
+        newflow::init(&ui, &shared);
         let (weak, sh) = (ui.as_weak(), shared.clone());
         ui.global::<Wizard>().on_pick_pack(move |id| if let Some(ui) = weak.upgrade() { wizard::pick_pack(&ui, &sh, &id) });
         let (weak, sh) = (ui.as_weak(), shared.clone());
@@ -1203,9 +1208,9 @@ fn main() -> Result<(), slint::PlatformError> {
         backend.on_set_inst_nether(move |idx, on| {
             let Some(ui) = weak.upgrade() else { return };
             let Some(i) = ui.global::<Backend>().get_instances().row_data(idx.max(0) as usize) else { return };
-            if presets::is_card(&i.name) || !instances::nether_ok(&i.ver, &i.loader) { return; }
+            if !instances::nether_ok(&i.ver, &i.loader) { return; }
             edit_inst(&ui, &sh, &i.name, |i| i.nether = on);
-            refilter(&ui); // Nether profiles list under Modpacks, plain ones under Vanilla
+            refilter(&ui);
             show_toast(&ui, &sh, &if on { format!("{} now runs the Nether client", i.name) } else { format!("{} is now plain Minecraft", i.name) });
         });
         let (weak, sh) = (ui.as_weak(), shared.clone());
@@ -1301,15 +1306,14 @@ fn main() -> Result<(), slint::PlatformError> {
             i.secs = 0;
             // a Nether profile only where the Nether client runs (the wizard offers nothing else)
             i.nether = ui.global::<Backend>().get_create_nether() && instances::nether_ok(&ver, label);
-            let i_nether = i.nether;
-            if loader == 6 && nether_core::optifine::supported(&ver) { i.optifine = "on".into(); }
+                        if loader == 6 && nether_core::optifine::supported(&ver) { i.optifine = "on".into(); }
             i.icon = icon;
             i.cover = cover;
             insts.push(i);
             persist(&sh.paths, &*insts);
-            // made with NEW PROFILE: show it where it lists (Modpacks for your own Nether profiles, else Vanilla)
+            // made from the new-instance walkthrough: show it in the instance list
             let b = ui.global::<Backend>();
-            if b.get_create_open() { b.set_play_tab(if i_nether { 2 } else { 1 }); }
+            if b.get_create_open() || ui.global::<NewInst>().get_first() { b.set_play_tab(0); }
             refilter(&ui);
             artui::refresh(&ui, &sh);
             show_toast(&ui, &sh, &format!("{name} created"));
@@ -1641,10 +1645,16 @@ java.lang.OutOfMemoryError: Java heap space
             let rows = ui.global::<Backend>().get_import_rows();
             for i in 0..rows.row_count().min(2) { if let Some(mut r) = rows.row_data(i) { r.on = true; rows.set_row_data(i, r); } }
         }
-        if let Some(n) = std::env::var("NC_SNAP_STEP").ok().and_then(|n| n.parse::<i32>().ok()) { ui.global::<Wizard>().set_snap_step(n); }
-        // NC_SNAP_PLAYTAB=n: Play page tab (0 Nether, 1 Vanilla, 2 Modpacks, 3 Horizon); NC_SNAP_VANILLA=1: the create wizard makes a Vanilla profile
+        // NC_SNAP_FLOW=n: open the new-instance walkthrough on a screen (0 quick or manual, 1 quick, 2-6 manual steps)
+        //   NC_SNAP_FLOW_LOADER=n: manual loader (0 Vanilla, 1 Fabric, 2 Forge, 3 NeoForge), NC_SNAP_FLOW_VER=n: version index (newest = 0)
+        if let Some(n) = std::env::var("NC_SNAP_FLOW").ok().and_then(|n| n.parse::<i32>().ok()) {
+            let f = ui.global::<NewInst>();
+            f.set_snap(n);
+            f.set_snap_loader(std::env::var("NC_SNAP_FLOW_LOADER").ok().and_then(|n| n.parse().ok()).unwrap_or(1));
+            f.set_snap_vi(std::env::var("NC_SNAP_FLOW_VER").ok().and_then(|n| n.parse().ok()).unwrap_or(0));
+        }
+        // NC_SNAP_PLAYTAB=n: Play page tab (0 Instances, 1 Modpacks, 2 Horizon)
         if let Some(n) = std::env::var("NC_SNAP_PLAYTAB").ok().and_then(|n| n.parse::<i32>().ok()) { ui.global::<Backend>().set_play_tab(n); refilter(&ui); }
-        if std::env::var("NC_SNAP_VANILLA").is_ok() { ui.global::<Backend>().set_create_nether(false); }
         // NC_SNAP_CARD=fam,way: pick a Play card once the cards are in
         if let Some((f, w)) = std::env::var("NC_SNAP_CARD").ok().and_then(|s| s.split_once(',').map(|(f, w)| (f.to_string(), w.parse::<i32>().unwrap_or(0)))) {
             let weak = ui.as_weak();

@@ -1,45 +1,46 @@
 # Profiles
 
-A **profile** (also called an instance) is one Minecraft setup: a version, a way to play, and its own mods, resource
-packs, worlds and settings. Profiles never share mods or worlds, so you can keep a PvP setup, a modpack and a
-survival world side by side without them touching each other.
+An **instance** is one Minecraft setup: a version, a loader, the Nether client on or off, and its own mods,
+resource packs, worlds and settings. Instances never share mods or worlds, so you can keep a PvP setup, a modpack and
+a survival world side by side without them touching each other.
 
-> The way you pick a version and turn the Nether client on or off is being redesigned. This page describes the
-> launcher as it is today and will change with it.
+## Make an instance
 
-## Ways to play
+On **Play**, press **New instance** (or **Ctrl+N**). If you don't have any instances yet, Play opens straight into
+these steps. First choose **Quick** or **Manual**.
 
-When you make a profile you first choose **how to play**:
+**Quick** asks for one thing, the Minecraft version. You get Fabric, the Nether client turned on, and Nether's
+performance mods (Sodium, Lithium, FerriteCore, ModernFix and a mod menu). Press **Create** or **Create & play**.
 
-| Choice | What you get | Versions |
-|---|---|---|
-| **Nether** | Minecraft with the Nether client: HUD, cosmetics, friends and parties. Nothing else to install. | 1.8.9, 1.12.2, 1.14 and newer |
-| **Nether + Fabric** (recommended) | The Nether client on Fabric. Adds Sodium, Lithium, FerriteCore and Mod Menu, and runs your own Fabric mods. | 1.14 and newer |
-| **Nether + Forge** | The Nether client on Forge, for big content mods and Forge modpacks. | 1.14 and newer |
-| **Nether + OptiFine** | OptiFine's zoom, shaders and connected textures, downloaded and set up for you. | 1.8.9 and 1.12.2 |
-| **Vanilla profile** | Plain Minecraft, or Fabric, Forge, NeoForge or Quilt, **without** the Nether client. | Any version |
+**Manual** takes five short steps:
 
-Pick a Vanilla profile when you need NeoForge, Quilt or a version the Nether client doesn't support.
+1. **Version**: every Minecraft release, newest first. A dot marks the versions the Nether client runs on.
+2. **Loader**: Vanilla, Fabric (recommended), Forge or NeoForge. A loader with no build for your version is greyed
+   out, and each one says whether the Nether client runs with it.
+3. **Nether client**: on or off. When it can't run on your version and loader, the launcher says why (for example
+   "On 1.12.2, the Nether client runs with Vanilla only, not Forge") and offers a loader where it does.
+4. **Mods**: the **Performance mods** switch, on by default, and popular Modrinth mods for your version and loader to
+   pick from or search. Vanilla skips this step.
+5. **Resource packs**: pick any popular packs for that version (optional). The name is filled in for you.
 
-The Nether client works the same on every loader because it is not a mod: the launcher adds it to the game when it
-starts. That is also why it doesn't conflict with Sodium, Iris or other performance mods.
+Mods and packs download right after you press **Create**. **Create & play** starts the game once they're done.
 
-## Make a profile
+### Where the Nether client runs
 
-On **Play**, press **New profile** (or **Ctrl+N**) and follow the steps:
+| Minecraft | Loaders |
+|---|---|
+| 1.14 and newer (26.x too) | Vanilla, Fabric, Forge |
+| 1.12.2 | Vanilla |
+| 1.8.9 | Vanilla, Fabric (Legacy Fabric) |
 
-1. **How to play** (or **Loader** for a Vanilla profile).
-2. **Version**: the Minecraft versions that way of playing supports, newest first.
-3. **Nether pack**: start empty, or with one of our small ready-made sets of mods and client settings.
-4. **Resource packs**: pick any popular packs for that version to download with it (optional).
-5. **Name, memory, icon and wallpaper**, with a summary. Press **Create**.
-
-Nothing downloads until you press **Play** the first time.
+NeoForge, other versions and snapshots play as plain Minecraft. The Nether client works the same on every loader
+because it is not a mod: the launcher adds it to the game when it starts. That is also why it doesn't conflict with
+Sodium, Iris or other performance mods. You can turn it on or off later from the instance's page.
 
 **Import** brings in a modpack file (Modrinth `.mrpack`, CurseForge zip) or profiles from another launcher on your
 PC: Prism, MultiMC, the CurseForge app, the Modrinth App, ATLauncher, the official launcher, and Lunar, NoRisk,
 OneClient or River client profiles. It can also copy their keybinds and game settings. The original is only read,
-never changed. **Install Packs** installs a Modrinth modpack as a new profile.
+never changed. **Install Packs** installs a Modrinth modpack as a new instance; modpacks list under **Play > Modpacks**.
 
 ## Inside a profile
 

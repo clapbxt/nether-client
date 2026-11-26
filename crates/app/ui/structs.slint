@@ -543,11 +543,37 @@ export global Wizard {
     in-out property <string> pack;
     in-out property <bool> pack-has-client;
     in-out property <int> mode: 0;
-    // snapshot only: open the create wizard on this step
-    in property <int> snap-step: 0;
     callback pick-pack(string);
     callback load-rps(string);
     callback finish(string, string);
+}
+
+// New-instance walkthrough (crates/app/src/newflow.rs, ui/newflow.slint). Loaders here: 0 Vanilla, 1 Fabric, 2 Forge,
+// 3 NeoForge (Fabric on a version only Legacy Fabric builds for runs on Legacy Fabric). mods = the Modrinth list
+// on screen for the mods step, picked = the mods chosen so far (kept across searches).
+export global NewInst {
+    in-out property <[Row]> mods;
+    in-out property <[Row]> picked;
+    in-out property <bool> mods-loading;
+    // the instance list is empty: Play shows the walkthrough in place of the list
+    in-out property <bool> first: false;
+    // snapshot only (NC_SNAP_FLOW): open on this screen with this loader / version index
+    in property <int> snap: -1;
+    in property <int> snap-loader: 1;
+    in property <int> snap-vi: 0;
+    // a Forge / NeoForge / Fabric build exists for this version (lists not loaded yet = true)
+    pure callback loader-ok(string, int) -> bool;
+    // why the Nether client can't run on this version + loader ("" = it can)
+    pure callback nether-why(string, int) -> string;
+    // a name no instance uses yet, from this base ("Fabric 1.21.11", then "Fabric 1.21.11 (2)")
+    pure callback free-name(string) -> string;
+    // what the performance mods are for this loader, in a few words
+    pure callback perf-text(int) -> string;
+    callback load-mods(string, int, string);
+    callback toggle-mod(string);
+    callback reset();
+    // name, version, loader, Nether on, performance mods, play when ready -> made
+    callback create(string, string, int, bool, bool, bool) -> bool;
 }
 
 // First-run setup walkthrough (crates/app/src/setup.rs, 2026-11-20). step: 0 welcome, 1 account, 2 Java & memory,
