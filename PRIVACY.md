@@ -20,8 +20,8 @@ your player UUID and nothing else.
 | Game files | piston-meta.mojang.com, launchermeta.mojang.com, libraries.minecraft.net, resources.download.minecraft.net | Installing and repairing versions |
 | Mod loaders | meta.fabricmc.net, meta.quiltmc.org, maven.minecraftforge.net, maven.neoforged.net | Installing a loader |
 | Mods and modpacks | api.modrinth.com, cdn.modrinth.com | Searches and downloads you start |
-| Skins, capes, news | sessionserver.mojang.com, api.mojang.com, textures.minecraft.net, launchercontent.mojang.com | Showing your skin and Mojang's news |
-| Nether news, packs | the Nether service (signed files) | Opening Home |
+| Skins and capes | sessionserver.mojang.com, api.mojang.com, textures.minecraft.net | Showing your skin |
+| Nether packs | the Nether service (signed files) | Opening the launcher |
 | Capes and cosmetics | the Nether player service (Cloudflare) | Opening Wardrobe, wearing a cape or cosmetic, and checking in at game start so others see your icon |
 | Updates | api.github.com, github.com | Checking for and downloading signed updates |
 | OptiFine (Nether + OptiFine profiles, 1.8.9 / 1.12.2) | bmclapi2.bangbang93.com (the OptiFine mirror HMCL and XMCL use) | Only the first launch of an OptiFine profile |

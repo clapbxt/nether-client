@@ -1055,27 +1055,8 @@ fn main() -> Result<(), slint::PlatformError> {
         let (weak, sh) = (ui.as_weak(), shared.clone());
         b.on_copy_sysinfo(move || if let Some(ui) = weak.upgrade() { settings::copy_sysinfo(&ui, &sh) });
     }
-    // Home news: newest Minecraft release/snapshot and Fabric loader
-    {
-        let (weak, sh) = (ui.as_weak(), shared.clone());
-        std::thread::spawn(move || {
-            let items = nether_core::news::latest(&nether_core::download::client());
-            // the art Mojang's launcher shows with each release (cached); Nether / Fabric cards use our banner
-            let pics: Vec<_> = items.iter().take(3).map(|n| if n.image.is_empty() { None } else { artui::web_image(&sh, &n.image, 640) }).collect();
-            // refresh published Nether packs so the (UI-thread) pack lists can read them from cache
-            let _ = nether_core::backend::packs(&nether_core::download::client());
-            ui_do(&weak, move |ui| {
-                let mut pics = pics.into_iter();
-                let rows: Vec<News> = items.iter().map(|n| {
-                    let img = pics.next().flatten().map(slint::Image::from_rgba8);
-                    News { tag: n.tag.as_str().into(), title: n.title.as_str().into(), url: n.url.as_str().into(), has_img: img.is_some(), img: img.unwrap_or_default() }
-                }).collect();
-                // L2: nothing fetched (offline): Home hides the news section instead of a placeholder row
-                ui.global::<Backend>().set_news_failed(rows.is_empty());
-                ui.global::<Backend>().set_news(ModelRc::new(VecModel::from(rows)));
-            });
-        });
-    }
+    // refresh published Nether packs so the (UI-thread) pack lists can read them from cache
+    std::thread::spawn(|| { let _ = nether_core::backend::packs(&nether_core::download::client()); });
     refilter(&ui);
     // ---- launcher settings ----
     {

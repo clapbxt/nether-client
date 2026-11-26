@@ -10,7 +10,6 @@ Your starting point.
   **More versions and ways to play**. On your very first visit Home offers two ready-made versions instead, plus
   **More versions** and **Browse modpacks**.
 - **View crash** appears here if the last game crashed.
-- **Latest news** from Nether Client and Mojang.
 - **Profiles** and **Friends**: jump back into a recent profile, or see who's online.
 
 The bar along the bottom always shows what will launch (the **launch target**), any downloads in progress, and a

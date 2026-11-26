@@ -258,17 +258,3 @@ pub fn cover_for(ui: &AppWindow, sh: &Arc<Shared>, version: String) {
         }
     });
 }
-
-/// A web image (news art) downloaded once into the art cache and decoded to at most `max` px (call off the UI thread).
-pub fn web_image(sh: &Shared, url: &str, max: u32) -> Option<SharedPixelBuffer<Rgba8Pixel>> {
-    let name: String = url.rsplit('/').next()?.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '.').collect();
-    if name.is_empty() { return None; }
-    let p = sh.paths.root.join("cache").join("art").join(format!("web-{name}"));
-    if !p.exists() {
-        let bytes = client().get(url).send().ok()?.error_for_status().ok()?.bytes().ok()?;
-        image::load_from_memory(&bytes).ok()?;
-        std::fs::create_dir_all(p.parent()?).ok()?;
-        std::fs::write(&p, &bytes).ok()?;
-    }
-    decode(&p, max)
-}

@@ -20,7 +20,6 @@ pub mod modrinth;
 pub mod modpack;
 pub mod mclogs;
 pub mod netherpack;
-pub mod news;
 pub mod import;
 pub mod launchers;
 pub mod worlds;
