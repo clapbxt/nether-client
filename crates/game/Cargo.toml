@@ -1,0 +1,16 @@
+[package]
+name = "nether-game"
+version = "0.1.0"
+edition = "2021"
+description = "Installing Minecraft: Mojang versions, libraries and assets, Java runtimes, the Fabric family, Forge/NeoForge, OptiFine, shared options.txt and resource pack sync"
+
+[dependencies]
+nether-common = { path = "../common" }
+nether-net = { path = "../net" }
+anyhow = "1"
+dirs = "5"
+rayon = "1"
+reqwest = { version = "0.12", features = ["blocking", "json", "multipart"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+zip = { version = "9", default-features = false, features = ["deflate"] }

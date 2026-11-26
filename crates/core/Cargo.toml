@@ -5,12 +5,14 @@ edition = "2021"
 
 [features]
 # developer switches (offline launch via NETHER_DEV_OFFLINE, NETHER_AGENT jar override); never in shipped builds
-dev = ["nether-auth/dev"]
+dev = ["nether-auth/dev", "nether-social/dev"]
 
 [dependencies]
 nether-common = { path = "../common" }
 nether-net = { path = "../net" }
 nether-auth = { path = "../auth" }
+nether-game = { path = "../game" }
+nether-social = { path = "../social" }
 anyhow = "1"
 dirs = "5"
 flate2 = "1"

@@ -4500,7 +4500,9 @@ dependencies = [
  "md5",
  "nether-auth",
  "nether-common",
+ "nether-game",
  "nether-net",
+ "nether-social",
  "rayon",
  "reqwest 0.12.28",
  "ring",
@@ -4512,6 +4514,21 @@ dependencies = [
  "tokio",
  "url",
  "windows",
+ "zip",
+]
+
+[[package]]
+name = "nether-game"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "dirs 5.0.1",
+ "nether-common",
+ "nether-net",
+ "rayon",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
  "zip",
 ]
 
@@ -4551,6 +4568,27 @@ dependencies = [
  "slint-build",
  "windows",
  "winresource",
+]
+
+[[package]]
+name = "nether-social"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "bytes",
+ "hex",
+ "image",
+ "iroh",
+ "nether-common",
+ "nether-net",
+ "reqwest 0.12.28",
+ "ring",
+ "serde",
+ "serde_json",
+ "sha1",
+ "tokio",
+ "url",
 ]
 
 [[package]]
