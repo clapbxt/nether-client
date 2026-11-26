@@ -227,26 +227,6 @@ export component AppWindow inherits Window {
             Rectangle { y: parent.height - 1px; height: 1px; background: Theme.ln; }
             // window buttons (no native title bar)
             WinButtons { stage-w: root.W - root.rail; }
-            // quick play (Lunar-style): every instance's icon, click = launch it
-            if root.has-inst: Rectangle {
-                x: 20px; y: 8px; height: 40px; width: ql.preferred-width + 36px + Math.min(Backend.instances.length, 10) * 40px; border-radius: Theme.r2;
-                background: Theme.s1; border-width: 1px; border-color: Theme.ln;
-                ql := Text { x: 14px; height: parent.height; vertical-alignment: center; text: "QUICK PLAY"; color: Theme.dim; font-family: Theme.pix; font-size: 16px; font-weight: 700; }
-                for it[i] in Backend.instances: Rectangle {
-                    visible: i < 10;
-                    x: ql.preferred-width + 28px + i * 40px; y: 4px; width: 32px; height: 32px; border-radius: Theme.r1;
-                    background: qt.has-hover ? Theme.hov : transparent;
-                    Image { x: 4px; y: 4px; width: 24px; height: 24px; source: it.icon-img; image-rendering: pixelated; }
-                    if it.running: Rectangle { x: parent.width - 8px; y: 2px; width: 6px; height: 6px; border-radius: 3px; background: Theme.red2; }
-                    qt := TouchArea { mouse-cursor: pointer; clicked => { Backend.active-inst = i; if !it.running && !it.starting { Backend.play(it.name); } } }
-                    if qt.has-hover: Rectangle {
-                        x: (parent.width - self.width) / 2; y: parent.height + 10px; width: qn.preferred-width + 20px; height: 26px; border-radius: Theme.r1;
-                        background: Theme.s3; border-width: 1px; border-color: Theme.ln2;
-                        qn := Text { text: it.running ? it.name + " · running" : "Play " + it.name; color: Theme.tx; font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
-                    }
-                }
-            }
-
             // Nether players online now (everyone): quiet live readout left of Friends, hover for what it counts
             if Friends.everyone != "": Rectangle {
                 x: fbtn.x - 4px - self.width; y: 8px; height: 40px; width: 14px + 8px + evn.preferred-width + 6px + evl.preferred-width + 14px;
