@@ -1,0 +1,58 @@
+# Builds and tests every push and pull request: the safety net for refactors.
+#   agent    the in-game client, with Gradle and pinned dependencies (no game install needed)
+#   core     nether-core's tests on Linux; also catches Windows-only code outside cfg(windows)
+#   windows  the whole workspace type-checks on the platform we ship
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build the agent
+        run: ./gradlew -p agent build --console=plain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent
+          path: |
+            agent/build/nether-agent.jar
+            agent/build/nether-agent-boot.jar
+            agent/build/schema.json
+
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@v2
+      - name: Test nether-core
+        run: cargo test -p nether-core
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@v2
+      - name: Check the workspace
+        run: cargo check --workspace --all-targets
