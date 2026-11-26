@@ -28,6 +28,7 @@ pub mod launch;
 pub mod perf;
 pub mod preflight;
 pub mod restore;
+pub mod server;
 pub mod share;
 pub mod snapshot;
 pub mod ugc;

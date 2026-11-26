@@ -10,9 +10,12 @@ use slint::{ComponentHandle, Model, ModelRc, VecModel};
 use crate::mods::{cached_icon, count, icon_image, icon_px, nice_date, title_case, update_rows};
 use crate::{show_toast, ui_do, AppWindow, Backend, Detail, Inst, Link, Row, Shared, VerOpt};
 
-const SORTS: [&str; 4] = ["downloads", "follows", "newest", "updated"];
+/// Sort dropdown order. Relevance only means something with search words; with none, Modrinth search falls back to downloads.
+const SORTS: [&str; 5] = ["relevance", "downloads", "follows", "newest", "updated"];
 /// Modrinth modpack categories in the Install Packs dropdown order ("" = all).
 const PACK_CATS: [&str; 11] = ["", "adventure", "challenging", "combat", "kitchen-sink", "lightweight", "magic", "multiplayer", "optimization", "quests", "technology"];
+/// Loader dropdown order ("" = any). Quilt is left out: Modrinth's Quilt filter also matches Fabric packs.
+const PACK_LOADERS: [&str; 4] = ["", "fabric", "forge", "neoforge"];
 
 fn loaders_text(l: &[String]) -> String {
     l.iter().map(|x| title_case(x)).collect::<Vec<_>>().join(" · ")
@@ -32,22 +35,25 @@ pub fn load(ui: &AppWindow, sh: &Arc<Shared>) {
         }
         _ => {
             b.set_pack_loading(true);
-            let (weak, sh, q, sort) = (ui.as_weak(), sh.clone(), b.get_pack_query().to_string(), SORTS[b.get_pack_sort().clamp(0, 3) as usize]);
+            let (weak, sh, q, sort) = (ui.as_weak(), sh.clone(), b.get_pack_query().to_string(), SORTS[b.get_pack_sort().clamp(0, SORTS.len() as i32 - 1) as usize]);
             let cat = PACK_CATS[b.get_pack_cat().clamp(0, PACK_CATS.len() as i32 - 1) as usize];
+            let loader = PACK_LOADERS[b.get_pack_loader().clamp(0, PACK_LOADERS.len() as i32 - 1) as usize];
+            // a slower, older search never replaces a newer one (typing fires a search per pause)
+            let gen = SEARCH_GEN.with(|g| { g.set(g.get() + 1); g.get() });
             std::thread::spawn(move || {
-                let res = modrinth::search(&client(), q.trim(), "modpack", "", None, sort, (!cat.is_empty()).then_some(cat));
+                let res = modrinth::search(&client(), q.trim(), "modpack", "", (!loader.is_empty()).then_some(loader), sort, (!cat.is_empty()).then_some(cat));
                 let hits = match res {
                     Ok(h) => h,
                     Err(e) => {
                         let (sh, msg) = (sh.clone(), format!("Modrinth search failed: {e}"));
-                        ui_do(&weak, move |ui| { ui.global::<Backend>().set_pack_loading(false); show_toast(ui, &sh, &msg); });
+                        ui_do(&weak, move |ui| { if SEARCH_GEN.with(|g| g.get()) != gen { return; } ui.global::<Backend>().set_pack_loading(false); show_toast(ui, &sh, &msg); });
                         return;
                     }
                 };
                 let meta: Vec<(String, String, String, String, String, String, String)> = hits.iter().map(|h| (h.id.clone(), h.title.clone(), format!("{} · by {}", h.desc, h.author), count(h.downloads), h.mc.clone(), loaders_text(&h.loaders), h.icon_url.clone())).collect();
                 ui_do(&weak, move |ui| {
                     let b = ui.global::<Backend>();
-                    if b.get_pack_src() != 0 { return; }
+                    if b.get_pack_src() != 0 || SEARCH_GEN.with(|g| g.get()) != gen { return; }
                     let rows: Vec<Row> = meta.iter().map(|(id, t, s, d, mc, l, icon)| {
                         let img = cached_icon(icon);
                         let (t, s) = (crate::mods::glyphs(t), crate::mods::glyphs(s));
@@ -175,6 +181,8 @@ pub fn open(ui: &AppWindow, sh: &Arc<Shared>, row: i32) {
 }
 
 thread_local! {
+    /// Newest Install Packs search (UI thread); older answers are dropped.
+    static SEARCH_GEN: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
     /// Versions of the open Modrinth pack (UI thread), for the strip text when another version is picked.
     static PACK_VERS: std::cell::RefCell<Vec<modrinth::VersionInfo>> = Default::default();
 }
