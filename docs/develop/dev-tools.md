@@ -58,9 +58,9 @@ Pass `-D` properties through `JAVA_TOOL_OPTIONS`.
 
 ## Updating name tables
 
-`agent/res/names/<version>.txt` maps the intermediary names the agent uses to each version's obfuscated names
+`res/names/<version>.txt` in the client repo maps the intermediary names the agent uses to each version's obfuscated names
 (`-srg` files for Forge, `-moj` for Mojang-mapped versions). After adding a version or a new lookup, regenerate them
-with `agent/tools/names.js` (`--official`, `--obf` and `--srg` inputs; usage is in the file header).
+with `tools/names.js` (client repo) (`--official`, `--obf` and `--srg` inputs; usage is in the file header).
 
 ## Tests
 

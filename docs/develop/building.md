@@ -11,26 +11,29 @@ the release key (see [Releases and signing](releasing.md)), and a few online fea
 |---|---|---|
 | Rust (MSVC toolchain) | stable | all crates |
 | Visual Studio Build Tools 2022 | C++ workload + Windows SDK | linking, resources |
-| JDK | 17 or newer | building the in-game client with Gradle (its output targets Java 8) |
-| Node.js | 18 or newer | `agent/tools/names.js`, only when updating name tables |
+| JDK | 17 or newer | only to build the in-game client yourself (its own repo) |
 
-The in-game client is built with Gradle (`agent/build.gradle.kts`). The Gradle wrapper downloads Gradle itself, and
-the LWJGL and ASM versions it compiles against are pinned in `agent/gradle/libs.versions.toml` and come from Maven
-Central, so you don't need to launch the game first. Why each version is the one it is is written at the top of that
-file.
+The in-game client lives in its own repo, [clapbxt/nether-agent](https://github.com/clapbxt/nether-agent), which has its own build instructions. The
+launcher bundles one client build as the offline fallback (`crates/core/build.rs` picks it):
+
+1. `NETHER_CLIENT_BUILD=<folder>`, if set (a folder with `nether-agent.jar`, `nether-agent-boot.jar`, `client.json`).
+2. Release builds: the client release pinned in `client.lock`, downloaded once into `target\client\` and checked
+   against its sha256.
+3. The client repo checked out and built next to this one: `..\nether_agent\build` or `..\nether-agent\build`.
+4. Debug builds: the pinned release, as in 2.
+
+With none of these, a debug build bundles no client (the launcher still downloads one at runtime), and a Windows
+release build stops with an error.
 
 ## Build order
 
 Each output embeds the one before it, so the order matters:
 
 ```powershell
-# 1. In-game client -> agent\build\nether-agent.jar, nether-agent-boot.jar, schema.json
-agent\gradlew.bat -p agent build      # or: powershell -File agent\build.ps1 (same thing)
-
-# 2. Launcher (core's build.rs also builds and embeds nether-media.exe and the agent jar)
+# 1. Launcher (core's build.rs also builds nether-media.exe and embeds it and the client build above)
 cargo build -p nether-app --release
 
-# 3. Installer (embeds target\release\nether-app.exe)
+# 2. Installer (embeds target\release\nether-app.exe)
 cargo build -p nether-setup --release
 ```
 
@@ -59,11 +62,11 @@ cargo test -p nether-common -p nether-net -p nether-auth -p nether-game -p nethe
 cargo clippy --workspace --release
 ```
 
-Rebuild the agent (`agent\gradlew.bat -p agent build`) whenever you change anything under `agent/`. Gradle only
-rewrites the jars when an input changed, so an unchanged agent doesn't make the launcher rebuild. Content tests need
-the private backend's content (`backend/content`) next to the repository; without it they are left out of the build.
+To try a client change, build the client repo next to this one and rebuild the launcher, or point a dev build at it
+with `NETHER_AGENT`. Content tests need the private backend's content (`backend/content`) in the repository folder;
+without it they are left out of the build.
 
-The same checks run on every push and pull request in GitHub Actions (`.github/workflows/ci.yml`): the agent build,
-the launcher libraries' tests on Linux, and a type check of the whole workspace on Windows.
+The same checks run on every push and pull request in GitHub Actions (`.github/workflows/ci.yml`): the launcher
+libraries' tests on Linux and a type check of the whole workspace on Windows. The client repo has its own CI.
 
 Next: [Tweaking and dev tools](dev-tools.md) for screenshots, scripted launches and more.

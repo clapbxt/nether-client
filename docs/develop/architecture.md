@@ -7,7 +7,9 @@ NetherClientSetup.exe ──installs──▶ nether-app.exe (launcher, Slint UI
                                     nether-core (no UI): accounts, installs, launching, mods, hosting, backend clients
                                         │  starts java with
                                         ▼
-                          Minecraft  +  -javaagent:nether-agent.jar  ◀── embedded in the launcher at build time
+                          Minecraft  +  -javaagent:<instance>/.nether/client/nether-agent.jar
+                                        ▲
+                                        └─ newest of: the build bundled into the launcher, or a signed client release
                                         │
                                         └─ nether-media.exe (Windows media session over stdio, exits with the game)
 ```
@@ -18,7 +20,7 @@ NetherClientSetup.exe ──installs──▶ nether-app.exe (launcher, Slint UI
 | Launcher screens | `crates/ui` (compiles `crates/app/ui/*.slint`) | Slint | library |
 | Core library | `crates/core` | Rust | library, used by the launcher and the dev examples |
 | Shared base, network, accounts | `crates/common`, `crates/net`, `crates/auth` | Rust | libraries under `nether-core` |
-| In-game client | `agent/` | Java (bytecode level 8) | `nether-agent.jar` + `schema.json` |
+| In-game client | [nether-agent](https://github.com/clapbxt/nether-agent) repo | Java (bytecode level 8) | `nether-agent.jar` + `client.json` + `schema.json` |
 | Media helper | `crates/media` | Rust | `nether-media.exe` |
 | Installer / updater | `crates/installer` | Rust + Slint | `NetherClientSetup.exe` |
 
@@ -66,7 +68,7 @@ Those have to be untangled before the rest can move.
 - **Backend clients:** signed content, capes and cosmetics, community uploads, friends, auto-update. The backend
   authenticates players with Mojang's `join` / `hasJoined` handshake, so it never receives a Minecraft token.
 
-## In-game client (`agent/`)
+## In-game client ([nether-agent](https://github.com/clapbxt/nether-agent))
 
 A `java.lang.instrument` agent, not a mod, so it runs the same on every loader.
 
@@ -89,15 +91,37 @@ A `java.lang.instrument` agent, not a mod, so it runs the same on every loader.
   the menu reach into features); don't add new ones.
 - It never patches renderer classes, so Sodium, Iris, Embeddium and Distant Horizons are unaffected.
 - Lookups are null-safe: a field missing on a version hides that feature instead of crashing the game. See
-  [`agent/SAFETY.md`](../../agent/SAFETY.md).
+  [the client's SAFETY.md](https://github.com/clapbxt/nether-agent/blob/main/SAFETY.md).
 
 ### Launcher ↔ agent
 
-- **Module settings UI.** The agent build writes `schema.json` describing every module and setting. The launcher reads
-  it at compile time and generates its client settings pages from it, so a new module needs no launcher UI code.
+- **Delivery.** Each instance gets its own copy of the client in `<instance>/.nether/client/` (both jars, `client.json`
+  and `nether-media.exe`), installed at launch by `nether_core::agent::ensure`. See [Client updates](#client-updates).
+- **Protocol.** `PROTOCOL` in `crates/core/src/agent.rs` and `clientProtocol` in the client repo's `gradle.properties` name the
+  launcher ↔ client contract: the `-Dnether.*` properties, the boot jar beside the agent jar, and the media helper
+  beside it. A launcher only installs a client with its own protocol number. Raise both together, and only for a
+  breaking change.
+- **Settings schema.** The agent build writes `schema.json` describing every module and setting (`ov.Schema`).
 - **Config.** Both sides read and write the same JSON config files (see [Tweaking and dev tools](dev-tools.md#client-config)).
 - **Runtime.** The launcher and the running game exchange small JSON files in the instance (for example world
   invites), and the media helper talks to the agent over stdio.
+
+## Client updates
+
+The in-game client updates on its own, always (there is no setting for it):
+
+1. Every launcher start checks the latest GitHub release of the client repo (`CLIENT_REPO` in
+   `crates/core/src/agent.rs`). A release carries `nether-agent.jar`, `nether-agent-boot.jar`, `client.json`
+   (version, protocol, sha256 of both jars) and `client.json.sig`.
+2. If it is newer than every client the launcher has, the launcher downloads `client.json` and checks its Ed25519
+   signature against `crates/core/res/client-ed25519.pub` (the signed message is `nether-client\n` followed by the
+   file's bytes). A release with another protocol number is skipped: it is for a newer launcher.
+3. The jars are downloaded and checked against the hashes in `client.json`, stored in
+   `%APPDATA%\NetherClient\client\builds\<version>\` (the two newest are kept), and installed into every instance
+   that already has a client. An instance whose game is running gets it at its next launch.
+4. At launch, the newest usable build is installed into that instance. If it can't be, the launcher falls back to an
+   older build, then to the copy already in the instance. The build bundled into the launcher is always one of the
+   candidates, so a launcher with no network still launches with a client.
 
 ## Backend
 
