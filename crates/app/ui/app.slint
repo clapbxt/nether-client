@@ -9,7 +9,7 @@ import "fonts/JetBrainsMono-Bold.ttf";
 
 import { Theme } from "theme.slint";
 export { Theme }
-import { Backend, Setup, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat, Sound, NewInst} from "structs.slint";
+import { Backend, Setup, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat, Sound, NewInst } from "structs.slint";
 export { Backend, Inst, Row, Detail, Link, PresetRow, WorldInvite, SkinLib, SkinTile, Wizard, JavaRt, Combiner, CombineCat, Setup, Sound, NewInst }
 import { Btn, Eyebrow, Page, Slash, Hatch, PlayButton, Icon, Ico, Pulse, LinkBtn, Heading, Scrim, WinButtons, Field, FocusTrap, Toggle, Dropdown, Stat } from "components.slint";
 import { HomeScreen } from "home.slint";
@@ -140,7 +140,7 @@ export component AppWindow inherits Window {
     }
     property <bool> slim: Backend.skin-slim;
     changed slim => { Backend.skin-wake(); }
-    // keyboard shortcuts (every key nothing else took): Ctrl+K command palette, Ctrl+1-5 tabs, Ctrl+, settings, Ctrl+N new instance,
+    // keyboard shortcuts (every key nothing else took): Ctrl+K command palette, Ctrl+1-4 pages in rail order, Ctrl+, settings, Ctrl+N new instance,
     // Esc closes the project page, account panel and crash page
     forward-focus: keys;
     keys := FocusScope {
@@ -364,7 +364,7 @@ export component AppWindow inherits Window {
                 if !Backend.job-on && Backend.running-count > 0: Rectangle {
                     Pulse { x: 0px; y: 24px; }
                     Text { x: 20px; width: parent.width - 140px; overflow: elide; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 500; vertical-alignment: center;
-                        text: (Backend.running-count == 0 ? "" : Backend.running-label != "" ? Backend.running-label : Backend.running-count == 1 ? "1 game running" : "\{Backend.running-count} games running"); }
+                        text: Backend.running-label != "" ? Backend.running-label : Backend.running-count == 1 ? "1 game running" : "\{Backend.running-count} games running"; }
                 }
                 if !Backend.job-on && Backend.running-count == 0: Text {
                     x: 0px; text: "Nothing running"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center;

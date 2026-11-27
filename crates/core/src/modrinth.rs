@@ -16,6 +16,7 @@ const HOURS6: std::time::Duration = std::time::Duration::from_secs(6 * 3600);
 
 use crate::download::{get_cached, post_cached};
 
+#[derive(Clone, Debug, Default)]
 pub struct Hit {
     pub id: String,
     pub title: String,

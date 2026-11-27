@@ -1730,7 +1730,6 @@ java.lang.OutOfMemoryError: Java heap space
         ui.global::<Backend>().on_win_close(move || if let Some(ui) = w.upgrade() { ui.window().dispatch_event(slint::platform::WindowEvent::CloseRequested); });
     }
     let r = slint::run_event_loop_until_quit();
-    // a running server is stopped cleanly (it saves its world); killed if it doesn't stop in time
     party::shutdown(&shared);
     worldshare::shutdown(&shared);
     friends::shutdown(&shared);
