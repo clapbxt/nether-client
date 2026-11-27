@@ -781,9 +781,14 @@ fn main() -> Result<(), slint::PlatformError> {
     let paths = Paths::new();
     applog::init(&paths.root);
     // one launcher at a time: a second start (shortcut, a file opened with it) goes to the first
+    // (a different launcher exe, such as the installed copy in the tray while a new build starts, can be replaced
+    // instead, so the new build is what opens)
     if !snapshot && !deeplink::first_instance() {
-        if !deeplink::hand_over(&deeplink::file_args()) { deeplink::busy_notice(); }
-        return Ok(());
+        let replaced = deeplink::other_copy().is_some_and(|(exe, pid)| deeplink::replace_other(&exe, pid));
+        if !replaced {
+            if !deeplink::hand_over(&deeplink::file_args()) { deeplink::busy_notice(); }
+            return Ok(());
+        }
     }
     prefs::apply_renderer(&paths);
     let ui = AppWindow::new()?;

@@ -10,6 +10,10 @@ This is the launcher's changelog. The in-game client has its own, in
 ## Unreleased
 
 ### Launcher
+- Starting a different launcher exe (a new build) while another one is running, for example the installed copy
+  hidden in the tray, now asks to close the running one and opens the new one. Before, it silently brought the old
+  window back, so a fresh build looked like the old version.
+- The close button hides the launcher to the tray by default.
 - The Instances page and the new-instance walkthrough now look like the in-game menu: one framed panel with a
   small title, filter pills (All, Nether, Modded, Vanilla, with counts), instances as cards (wallpaper, icon,
   version and loader, a settings square and a wide Play / Running bar), group sections, and a hint footer. Horizon
