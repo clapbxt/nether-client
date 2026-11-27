@@ -39,10 +39,78 @@ pub fn first_instance() -> bool {
     let name: Vec<u16> = "Local\\NetherClient.Launcher\0".encode_utf16().collect();
     // the handle lives as long as the process (released by Windows on exit)
     let h = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
-    !(h.is_null() || unsafe { GetLastError() } == ERROR_ALREADY_EXISTS)
+    if h.is_null() { return false; }
+    if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
+        // let go of it, or the mutex outlives the other launcher and a retry (replace_other) never gets it
+        unsafe { windows_sys::Win32::Foundation::CloseHandle(h) };
+        return false;
+    }
+    true
 }
 #[cfg(not(windows))]
 pub fn first_instance() -> bool { true }
+
+/// The exe of the launcher already running in this session, when it is a different file from this one (an older
+/// installed copy in the tray while a fresh build is started, or the other way round). None when it is this same exe
+/// or can't be told.
+#[cfg(windows)]
+pub fn other_copy() -> Option<(PathBuf, u32)> {
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{FindWindowExW, GetWindowThreadProcessId, HWND_MESSAGE};
+    let class = wide(CLASS);
+    // the running copy may still be starting: its hand-over window shows up shortly after the mutex
+    let mut hwnd = std::ptr::null_mut();
+    for _ in 0..12 {
+        hwnd = unsafe { FindWindowExW(HWND_MESSAGE, std::ptr::null_mut(), class.as_ptr(), std::ptr::null()) };
+        if !hwnd.is_null() { break; }
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    if hwnd.is_null() { return None; }
+    let mut pid = 0u32;
+    unsafe { GetWindowThreadProcessId(hwnd, &mut pid) };
+    if pid == 0 || pid == std::process::id() { return None; }
+    let h = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if h.is_null() { return None; }
+    let mut buf = vec![0u16; 1024];
+    let mut len = buf.len() as u32;
+    let ok = unsafe { QueryFullProcessImageNameW(h, 0, buf.as_mut_ptr(), &mut len) };
+    unsafe { CloseHandle(h) };
+    if ok == 0 { return None; }
+    let theirs = PathBuf::from(String::from_utf16_lossy(&buf[..len as usize]));
+    let mine = std::env::current_exe().ok()?;
+    let same = |a: &Path, b: &Path| match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a.as_os_str().eq_ignore_ascii_case(b.as_os_str()),
+    };
+    if same(&theirs, &mine) { None } else { Some((theirs, pid)) }
+}
+#[cfg(not(windows))]
+pub fn other_copy() -> Option<(PathBuf, u32)> { None }
+
+/// Another launcher exe is running (usually the installed one, hidden in the tray, while a new build is started).
+/// Handing over would show that old window, so ask whether to close it and start this one instead. True when it was
+/// closed and this start may go on.
+#[cfg(windows)]
+pub fn replace_other(theirs: &Path, pid: u32) -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, WAIT_OBJECT_0};
+    use windows_sys::Win32::System::Threading::{OpenProcess, TerminateProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, IDYES, MB_ICONQUESTION, MB_YESNO};
+    let mine = std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default();
+    let text = wide(&format!(
+        "Another Nether Client is already running (maybe in the tray):\n{}\n\nClose it and start this one instead?\n{}\n\nNo brings the running one to the front.",
+        theirs.display(), mine));
+    let title = wide("Nether Client");
+    if unsafe { MessageBoxW(std::ptr::null_mut(), text.as_ptr(), title.as_ptr(), MB_YESNO | MB_ICONQUESTION) } != IDYES { return false; }
+    let h = unsafe { OpenProcess(PROCESS_TERMINATE | PROCESS_SYNCHRONIZE, 0, pid) };
+    if h.is_null() { return false; }
+    let gone = unsafe { TerminateProcess(h, 0) != 0 && WaitForSingleObject(h, 5000) == WAIT_OBJECT_0 };
+    unsafe { CloseHandle(h) };
+    // its mutex is released with it; take it now
+    gone && first_instance()
+}
+#[cfg(not(windows))]
+pub fn replace_other(_: &Path, _: u32) -> bool { false }
 
 /// Hand this start over to the running launcher: files to open, or just "come to the front".
 /// Retries for a few seconds (it may still be starting). True when it took it.
