@@ -74,6 +74,9 @@ export struct Detail {
 export struct RestorePt { file: string, date: string, when: string, kind: string, size: string }
 // L2: instance list row: idx = instance index, or a group header (head != "", n = its instance count, folded); num = list number
 export struct InstRow { idx: int, head: string, n: int, folded: bool, num: int }
+// Instances grid section (a group, or the ungrouped ones first with head ""); items = instance indices,
+// -3 = the Horizon tile, -2 = the "New instance" tile
+export struct InstSec { head: string, n: int, folded: bool, items: [int] }
 // L2: command palette row (kind = INSTANCE / PLAY / WORLD / MOD / SETTING / ACTION)
 export struct PalRow { kind: string, title: string, sub: string }
 export global Backend {
@@ -183,8 +186,10 @@ export global Backend {
     callback load-packs();
     callback open-pack(int);
 
-    // instances page: grid filter (0 all, 1 modded, 2 vanilla) -> indices shown; create dialog version lists
+    // instances page: filter pill (0 all, 1 Nether on, 2 modded, 3 vanilla) -> indices shown, sections and each pill's count
     in-out property <int> inst-filter: 0;
+    in-out property <[InstSec]> inst-secs;
+    in-out property <[int]> inst-counts: [0, 0, 0, 0];
     in-out property <[int]> visible-insts;
     callback refilter();
     // instances list search + sort (0 last played, 1 name, 2 playtime, 3 created); recent = indices, last played first (Home)
@@ -579,18 +584,16 @@ export global NewInst {
     pure callback free-name(string) -> string;
     // what the performance mods are for this loader, in a few words
     pure callback perf-text(int) -> string;
-    // the performance mods of the mods step, one check box each (id = Modrinth slug); perf-all = every box is
-    // ticked, which is what the Performance mods toggle shows
+    // the performance mods of the mods step (id = Modrinth slug), shown as rows of the mods list; perf-all = every
+    // one is on, which is what the Performance mods toggle shows
     in-out property <[Row]> perf-mods;
     in-out property <bool> perf-all: true;
-    // how many boxes are ticked
+    // how many are on
     in-out property <int> perf-n: 0;
     // fill perf-mods for this version + loader, all ticked
     callback load-perf(string, int);
-    // the toggle: tick (true) or untick every box
+    // the toggle: turn every one on (true) or off
     callback perf-set(bool);
-    // one box
-    callback perf-toggle(string);
     callback load-mods(string, int, string);
     callback toggle-mod(string);
     // MODPACK: Modrinth modpacks for a search ("" = most downloaded). Each row: mc = its newest Minecraft version,
@@ -651,71 +654,4 @@ export global Combiner {
 // Interface sounds (Rust: sfx.rs). 0 press, 1 toggle on, 2 toggle off, 3 panel open, 4 launch, 5 error.
 export global Sound {
     callback play(int);
-}
-
-// Host page (crates/app/src/host.rs). One server runs at a time.
-export struct HostPlayer { name: string, op: bool, wl: bool }
-export struct HostBackup { name: string, size: string, date: string }
-// console line; k: 0 output, 1 warning/error, 2 typed command
-export struct ConLine { t: string, k: int }
-export global HostState {
-    // selected profile (index into Backend.instances)
-    in-out property <int> idx: -1;
-    // open tab: 0 console, 1 players, 2 settings, 3 world
-    in-out property <int> tab: 0;
-    in-out property <string> inst-name;
-    in-out property <string> inst-meta;
-    // 0 loading, 1 cannot host (phase-note says why), 2 not set up yet, 3 set up
-    in-out property <int> phase: 0;
-    in-out property <string> phase-note;
-    // 0 stopped, 1 starting, 2 running, 3 stopping, 4 crashed (exit-code)
-    in-out property <int> status: 0;
-    in-out property <int> exit-code: 0;
-    // install / start / stop in flight; live = a server process exists (feeds the bottom deck)
-    in-out property <bool> busy;
-    in-out property <bool> live;
-    in-out property <string> deck-text;
-    in-out property <string> uptime: "—";
-    in-out property <bool> eula-open;
-    in-out property <[ConLine]> console;
-    in-out property <int> console-rev;
-    in-out property <[HostPlayer]> players;
-    in-out property <[string]> whitelist;
-    in-out property <[string]> ops;
-    in-out property <[string]> saves;
-    in-out property <[HostBackup]> backups;
-    // settings (server.properties + launcher-side RAM / UPnP)
-    in-out property <string> port: "25565";
-    in-out property <string> motd;
-    in-out property <string> max-players: "20";
-    in-out property <int> difficulty: 1;
-    in-out property <int> gamemode: 0;
-    in-out property <bool> pvp: true;
-    in-out property <bool> online: true;
-    in-out property <bool> wl-on;
-    in-out property <bool> upnp: true;
-    in-out property <int> ram: 2;
-    // sharing: addresses; upnp-state 0 off, 1 opening, 2 open, 3 failed, 4 turned off
-    in-out property <string> lan;
-    in-out property <string> pub-addr;
-    // what to give friends: the public address when there is one, else the LAN one
-    in-out property <string> share-addr;
-    // outside check of pub-addr: 0 not checked, 1 checking, 2 reachable, 3 not reachable
-    in-out property <int> reach;
-    in-out property <int> upnp-state;
-    in-out property <string> upnp-msg;
-    callback opened();
-    callback select(int);
-    callback primary();
-    callback accept-eula();
-    callback send(string);
-    callback history(int) -> string;
-    callback player(string, int);
-    callback list-add(int, string);
-    callback list-remove(int, string);
-    callback save-settings();
-    callback import-save(int);
-    callback backup();
-    callback open-backups();
-    callback check-reach();
 }

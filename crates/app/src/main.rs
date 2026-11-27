@@ -41,7 +41,6 @@ mod friends;
 mod party;
 mod presets;
 mod horizon;
-mod host;
 mod perfui;
 mod setup;
 mod voice;
@@ -150,9 +149,13 @@ fn category_slug(kind: i32, idx: i32) -> String {
 /// played, 1 name, 2 playtime, 3 created) and the Home order (last played first).
 pub(crate) fn refilter(ui: &AppWindow) {
     let b = ui.global::<Backend>();
-    let (q, sort) = (b.get_inst_query().trim().to_lowercase(), b.get_inst_sort());
+    let (q, sort, filter) = (b.get_inst_query().trim().to_lowercase(), b.get_inst_sort(), b.get_inst_filter());
     let all: Vec<Inst> = b.get_instances().iter().collect();
+    // filter pills: 0 all, 1 Nether client on, 2 modded (any loader), 3 vanilla
+    let pill = |i: &Inst, f: i32| match f { 1 => i.nether, 2 => i.loader != "Vanilla", 3 => i.loader == "Vanilla", _ => true };
+    b.set_inst_counts(ModelRc::new(VecModel::from((0..4).map(|f| all.iter().filter(|i| pill(i, f)).count() as i32).collect::<Vec<_>>())));
     let mut v: Vec<usize> = (0..all.len())
+        .filter(|n| pill(&all[*n], filter))
         .filter(|n| q.is_empty() || [&all[*n].name, &all[*n].ver, &all[*n].loader].iter().any(|s| s.to_lowercase().contains(&q)))
         .collect();
     match sort {
@@ -177,6 +180,26 @@ pub(crate) fn refilter(ui: &AppWindow) {
         if !folded { for n in members { push(&mut rows, n); } }
     }
     b.set_inst_rows(ModelRc::new(VecModel::from(rows)));
+    // the grid: ungrouped first (Horizon leads it on All), then each group; the "New instance" tile closes the list
+    let plain = q.is_empty() && filter == 0;
+    let mut secs: Vec<InstSec> = vec![];
+    let mut first: Vec<i32> = if plain && b.get_hz_added() { vec![-3] } else { vec![] };
+    first.extend(v.iter().filter(|n| all[**n].group.is_empty()).map(|n| *n as i32));
+    if !first.is_empty() || names.is_empty() { secs.push(InstSec { head: "".into(), n: first.len() as i32, folded: false, items: ModelRc::new(VecModel::from(first)) }); }
+    for g in &names {
+        let members: Vec<i32> = v.iter().filter(|n| all[**n].group == g.as_str()).map(|n| *n as i32).collect();
+        if members.is_empty() { continue; }
+        let folded = FOLDED.with(|f| f.borrow().contains(g));
+        let n = members.len() as i32;
+        secs.push(InstSec { head: g.as_str().into(), n, folded, items: ModelRc::new(VecModel::from(if folded { vec![] } else { members })) });
+    }
+    if plain && !all.is_empty() {
+        match secs.last_mut() {
+            Some(s) if !s.folded => { let mut it: Vec<i32> = s.items.iter().collect(); it.push(-2); s.items = ModelRc::new(VecModel::from(it)); }
+            _ => secs.push(InstSec { head: "".into(), n: 0, folded: false, items: ModelRc::new(VecModel::from(vec![-2])) }),
+        }
+    }
+    b.set_inst_secs(ModelRc::new(VecModel::from(secs)));
     // nothing to play yet (no instance, Horizon not added): Play shows the new-instance walkthrough in place of the list
     ui.global::<NewInst>().set_first(all.is_empty() && !b.get_hz_added());
     b.set_groups(ModelRc::new(VecModel::from(names.iter().map(|g| g.as_str().into()).collect::<Vec<slint::SharedString>>())));
@@ -1128,7 +1151,6 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
     artui::init(ui.as_weak(), shared.clone());
-    host::init(&ui, shared.clone());
     worldshare::init(&ui, shared.clone());
     friends::init(&ui, shared.clone());
     party::init(&ui, shared.clone());
@@ -1557,10 +1579,9 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.global::<Backend>().set_gate_open(gate == 1);
         // NC_SNAP_WPAGE=n: Wardrobe page (0 skins, 1 capes, 2.. cosmetic slots in Kind::ALL order)
         if let Some(n) = std::env::var("NC_SNAP_WPAGE").ok().and_then(|n| n.parse::<i32>().ok()) { ui.set_ward_page(n); }
-        // NC_SNAP_STATE: dev-only page states for captures (see wardrobe::snap, host::snap)
+        // NC_SNAP_STATE: dev-only page states for captures (see wardrobe::snap)
         if let Ok(st) = std::env::var("NC_SNAP_STATE") {
             wardrobe::snap(&ui, &shared, &st);
-            host::snap(&ui, &st);
             community::snap(&ui, &st);
             friends::snap(&ui, &st);
             // L1 dialogs with sample rows (captures only)
@@ -1710,7 +1731,6 @@ java.lang.OutOfMemoryError: Java heap space
     }
     let r = slint::run_event_loop_until_quit();
     // a running server is stopped cleanly (it saves its world); killed if it doesn't stop in time
-    host::shutdown();
     party::shutdown(&shared);
     worldshare::shutdown(&shared);
     friends::shutdown(&shared);

@@ -10,6 +10,10 @@ This is the launcher's changelog. The in-game client has its own, in
 ## Unreleased
 
 ### Launcher
+- The Instances page and the new-instance walkthrough now look like the in-game menu: one framed panel with a
+  small title, filter pills (All, Nether, Modded, Vanilla, with counts), instances as cards (wallpaper, icon,
+  version and loader, a settings square and a wide Play / Running bar), group sections, and a hint footer. Horizon
+  opens as a sheet. The walkthrough has the in-game header, step pills, quieter cards and on / off pills for mods.
 - Importing a modpack file or instance folder (picked or dropped on the window) first shows what it is: its
   name (editable), Minecraft version, loader and file count, and how many CurseForge mods won't download.
 - New **Host** page: run a server from a Vanilla or Fabric profile. Set it up and start it in two clicks, agree to

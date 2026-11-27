@@ -181,6 +181,19 @@ pub fn projects(c: &Client, ids: &[String]) -> Result<std::collections::HashMap<
     Ok(v.iter().map(|p| (p["id"].as_str().unwrap_or_default().to_string(), (p["title"].as_str().unwrap_or_default().to_string(), p["icon_url"].as_str().unwrap_or_default().to_string()))).collect())
 }
 
+/// slug or id -> the project as a search hit (title, description, downloads, icon), for every project Modrinth knows.
+pub fn hits(c: &Client, slugs: &[String]) -> Result<std::collections::HashMap<String, Hit>> {
+    if slugs.is_empty() { return Ok(Default::default()); }
+    let v: Vec<Value> = serde_json::from_value(get_cached(c, &format!("{API}/projects"), &[("ids", json!(slugs).to_string())], HOURS6)?)?;
+    let mut out = std::collections::HashMap::new();
+    for p in &v {
+        let s = |k: &str| p[k].as_str().unwrap_or_default().to_string();
+        let h = Hit { id: s("id"), title: s("title"), desc: s("description"), downloads: p["downloads"].as_u64().unwrap_or(0), icon_url: s("icon_url"), ..Default::default() };
+        for k in slugs { if k.eq_ignore_ascii_case(&s("slug")) || *k == h.id { out.insert(k.clone(), h.clone()); } }
+    }
+    Ok(out)
+}
+
 /// slug or id -> (project id, title), for every project Modrinth knows (slugs are matched case-insensitively).
 pub fn project_ids(c: &Client, slugs: &[String]) -> Result<std::collections::HashMap<String, (String, String)>> {
     if slugs.is_empty() { return Ok(Default::default()); }

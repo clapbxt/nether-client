@@ -1,6 +1,6 @@
 # The launcher
 
-A quick tour of the launcher's pages. Use the bar at the top to move between them, or press **Ctrl+1** to **Ctrl+5**.
+A quick tour of the launcher's pages. Use the bar at the top to move between them, or press **Ctrl+1** to **Ctrl+4**.
 
 ## Home
 
@@ -33,24 +33,6 @@ can:
 Search modpacks on Modrinth, filter them by loader and category, sort them (by relevance while you search), and
 install one as a new profile in one step.
 
-## Host
-
-Run a Minecraft server from one of your profiles (Vanilla or Fabric) and play on it with friends. Pick the profile at
-the top, then **Set up server** (downloads the official server into the profile's `server` folder) and **Start
-server**. The first start asks you to agree to Mojang's EULA; nothing is accepted for you.
-
-- **Share with friends** shows the address to give them: your public address when your router opened the port
-  (UPnP), otherwise your LAN address. They add it under **Multiplayer**, then **Direct Connect**. **Check from
-  outside** tests whether the internet can reach it.
-- **Console**: the server log, and a box for commands (up and down arrows go through earlier ones).
-- **Players**: who's online (kick, op, whitelist), plus the whitelist and operator lists.
-- **Settings**: port, message, max players, memory, difficulty, game mode, PvP, online mode, whitelist and
-  automatic port opening. Changes save as you type and apply on the next start.
-- **World**: copy one of the profile's singleplayer worlds in as the server world (the old one is set aside, not
-  deleted), and make backups.
-
-One server runs at a time. The bottom bar shows it while it runs, and closing the launcher stops it cleanly.
-
 ## Wardrobe
 
 Your skins and capes, with a live 3D preview. See [Skins, capes and cosmetics](wardrobe.md).
@@ -77,7 +59,7 @@ players. See [Friends, parties and world invites](friends.md).
 | Keys | Does |
 |---|---|
 | **Ctrl+K** | Search everything: pages, settings, profiles, worlds and mods |
-| **Ctrl+1** to **Ctrl+5** | Go to a page |
+| **Ctrl+1** to **Ctrl+4** | Go to a page |
 | **Ctrl+,** | Settings |
 | **Ctrl+N** | New instance |
 | **Esc** | Close the open dialog |

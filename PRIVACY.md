@@ -25,10 +25,10 @@ your player UUID and nothing else.
 | Capes and cosmetics | the Nether player service (Cloudflare) | Opening Wardrobe, wearing a cape or cosmetic, and checking in at game start so others see your icon |
 | Updates | api.github.com, github.com | Checking for and downloading signed updates |
 | OptiFine (Nether + OptiFine profiles, 1.8.9 / 1.12.2) | bmclapi2.bangbang93.com (the OptiFine mirror HMCL and XMCL use) | Only the first launch of an OptiFine profile |
-| Hosting | api.playit.gg, api.ipify.org, api.mcstatus.io, fill.papermc.io | Only while you use the Host tab |
 | Friends, world invites | the Nether friends service (Cloudflare) | While you are signed in: your friends list, requests, blocks and status, about once a minute |
 | Parties and party voice | your party members, directly (peer-to-peer); n0's iroh.link relays when a direct link can't be made | Only while you are in a party with others |
 | Invite to world (friends joining your world) | your friends, directly (peer-to-peer); n0's iroh.link relays when a direct link can't be made | While a game runs, the launcher keeps a link to an iroh.link relay ready so sharing your world is instant; friends connect only after you invite them |
+| Checking if friends can reach your world | api.ipify.org, api.mcstatus.io | Only while you share a world |
 | Sharing logs | api.mclo.gs | Only when you confirm Share or press Upload; anyone with the link can read it (your user name, home folder, IP addresses and tokens are removed first) |
 
 ## In game

@@ -5,9 +5,10 @@
 // Logic: crates/app/src/newflow.rs.
 import { Theme } from "theme.slint";
 import { Backend, NewInst, Wizard, Row } from "structs.slint";
-import { Btn, LinkBtn, Chip, ModIcon, Icon, Ico, IconBtn, Field, Toggle, Heading } from "components.slint";
+import { Btn, LinkBtn, Chip, ModIcon, Icon, Ico, IconBtn, Field, Toggle, Heading, Pill, QuietBtn, MiniPill } from "components.slint";
 
-// A big choice tile: title, text, a few lines that say what you get, picked ring.
+// A choice card (in-game card look, 2026-11-27): quiet plate + hairline that lifts on hover; picked = accent ring and
+// the accent dot (the in-game font picker); title, text, what you get, a foot line.
 component Choice inherits Rectangle {
     in property <string> title;
     in property <string> text;
@@ -20,21 +21,31 @@ component Choice inherits Rectangle {
     in property <bool> compact;
     callback chosen();
     callback chosen-twice();
-    border-radius: Theme.r2;
-    background: root.picked ? Theme.red.with-alpha(0.094) : (ta.has-hover && root.ok ? Theme.s2 : Theme.bg);
-    border-width: 1px; border-color: root.picked ? Theme.red2 : (ta.has-hover && root.ok ? Theme.ln2 : Theme.ln);
+    property <bool> lit: ta.has-hover && root.ok;
     opacity: root.ok ? 1 : 0.5;
-    animate background, border-color { duration: Theme.fast; }
-    Text { x: 24px; y: 20px; text: root.title; color: Theme.tx; font-family: Theme.pix; font-size: 32px; font-weight: 800; }
-    if root.tag != "": Chip { x: parent.width - self.width - 20px; y: 26px; text: root.tag; hot: true; }
-    if root.picked: Icon { x: parent.width - 34px; y: root.tag != "" ? 60px : 30px; d: Ico.check; tint: Theme.red2; }
-    Text { x: 24px; y: root.compact ? 60px : 66px; width: parent.width - 48px; text: root.text; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
-    for l[i] in root.lines: Rectangle {
-        x: 24px; y: (root.compact ? 96px : 124px) + i * (root.compact ? 24px : 26px); width: parent.width - 48px; height: 22px;
-        Rectangle { x: 0px; y: 8px; width: 6px; height: 6px; border-radius: 3px; background: Theme.red2; }
-        Text { x: 16px; width: parent.width - 16px; text: l; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
+    Rectangle {
+        y: root.lit ? -2px : 0px; height: parent.height;
+        animate y { duration: Theme.fast; }
+        border-radius: Theme.r2;
+        background: root.picked ? Theme.red.with-alpha(0.08) : (root.lit ? Theme.s3 : Theme.s2);
+        border-width: root.picked ? 2px : 1px; border-color: root.picked ? Theme.red : (root.lit ? Theme.ln2 : Theme.ln);
+        animate background, border-color { duration: Theme.fast; }
+        Text { x: 20px; y: 18px; height: 24px; text: root.title; color: Theme.tx; font-family: Theme.ui; font-size: 19px * Theme.ts; font-weight: 700; vertical-alignment: center; }
+        if root.tag != "": Rectangle {
+            x: parent.width - self.width - 18px; y: 20px; width: tg.preferred-width + 16px; height: 20px; border-radius: 10px;
+            background: Theme.red.with-alpha(0.16);
+            tg := Text { text: root.tag; color: Theme.redtx; font-family: Theme.ui; font-size: 11px * Theme.ts; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+        }
+        Text { x: 20px; y: 50px; width: parent.width - 40px; text: root.text; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; wrap: word-wrap; }
+        for l[i] in root.lines: Rectangle {
+            x: 20px; y: (root.compact ? 90px : 112px) + i * 24px; width: parent.width - 40px; height: 22px;
+            Icon { x: 0px; y: 5px; d: Ico.check; tint: root.picked ? Theme.redtx : Theme.mut; }
+            Text { x: 20px; width: parent.width - 20px; text: l; color: Theme.tx; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; overflow: elide; }
+        }
+        if root.foot != "": Text { x: 20px; y: parent.height - 32px; width: parent.width - 60px; height: 18px; text: root.foot; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; overflow: elide; }
+        // the picked dot, bottom right (in-game picker)
+        Rectangle { x: parent.width - 24px; y: parent.height - 27px; width: 8px; height: 8px; border-radius: 4px; background: Theme.red; opacity: root.picked ? 1 : 0; animate opacity { duration: Theme.fast; } }
     }
-    if root.foot != "": Text { x: 24px; y: parent.height - 34px; width: parent.width - 48px; height: 20px; text: root.foot; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; overflow: elide; }
     ta := TouchArea { mouse-cursor: root.ok ? pointer : default; clicked => { if root.ok { root.chosen(); } } double-clicked => { if root.ok { root.chosen-twice(); } } }
 }
 
@@ -49,12 +60,12 @@ component VersionGrid inherits Rectangle {
         content-height: Math.ceil(root.vers.length / root.cols) * 50px;
         for v[i] in root.vers: Rectangle {
             x: mod(i, root.cols) * (parent.width / root.cols); y: floor(i / root.cols) * 50px; width: parent.width / root.cols - 8px; height: 42px;
-            border-radius: Theme.r1;
-            background: root.current == i ? Theme.ice : (vt.has-hover ? Theme.s2 : Theme.bg);
-            border-width: 1px; border-color: root.current == i ? Theme.ice : Theme.ln;
-            Text { text: v; color: root.current == i ? Theme.ink : Theme.tx; font-family: Theme.mono; font-size: 14px * Theme.ts; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
-            if v == Backend.new-version: Text { x: 6px; y: 3px; text: "NEW"; color: root.current == i ? Theme.ink : Theme.red2; font-family: Theme.mono; font-size: 9px * Theme.ts; font-weight: 700; }
-            if root.dots && Backend.nether-ok(v, "Vanilla"): Rectangle { x: parent.width - 12px; y: 6px; width: 6px; height: 6px; border-radius: 3px; background: root.current == i ? Theme.red : Theme.red2; }
+            border-radius: 6px;
+            background: root.current == i ? Theme.red : (vt.has-hover ? Theme.s3 : Theme.s2);
+            animate background { duration: Theme.fast; }
+            Text { text: v; color: root.current == i ? white : (vt.has-hover ? Theme.tx : Theme.dim); font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+            if v == Backend.new-version: Text { x: 8px; y: 4px; text: "New"; color: root.current == i ? #ffffffc0 : Theme.redtx; font-family: Theme.ui; font-size: 10px * Theme.ts; font-weight: 600; }
+            if root.dots && Backend.nether-ok(v, "Vanilla"): Rectangle { x: parent.width - 13px; y: 7px; width: 6px; height: 6px; border-radius: 3px; background: root.current == i ? white : Theme.red2; }
             vt := TouchArea { mouse-cursor: pointer; clicked => { root.current = i; } double-clicked => { root.current = i; root.twice(); } }
         }
     }
@@ -65,17 +76,15 @@ component PickRow inherits Rectangle {
     in property <Row> r;
     callback toggled();
     callback twice();
-    border-radius: Theme.r1;
-    background: root.r.on ? Theme.red.with-alpha(0.094) : (ta.has-hover ? Theme.s2 : Theme.bg);
-    border-width: 1px; border-color: root.r.on ? Theme.red2 : Theme.ln;
+    border-radius: Theme.r2;
+    background: ta.has-hover ? Theme.s3 : Theme.s2;
+    border-width: 1px; border-color: root.r.on ? Theme.red.with-alpha(0.6) : (ta.has-hover ? Theme.ln2 : Theme.ln);
     animate background, border-color { duration: Theme.fast; }
     ModIcon { x: 10px; y: (parent.height - self.height) / 2; src: root.r.icon; has: root.r.has-icon; }
     Text { x: 60px; y: 9px; width: parent.width - 150px; text: root.r.name; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; overflow: elide; }
-    Text { x: 60px; y: 31px; width: parent.width - 100px; text: root.r.sub; color: Theme.mut; font-family: Theme.ui; font-size: 11px * Theme.ts; overflow: elide; }
-    Text { x: parent.width - 120px; y: 9px; width: 76px; text: root.r.meta; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: right; }
-    Rectangle { x: parent.width - 34px; y: (parent.height - 18px) / 2; width: 18px; height: 18px; border-radius: 4px; border-width: 1px;
-        border-color: root.r.on ? Theme.red2 : Theme.mut; background: root.r.on ? Theme.red : transparent;
-        if root.r.on: Icon { x: 3px; y: 3px; d: Ico.check; tint: white; } }
+    Text { x: 60px; y: 31px; width: parent.width - 112px; text: root.r.sub; color: Theme.mut; font-family: Theme.ui; font-size: 11px * Theme.ts; overflow: elide; }
+    Text { x: parent.width - 132px; y: 9px; width: 80px; text: root.r.meta; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; horizontal-alignment: right; }
+    MiniPill { x: parent.width - 44px; y: (parent.height - self.height) / 2; on: root.r.on; }
     ta := TouchArea { mouse-cursor: pointer; clicked => { root.toggled(); } double-clicked => { root.twice(); } }
 }
 
@@ -114,7 +123,7 @@ export component CreateFlow inherits Rectangle {
     property <string> why: NewInst.nether-why(root.ver, root.loader);
     property <bool> nether-on: root.nether && root.why == "";
     property <int> picked-n: NewInst.picked.length;
-    property <length> body-y: root.mode == 2 ? 184px : 150px;
+    property <length> body-y: root.mode == 2 ? 186px : 146px;
     property <length> body-h: root.height - root.body-y - 96px;
 
     public function reset() {
@@ -132,8 +141,8 @@ export component CreateFlow inherits Rectangle {
         // moving on from the loader: Nether on wherever it can run
         if s == 2 && root.step == 1 { root.nether = NewInst.nether-why(root.ver, root.loader) == ""; }
         if s == 3 {
-            NewInst.load-mods(root.ver, root.loader, root.query);
             if root.perf-key != root.ver + "|" + root.loader { root.perf-key = root.ver + "|" + root.loader; NewInst.load-perf(root.ver, root.loader); }
+            NewInst.load-mods(root.ver, root.loader, root.query);
         }
         if s == 4 {
             Wizard.load-rps(root.ver);
@@ -178,19 +187,29 @@ export component CreateFlow inherits Rectangle {
             if NewInst.snap >= 6 { root.go(4); }
         }
     }
-    background: Theme.s1; border-width: 1px; border-color: Theme.ln2; border-radius: Theme.r2;
+    background: Theme.s1; border-radius: Theme.r2;
+    drop-shadow-blur: 18px; drop-shadow-offset-y: 4px; drop-shadow-color: #00000050;
     TouchArea { }
+    Rectangle { border-radius: parent.border-radius; y: 0px; height: 120px; background: @linear-gradient(180deg, Theme.sheen 0%, transparent 100%); }
+    Rectangle { border-radius: parent.border-radius; border-width: 1px; border-color: Theme.ln2; }
 
-    // ---------- header ----------
-    Text { x: 32px; y: 30px; height: 18px; vertical-alignment: center; color: Theme.red2; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 1.6px;
-        text: root.mode == 0 ? (root.inline ? "WELCOME TO NETHER" : "NEW INSTANCE") : (root.mode == 1 ? "QUICK SETUP" : (root.mode == 3 ? "MODPACK  ·  STEP \{root.pstep + 1} OF 2" : (root.mode == 4 ? "HORIZON" : "MANUAL SETUP  ·  STEP \{root.step + 1} OF 5"))); }
-    Heading { x: 30px; y: 50px; width: parent.width - 120px; font-size: 44px; overflow: elide;
-        text: root.mode == 0 ? (root.inline ? "LET'S SET UP YOUR GAME" : "HOW DO YOU WANT TO START?")
-            : (root.mode == 1 ? "PICK A VERSION"
-            : (root.mode == 3 ? (root.pstep == 0 ? "PICK A MODPACK" : "NETHER CLIENT")
-            : (root.mode == 4 ? "MINECRAFT IN RUST"
-            : (root.step == 0 ? "PICK A VERSION" : (root.step == 1 ? "PICK A LOADER" : (root.step == 2 ? "NETHER CLIENT" : (root.step == 3 ? "YOUR FIRST MODS" : "RESOURCE PACKS"))))))); }
-    Text { x: 32px; y: 102px; width: parent.width - 64px; height: 22px; vertical-alignment: center; overflow: elide; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts;
+    // ---------- header (in-game screen header) ----------
+    if root.mode != 0: QuietBtn { x: 14px; y: 14px; d: Ico.back; tip: "Back"; clicked => { root.back(); } }
+    ft := Text { x: root.mode != 0 ? 54px : 22px; y: 0px; height: 60px; vertical-alignment: center; color: Theme.tx; font-family: Theme.pix; font-size: 24px; font-weight: 700;
+        text: root.mode == 0 ? (root.inline ? "WELCOME TO NETHER" : "NEW INSTANCE") : (root.mode == 1 ? "QUICK SETUP" : (root.mode == 3 ? "Modpack" : (root.mode == 4 ? "HORIZON" : "MANUAL SETUP"))); }
+    Text { x: ft.x + ft.preferred-width + 14px; y: 0px; height: 60px; vertical-alignment: center; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts;
+        text: root.mode == 2 ? "Step \{root.step + 1} of 5" : (root.mode == 3 ? "Step \{root.pstep + 1} of 2" : (root.mode == 1 ? "One step" : (root.mode == 4 ? "Experimental" : ""))); }
+    if !root.inline: QuietBtn { x: parent.width - 46px; y: 14px; d: Ico.close; tip: "Close"; clicked => { root.closed(); } }
+    Rectangle { y: 60px; height: 1px; background: Theme.ln; }
+
+    // the question, then one line on it
+    Text { x: 32px; y: 78px; width: parent.width - 64px; height: 26px; vertical-alignment: center; overflow: elide; color: Theme.tx; font-family: Theme.ui; font-size: 20px * Theme.ts; font-weight: 700;
+        text: root.mode == 0 ? (root.inline ? "Let's set up your game" : "How do you want to start?")
+            : (root.mode == 1 ? "Pick a version"
+            : (root.mode == 3 ? (root.pstep == 0 ? "Pick a modpack" : "Nether client")
+            : (root.mode == 4 ? "Minecraft in Rust"
+            : (root.step == 0 ? "Pick a version" : (root.step == 1 ? "Pick a loader" : (root.step == 2 ? "Nether client" : (root.step == 3 ? "Your first mods" : "Resource packs"))))))); }
+    Text { x: 32px; y: 106px; width: parent.width - 64px; height: 20px; vertical-alignment: center; overflow: elide; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts;
         text: root.mode == 0 ? "Quick gets you playing in one step. Manual lets you choose everything."
             : (root.mode == 1 ? "Fabric with the Nether client and performance mods, ready to play. Newest first."
             : (root.mode == 3 ? (root.pstep == 0 ? "Modpacks from Modrinth, most downloaded first. Search for one by name."
@@ -201,20 +220,16 @@ export component CreateFlow inherits Rectangle {
             : (root.step == 2 ? "Minecraft " + root.ver + " with " + root.lname + ". You can switch it later on the instance page."
             : (root.step == 3 ? "Popular " + root.lname + " mods for " + root.ver + ". Pick any to download with the instance, or skip."
             : "Popular packs for " + root.ver + ". Pick any to download with the instance, or skip."))))))); }
-    if !root.inline: IconBtn { x: parent.width - 32px - 34px; y: 28px; size: 34px; d: Ico.close; tip: "Close"; clicked => { root.closed(); } }
 
-    // ---------- manual: step rail ----------
+    // ---------- manual: the steps as in-game pills (done = a tick, open = the accent) ----------
     if root.mode == 2: HorizontalLayout {
-        x: 32px; y: 138px; width: parent.width - 64px; height: 30px; spacing: 6px;
-        for st[i] in ["VERSION", "LOADER", "NETHER", "MODS", "RESOURCE PACKS"]: Rectangle {
+        x: 32px; y: 138px; height: 30px; spacing: 6px; alignment: start;
+        for st[i] in ["Version", "Loader", "Nether", "Mods", "Resource packs"]: Pill {
             property <bool> skip: i == 3 && root.loader == 0;
-            border-radius: Theme.r1;
-            background: root.step == i ? Theme.s3 : transparent;
+            text: st; icon: i < root.step && !self.skip ? Ico.check : ""; count: i < root.step ? "" : "\{i + 1}";
+            on: root.step == i;
             opacity: self.skip ? 0.35 : 1;
-            Rectangle { y: parent.height - 2px; height: 2px; background: i < root.step ? Theme.ice : (root.step == i ? Theme.red2 : Theme.ln2); }
-            Text { x: 10px; height: parent.height; text: "0\{i + 1}"; color: root.step == i ? Theme.red2 : Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; vertical-alignment: center; }
-            Text { x: 34px; width: parent.width - 40px; height: parent.height; overflow: elide; text: st; color: root.step == i ? Theme.tx : (i < root.step ? Theme.dim : Theme.mut); font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; vertical-alignment: center; }
-            TouchArea { mouse-cursor: i < root.step && !parent.skip ? pointer : default; clicked => { if i < root.step && !parent.skip { root.step = i; } } }
+            clicked => { if i < root.step && !self.skip { root.step = i; } }
         }
     }
 
@@ -226,7 +241,7 @@ export component CreateFlow inherits Rectangle {
         property <length> ty: (self.height - 2 * self.th - 16px) / 2;
         Choice {
             x: 0px; y: parent.ty; width: parent.tw; height: parent.th; compact: true;
-            title: "QUICK"; tag: "RECOMMENDED";
+            title: "Quick"; tag: "Recommended";
             text: "Pick a version and you're ready. We set up the rest.";
             lines: ["Fabric, the light and fast loader", "Nether client on: HUD, zoom, cosmetics, friends", "Performance mods: Sodium, Lithium and more"];
             foot: "Two clicks. Change anything later.";
@@ -235,7 +250,7 @@ export component CreateFlow inherits Rectangle {
         }
         Choice {
             x: parent.tw + 16px; y: parent.ty; width: parent.tw; height: parent.th; compact: true;
-            title: "MANUAL";
+            title: "Manual";
             text: "Choose each part yourself, one step at a time.";
             lines: ["Any release with Vanilla, Fabric, Forge or NeoForge", "Nether client on or off", "Your first mods and resource packs"];
             foot: "Five short steps.";
@@ -244,7 +259,7 @@ export component CreateFlow inherits Rectangle {
         }
         Choice {
             x: 0px; y: parent.ty + parent.th + 16px; width: parent.tw; height: parent.th; compact: true;
-            title: "MODPACK";
+            title: "Modpack";
             text: "A ready-made pack from Modrinth, with all its mods and settings.";
             lines: ["Search Modrinth's modpacks", "Nether client on or off"];
             foot: "Two steps.";
@@ -253,7 +268,7 @@ export component CreateFlow inherits Rectangle {
         }
         Choice {
             x: parent.tw + 16px; y: parent.ty + parent.th + 16px; width: parent.tw; height: parent.th; compact: true;
-            title: "HORIZON"; tag: "EXPERIMENTAL"; ok: !Backend.hz-added;
+            title: "Horizon"; tag: "Experimental"; ok: !Backend.hz-added;
             text: "Minecraft 26.3 rewritten in Rust. No mods, no settings.";
             lines: ["Its own engine, not the Java game", "Worlds open in Minecraft 26.3 too"];
             foot: Backend.hz-added ? "Already in your list." : "One click.";
@@ -289,15 +304,15 @@ export component CreateFlow inherits Rectangle {
     // ---------- manual 1: loader ----------
     if root.mode == 2 && root.step == 1: Rectangle {
         x: 32px; y: root.body-y; width: parent.width - 64px; height: root.body-h;
-        for l[i] in [{t: "VANILLA", d: "Minecraft exactly as Mojang ships it. No mods."},
-                     {t: "FABRIC", d: "Light and fast. Sodium, Iris and most performance and client mods."},
-                     {t: "FORGE", d: "The classic loader for big content mods and older modpacks."},
-                     {t: "NEOFORGE", d: "Forge's modern successor for new content mods."}]: Choice {
+        for l[i] in [{t: "Vanilla", d: "Minecraft exactly as Mojang ships it. No mods."},
+                     {t: "Fabric", d: "Light and fast. Sodium, Iris and most performance and client mods."},
+                     {t: "Forge", d: "The classic loader for big content mods and older modpacks."},
+                     {t: "NeoForge", d: "Forge's modern successor for new content mods."}]: Choice {
             property <bool> can: NewInst.loader-ok(root.ver, i);
             property <bool> n-ok: NewInst.nether-why(root.ver, i) == "";
-            x: mod(i, 2) * (parent.width / 2 + 8px); y: floor(i / 2) * 176px;
-            width: parent.width / 2 - 8px; height: 164px;
-            title: l.t; text: l.d; tag: i == 1 && self.can ? "RECOMMENDED" : "";
+            x: mod(i, 2) * (parent.width / 2 + 8px); y: floor(i / 2) * 148px;
+            width: parent.width / 2 - 8px; height: 136px;
+            title: l.t; text: l.d; tag: i == 1 && self.can ? "Recommended" : "";
             ok: self.can; picked: root.loader == i;
             foot: !self.can ? "No " + root.loader-names[i] + " build for " + root.ver + " yet."
                 : (self.n-ok ? "The Nether client runs here." : "No Nether client with " + root.loader-names[i] + " on " + root.ver + ".");
@@ -310,8 +325,8 @@ export component CreateFlow inherits Rectangle {
     if root.mode == 2 && root.step == 2: Rectangle {
         x: 32px; y: root.body-y; width: parent.width - 64px; height: root.body-h;
         Choice {
-            x: 0px; y: 0px; width: (parent.width - 16px) / 2; height: 236px;
-            title: "NETHER ON"; tag: root.why == "" ? "RECOMMENDED" : "";
+            x: 0px; y: 0px; width: (parent.width - 16px) / 2; height: 208px;
+            title: "Nether on"; tag: root.why == "" ? "Recommended" : "";
             ok: root.why == ""; picked: root.nether-on;
             text: "Minecraft with the Nether client built in. Press Right Shift in game to set it up.";
             lines: ["HUD, zoom, keystrokes and other client features", "Cosmetics, capes and emotes", "Friends, parties and world invites"];
@@ -319,8 +334,8 @@ export component CreateFlow inherits Rectangle {
             chosen-twice => { root.nether = true; root.go(3); }
         }
         Choice {
-            x: (parent.width + 16px) / 2; y: 0px; width: (parent.width - 16px) / 2; height: 236px;
-            title: "NETHER OFF";
+            x: (parent.width + 16px) / 2; y: 0px; width: (parent.width - 16px) / 2; height: 208px;
+            title: "Nether off";
             picked: !root.nether-on;
             text: "Plain Minecraft. Your mods and worlds work the same either way.";
             lines: ["Nothing from Nether runs in game", "Turn it on later if this version supports it"];
@@ -329,9 +344,9 @@ export component CreateFlow inherits Rectangle {
         }
         // why it can't run here, and the way to a setup where it does
         if root.why != "": Rectangle {
-            y: 256px; width: parent.width; height: 64px; border-radius: Theme.r2;
+            y: 224px; width: parent.width; height: 64px; border-radius: Theme.r2;
             background: Theme.red.with-alpha(0.07); border-width: 1px; border-color: Theme.red2.with-alpha(0.45);
-            Text { x: 18px; y: 12px; text: "WHY NOT HERE"; color: Theme.red2; font-family: Theme.mono; font-size: 10px * Theme.ts; font-weight: 700; letter-spacing: 1.4px; }
+            Text { x: 18px; y: 11px; text: "Why not here"; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 600; }
             Text { x: 18px; y: 30px; width: parent.width - 260px; height: 22px; vertical-alignment: center; overflow: elide; text: root.why; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; }
             if root.loader != 1 && NewInst.loader-ok(root.ver, 1) && NewInst.nether-why(root.ver, 1) == "": LinkBtn {
                 x: parent.width - self.width - 18px; y: 20px; text: "USE FABRIC INSTEAD"; clicked => { root.loader = 1; root.nether = true; } }
@@ -343,38 +358,25 @@ export component CreateFlow inherits Rectangle {
     // ---------- manual 3: mods + performance mods ----------
     if root.mode == 2 && root.step == 3: ms := Rectangle {
         x: 32px; y: root.body-y; width: parent.width - 64px; height: root.body-h;
-        // the performance set, on by default: the toggle ticks or unticks every box below it, and unticking any
-        // box turns the toggle off (it is on only while all of them are ticked)
+        // the performance set, on by default: the toggle turns every performance mod in the list below on or off, and
+        // turning any of them off there turns the toggle off (it is on only while all of them are)
         property <bool> pon: NewInst.perf-all;
         property <int> pn: NewInst.perf-mods.length;
-        property <length> pw: (self.width - 36px - (Math.max(1, self.pn) - 1) * 6px) / Math.max(1, self.pn);
         Rectangle {
-            y: 0px; width: parent.width; height: 108px; border-radius: Theme.r2;
-            background: ms.pon ? Theme.red.with-alpha(0.07) : Theme.bg; border-width: 1px; border-color: ms.pon ? Theme.red2.with-alpha(0.45) : Theme.ln;
+            y: 0px; width: parent.width; height: 64px; border-radius: Theme.r2;
+            background: Theme.s2; border-width: 1px; border-color: ms.pon ? Theme.red.with-alpha(0.6) : Theme.ln;
             Text { x: 18px; y: 12px; text: "Performance mods"; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; }
             Text { x: 18px; y: 34px; width: parent.width - 100px; overflow: elide; text: NewInst.perf-text(root.loader); color: Theme.dim; font-family: Theme.ui; font-size: 12px * Theme.ts; }
             Toggle { x: parent.width - 60px; y: 21px; on <=> NewInst.perf-all; enabled: ms.pn > 0; toggled(v) => { NewInst.perf-set(v); } }
-            for r[i] in NewInst.perf-mods: Rectangle {
-                x: 18px + i * (ms.pw + 6px); y: 62px; width: ms.pw; height: 32px; border-radius: Theme.r1;
-                background: r.on ? Theme.red.with-alpha(0.094) : (pt.has-hover ? Theme.s2 : Theme.s1);
-                border-width: 1px; border-color: r.on ? Theme.red2.with-alpha(0.6) : Theme.ln;
-                animate background, border-color { duration: Theme.fast; }
-                Rectangle { x: 8px; y: 8px; width: 16px; height: 16px; border-radius: 4px; border-width: 1px;
-                    border-color: r.on ? Theme.red2 : Theme.mut; background: r.on ? Theme.red : transparent;
-                    if r.on: Icon { x: 2px; y: 2px; d: Ico.check; tint: white; } }
-                Text { x: 30px; width: parent.width - 36px; height: parent.height; vertical-alignment: center; overflow: elide; text: r.name;
-                    color: r.on ? Theme.tx : Theme.dim; font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 600; }
-                pt := TouchArea { mouse-cursor: pointer; clicked => { NewInst.perf-toggle(r.id); } }
-            }
         }
-        Field { x: 0px; y: 124px; width: parent.width; height: 38px; text-size: 13px; search: true;
+        Field { x: 0px; y: 80px; width: parent.width; height: 38px; text-size: 13px; search: true;
             placeholder: "Search Modrinth for " + root.lname + " " + root.ver + " mods"; text <=> root.query;
             edited => { NewInst.load-mods(root.ver, root.loader, root.query); } }
-        if NewInst.mods-loading && NewInst.mods.length == 0: Text { y: 180px; text: "Loading from Modrinth…"; color: Theme.mut; font-family: Theme.ui; font-size: 14px * Theme.ts; }
-        if !NewInst.mods-loading && NewInst.mods.length == 0: Text { y: 180px; width: parent.width; wrap: word-wrap; color: Theme.mut; font-family: Theme.ui; font-size: 14px * Theme.ts;
+        if NewInst.mods-loading && NewInst.mods.length == 0: Text { y: 136px; text: "Loading from Modrinth…"; color: Theme.mut; font-family: Theme.ui; font-size: 14px * Theme.ts; }
+        if !NewInst.mods-loading && NewInst.mods.length == 0: Text { y: 136px; width: parent.width; wrap: word-wrap; color: Theme.mut; font-family: Theme.ui; font-size: 14px * Theme.ts;
             text: root.query == "" ? "Couldn't load mods from Modrinth. You can add mods later from the instance page." : "No " + root.lname + " mods for " + root.ver + " match that."; }
         Flickable {
-            y: 174px; height: parent.height - 174px; content-height: Math.ceil(NewInst.mods.length / 2) * 66px;
+            y: 130px; height: parent.height - 130px; content-height: Math.ceil(NewInst.mods.length / 2) * 66px;
             for r[i] in NewInst.mods: PickRow {
                 x: mod(i, 2) * (parent.width / 2 + 4px); y: floor(i / 2) * 66px; width: parent.width / 2 - 4px; height: 58px;
                 r: r; toggled => { NewInst.toggle-mod(r.id); }
@@ -419,8 +421,8 @@ export component CreateFlow inherits Rectangle {
     if root.mode == 3 && root.pstep == 1: Rectangle {
         x: 32px; y: root.body-y; width: parent.width - 64px; height: root.body-h;
         Choice {
-            x: 0px; y: 0px; width: (parent.width - 16px) / 2; height: 236px;
-            title: "NETHER ON"; tag: root.pack.path == "" ? "RECOMMENDED" : "";
+            x: 0px; y: 0px; width: (parent.width - 16px) / 2; height: 208px;
+            title: "Nether on"; tag: root.pack.path == "" ? "Recommended" : "";
             ok: root.pack.path == ""; picked: root.pnether-on;
             text: "The pack with the Nether client built in. Press Right Shift in game to set it up.";
             lines: ["HUD, zoom, keystrokes and other client features", "Cosmetics, capes and emotes", "Friends, parties and world invites"];
@@ -428,8 +430,8 @@ export component CreateFlow inherits Rectangle {
             chosen-twice => { root.pnether = true; root.make(false); }
         }
         Choice {
-            x: (parent.width + 16px) / 2; y: 0px; width: (parent.width - 16px) / 2; height: 236px;
-            title: "NETHER OFF";
+            x: (parent.width + 16px) / 2; y: 0px; width: (parent.width - 16px) / 2; height: 208px;
+            title: "Nether off";
             picked: !root.pnether-on;
             text: "The pack exactly as its makers ship it.";
             lines: ["Nothing from Nether runs in game", "Turn it on later if the pack supports it"];
@@ -437,9 +439,9 @@ export component CreateFlow inherits Rectangle {
             chosen-twice => { root.pnether = false; root.make(false); }
         }
         if root.pack.path != "": Rectangle {
-            y: 256px; width: parent.width; height: 64px; border-radius: Theme.r2;
+            y: 224px; width: parent.width; height: 64px; border-radius: Theme.r2;
             background: Theme.red.with-alpha(0.07); border-width: 1px; border-color: Theme.red2.with-alpha(0.45);
-            Text { x: 18px; y: 12px; text: "WHY NOT HERE"; color: Theme.red2; font-family: Theme.mono; font-size: 10px * Theme.ts; font-weight: 700; letter-spacing: 1.4px; }
+            Text { x: 18px; y: 11px; text: "Why not here"; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 600; }
             Text { x: 18px; y: 30px; width: parent.width - 36px; height: 22px; vertical-alignment: center; overflow: elide; text: root.pack.path; color: Theme.tx; font-family: Theme.ui; font-size: 14px * Theme.ts; }
         }
     }
@@ -447,12 +449,12 @@ export component CreateFlow inherits Rectangle {
     // ---------- Horizon: what you get, then CREATE ----------
     if root.mode == 4: Rectangle {
         x: 32px; y: root.body-y; width: parent.width - 64px; height: root.body-h;
-        for t[k] in [{h: "ONE VERSION", d: "Horizon plays 26.3 only. Its worlds are vanilla's format, so they open in Minecraft 26.3 too."},
-                     {h: "ITS OWN ENGINE", d: "Not the Java game: the Nether HUD, cosmetics and Java mods don't run in it. Some of vanilla is still missing."},
-                     {h: "FROM YOUR COPY", d: "Built from your own Minecraft files the first time you play. Needs an account that owns Java Edition."}]: Rectangle {
+        for t[k] in [{h: "One version", d: "Horizon plays 26.3 only. Its worlds are vanilla's format, so they open in Minecraft 26.3 too."},
+                     {h: "Its own engine", d: "Not the Java game: the Nether HUD, cosmetics and Java mods don't run in it. Some of vanilla is still missing."},
+                     {h: "From your copy", d: "Built from your own Minecraft files the first time you play. Needs an account that owns Java Edition."}]: Rectangle {
             x: k * ((parent.width - 32px) / 3 + 16px); y: 0px; width: (parent.width - 32px) / 3; height: 150px;
-            border-radius: Theme.r2; background: Theme.bg; border-width: 1px; border-color: Theme.ln;
-            Text { x: 18px; y: 16px; height: 22px; text: t.h; color: Theme.tx; font-family: Theme.disp; font-size: 18px; font-weight: 700; vertical-alignment: center; }
+            border-radius: Theme.r2; background: Theme.s2; border-width: 1px; border-color: Theme.ln;
+            Text { x: 18px; y: 16px; height: 22px; text: t.h; color: Theme.tx; font-family: Theme.ui; font-size: 16px * Theme.ts; font-weight: 700; vertical-alignment: center; }
             Text { x: 18px; y: 48px; width: parent.width - 36px; height: 90px; wrap: word-wrap; overflow: elide; text: t.d; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; }
         }
         Text { x: 0px; y: 170px; width: parent.width; wrap: word-wrap; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts;
@@ -462,21 +464,22 @@ export component CreateFlow inherits Rectangle {
 
     // ---------- footer: what you'll get, back, next / create ----------
     Rectangle { x: 0px; y: parent.height - 80px; width: parent.width; height: 1px; background: Theme.ln; }
+    Rectangle { x: 1px; y: parent.height - 79px; width: parent.width - 2px; height: 78px; border-radius: Theme.r2; background: Theme.bg.with-alpha(0.25); }
     if root.mode == 1: Text { x: 32px; y: parent.height - 60px; width: parent.width - 520px; height: 40px; vertical-alignment: center; overflow: elide;
-        color: Theme.dim; font-family: Theme.mono; font-size: 12px * Theme.ts;
+        color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts;
         text: root.qver == "" ? "" : root.qver + "  ·  Fabric  ·  Nether on  ·  performance mods"; }
     if root.mode == 3 || root.mode == 4: Text { x: 32px; y: parent.height - 60px; width: parent.width - 520px; height: 40px; vertical-alignment: center; overflow: elide;
-        color: Theme.dim; font-family: Theme.mono; font-size: 12px * Theme.ts;
+        color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts;
         text: root.mode == 4 ? "Horizon  ·  26.3  ·  no mods, no settings"
             : (root.pack.id == "" ? "" : root.pack.name + (root.pack.mc != "" ? "  ·  " + root.pack.mc : "") + (root.pack.ver != "" ? "  ·  " + root.pack.ver : "") + (root.pstep >= 1 ? (root.pnether-on ? "  ·  Nether on" : "  ·  Nether off") : "")); }
     if root.mode == 2 && root.step < 4: Text { x: 32px; y: parent.height - 60px; width: parent.width - 520px; height: 40px; vertical-alignment: center; overflow: elide;
-        color: Theme.dim; font-family: Theme.mono; font-size: 12px * Theme.ts;
+        color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts;
         text: root.ver + (root.step >= 1 ? "  ·  " + root.lname : "") + (root.step >= 2 ? (root.nether-on ? "  ·  Nether on" : "  ·  Nether off") : "")
             + (root.step >= 3 && root.loader != 0 ? (NewInst.perf-all ? "  ·  performance mods" : (NewInst.perf-n > 0 ? "  ·  \{NewInst.perf-n} performance mods" : "")) + (root.picked-n > 0 ? "  ·  \{root.picked-n} picked" : "") : ""); }
     // last step: the name, filled in for you
     if root.mode == 2 && root.step == 4: Rectangle {
         x: 32px; y: parent.height - 62px; width: 380px; height: 44px;
-        Text { x: 0px; width: 52px; height: parent.height; vertical-alignment: center; text: "NAME"; color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; font-weight: 700; letter-spacing: 1.2px; }
+        Text { x: 0px; width: 52px; height: parent.height; vertical-alignment: center; text: "Name"; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; }
         Field { x: 56px; y: 3px; width: parent.width - 56px; height: 38px; text-size: 14px; placeholder: "My instance"; text <=> root.name; accepted => { root.make(false); } }
     }
     // a step with NEXT (manual before the last step, modpack's first) or the two CREATE buttons

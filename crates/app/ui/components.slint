@@ -68,7 +68,7 @@ export component SectionHead inherits Rectangle {
     in property <string> note;
     height: 20px;
     // (idx is ignored since v6: sections are named, not numbered)
-    t := Text { x: 0px; height: parent.height; text: root.title; color: Theme.tx; font-family: Theme.pix; font-size: 16px; font-weight: 700; vertical-alignment: center; }
+    t := Text { x: 0px; height: parent.height; text: root.title; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; letter-spacing: 0.8px; vertical-alignment: center; }
     nt := Text { x: parent.width - self.preferred-width; height: parent.height; text: root.note; color: Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; }
     Rectangle { x: t.x + t.preferred-width + 12px; y: 10px; width: parent.width - self.x - (root.note == "" ? 0px : nt.preferred-width + 12px); height: 1px; background: Theme.ln; }
 }
@@ -140,6 +140,12 @@ export global Ico {
     out property <string> search: "M 5 1 A 4 4 0 1 1 4.99 1 Z M 8 8 L 11 11";
     out property <string> export: "M 6 8 L 6 1 M 3.5 3.5 L 6 1 L 8.5 3.5 M 1.5 7 L 1.5 10.5 L 10.5 10.5 L 10.5 7";
     out property <string> edit: "M 2 10 L 2 8 L 8.5 1.5 L 10.5 3.5 L 4 10 Z";
+    out property <string> cog: "M 6 4 A 2 2 0 1 1 5.99 4 Z M 6 0.8 L 6 2.4 M 6 9.6 L 6 11.2 M 0.8 6 L 2.4 6 M 9.6 6 L 11.2 6 M 2.3 2.3 L 3.5 3.5 M 8.5 8.5 L 9.7 9.7 M 9.7 2.3 L 8.5 3.5 M 3.5 8.5 L 2.3 9.7";
+    out property <string> layers: "M 6 1 L 11 3.5 L 6 6 L 1 3.5 Z M 1 6 L 6 8.5 L 11 6 M 1 8.5 L 6 11 L 11 8.5";
+    out property <string> flame: "M 6 11 C 3 11 2 9 2 7.3 C 2 5 4 4 4.5 1.5 C 6.5 3 7 4.2 7 5.5 C 7.6 5 8 4.3 8.1 3.6 C 9.4 4.8 10 6 10 7.3 C 10 9.3 8.6 11 6 11 Z";
+    out property <string> cube: "M 6 1 L 11 3.5 L 11 8.5 L 6 11 L 1 8.5 L 1 3.5 Z M 1 3.5 L 6 6 L 11 3.5 M 6 6 L 6 11";
+    out property <string> block: "M 1.5 1.5 L 10.5 1.5 L 10.5 10.5 L 1.5 10.5 Z M 1.5 4.5 L 10.5 4.5";
+    out property <string> stop: "M 3 3 L 9 3 L 9 9 L 3 9 Z";
     out property <string> refresh: "M 10 6 A 4 4 0 1 1 8.8 3.2 M 9.2 0.8 L 9.2 3.4 L 6.6 3.4";
 }
 
@@ -638,4 +644,93 @@ export component SetRow inherits Rectangle {
     Text { x: root.indent; y: 35px; width: parent.width - root.reserve - root.indent; text: root.sub; color: root.dimmed ? Theme.mut : Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; overflow: elide; }
     Rectangle { x: 0px; y: parent.height - 1px; height: 1px; background: Theme.ln; }
     @children
+}
+// ---------- in-game parity (2026-11-27): the Nether menu's controls (nether_agent Menu.java), drawn the same way ----------
+
+// Category pill (in-game Mods screen): a filled quiet plate, icon + label + count; the open one is the accent.
+export component Pill inherits Rectangle {
+    in property <string> text;
+    in property <string> icon;
+    in property <string> count;
+    in property <bool> on;
+    callback clicked();
+    height: 30px;
+    width: (root.icon == "" ? 14px : 36px) + lt.preferred-width + (root.count == "" ? 14px : ct.preferred-width + 22px);
+    border-radius: 6px;
+    background: root.on ? Theme.red : (ta.has-hover ? Theme.s3 : Theme.s2);
+    animate background { duration: Theme.fast; }
+    property <color> fg: root.on ? white : (ta.has-hover ? Theme.tx : Theme.dim);
+    if root.icon != "": Icon { x: 14px; y: 9px; d: root.icon; tint: root.fg; }
+    lt := Text { x: root.icon == "" ? 14px : 36px; height: parent.height; text: root.text; color: root.fg; font-family: Theme.ui; font-size: 13px * Theme.ts; font-weight: 600; vertical-alignment: center; }
+    ct := Text { x: lt.x + lt.preferred-width + 8px; height: parent.height; text: root.count; color: root.on ? #ffffffc0 : Theme.mut; font-family: Theme.ui; font-size: 12px * Theme.ts; vertical-alignment: center; }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { if !root.on { Sound.play(0); } root.clicked(); } }
+}
+
+// Sub-tabs (in-game Look / Font / Display): plain labels, the open one sits on a soft plate.
+export component SubTabs inherits Rectangle {
+    in property <[string]> items;
+    in-out property <int> current: 0;
+    height: 32px;
+    width: hl.preferred-width;
+    hl := HorizontalLayout {
+        alignment: start; spacing: 4px;
+        for it[i] in root.items: Rectangle {
+            min-width: lt.preferred-width + 28px; horizontal-stretch: 0;
+            border-radius: 6px;
+            background: root.current == i ? Theme.s3 : (t.has-hover ? Theme.hov : transparent);
+            animate background { duration: Theme.fast; }
+            lt := Text { text: it; color: root.current == i ? Theme.tx : (t.has-hover ? Theme.tx : Theme.dim); font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: root.current == i ? 600 : 500; horizontal-alignment: center; vertical-alignment: center; }
+            t := TouchArea { mouse-cursor: pointer; clicked => { if root.current != i { Sound.play(0); } root.current = i; } }
+        }
+    }
+    fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
+        key-pressed(e) => {
+            if e.text == Key.LeftArrow && root.current > 0 { root.current -= 1; return accept; }
+            if e.text == Key.RightArrow && root.current < root.items.length - 1 { root.current += 1; return accept; }
+            return reject;
+        } }
+    if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-radius: 8px; border-width: 2px; border-color: Theme.ice; }
+}
+
+// Section label (in-game card grid): name, then its count on a small round badge.
+export component GroupLabel inherits Rectangle {
+    in property <string> text;
+    in property <string> count;
+    height: 24px;
+    width: lt.preferred-width + (root.count == "" ? 0px : ct.preferred-width + 22px);
+    lt := Text { x: 0px; height: parent.height; text: root.text; color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; vertical-alignment: center; }
+    Rectangle {
+        visible: root.count != "";
+        x: lt.preferred-width + 10px; y: 3px; width: ct.preferred-width + 12px; height: 18px; border-radius: 9px; background: Theme.s3;
+        ct := Text { text: root.count; color: Theme.dim; font-family: Theme.ui; font-size: 11px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }
+    }
+}
+
+// Quiet square icon button (in-game back arrow / close / HUD editor): no frame, a faint plate under the pointer.
+export component QuietBtn inherits Rectangle {
+    in property <string> d;
+    in property <string> tip;
+    callback clicked();
+    width: 32px; height: 32px; border-radius: 5px;
+    background: ta.pressed ? Theme.s3 : (ta.has-hover ? Theme.hov : transparent);
+    animate background { duration: Theme.fast; }
+    Icon { x: (parent.width - 12px) / 2; y: (parent.height - 12px) / 2; d: root.d; tint: ta.has-hover ? Theme.tx : Theme.mut; }
+    ta := TouchArea { mouse-cursor: pointer; clicked => { Sound.play(0); root.clicked(); } }
+    fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
+        key-pressed(e) => { if e.text == " " || e.text == Key.Return { Sound.play(0); root.clicked(); return accept; } return reject; } }
+    if fs.has-focus: Rectangle { x: -3px; y: -3px; width: parent.width + 6px; height: parent.height + 6px; border-radius: 7px; border-width: 2px; border-color: Theme.ice; }
+    if root.tip != "" && ta.has-hover: Rectangle {
+        x: (root.width - self.width) / 2; y: root.height + 6px; width: tl.preferred-width + 18px; height: 24px;
+        background: Theme.s3; border-radius: Theme.r1; border-width: 1px; border-color: Theme.ln2;
+        tl := Text { text: root.tip; color: Theme.tx; font-family: Theme.ui; font-size: 12px * Theme.ts; horizontal-alignment: center; vertical-alignment: center; }
+    }
+}
+
+// The in-game on / off pill (30 x 17), as a picture: the row around it takes the click.
+export component MiniPill inherits Rectangle {
+    in property <bool> on;
+    width: 30px; height: 17px; border-radius: 8.5px;
+    background: root.on ? Theme.red : Theme.s3;
+    animate background { duration: Theme.mid; }
+    Rectangle { x: root.on ? 16px : 3px; y: 3px; width: 11px; height: 11px; border-radius: 5.5px; background: root.on ? white : Theme.dim; animate x { duration: Theme.mid; easing: ease-out-quint; } }
 }

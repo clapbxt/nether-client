@@ -106,11 +106,6 @@ pub fn init(ui: &AppWindow, sh: &Arc<Shared>) {
     n.on_load_perf(move |ver, l| if let Some(ui) = weak.upgrade() { load_perf(&ui, &s, &ver, l) });
     let weak = ui.as_weak();
     n.on_perf_set(move |on| if let Some(ui) = weak.upgrade() { perf_set(&ui, None, on) });
-    let weak = ui.as_weak();
-    n.on_perf_toggle(move |id| if let Some(ui) = weak.upgrade() {
-        let on = ui.global::<NewInst>().get_perf_mods().iter().find(|r| r.id == id).is_some_and(|r| !r.on);
-        perf_set(&ui, Some(&id), on)
-    });
     let (weak, s) = (ui.as_weak(), sh.clone());
     n.on_load_mods(move |ver, l, q| if let Some(ui) = weak.upgrade() { load_mods(&ui, &s, &ver, l, &q) });
     let weak = ui.as_weak();
@@ -149,7 +144,8 @@ fn perf_list(sh: &Shared, l: Loader) -> Vec<(String, String)> {
     perf::catalog(l).iter().map(|b| (b.slug.to_string(), b.name.to_string())).collect()
 }
 
-/// Fill the check boxes under the Performance mods toggle, every one ticked (the toggle starts on).
+/// The performance mods for this version + loader, every one on (the toggle starts on). They show in the mods list
+/// below the toggle (id = Modrinth slug), so the list must be filled after this.
 fn load_perf(ui: &AppWindow, sh: &Arc<Shared>, ver: &str, loader: i32) {
     let l = loader_of(&ui.global::<Backend>(), ver, loader);
     let rows: Vec<Row> = perf_list(sh, l).into_iter().map(|(id, name)| Row { id: id.into(), name: name.into(), on: true, ..Default::default() }).collect();
@@ -159,8 +155,9 @@ fn load_perf(ui: &AppWindow, sh: &Arc<Shared>, ver: &str, loader: i32) {
     n.set_perf_mods(ModelRc::new(VecModel::from(rows)));
 }
 
-/// Tick or untick one box (`id`) or all of them (None). The toggle is on only while every box is ticked, so
-/// unticking one turns it off and ticking the last one turns it back on.
+/// Turn one performance mod (`id`) or all of them (None) on or off, here and in the mods list. The toggle is on only
+/// while every one is on, so turning one off turns it off and turning the last one on turns it back on. The toggle
+/// also re-sorts the list so what's on stays at the top; a single row keeps its place under the cursor.
 fn perf_set(ui: &AppWindow, id: Option<&str>, on: bool) {
     let n = ui.global::<NewInst>();
     let m = n.get_perf_mods();
@@ -173,6 +170,13 @@ fn perf_set(ui: &AppWindow, id: Option<&str>, on: bool) {
     let ticked = m.iter().filter(|r| r.on).count();
     n.set_perf_n(ticked as i32);
     n.set_perf_all(ticked > 0 && ticked == m.row_count());
+    let mods = n.get_mods();
+    let mut rows: Vec<Row> = mods.iter().collect();
+    for r in rows.iter_mut() {
+        if let Some(p) = m.iter().find(|p| p.id == r.id) { r.on = p.on; }
+    }
+    if id.is_none() { rows.sort_by_key(|r| !r.on); }
+    for (k, r) in rows.into_iter().enumerate() { mods.set_row_data(k, r); }
 }
 
 /// Popular (or searched) mods for this version + loader, icons streamed in. Picks survive a new search.
@@ -184,22 +188,47 @@ fn load_mods(ui: &AppWindow, sh: &Arc<Shared>, ver: &str, loader: i32, query: &s
     SEARCH.with(|s| *s.borrow_mut() = key.clone());
     let n = ui.global::<NewInst>();
     n.set_mods_loading(true);
+    // the performance mods are rows of this list too (id = slug, on = the toggle's state for it)
+    let perf: Vec<(String, String)> = n.get_perf_mods().iter().map(|r| (r.id.to_string(), r.name.to_string())).collect();
     let (weak, sh, ver, q) = (ui.as_weak(), sh.clone(), ver.to_string(), query.trim().to_string());
     std::thread::spawn(move || {
+        let c = client();
         let sort = if q.is_empty() { "downloads" } else { "relevance" };
-        let hits = modrinth::search(&client(), &q, "mod", &ver, Some(&ml), sort, None).unwrap_or_default();
-        let hits: Vec<_> = hits.into_iter().take(24).collect();
-        let meta: Vec<(String, String, String, String, String)> = hits.iter().map(|h| (h.id.clone(), h.title.clone(), h.desc.clone(), count(h.downloads), h.icon_url.clone())).collect();
+        let found = modrinth::search(&c, &q, "mod", &ver, Some(&ml), sort, None).unwrap_or_default();
+        let slugs: Vec<String> = perf.iter().map(|(s, _)| s.clone()).collect();
+        let known = modrinth::hits(&c, &slugs).unwrap_or_default();
+        let slug_of = |id: &str| known.iter().find(|(_, h)| h.id == id).map(|(s, _)| s.clone());
+        // no search: every performance mod first; a search: its hits, a performance mod's under its slug
+        let mut hits: Vec<modrinth::Hit> = if q.is_empty() {
+            perf.iter().map(|(s, name)| {
+                let mut h = known.get(s).cloned().unwrap_or_else(|| modrinth::Hit { title: name.clone(), ..Default::default() });
+                h.id = s.clone();
+                h
+            }).collect()
+        } else { vec![] };
+        for mut h in found.into_iter().take(24) {
+            match slug_of(&h.id) {
+                Some(_) if q.is_empty() => continue,
+                Some(s) => h.id = s,
+                None => {}
+            }
+            hits.push(h);
+        }
+        let meta: Vec<(String, String, String, String, String)> = hits.iter().map(|h| (h.id.clone(), h.title.clone(), h.desc.clone(), if h.downloads > 0 { count(h.downloads) } else { String::new() }, h.icon_url.clone())).collect();
         let k2 = key.clone();
         ui_do(&weak, move |ui| {
             if SEARCH.with(|s| *s.borrow() != k2) { return; }
             let n = ui.global::<NewInst>();
             let picked: Vec<String> = n.get_picked().iter().map(|r| r.id.to_string()).collect();
-            let rows: Vec<Row> = meta.iter().map(|(id, t, d, c, icon)| {
+            let perf = n.get_perf_mods();
+            let mut rows: Vec<Row> = meta.iter().map(|(id, t, d, c, icon)| {
                 let img = cached_icon(icon);
+                let on = perf.iter().find(|p| p.id == id.as_str()).map_or(picked.contains(id), |p| p.on);
                 Row { id: id.as_str().into(), name: t.as_str().into(), sub: d.as_str().into(), meta: c.as_str().into(), path: icon.as_str().into(),
-                    on: picked.contains(id), has_icon: img.is_some(), icon: img.unwrap_or_default(), ..Default::default() }
+                    on, has_icon: img.is_some(), icon: img.unwrap_or_default(), ..Default::default() }
             }).collect();
+            // what's on at the top
+            rows.sort_by_key(|r| !r.on);
             n.set_mods_loading(false);
             n.set_mods(ModelRc::new(VecModel::from(rows)));
         });
@@ -310,6 +339,7 @@ fn create_pack(ui: &AppWindow, sh: &Arc<Shared>, id: &str, title: &str, nether: 
 /// Pick or unpick a mod on screen.
 fn toggle(ui: &AppWindow, id: &str) {
     let n = ui.global::<NewInst>();
+    if let Some(p) = n.get_perf_mods().iter().find(|p| p.id == id) { return perf_set(ui, Some(id), !p.on); }
     let mods = n.get_mods();
     let Some(k) = mods.iter().position(|r| r.id == id) else { return };
     let Some(mut r) = mods.row_data(k) else { return };
