@@ -56,7 +56,7 @@ The view editors show the real game behind their settings, so you see exactly ho
 
 | Module | What it does |
 |---|---|
-| Performance | Nether's own fixes that make each frame faster: skips hidden entities and block entities, avoids GPU stalls, keeps frame caps even. On by default. |
+| Performance | Nether's own fixes that make each frame faster: skips hidden entities and block entities, avoids GPU stalls, shares one GPU fence per frame, skips needless framebuffer switches, keeps frame caps even. On by default. |
 | Background FPS | Lowers the frame rate while the game is in the background, so your PC runs cooler and quieter |
 | Background Reload | Resource packs reload in the background, without a loading screen |
 | Waypoints | Mark places and see them on screen with their distance. Saved per server, world and dimension. |
