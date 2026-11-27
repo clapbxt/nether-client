@@ -17,7 +17,7 @@ pub struct LauncherPrefs {
     pub autostart: bool,
     /// 0 keep open, 1 minimize, 2 hide to tray
     pub on_launch: i32,
-    /// 0 quit, 1 hide to tray
+    /// 0 quit, 1 hide to tray (default: the close button keeps Nether running in the tray)
     pub on_close: i32,
     /// stop ambient animations (saves GPU/CPU)
     pub calm: bool,
@@ -46,7 +46,7 @@ pub struct LauncherPrefs {
 }
 
 impl Default for LauncherPrefs {
-    fn default() -> Self { LauncherPrefs { gpu: true, autostart: false, on_launch: 1, on_close: 0, calm: false, accent: 0, theme: 0, text: 0, capes: true, discord: true, auto_update: true, ram: 0, setup_done: false, sounds: 1, beta: false } }
+    fn default() -> Self { LauncherPrefs { gpu: true, autostart: false, on_launch: 1, on_close: 1, calm: false, accent: 0, theme: 0, text: 0, capes: true, discord: true, auto_update: true, ram: 0, setup_done: false, sounds: 1, beta: false } }
 }
 
 /// Memory a new profile gets on a PC with `sys_gb` of RAM: enough for Nether profiles and light packs, never more
@@ -66,13 +66,17 @@ pub fn load(paths: &Paths) -> LauncherPrefs {
     let mut p: LauncherPrefs = serde_json::from_value(v.clone()).unwrap_or_default();
     // pre-v7 themes: Ice (3) was the light one, every other one becomes NetherGlass Dark
     if v.get("look").is_none() && v["theme"].as_i64() == Some(3) { p.theme = 1; }
+    // the close button used to default to Quit; settings saved before the tray became the default move over once
+    // ("close2" is written on every save, so a later pick of "Quit the launcher" sticks)
+    if v.is_object() && v.get("close2").is_none() { p.on_close = 1; }
     p.theme = crate::settings::theme_idx(p.theme) as i32;
     p
 }
 
 pub fn save(paths: &Paths, p: &LauncherPrefs) -> anyhow::Result<()> {
     let was_on = load(paths).capes;
-    let v: Value = serde_json::to_value(p)?;
+    let mut v: Value = serde_json::to_value(p)?;
+    v["close2"] = Value::Bool(true);
     nether_core::store::update_config(paths, |o| { o.insert("launcher".into(), v); })?;
     // turning capes and cosmetics off deletes your entry at the cape service (now, or at the next sign-in)
     if was_on && !p.capes { crate::skin::forget_nether(paths, true); }
