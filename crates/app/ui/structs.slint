@@ -28,6 +28,8 @@ export struct Acct { uuid: string, name: string, active: bool }
 // Settings > Java: one major version, what the launcher will run for it (custom = picked by the user)
 // ready: a Java of this major is on this PC (ours, the system's or a custom one)
 export struct JavaRt { major: int, title: string, sub: string, custom: bool, ready: bool }
+// Settings > Personalization theme tile: name (+ sub, "Dark" for "Nether Dark"), its own colours and panel radius
+export struct ThemeSpec { name: string, sub: string, bg: color, panel: color, line: color, text: color, r: length }
 // a world (or, server: true, a saved server; folder = its address) in an instance; sub = mode · version · last played · size
 export struct WorldRow { folder: string, name: string, sub: string, icon: image, has-icon: bool, hardcore: bool, server: bool, status: string, online: bool }
 // a screenshot thumbnail (screenshots tab)
@@ -261,11 +263,17 @@ export global Backend {
     in-out property <int> lp-on-launch: 1;
     in-out property <int> lp-on-close: 1;
     in-out property <bool> calm: false;
-    // look: accent 0 racing red, 1 ember, 2 acid, 3 cobalt, 4 violet; text size 0 default, 1 large, 2 larger
+    // look (look.rs): accent 0 fire, 1 racing red, 2 acid, 3 cobalt, 4 violet, 5 custom (lp-accent-hex, shown as
+    // accent-custom); theme = index into `themes` (built in, then themes/*.json); corners 0 sharp, 1 default, 2 round;
+    // text size 0 default, 1 large, 2 larger
     in-out property <int> lp-accent: 0;
-    // theme 0 OLED, 1 Obsidian, 2 Slate, 3 Ice
+    in-out property <string> lp-accent-hex;
+    in-out property <color> accent-custom: #F76A05;
     in-out property <int> lp-theme: 0;
+    in-out property <[ThemeSpec]> themes;
+    in-out property <int> lp-corners: 1;
     in-out property <int> lp-text: 0;
+    callback open-themes();
     // Settings > Java: one row per major version; pick a java(w).exe or go back to automatic
     in-out property <[JavaRt]> javas;
     callback java-pick(int);

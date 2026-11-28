@@ -31,6 +31,7 @@ mod newflow;
 mod combine;
 mod instpage;
 mod settings;
+mod look;
 // L1: pre-launch check, safe updates / history
 mod preflight;
 mod snapshot;
@@ -706,6 +707,9 @@ fn start_launch(weak: slint::Weak<AppWindow>, sh: Arc<Shared>, name: String, ver
                     if b.get_running_count() == 0 { discord::idle(&sh3.paths, true); }
                     // bring the launcher back if it stepped aside for the game
                     if prefs::load(&sh3.paths).on_launch != 0 && b.get_running_count() == 0 { prefs::show(ui); }
+                    // the in-game Settings may have changed the theme: follow it
+                    let mut lp = prefs::load(&sh3.paths);
+                    if adopt_game_look(&sh3, &mut lp) { let _ = prefs::save(&sh3.paths, &lp); apply_look(ui, &sh3, &lp); }
                     edit_inst(ui, &sh3, &name, |i| { i.running = false; i.stopping = false; i.secs += rest; i.hours = i.secs / 3600; });
                     running_label(ui);
                     if stopped { show_toast(ui, &sh3, &format!("Stopped {name}")); }
@@ -774,6 +778,43 @@ fn with_app(f: impl FnOnce(&AppWindow, &Arc<Shared>)) {
 fn is_web_url(u: &str) -> bool {
     let rest = u.strip_prefix("https://").or_else(|| u.strip_prefix("http://"));
     rest.is_some_and(|r| r.split(['/', '?', '#']).next().is_some_and(|h| !h.is_empty() && !h.contains(char::is_whitespace)))
+}
+
+/// Theme, accent, corners and text size: into the launcher's Theme global and into the in-game client's config
+/// (every theme resolved, so the in-game picker matches; design v9, look.rs).
+fn apply_look(ui: &AppWindow, sh: &Shared, p: &prefs::LauncherPrefs) {
+    let list = look::all(&sh.paths.root);
+    let c = look::Choice { theme: &p.theme_name, accent: p.accent, accent_hex: if p.accent == 5 { &p.accent_hex } else { "" }, corners: p.corners, text: p.text };
+    look::apply(ui, &list, &c);
+    let b = ui.global::<Backend>();
+    b.set_lp_accent(p.accent);
+    b.set_lp_accent_hex(p.accent_hex.clone().into());
+    b.set_lp_corners(p.corners);
+    b.set_lp_text(p.text);
+    client::set_look(sh, look::game_look(&list, &c));
+}
+
+/// Take over a theme, accent or corners picked in game (client.json) that differ from the prefs. Returns whether
+/// anything changed.
+fn adopt_game_look(sh: &Shared, p: &mut prefs::LauncherPrefs) -> bool {
+    let (theme, accent, corners) = client::game_look(sh);
+    let list = look::all(&sh.paths.root);
+    let mut changed = false;
+    if let Some(t) = theme.and_then(|t| list.iter().find(|d| d.name.eq_ignore_ascii_case(&t)).map(|d| d.name.clone())) {
+        if t != p.theme_name { p.theme_name = t; changed = true; }
+    }
+    if let Some(c) = accent.as_deref().and_then(look::parse_hex) {
+        let cur = look::accent(p.accent, if p.accent == 5 { look::parse_hex(&p.accent_hex) } else { None })[0];
+        if c != cur {
+            match look::ACCENTS.iter().position(|a| a[0] == c) {
+                Some(i) => p.accent = i as i32,
+                None => { p.accent = 5; p.accent_hex = format!("#{c:06X}"); }
+            }
+            changed = true;
+        }
+    }
+    if let Some(c) = corners.filter(|c| (0..=2).contains(c) && *c != p.corners) { p.corners = c; changed = true; }
+    changed
 }
 
 fn main() -> Result<(), slint::PlatformError> {
@@ -1102,9 +1143,9 @@ fn main() -> Result<(), slint::PlatformError> {
         ui.global::<Sound>().on_play(|n| { if let Some(k) = sfx::Sfx::from_i32(n) { sfx::play(k); } });
         backend.set_discord_ready(discord::app_id(&shared.paths).is_some());
         discord::enable(&shared.paths, p.discord);
-        settings::apply_look(&ui, p.accent, p.text);
-        settings::apply_theme(&ui, p.theme);
-        client::set_look(&shared, settings::THEME_NAMES[settings::theme_idx(p.theme)], settings::accent_hex(p.accent));
+        let mut p = p;
+        if adopt_game_look(&shared, &mut p) { let _ = prefs::save(&shared.paths, &p); }
+        apply_look(&ui, &shared, &p);
     }
     {
         let (weak, sh) = (ui.as_weak(), shared.clone());
@@ -1112,11 +1153,13 @@ fn main() -> Result<(), slint::PlatformError> {
             let Some(ui) = weak.upgrade() else { return };
             let b = ui.global::<Backend>();
             let old = prefs::load(&sh.paths);
-            let p = prefs::LauncherPrefs { gpu: b.get_lp_gpu(), autostart: b.get_lp_autostart(), on_launch: b.get_lp_on_launch(), on_close: b.get_lp_on_close(), calm: b.get_calm(), accent: b.get_lp_accent(), theme: b.get_lp_theme(), text: b.get_lp_text(), capes: b.get_lp_capes(), discord: b.get_lp_discord(), auto_update: b.get_lp_auto_update(), ram: old.ram, setup_done: old.setup_done, sounds: b.get_lp_sounds(), beta: b.get_lp_beta() };
+            let list = look::all(&sh.paths.root);
+            let theme_name = list.get(b.get_lp_theme().max(0) as usize).map(|d| d.name.clone()).unwrap_or_else(|| old.theme_name.clone());
+            let accent_hex = look::parse_hex(b.get_lp_accent_hex().as_str()).map(|c| format!("#{c:06X}")).unwrap_or_else(|| old.accent_hex.clone());
+            let accent = if b.get_lp_accent() == 5 && accent_hex.is_empty() { old.accent } else { b.get_lp_accent() };
+            let p = prefs::LauncherPrefs { gpu: b.get_lp_gpu(), autostart: b.get_lp_autostart(), on_launch: b.get_lp_on_launch(), on_close: b.get_lp_on_close(), calm: b.get_calm(), accent, accent_hex, theme_name, corners: b.get_lp_corners(), theme: old.theme, text: b.get_lp_text(), capes: b.get_lp_capes(), discord: b.get_lp_discord(), auto_update: b.get_lp_auto_update(), ram: old.ram, setup_done: old.setup_done, sounds: b.get_lp_sounds(), beta: b.get_lp_beta() };
             sfx::set_level(p.sounds);
-            settings::apply_look(&ui, p.accent, p.text);
-            settings::apply_theme(&ui, p.theme);
-            client::set_look(&sh, settings::THEME_NAMES[settings::theme_idx(p.theme)], settings::accent_hex(p.accent));
+            apply_look(&ui, &sh, &p);
             discord::enable(&sh.paths, p.discord);
             ui.global::<Theme>().set_calm(p.calm);
             if p.autostart != old.autostart {
@@ -1676,16 +1719,18 @@ java.lang.OutOfMemoryError: Java heap space
                 }
             });
         }
-        // NC_SNAP_THEME=n: preview a theme without saving it
-        if let Some(n) = std::env::var("NC_SNAP_THEME").ok().and_then(|n| n.parse::<i32>().ok()) {
-            ui.global::<Backend>().set_lp_theme(n);
-            settings::apply_theme(&ui, n);
-        }
-        // NC_SNAP_LOOK=accent,text: preview the accent colour / text size without saving them
-        if let Some((a, t)) = std::env::var("NC_SNAP_LOOK").ok().and_then(|s| s.split_once(',').map(|(a, t)| (a.parse().unwrap_or(0), t.parse().unwrap_or(0)))) {
-            ui.global::<Backend>().set_lp_accent(a);
-            ui.global::<Backend>().set_lp_text(t);
-            settings::apply_look(&ui, a, t);
+        // NC_SNAP_LOOK=theme,accent,text[,corners]: preview a look without saving it (theme by name, accent 0-4 or #hex)
+        if let Ok(s) = std::env::var("NC_SNAP_LOOK") {
+            let f: Vec<&str> = s.split(',').collect();
+            let mut p = prefs::load(&shared.paths);
+            if let Some(t) = f.first().filter(|t| !t.is_empty()) { p.theme_name = t.to_string(); }
+            if let Some(a) = f.get(1) { if a.starts_with('#') { p.accent = 5; p.accent_hex = a.to_string(); } else { p.accent = a.parse().unwrap_or(0); } }
+            p.text = f.get(2).and_then(|t| t.parse().ok()).unwrap_or(p.text);
+            p.corners = f.get(3).and_then(|t| t.parse().ok()).unwrap_or(p.corners);
+            let list = look::all(&shared.paths.root);
+            look::apply(&ui, &list, &look::Choice { theme: &p.theme_name, accent: p.accent, accent_hex: if p.accent == 5 { &p.accent_hex } else { "" }, corners: p.corners, text: p.text });
+            ui.global::<Backend>().set_lp_accent(p.accent);
+            ui.global::<Backend>().set_lp_corners(p.corners);
         }
         // NC_SNAP_NOGATE: keep the sign-in gate away even when the saved login can't refresh (captures of signed-in pages)
         if std::env::var("NC_SNAP_NOGATE").is_ok() {

@@ -9,7 +9,7 @@ use slint::ComponentHandle;
 
 use crate::AppWindow;
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct LauncherPrefs {
     /// GPU rendering (off = software renderer; applies on restart)
@@ -21,10 +21,16 @@ pub struct LauncherPrefs {
     pub on_close: i32,
     /// stop ambient animations (saves GPU/CPU)
     pub calm: bool,
-    /// accent colour (settings::ACCENTS index, 0 = fire)
+    /// accent colour (look::ACCENTS index, 0 = fire; 5 = the custom colour in accent_hex)
     pub accent: i32,
-    /// theme (settings::THEME_NAMES index, 0 = Nether Dark, the default, 1 = Nether Light; pre-v8 values 2/3 fold onto them
-    /// via settings::theme_idx); key "look" since v7 (old "theme" = OLED/Obsidian/Slate/Ice)
+    /// custom accent "#RRGGBB" (accent 5)
+    pub accent_hex: String,
+    /// theme by name (look::all: built in or a themes/*.json file); empty = from the v8 index in `theme`
+    pub theme_name: String,
+    /// corners: 0 sharp, 1 default, 2 round (launcher and in game)
+    pub corners: i32,
+    /// v8 theme index (0 Nether Dark, 1 Nether Light; pre-v8 values 2/3 fold onto them); key "look" since v7 (old "theme" =
+    /// OLED/Obsidian/Slate/Ice). Read only to fill `theme_name` once.
     #[serde(rename = "look")]
     pub theme: i32,
     /// reading-text size: 0 default, 1 large, 2 larger
@@ -46,7 +52,7 @@ pub struct LauncherPrefs {
 }
 
 impl Default for LauncherPrefs {
-    fn default() -> Self { LauncherPrefs { gpu: true, autostart: false, on_launch: 1, on_close: 1, calm: false, accent: 0, theme: 0, text: 0, capes: true, discord: true, auto_update: true, ram: 0, setup_done: false, sounds: 1, beta: false } }
+    fn default() -> Self { LauncherPrefs { gpu: true, autostart: false, on_launch: 1, on_close: 1, calm: false, accent: 0, accent_hex: String::new(), theme_name: String::new(), corners: 1, theme: 0, text: 0, capes: true, discord: true, auto_update: true, ram: 0, setup_done: false, sounds: 1, beta: false } }
 }
 
 /// Memory a new profile gets on a PC with `sys_gb` of RAM: enough for Nether profiles and light packs, never more
@@ -69,7 +75,8 @@ pub fn load(paths: &Paths) -> LauncherPrefs {
     // the close button used to default to Quit; settings saved before the tray became the default move over once
     // ("close2" is written on every save, so a later pick of "Quit the launcher" sticks)
     if v.is_object() && v.get("close2").is_none() { p.on_close = 1; }
-    p.theme = crate::settings::theme_idx(p.theme) as i32;
+    p.theme = (p.theme.max(0) % 2) as i32;
+    if p.theme_name.trim().is_empty() { p.theme_name = if p.theme == 1 { "Nether Light" } else { "Nether Dark" }.into(); }
     p
 }
 

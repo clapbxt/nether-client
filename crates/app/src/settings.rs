@@ -1,77 +1,16 @@
 //! Settings page pieces that are not plain prefs: Java per major version, launcher folders, the look
-//! (accent colour + text size, applied to the `Theme` global), removing saved accounts, and the update check
+//! (the look itself is look.rs), removing saved accounts, and the update check
 //! against GitHub releases (silent when there is no release yet or no connection).
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use nether_core::java::{self, Source};
-use slint::{Color, ComponentHandle, ModelRc, VecModel};
+use slint::{ComponentHandle, ModelRc, VecModel};
 
-use crate::{show_toast, ui_do, AppWindow, Backend, JavaRt, Link, Shared, Theme};
+use crate::{show_toast, ui_do, AppWindow, Backend, JavaRt, Link, Shared};
 
 /// Java majors the launcher uses and the game versions that want each.
 const MAJORS: [(u32, &str); 4] = [(8, "Minecraft 1.16.5 and older"), (17, "Minecraft 1.17 to 1.20.4"), (21, "Minecraft 1.20.5 to 1.21.11"), (25, "Minecraft 26.1 and newer")];
-
-/// Accent palettes: base, bright, deep, text on dark, pressed, PLAY plate (same order as the Settings swatches).
-const ACCENTS: [[u32; 6]; 5] = [
-    [0xF76A05, 0xFF9A2E, 0x8F3A02, 0xFFAA66, 0xD65A04, 0x4A2002], // fire (the logo's orange; default)
-    [0xE5372D, 0xFF6157, 0x9E1F18, 0xFF8A82, 0xC42A21, 0x4A1210], // racing red
-    [0x22A845, 0x3DDC6A, 0x146B2B, 0x7BE89A, 0x1B8A39, 0x0B3816], // acid
-    [0x1F6FEB, 0x4C8DFF, 0x123F86, 0x8AB4FF, 0x1A5DC7, 0x0A2148], // cobalt
-    [0x8B3DFF, 0xA66BFF, 0x4F1F99, 0xC4A1FF, 0x7330D9, 0x26104A], // violet
-];
-/// Themes: bg, s1, s2, s3, hairline, hairline2, text, dim, mut, ink (text on primary fills), primary fill, glass, glass hairline,
-/// hover, backdrop top tint, panel sheen, card shadow (ARGB). v8: one Nether look (neutral charcoal / paper, small radii,
-/// Nether Pixel titles, bevelled solid buttons) in Dark and Light; the accent is the only colour choice.
-const THEMES: [[u32; 17]; 2] = [
-    [0xFF0F0F11, 0xF218181B, 0xFF202024, 0xFF2A2A30, 0x10FFFFFF, 0x21FFFFFF, 0xFFF4F4F5, 0xFFA1A1AA, 0xFF71717A, 0xFF0F0F11, 0xFFF4F4F5, 0xC718181B, 0x17FFFFFF, 0x0BFFFFFF, 0xFF17171B, 0x08FFFFFF, 0x66000000], // Nether Dark
-    [0xFFEEEEF1, 0xF7FFFFFF, 0xFFF5F5F7, 0xFFE6E6EB, 0x12000000, 0x24000000, 0xFF18181B, 0xFF52525B, 0xFF8A8A93, 0xFFFFFFFF, 0xFF18181B, 0xD9FFFFFF, 0x14000000, 0x0A000000, 0xFFF9F9FB, 0x80FFFFFF, 0x1F000000], // Nether Light
-];
-/// Names written to client.json for the in-game menu (`Th.NAMES`, same order).
-pub const THEME_NAMES: [&str; 2] = ["Nether Dark", "Nether Light"];
-
-/// Saved theme index -> a valid one (pre-v8 had four: the odd ones were light).
-pub fn theme_idx(theme: i32) -> usize { (theme.max(0) % 2) as usize }
-
-fn argb(c: u32) -> Color { Color::from_argb_u8((c >> 24) as u8, (c >> 16) as u8, (c >> 8) as u8, c as u8) }
-
-/// Push the theme surfaces, shape and display face into the Theme global.
-pub fn apply_theme(ui: &AppWindow, theme: i32) {
-    let i = theme_idx(theme);
-    let c = THEMES[i];
-    let light = i == 1;
-    let t = ui.global::<Theme>();
-    t.set_bg(argb(c[0])); t.set_s1(argb(c[1])); t.set_s2(argb(c[2])); t.set_s3(argb(c[3])); t.set_ln(argb(c[4])); t.set_ln2(argb(c[5]));
-    t.set_tx(argb(c[6])); t.set_dim(argb(c[7])); t.set_mut(argb(c[8])); t.set_ink(argb(c[9])); t.set_ice(argb(c[10]));
-    t.set_glass(argb(c[11])); t.set_glass_ln(argb(c[12])); t.set_hov(argb(c[13])); t.set_bg_top(argb(c[14])); t.set_sheen(argb(c[15])); t.set_shade(argb(c[16]));
-    t.set_aura(if light { 0.05 } else { 0.07 });
-    t.set_r1(5.0); t.set_r2(8.0); t.set_r3(12.0);
-    t.set_square(false); t.set_light(light);
-    t.set_disp("Barlow".into());
-}
-
-/// Accent pair (base, bright) as "#RRGGBB" for the in-game menu.
-pub fn accent_hex(accent: i32) -> (String, String) {
-    let a = ACCENTS[accent.clamp(0, ACCENTS.len() as i32 - 1) as usize];
-    (format!("#{:06X}", a[0]), format!("#{:06X}", a[1]))
-}
-
-const TEXT_SCALES: [f32; 3] = [1.0, 1.1, 1.2];
-
-fn rgb(c: u32) -> Color { Color::from_rgb_u8((c >> 16) as u8, (c >> 8) as u8, c as u8) }
-
-/// Push the accent and text size into the Theme global.
-pub fn apply_look(ui: &AppWindow, accent: i32, text: i32) {
-    let a = ACCENTS[accent.clamp(0, ACCENTS.len() as i32 - 1) as usize];
-    let t = ui.global::<Theme>();
-    t.set_red(rgb(a[0]));
-    t.set_red2(rgb(a[1]));
-    t.set_red3(rgb(a[2]));
-    t.set_redtx_d(rgb(a[3]));
-    t.set_press(rgb(a[4]));
-    t.set_plate(rgb(a[5]));
-    t.set_ts(TEXT_SCALES[text.clamp(0, TEXT_SCALES.len() as i32 - 1) as usize]);
-}
 
 fn java_rows(sh: &Shared) -> Vec<JavaRt> {
     MAJORS.iter().map(|(m, games)| {
@@ -252,6 +191,18 @@ pub fn init(ui: &AppWindow, sh: Arc<Shared>) {
         // only the launcher's own folders
         if p.starts_with(&root) { open_dir(&p); }
     });
+    {
+        // custom themes: <data>/themes/*.json (look.rs), with a note on the format the first time
+        let dir = sh.paths.root.join("themes");
+        b.on_open_themes(move || {
+            let _ = std::fs::create_dir_all(&dir);
+            let note = dir.join("README.txt");
+            if !note.exists() {
+                let _ = std::fs::write(&note, "Custom themes for Nether Client. Each .json file here is one theme; restart the launcher (or reopen Settings) to see it.\r\n\r\n{ \"name\": \"My theme\", \"dark\": true, \"base\": \"#101418\", \"accent\": \"#3FA7FF\", \"corners\": 1 }\r\n\r\nname: shown in the picker (launcher and in game)\r\ndark: true for a dark theme, false for a light one\r\nbase: the background colour; panels, lines and text are made from it\r\naccent (optional): replaces your accent colour while the theme is on\r\ncorners (optional): 0 sharp, 1 default, 2 round\r\n");
+            }
+            open_dir(&dir);
+        });
+    }
     {
         let (weak, sh) = (ui.as_weak(), sh.clone());
         b.on_java_pick(move |major| {

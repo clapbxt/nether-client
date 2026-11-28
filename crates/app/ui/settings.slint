@@ -1,6 +1,6 @@
 import { Theme } from "theme.slint";
-import { Backend, Art, Acct, JavaRt, Link, Sound } from "structs.slint";
-import { Eyebrow, Heading, Btn, Toggle, Dropdown, IconBtn, Ico, Icon, SectionHead, SetRow, Slash, Seg, Chip } from "components.slint";
+import { Backend, Art, Acct, JavaRt, Link, Sound, ThemeSpec } from "structs.slint";
+import { Eyebrow, Heading, Btn, Toggle, Dropdown, IconBtn, Ico, Icon, SectionHead, SetRow, Slash, Seg, Chip, Field, LinkBtn } from "components.slint";
 
 // A row with a switch on the right. A disabled row must not flip (the change would never be saved).
 component SyncRow inherits SetRow {
@@ -88,7 +88,6 @@ component AcctRow inherits SetRow {
         clicked => { if root.acct.active { Backend.sign-out(); } else { Backend.remove-account(root.acct.uuid); } } }
 }
 
-struct ThemeSpec { name: string, sub: string, bg: color, panel: color, line: color, text: color, r: length }
 
 // Theme picker tile: a tiny window drawn in that theme's own colours and shape, name below
 component ThemeTile inherits Rectangle {
@@ -120,8 +119,8 @@ export component SettingsScreen inherits Rectangle {
     property <length> y3: root.y2 + 40px + root.nacc * 64px + 68px;
     property <length> y4: root.y3 + 40px + Backend.javas.length * 64px + 40px;
     property <length> y5: root.y4 + 40px + 7 * 64px + 40px;
-    property <length> y6: root.y5 + 40px + 3 * 64px + 190px + ic.height + wp.height + 40px;
-    property <length> py: root.y5 + 256px;
+    property <length> py: root.y5 + 216px + 60px + root.trows * 90px + 8px;
+    property <length> y6: root.py + 206px + ic.height + wp.height;
     property <length> sy: root.y6 + 24px + Backend.folders.length * 64px;
     // L2: privacy (what the launcher and client connect to)
     property <length> y7: root.sy + 5 * 64px + 40px;
@@ -130,9 +129,9 @@ export component SettingsScreen inherits Rectangle {
     property <length> end: fl.content-height - fl.height - 2px;
     property <[length]> tops: [0px, root.y2, root.y3, root.y4, root.y5, root.y6, root.y7];
     property <int> at: root.pos >= Math.min(root.y7 - 120px, root.end) ? 6 : (root.pos >= root.y6 - 120px ? 5 : (root.pos >= root.y5 - 120px ? 4 : (root.pos >= root.y4 - 120px ? 3 : (root.pos >= root.y3 - 120px ? 2 : (root.pos >= root.y2 - 120px ? 1 : 0)))));
-    property <[ThemeSpec]> themes: [
-        { name: "Nether", sub: "Dark", bg: #0F0F11, panel: #202024, line: #ffffff21, text: #F4F4F5, r: 8px },
-        { name: "Nether", sub: "Light", bg: #EEEEF1, panel: #FFFFFF, line: #00000024, text: #18181B, r: 8px }];
+    // theme tiles: 128 px apart, as many per row as fit
+    property <int> tcols: Math.max(1, Math.floor((root.cw + 8px) / 128px));
+    property <int> trows: Math.max(1, Math.ceil(Backend.themes.length / root.tcols));
     property <[string]> accent-names: ["Fire", "Racing red", "Acid", "Cobalt", "Violet"];
     property <[color]> accents: [#F76A05, #E5372D, #22A845, #1F6FEB, #8B3DFF];
     // L2: what connects where (Rule 6); k = what for, url = hosts and when
@@ -219,9 +218,9 @@ export component SettingsScreen inherits Rectangle {
 
         // ---------- 05 personalization ----------
         SectionHead { x: 0px; y: root.y5; width: root.cw; idx: "05"; title: "PERSONALIZATION"; }
-        SetRow { x: 0px; y: root.y5 + 24px; width: root.cw; reserve: 230px; title: "Accent colour"; sub: root.accent-names[Backend.lp-accent] + " · PLAY, buttons, selection marks and live states";
+        SetRow { x: 0px; y: root.y5 + 24px; width: root.cw; reserve: 330px; title: "Accent colour"; sub: (Backend.lp-accent == 5 ? "Custom " + Backend.lp-accent-hex : root.accent-names[Backend.lp-accent]) + " · PLAY, buttons, selection marks and live states";
             for c[i] in root.accents: Rectangle {
-                x: parent.width - 5 * 36px + 6px + i * 36px; y: 18px; width: 28px; height: 28px; background: c;
+                x: parent.width - 6 * 36px - 96px + 6px + i * 36px; y: 18px; width: 28px; height: 28px; background: c;
                 border-width: Backend.lp-accent == i ? 2px : 0px; border-color: Theme.ice; border-radius: Theme.r2;
                 Rectangle { x: 2px; y: 2px; width: 24px; height: 24px; border-radius: Theme.r1; background: transparent; border-width: Backend.lp-accent == i ? 2px : 0px; border-color: Theme.bg; }
                 sw := TouchArea { mouse-cursor: pointer; clicked => { Backend.lp-accent = i; Backend.save-launcher(); } }
@@ -229,13 +228,26 @@ export component SettingsScreen inherits Rectangle {
                     key-pressed(e) => { if e.text == " " || e.text == Key.Return { Backend.lp-accent = i; Backend.save-launcher(); return accept; } return reject; } }
                 if sf.has-focus || (sw.has-hover && Backend.lp-accent != i): Rectangle { x: -4px; y: -4px; width: parent.width + 8px; height: parent.height + 8px; border-radius: Theme.r3; border-width: 1px; border-color: sf.has-focus ? Theme.ice : Theme.ln2; }
             }
-        }
-        SetRow { x: 0px; y: root.y5 + 152px; width: root.cw; height: 104px; reserve: 300px; title: "Theme"; sub: "Dark or Light, also in the in-game menu. Your accent colour is the only colour that changes.";
-            for t[i] in root.themes: ThemeTile { x: parent.width - 2 * 128px + 8px + i * 128px; y: 12px; spec: t; on: Backend.lp-theme == i;
-                pick => { Backend.lp-theme = i; Backend.save-launcher(); } }
+            // the custom colour: its swatch, and a hex field (Enter applies)
+            Rectangle {
+                x: parent.width - 36px - 96px + 6px; y: 18px; width: 28px; height: 28px; background: Backend.lp-accent == 5 ? Backend.accent-custom : Theme.s2;
+                border-width: Backend.lp-accent == 5 ? 2px : 1px; border-color: Backend.lp-accent == 5 ? Theme.ice : Theme.ln2; border-radius: Theme.r2;
+                if Backend.lp-accent != 5: Text { text: "+"; color: Theme.dim; font-family: Theme.ui; font-size: 16px; horizontal-alignment: center; vertical-alignment: center; }
+                TouchArea { mouse-cursor: pointer; clicked => { if Backend.lp-accent-hex != "" { Backend.lp-accent = 5; Backend.save-launcher(); } else { hexf.focus-input(); } } }
+            }
+            hexf := Field { x: parent.width - 88px; y: 14px; width: 88px; height: 36px; text-size: 13px; placeholder: "#RRGGBB"; text: Backend.lp-accent-hex;
+                accepted => { Backend.lp-accent-hex = self.text; Backend.lp-accent = 5; Backend.save-launcher(); } }
         }
         SetRow { x: 0px; y: root.y5 + 88px; width: root.cw; reserve: 340px; title: "Text size"; sub: "Bigger reading text. Titles keep their size.";
-            Seg { x: parent.width - self.width; y: 15px; items: ["DEFAULT", "LARGE", "LARGER"]; current: Backend.lp-text; changed(i) => { Backend.lp-text = i; Backend.save-launcher(); } }
+            Seg { x: parent.width - self.width; y: 15px; items: ["Default", "Large", "Larger"]; current: Backend.lp-text; changed(i) => { Backend.lp-text = i; Backend.save-launcher(); } }
+        }
+        SetRow { x: 0px; y: root.y5 + 152px; width: root.cw; reserve: 340px; title: "Corners"; sub: "How round panels, cards and buttons are, here and in game.";
+            Seg { x: parent.width - self.width; y: 15px; items: ["Sharp", "Default", "Round"]; current: Backend.lp-corners; changed(i) => { Backend.lp-corners = i; Backend.save-launcher(); } }
+        }
+        SetRow { x: 0px; y: root.y5 + 216px; width: root.cw; height: 60px + root.trows * 90px; reserve: 150px; title: "Theme"; sub: "The launcher, the in-game menus and the title screen follow it. Add your own as a JSON file.";
+            LinkBtn { x: parent.width - self.width; y: 16px; text: "THEMES FOLDER"; clicked => { Backend.open-themes(); } }
+            for t[i] in Backend.themes: ThemeTile { x: Math.mod(i, root.tcols) * 128px; y: 60px + Math.floor(i / root.tcols) * 90px; spec: t; on: Backend.lp-theme == i;
+                pick => { Backend.lp-theme = i; Backend.save-launcher(); } }
         }
         Text { x: 0px; y: root.py + 24px; text: "Your instance icons"; color: Theme.tx; font-family: Theme.ui; font-size: 15px * Theme.ts; font-weight: 600; }
         Text { x: 0px; y: root.py + 46px; width: root.cw; text: "PNG, JPG or WebP. Pixel art stays crisp; large images are scaled to 64px."; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; }

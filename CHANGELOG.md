@@ -10,6 +10,8 @@ This is the launcher's changelog. The in-game client has its own, in
 ## Unreleased
 
 ### Launcher
+- **Themes:** Seven built-in themes (Nether Dark, Nether Light, Midnight, OLED, Crimson, Warped, Paper), any accent colour (type a hex code next to the swatches), and Corners (Sharp, Default, Round) in Settings → Personalization. Your own themes are JSON files in the themes folder (Settings → Theme → Themes folder explains the format). The in-game menus, title screen and pause screen follow the launcher's theme, and a theme picked in game comes back to the launcher when the game closes.
+- The launcher no longer uses about a fifth of a CPU core while it sits idle on Home: the player preview spins one turn after you move or hover it, and animated capes and cosmetics hold still on Home until then (they keep moving in the Wardrobe).
 - New in-game client releases now arrive while the launcher is open (checked every 20 minutes, and by Check now even with a launcher update pending); no restart needed.
 - Starting a different launcher exe (a new build) while another one is running, for example the installed copy
   hidden in the tray, now asks to close the running one and opens the new one. Before, it silently brought the old

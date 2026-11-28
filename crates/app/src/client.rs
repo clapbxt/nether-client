@@ -39,16 +39,25 @@ pub fn instance_file(sh: &Shared, name: &str, shared: bool) -> Option<PathBuf> {
     (!global).then(|| file(sh, Some(name)))
 }
 
-/// The look the in-game menu follows (theme name + accent pair), written to the global client.json.
-pub fn set_look(sh: &Shared, theme: &str, accent: (String, String)) {
+/// The look the in-game client follows (look::game_look: theme, accent pair, corners, every theme's palette), written
+/// to the global client.json; untouched when nothing changed (the agent reloads the file live).
+pub fn set_look(sh: &Shared, look: Value) {
     let p = file(sh, None);
     let mut root = read_json(&p);
     if !root["modules"].is_object() { root["modules"] = json!({}); }
     if !root["modules"]["client"].is_object() { root["modules"]["client"] = json!({}); }
     let c = &mut root["modules"]["client"];
-    if c["theme"] == theme && c["accent"] == accent.0 && c["accent2"] == accent.1 { return; }
-    c["theme"] = theme.into(); c["accent"] = accent.0.into(); c["accent2"] = accent.1.into();
+    let Some(new) = look.as_object() else { return };
+    if new.iter().all(|(k, v)| &c[k] == v) { return; }
+    for (k, v) in new { c[k] = v.clone(); }
     write_json(&p, &root);
+}
+
+/// What the in-game Settings last picked: (theme name, accent "#RRGGBB", corners), from the global client.json.
+pub fn game_look(sh: &Shared) -> (Option<String>, Option<String>, Option<i32>) {
+    let v = read_json(&file(sh, None));
+    let c = &v["modules"]["client"];
+    (c["theme"].as_str().map(str::to_string), c["accent"].as_str().map(str::to_string), c["corners"].as_f64().map(|n| n as i32))
 }
 
 /// Old instance configs carried `inject` / `groups` (client on/off, module groups) and `use_global` (the removed
