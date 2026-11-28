@@ -2,7 +2,7 @@
 # Players get newer client releases without a launcher update; this only sets what a fresh install starts with.
 # Update it after a client release: version, then the sha256 of each release asset (from its client.json and the
 # release page). Empty version = nothing pinned (a build then uses ../nether_agent/build if it is there).
-version = 1.0.2
-nether-agent.jar = 119f12ebf4150232edf9610355e210c13c295a15d718f7f82ea64faea00b7b70
+version = 1.0.3
+nether-agent.jar = 0f8a5d28738e7282489401161f0518be1f069340a9a8550dbe4057f27856c8f8
 nether-agent-boot.jar = cff2cc10bb62b4fdd4fc44d845a64050ac9c6ce8ae82a1c45e843ee45e003db1
-client.json = ec23ac6bf7d8c3b8b798bf9aa9dba8c9bc38df7b5bd72acd5d075cf3416782af
+client.json = f670cde4e3d06ff3e900ae4074e655473e30443c09a09b52d771eb673c1e8633
