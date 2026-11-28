@@ -10,6 +10,7 @@ This is the launcher's changelog. The in-game client has its own, in
 ## Unreleased
 
 ### Launcher
+- New in-game client releases now arrive while the launcher is open (checked every 20 minutes, and by Check now even with a launcher update pending); no restart needed.
 - Starting a different launcher exe (a new build) while another one is running, for example the installed copy
   hidden in the tray, now asks to close the running one and opens the new one. Before, it silently brought the old
   window back, so a fresh build looked like the old version.

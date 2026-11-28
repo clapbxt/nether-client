@@ -1182,6 +1182,9 @@ fn main() -> Result<(), slint::PlatformError> {
         // look for a newer release right away: an installed copy on an old version is gated until it updates
         let (w, sh) = (ui.as_weak(), shared.clone());
         slint::Timer::single_shot(std::time::Duration::from_millis(200),move || if let Some(ui) = w.upgrade() { settings::check_updates(&ui, &sh, false) });
+        // the in-game client updates itself while the launcher stays open: look again every 20 minutes
+        let sh = shared.clone();
+        Box::leak(Box::new(slint::Timer::default())).start(slint::TimerMode::Repeated, std::time::Duration::from_secs(20 * 60), move || settings::update_client(&sh));
     }
     wardrobe::init(&ui, shared.clone());
     community::init(&ui, shared.clone());
