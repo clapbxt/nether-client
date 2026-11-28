@@ -583,12 +583,12 @@ export component InstancesScreen inherits Rectangle {
 
         // mods + packs
         if root.itab == 1 || root.itab == 2: Page {
-            Seg { x: 56px; y: 204px; items: ["INSTALLED", "BROWSE"]; item-w: 100px; current <=> root.mode; changed(i) => { root.load-mods(); } }
+            Seg { x: 56px; y: 204px; items: ["Installed", "Browse"]; item-w: 100px; current <=> root.mode; changed(i) => { root.load-mods(); } }
             if root.mode == 0: Btn { x: 1384px - 140px; y: 204px; width: 140px; height: 34px; text: "FOLDER"; icon: Ico.folder; clicked => { Backend.content-folder(root.sel); } }
             if root.mode == 0 && root.live-src: Field { x: root.itab == 2 ? 56px + 300px + 426px + 14px : 56px + 300px; y: 204px; width: 240px; height: 34px; text-size: 13px; search: true; placeholder: "Filter installed"; text <=> Backend.mod-query; edited => { Backend.filter-installed(); } }
             if root.mode == 0: Btn { x: 1384px - 140px - 8px - self.width; y: 204px; height: 34px; text: "ADD FILES"; icon: Ico.plus; clicked => { Backend.add-content-files(root.sel); } }
             if root.mode == 0 && Backend.update-count > 0: Btn { x: 1384px - 140px - 8px - 175px - 8px - self.width; y: 204px; height: 34px; text: Backend.update-count == 1 ? "UPDATE 1 MOD" : "UPDATE ALL (\{Backend.update-count})"; solid: true; icon: Ico.download; clicked => { Backend.update-mods(-1); } }
-            if root.itab == 2: Seg { x: 56px + 300px; y: 204px; items: ["RESOURCE PACKS", "SHADERS"]; item-w: 150px; current <=> root.kind; }
+            if root.itab == 2: Seg { x: 56px + 300px; y: 204px; items: ["Resource packs", "Shaders"]; item-w: 150px; current <=> root.kind; }
             if root.itab == 2 && root.kind == 0 && root.mode == 0: Btn { x: 56px + 300px + 300px + 14px; y: 204px; height: 34px; text: "COMBINE"; clicked => { Combiner.start(root.sel); } }
             if root.mode == 1: Text { x: 1384px - self.width; y: 204px; height: 34px; text: "Showing builds for " + Backend.instances[root.sel].ver + " · " + Backend.instances[root.sel].loader; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center; }
             // search + options (Modrinth browse)
@@ -766,7 +766,7 @@ export component InstancesScreen inherits Rectangle {
 
         // logs: the game log, the launcher's capture of the last start, or the newest crash report; filter + issues-only
         if root.itab == 5: Page {
-            Seg { x: 56px; y: 196px; items: ["GAME LOG", "LAST START", "CRASH REPORT"]; item-w: 112px; current <=> Backend.log-kind; changed(i) => { Backend.load-log(i); } }
+            Seg { x: 56px; y: 196px; items: ["Game log", "Last start", "Crash report"]; item-w: 112px; current <=> Backend.log-kind; changed(i) => { Backend.load-log(i); } }
             Field { x: 548px; y: 196px; width: 190px; height: 34px; text-size: 13px; search: true; placeholder: "Filter lines"; text <=> Backend.log-filter; edited => { Backend.load-log(Backend.log-kind); } }
             Rectangle {
                 x: 740px; y: 196px; width: 150px; height: 34px;

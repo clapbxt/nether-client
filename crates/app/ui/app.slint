@@ -97,7 +97,7 @@ export component AppWindow inherits Window {
     property <float> s: Math.min(root.width / 1516px, root.height / 900px);
     property <length> W: root.width / root.s;
     property <length> H: root.height / root.s;
-    property <[string]> labels: ["Home", "Play", "Discover", "Wardrobe"];
+    property <[string]> labels: ["Home", "Instances", "Modpacks", "Wardrobe"];
     property <[int]> ids: [0, 1, 2, 5];
     // rail icons (design/module-icons, 20 grid): home, play (game pad), discover, wardrobe
     property <[string]> icons: [
@@ -369,7 +369,7 @@ export component AppWindow inherits Window {
                 if !Backend.job-on && Backend.running-count == 0: Text {
                     x: 0px; text: "Nothing running"; color: Theme.mut; font-family: Theme.ui; font-size: 13px * Theme.ts; vertical-alignment: center;
                 }
-                Text { x: 0px; width: parent.width; visible: !Backend.job-on; text: "\{Backend.instances.length} " + (Backend.instances.length == 1 ? "profile" : "profiles"); color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; }
+                Text { x: 0px; width: parent.width; visible: !Backend.job-on; text: "\{Backend.instances.length} " + (Backend.instances.length == 1 ? "instance" : "instances"); color: Theme.mut; font-family: Theme.mono; font-size: 11px * Theme.ts; horizontal-alignment: right; vertical-alignment: center; }
             }
         }
 

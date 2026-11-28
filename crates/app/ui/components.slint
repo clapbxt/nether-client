@@ -322,7 +322,7 @@ export component Seg inherits Rectangle {
             animate background { duration: Theme.mid; }
             lt := Text {
                 text: it; color: root.current == i ? white : (st.has-hover ? Theme.tx : Theme.dim);
-                font-family: Theme.disp; font-size: 16px; font-weight: 700;
+                font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600;
                 horizontal-alignment: center; vertical-alignment: center;
                 animate color { duration: Theme.mid; }
             }

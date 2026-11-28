@@ -64,7 +64,7 @@ component Jump inherits Rectangle {
     background: root.active ? Theme.red.with-alpha(0.16) : (ta.has-hover ? Theme.hov : transparent);
     animate background { duration: Theme.fast; }
     Rectangle { x: 0px; y: 8px; width: 3px; height: parent.height - 16px; border-radius: 2px; background: Theme.red2; opacity: root.active ? 1 : 0; animate opacity { duration: Theme.mid; } }
-    Text { x: 16px; text: root.label; color: root.active ? Theme.tx : Theme.dim; font-family: Theme.disp; font-size: 16px; font-weight: 700; vertical-alignment: center; }
+    Text { x: 16px; text: root.label; color: root.active ? Theme.tx : Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts; font-weight: 600; vertical-alignment: center; }
     ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
     fs := FocusScope { width: 0px; height: 0px; focus-on-click: false;
         key-pressed(e) => { if e.text == " " || e.text == Key.Return { root.clicked(); return accept; } return reject; } }
@@ -160,7 +160,7 @@ export component SettingsScreen inherits Rectangle {
     init => { root.jump(); }
     changed goto => { root.jump(); }
 
-    for s[i] in ["GAME", "ACCOUNTS", "JAVA", "LAUNCHER", "PERSONALIZATION", "STORAGE & ABOUT", "PRIVACY"]: Jump {
+    for s[i] in ["Game", "Accounts", "Java", "Launcher", "Personalization", "Storage & about", "Privacy"]: Jump {
         x: 48px; y: 100px + i * 40px; width: 220px; idx: "0\{i + 1}"; label: s; active: root.at == i;
         clicked => { fl.content-y = -Math.max(0px, Math.min(root.tops[i], fl.content-height - fl.height)); }
     }
@@ -211,7 +211,7 @@ export component SettingsScreen inherits Rectangle {
         ChoiceRow { x: 0px; y: root.y4 + 216px; width: root.cw; title: "Close button"; sub: "Quit, or keep running in the system tray."; items: ["Quit the launcher", "Hide to tray"]; current <=> Backend.lp-on-close; changed => { Backend.save-launcher(); } }
         SyncRow { x: 0px; y: root.y4 + 280px; width: root.cw; title: "Reduce motion"; sub: "Turn off page transitions and pulsing indicators; saves power on laptops."; on <=> Backend.calm; toggled => { Backend.save-launcher(); } }
         SetRow { x: 0px; y: root.y4 + 344px; width: root.cw; reserve: 340px; title: "Interface sounds"; sub: "Soft clicks in the launcher and the in-game menus, a chime on PLAY.";
-            Seg { x: parent.width - self.width; y: 15px; items: ["OFF", "QUIET", "NORMAL"]; current: Backend.lp-sounds;
+            Seg { x: parent.width - self.width; y: 15px; items: ["Off", "Quiet", "Normal"]; current: Backend.lp-sounds;
                 changed(i) => { Backend.lp-sounds = i; Backend.save-launcher(); Sound.play(0); } }
         }
         SetRow { x: 0px; y: root.y4 + 408px; width: root.cw; reserve: 0px; title: "Keyboard shortcuts"; sub: "Ctrl+K search everything  ·  Ctrl+1-4 pages  ·  Ctrl+, settings  ·  Ctrl+N new instance  ·  Esc closes"; }

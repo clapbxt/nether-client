@@ -67,8 +67,8 @@ export component CommBar inherits Rectangle {
         sf := Field { x: 0px; y: -3px; width: 360px; search: true; placeholder: "Search by name or creator"; text <=> Community.query;
             edited => { root.typing = true; } accepted => { root.typing = false; Community.load(root.page); } }
         Timer { interval: 450ms; running: root.typing; triggered => { root.typing = false; Community.load(root.page); } }
-        Seg { x: 376px; items: ["ALL", "MINE"]; current: Community.filter; changed(i) => { Community.filter = i; Community.load(root.page); } }
-        Seg { x: parent.width - self.width; items: ["TOP", "NEW"]; current: Community.sort; changed(i) => { Community.sort = i; Community.load(root.page); } }
+        Seg { x: 376px; items: ["All", "Mine"]; current: Community.filter; changed(i) => { Community.filter = i; Community.load(root.page); } }
+        Seg { x: parent.width - self.width; items: ["Top", "New"]; current: Community.sort; changed(i) => { Community.sort = i; Community.load(root.page); } }
     }
 }
 

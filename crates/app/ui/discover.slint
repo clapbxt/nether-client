@@ -7,20 +7,20 @@ component ColHead inherits Text {
     font-family: Theme.ui; font-size: 12px * Theme.ts; font-weight: 600; letter-spacing: 0.9px; color: Theme.mut; vertical-alignment: center;
 }
 
-// Install Packs: Modrinth modpacks and Nether packs (pack-src 0 / 2; CurseForge stays hidden until there is an API key).
+// Modpacks page: Modrinth modpacks and Nether packs (pack-src 0 / 2; CurseForge stays hidden until there is an API key).
 // Clicking a row opens the project page.
 export component DiscoverScreen inherits Rectangle {
     property <int> src: Backend.pack-src;
     property <bool> typing;
     init => { Backend.load-packs(); }
 
-    Heading { x: 56px; y: 28px; text: "INSTALL PACKS"; font-size: 32px; }
+    Heading { x: 56px; y: 28px; text: "MODPACKS"; font-size: 32px; }
     Text {
         x: 56px; y: 80px;
         text: root.src == 2 ? "Small bundles picked by us. Mods download from Modrinth for the version you choose." : "Modpacks. Installing one creates a ready-to-play instance.";
         color: Theme.dim; font-family: Theme.ui; font-size: 14px * Theme.ts;
     }
-    Seg { x: 1384px - self.width; y: 32px; items: ["MODRINTH", "NETHER"]; item-w: 124px; current: Backend.pack-src == 2 ? 1 : 0;
+    Seg { x: 1384px - self.width; y: 32px; items: ["Modrinth", "Nether"]; item-w: 124px; current: Backend.pack-src == 2 ? 1 : 0;
         changed(i) => { Backend.pack-src = i == 1 ? 2 : 0; Backend.load-packs(); } }
 
     // search + sort (Modrinth)

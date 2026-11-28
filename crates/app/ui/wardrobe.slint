@@ -46,7 +46,7 @@ export component WardrobeScreen inherits Rectangle {
     init => { SkinLib.refresh(); }
 
     Heading { x: 56px; y: 28px; text: "WARDROBE"; font-size: 32px; }
-    Seg { x: 1384px - self.width; y: 32px; items: ["SKINS", "CAPES", "HATS", "HEADBANDS", "MASKS", "BACK", "WINGS", "AURAS", "PETS"]; item-w: 92px; current <=> root.page;
+    Seg { x: 1384px - self.width; y: 32px; items: ["Skins", "Capes", "Hats", "Headbands", "Masks", "Back", "Wings", "Auras", "Pets"]; item-w: 92px; current <=> root.page;
         changed(i) => { Backend.hover-cos(""); } }
 
     // preview plate
@@ -73,7 +73,7 @@ export component WardrobeScreen inherits Rectangle {
         }
         Rectangle { x: 0px; y: parent.height - 62px; width: parent.width; height: 62px; background: Theme.s1;
             Rectangle { y: 0px; height: 1px; background: Theme.ln; }
-            Seg { x: 14px; y: 14px; items: ["CLASSIC", "SLIM"]; item-w: 84px; current: Backend.skin-slim ? 1 : 0;
+            Seg { x: 14px; y: 14px; items: ["Classic", "Slim"]; item-w: 84px; current: Backend.skin-slim ? 1 : 0;
                 changed(i) => { Backend.skin-slim = i == 1; if root.picked { SkinLib.set-slim(root.sel, i == 1); } } }
             if !root.picked: Text { x: 200px; width: parent.width - 214px; horizontal-alignment: right; vertical-alignment: center; text: root.page == 0 ? (root.signed ? "Account skin" : "Default (Steve)") : root.page == 1 ? (Backend.ncape-sel != "" ? (Backend.look-names[0] != "" ? Backend.look-names[0] : "Public cape") : Backend.capes[Backend.cape-sel].name) : root.worn-name; color: Theme.dim; font-family: Theme.ui; font-size: 13px * Theme.ts; overflow: elide; }
             if root.picked: PlayButton {

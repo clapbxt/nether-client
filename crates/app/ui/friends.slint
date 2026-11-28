@@ -189,7 +189,7 @@ export component FriendsPanel inherits Rectangle {
         IconBtn { x: parent.width - 22px - 38px; y: 0px; size: 38px; d: FIco.add-user; tip: "Send request"; clicked => { Friends.add(Friends.add-text); } }
         if Friends.msg != "": Text { x: 22px; y: 44px; width: parent.width - 44px; text: Friends.msg; color: Theme.redtx; font-family: Theme.ui; font-size: 12px * Theme.ts; overflow: elide; }
         tabs := UTabs { x: 22px; y: Friends.msg != "" ? 64px : 50px; width: parent.width - 44px;
-            items: ["FRIENDS", Friends.pending > 0 ? "REQUESTS \{Friends.pending}" : "REQUESTS", "BLOCKED"]; current <=> Friends.tab; }
+            items: ["Friends", Friends.pending > 0 ? "Requests \{Friends.pending}" : "Requests", "Blocked"]; current <=> Friends.tab; }
         if Friends.tab == 0 && Friends.total > 6: Field { x: 22px; y: tabs.y + 48px; width: parent.width - 44px; height: 34px; search: true; text-size: 13px; placeholder: "Search friends";
             edited => { Friends.search(self.text); } }
         property <length> top: tabs.y + 46px + (Friends.tab == 0 && Friends.total > 6 ? 42px : 0px);
