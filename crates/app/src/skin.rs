@@ -514,6 +514,9 @@ thread_local! {
     static DIMS: std::cell::Cell<(u32, u32)> = const { std::cell::Cell::new((0, 0)) };
     static LAST: RefCell<std::time::Instant> = RefCell::new(std::time::Instant::now());
     static START: std::time::Instant = std::time::Instant::now();
+    /// Auto-spin runs until then: one turn after the last wake (hover, drag, tab change, window focus), so an idle
+    /// launcher stops redrawing instead of rendering the player in software forever (~20 % of a core).
+    static SPIN_END: std::cell::Cell<std::time::Instant> = std::cell::Cell::new(std::time::Instant::now());
 }
 
 pub fn init(ui: &AppWindow) { UI.with(|u| *u.borrow_mut() = Some(ui.as_weak())); wake(); }
@@ -532,6 +535,7 @@ pub(crate) fn community_ready() {
 
 /// The preview needs frames (hover, drag, tab change, new skin): start the timer if it is stopped.
 pub fn wake() {
+    SPIN_END.with(|e| e.set(std::time::Instant::now() + std::time::Duration::from_secs_f32(SPIN_SECS)));
     TIMER.with(|t| {
         if t.running() { return; }
         LAST.with(|l| *l.borrow_mut() = std::time::Instant::now());
@@ -544,6 +548,9 @@ pub fn wake() {
     });
 }
 
+/// Seconds per auto-spin turn.
+const SPIN_SECS: f32 = 14.0;
+
 fn mark_dirty() {
     DIRTY.with(|d| *d.borrow_mut() = true);
     wake();
@@ -555,18 +562,21 @@ fn tick(ui: &AppWindow, dt: f32) -> bool {
     if ui.get_tab() != 5 && PREVIEW.with(|p| *p.borrow()) { preview_account(ui); }
     if !matches!(ui.get_tab(), 0 | 5) || !ui.window().is_visible() || ui.window().is_minimized() || !crate::winchrome::is_active() { return false; } // background windows draw nothing; WM_ACTIVATE wakes the timer again
     let b = ui.global::<Backend>();
-    // auto spin always (while the tab shows), never with reduced motion
-    let spin = b.get_skin_spin() && !b.get_skin_held() && !b.get_calm();
-    if spin { YAW.with(|y| *y.borrow_mut() += dt * std::f32::consts::TAU / 14.0); }
+    // auto spin for one turn after activity (while the tab shows), never with reduced motion
+    let awake = SPIN_END.with(|e| std::time::Instant::now() < e.get());
+    let spin = b.get_skin_spin() && !b.get_skin_held() && !b.get_calm() && awake;
+    if spin { YAW.with(|y| *y.borrow_mut() += dt * std::f32::consts::TAU / SPIN_SECS); }
     let slim = b.get_skin_slim();
-    // an animated cape or cosmetic keeps the preview drawing (first frame only with reduced motion)
-    let mut anim = !b.get_calm() && shown_items().iter().flatten().any(|l| l.animated());
+    // an animated cape or cosmetic keeps the preview drawing in the Wardrobe, and on Home for a while after activity
+    // (then it holds its frame: an idle launcher draws nothing); first frame only with reduced motion
+    let moving = !b.get_calm() && (ui.get_tab() == 5 || awake);
+    let mut anim = moving && shown_items().iter().flatten().any(|l| l.animated());
     LOOK.with(|l| {
         let mut l = l.borrow_mut();
         let Some(look) = l.as_mut() else { return };
         let mut dirty = DIRTY.with(|d| std::mem::replace(&mut *d.borrow_mut(), false));
         ANIM.with(|a| if let Some((f, ms, cur)) = a.borrow_mut().as_mut() {
-            anim = !b.get_calm();
+            anim = moving;
             let i = if anim { (START.with(|s| s.elapsed().as_millis()) / *ms as u128 % f.len() as u128) as usize } else { 0 };
             if i != *cur { *cur = i; look.cape = Some(f[i].clone()); dirty = true; }
         });

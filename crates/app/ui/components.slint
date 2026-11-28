@@ -622,9 +622,11 @@ export component GroundShadow inherits Rectangle {
     }
 }
 
-// Click-and-drag over the player preview to turn the model (auto spin always runs, pauses while held).
+// Click-and-drag over the player preview to turn the model. Auto spin runs one turn after activity (hovering the
+// player starts another) and pauses while held; an idle launcher draws nothing.
 export component SpinArea inherits TouchArea {
     property <length> last;
+    changed has-hover => { if self.has-hover { Backend.skin-wake(); } }
     mouse-cursor: self.pressed ? MouseCursor.grabbing : MouseCursor.grab;
     changed pressed => { Backend.skin-held = self.pressed; root.last = self.mouse-x; Backend.skin-wake(); }
     moved => { if self.pressed { Backend.skin-drag((self.mouse-x - root.last) / 1px); root.last = self.mouse-x; } }
